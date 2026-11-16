@@ -345,6 +345,12 @@ test.describe("工程协同台项目维度流程", () => {
     await submitBindingFlow(page, "EVT", ["N1-OTA-EVT-003"]);
     await submitBindingFlow(page, "DVT", ["N1-OTA-DVT-001"], "林澈");
     await submitBindingFlow(page, "PVT", ["N1-OTA-PVT-001"]);
+    const bulkBarcodes = Array.from({ length: 40 }, (_, index) => `N1-OTA-BULK-${String(index + 1).padStart(3, "0")}`);
+    await submitBindingFlow(page, "EVT", bulkBarcodes);
+    const bulkFlow = page.locator(".binding-flow-row").filter({ hasText: "条码 40 个" }).first();
+    await expect(bulkFlow).toBeVisible();
+    await bulkFlow.locator("details.barcode-details summary").click();
+    await expect(bulkFlow.locator(".barcode-chip")).toHaveCount(40);
     await expect(page.getByText("N1-OTA-EVT-003")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "撤销电子流" }).first()).toBeVisible();
     await expect(page.locator(".flow-web-link").first()).toBeVisible();
@@ -435,5 +441,22 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByRole("heading", { name: "远山 X0" })).toBeVisible();
     await expect(page.locator(".data-table")).toContainText("1001OTA");
     await expect(page.locator(".data-table")).toContainText("1008MED");
+  });
+  test("责任田主管可以新建软件包并进入配置页", async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page, "OWNER001");
+    await page.goto("/settings/packages");
+    await page.getByTestId("new-package-trigger").click();
+    const form = page.getByTestId("new-package-form");
+    await expect(form).toBeVisible();
+    await form.locator('input[name="name"]').fill("9901TST");
+    await form.locator('input[name="code"]').fill("TST");
+    await chooseByText(form.locator('select[name="ownerId"]'), "王磊");
+    await form.locator('textarea[name="description"]').fill("自动化验证责任田主管新建软件包。");
+    await form.getByRole("button", { name: "创建并配置使用范围" }).click();
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(/\/settings\/packages\/\d+(\?|$)/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("9901TST");
+    await expect(page.getByText("软件包已创建，请继续配置使用范围。")).toBeVisible();
   });
 });
