@@ -4,8 +4,10 @@ import { requireRole } from "@/lib/auth";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import {
   addProjectNodeAction,
+  addProjectNodeApproverAction,
   deleteProjectAction,
   deleteProjectNodeAction,
+  removeProjectNodeApproverAction,
   saveProjectAction,
   updateProjectNodeAction,
 } from "@/lib/actions/settings";
@@ -39,7 +41,7 @@ export default async function ProjectsSettingsPage({
       <PageHeader
         eyebrow="Settings / Projects"
         title="项目与测试节点"
-        description="维护项目 PM、测试节点和项目状态。每个测试节点需要规划设备条码绑定验证责任人、绑定电子流审批人和绑定通过数量，试制发布后会按这些配置生成绑定任务。"
+        description="维护项目 PM、测试节点和项目状态。每个测试节点需要规划设备条码绑定验证责任人、主审批人与审批人范围、绑定通过数量，试制发布会按这些配置生成绑定任务。"
       />
       <FlashMessage notice={notice} />
       <SettingsTabs isAdmin={user.role === "ADMIN"} />
@@ -120,10 +122,6 @@ export default async function ProjectsSettingsPage({
                               ))}
                             </select>
                           </label>
-                          <label className="field">
-                            <span className="label">排序</span>
-                            <input className="input" type="number" name="sortOrder" min={0} defaultValue={project.sortOrder} />
-                          </label>
                           <label className="field span-2">
                             <span className="label">项目说明</span>
                             <textarea className="textarea" name="description" defaultValue={project.description} />
@@ -178,7 +176,7 @@ export default async function ProjectsSettingsPage({
                               </select>
                             </label>
                             <label className="field">
-                              <span className="label">绑定电子流审批人 <span className="required-mark">*</span></span>
+                              <span className="label">主审批人 <span className="required-mark">*</span></span>
                               <select className="select" name="bindingApproverId" required defaultValue="">
                                 <option value="" disabled>选择审批人</option>
                                 {people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}
@@ -206,8 +204,27 @@ export default async function ProjectsSettingsPage({
                           </div>
                           <div className="node-config-meta">
                             <span>绑定责任人 <strong>{node.bindingOwnerName ?? "未配置"}</strong></span>
-                            <span>审批人 <strong>{node.bindingApproverName ?? "未配置"}</strong></span>
+                            <span>主审批人 <strong>{node.bindingApproverName ?? "未配置"}</strong></span>
                             <span>通过数量要求 <strong>{node.requiredBindingCount}</strong></span>
+                          </div>
+                          <div className="node-approver-range">
+                            <span className="small muted">审批人范围：</span>
+                            {node.approvers.map((approver) => (
+                              <span className="member-pill" key={approver.id}>
+                                {approver.userName}
+                                {approver.userId !== node.bindingApproverId && (
+                                  <ActionForm action={removeProjectNodeApproverAction} hidden={{ assignmentId: approver.id }} submitText="×" submitVariant="ghost" submitClassName="chip-remove" confirmMessage={`从审批人范围移除 ${approver.userName}？`} />
+                                )}
+                              </span>
+                            ))}
+                            <details className="node-approver-add">
+                              <summary className="archive-link" style={{ listStyle: "none", cursor: "pointer" }}>+ 添加审批人</summary>
+                              <div style={{ marginTop: 7, minWidth: 250 }}>
+                                <ActionForm action={addProjectNodeApproverAction} hidden={{ nodeId: node.id }} submitText="加入审批人范围" submitClassName="button-sm">
+                                  <label className="field"><span className="label">人员</span><select className="select" name="userId" required defaultValue=""><option value="" disabled>选择审批人</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+                                </ActionForm>
+                              </div>
+                            </details>
                           </div>
                         </div>
                         <details className="inline-config">

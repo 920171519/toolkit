@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -49,6 +49,14 @@ CREATE TABLE IF NOT EXISTS area_project_leads (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL,
   UNIQUE(area_id, project_id)
+);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notification_key TEXT NOT NULL,
+  read_at TEXT NOT NULL,
+  UNIQUE(user_id, notification_key)
 );
 
 CREATE TABLE IF NOT EXISTS area_project_members (
@@ -152,6 +160,14 @@ CREATE TABLE IF NOT EXISTS report_files (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS project_node_approvers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  node_id INTEGER NOT NULL REFERENCES project_nodes(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  UNIQUE(node_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS integration_batches (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
@@ -249,6 +265,14 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   UNIQUE(package_version_id, project_id, node_id)
 );
 
+CREATE TABLE IF NOT EXISTS binding_requirement_approvers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requirement_id INTEGER NOT NULL REFERENCES binding_requirements(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  UNIQUE(requirement_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS binding_flows (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   flow_no TEXT NOT NULL UNIQUE,
@@ -265,6 +289,14 @@ CREATE TABLE IF NOT EXISTS binding_flows (
   review_comment TEXT,
   cancelled_at TEXT,
   cancel_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS batch_progress_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_id INTEGER NOT NULL REFERENCES integration_batches(id) ON DELETE CASCADE,
+  author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -288,12 +320,20 @@ CREATE INDEX IF NOT EXISTS idx_batches_project ON integration_batches(project_id
 CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id);
 CREATE INDEX IF NOT EXISTS idx_binding_requirements_version ON binding_requirements(package_version_id);
 CREATE INDEX IF NOT EXISTS idx_area_leaders_area ON area_leaders(area_id);
+CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id);
+CREATE INDEX IF NOT EXISTS idx_node_approvers_node ON project_node_approvers(node_id);
+CREATE INDEX IF NOT EXISTS idx_requirement_approvers_req ON binding_requirement_approvers(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_progress_notes_batch ON batch_progress_notes(batch_id);
 CREATE INDEX IF NOT EXISTS idx_area_project_members ON area_project_members(area_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_binding_requirements_request ON binding_requirements(request_id);
 CREATE INDEX IF NOT EXISTS idx_binding_flow_barcodes_flow ON binding_flow_barcodes(flow_id);
 CREATE INDEX IF NOT EXISTS idx_binding_flows_approver ON binding_flows(approver_id, status);
 CREATE INDEX IF NOT EXISTS idx_binding_flows_submitter ON binding_flows(submitted_by, status);
 CREATE INDEX IF NOT EXISTS idx_usages_package ON package_usages(package_id);
+CREATE INDEX IF NOT EXISTS idx_usages_project ON package_usages(project_id, node_id);
+CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(software_manager_id);
+CREATE INDEX IF NOT EXISTS idx_versions_submitter ON package_versions(submitted_by);
+CREATE INDEX IF NOT EXISTS idx_requirements_owner ON binding_requirements(binding_owner_id, status);
 CREATE INDEX IF NOT EXISTS idx_binding_version ON binding_tasks(package_version_id);
 CREATE INDEX IF NOT EXISTS idx_risk_version ON risk_reviews(package_version_id);
 CREATE INDEX IF NOT EXISTS idx_formal_version ON formal_reviews(package_version_id);

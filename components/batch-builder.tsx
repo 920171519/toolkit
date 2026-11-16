@@ -1,10 +1,16 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Archive } from "lucide-react";
 import type { BatchCandidatePackage, ProjectOption } from "@/lib/workflow-queries";
+import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { Badge } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { createBatchAction } from "@/lib/actions/workflow";
+
+function statusLabel(status: string) {
+  return PACKAGE_STATUS_META[status as keyof typeof PACKAGE_STATUS_META]?.label ?? status;
+}
 
 export function BatchBuilder({
   project,
@@ -15,7 +21,19 @@ export function BatchBuilder({
   candidates: BatchCandidatePackage[];
   defaultCode: string;
 }) {
-  const changedCount = candidates.filter((candidate) => candidate.requestId !== null).length;
+  const initial = useMemo(
+    () => new Map(candidates.map((candidate) => [candidate.packageId, candidate.defaultVersionId])),
+    [candidates],
+  );
+  const [selected, setSelected] = useState<Map<number, number>>(initial);
+
+  const rows = candidates.map((candidate) => {
+    const versionId = selected.get(candidate.packageId) ?? candidate.defaultVersionId;
+    const version = candidate.versions.find((item) => item.id === versionId) ?? null;
+    return { candidate, versionId, version };
+  });
+  const changedCount = rows.filter((row) => row.version?.requestStatus === "PENDING").length;
+  const items = rows.map((row) => ({ packageId: row.candidate.packageId, packageVersionId: row.versionId }));
 
   return (
     <ActionForm
@@ -23,9 +41,9 @@ export function BatchBuilder({
       testId="batch-builder-form"
       submitText="创建整套配套批次"
       submitVariant="primary"
-      hidden={{ projectId: project.id }}
+      hidden={{ projectId: project.id, items: JSON.stringify(items) }}
       disabled={changedCount === 0}
-      footerNote={<>项目：<strong>{project.name}</strong> · 整套 <strong>{candidates.length}</strong> 个软件包，其中 <strong>{changedCount}</strong> 个待测版本。每次转测必须整套软件包一起转测。</>}
+      footerNote={<>项目：<strong>{project.name}</strong> · 整套 <strong>{candidates.length}</strong> 个软件包，其中 <strong>{changedCount}</strong> 个待测版本。默认沿用上次转测版本，有变更的软件包默认选择本次待转测版本。</>}
     >
       <div className="form-grid" style={{ marginBottom: 16 }}>
         <label className="field"><span className="label">批次号</span><input className="input" name="code" defaultValue={defaultCode} required pattern="[Bb][0-9]{3,}" /></label>
@@ -33,8 +51,8 @@ export function BatchBuilder({
       </div>
 
       <div className="toolbar-spread" style={{ marginBottom: 9 }}>
-        <div><h3 style={{ fontSize: 16 }}>本项目整套配套快照</h3><p className="small muted" style={{ marginTop: 2 }}>系统按本项目全部在用软件包自动生成配套，不提供可选框。有新增转测申请的包使用新版本，其余使用当前正式版本。</p></div>
-        <Badge tone={changedCount > 0 ? "amber" : "slate"}>{changedCount} 个待测版本</Badge>
+        <div><h3 style={{ fontSize: 16 }}>本项目整套配套与版本选择</h3><p className="small muted" style={{ marginTop: 2 }}>所有软件包必须一起转测。默认选择上次转测版本；本次有变更的包默认本次待转测版本。可通过下拉框改为历史版本。</p></div>
+        <Badge tone={changedCount > 0 ? "amber" : "rose"}>{changedCount} 个待测版本</Badge>
       </div>
 
       {candidates.length === 0 ? (
@@ -53,7 +71,7 @@ export function BatchBuilder({
               </tr>
             </thead>
             <tbody>
-              {candidates.map((candidate) => (
+              {rows.map(({ candidate, versionId, version }) => (
                 <tr key={candidate.packageId}>
                   <td>
                     <span style={{ fontWeight: 600 }}>{candidate.packageName}</span>
@@ -62,18 +80,36 @@ export function BatchBuilder({
                   <td><span className="mono small">{candidate.formalVersion ?? "—"}</span></td>
                   <td><span className="mono small">{candidate.currentTrialVersions.length > 0 ? candidate.currentTrialVersions.join(" / ") : "—"}</span></td>
                   <td><span className="mono small">{candidate.previousTestVersion ?? "首次"}</span></td>
-                  <td>
-                    <span className="version-badge">{candidate.version}</span>
-                    {candidate.requestId
-                      ? <div><Badge tone="amber">本次新增转测</Badge></div>
-                      : <div className="small muted">正式版本基线</div>}
+                  <td style={{ minWidth: 230 }}>
+                    <select
+                      className="select"
+                      value={versionId}
+                      aria-label={`${candidate.packageName} 本次转测版本`}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setSelected((current) => {
+                          const next = new Map(current);
+                          next.set(candidate.packageId, value);
+                          return next;
+                        });
+                      }}
+                    >
+                      {candidate.versions.map((option) => (
+                        <option value={option.id} key={option.id}>
+                          {option.version} · {option.requestStatus === "PENDING" ? "本次待转测" : statusLabel(option.status)}
+                        </option>
+                      ))}
+                    </select>
+                    {version?.requestStatus === "PENDING" && <div style={{ marginTop: 4 }}><Badge tone="amber">本次新增转测</Badge></div>}
                   </td>
                   <td>
                     {!candidate.previousTestVersion
                       ? <Badge tone="slate">首次转测</Badge>
-                      : candidate.changedVsPrevious
-                        ? <Badge tone="violet">有变更</Badge>
-                        : <Badge tone="slate">无变化</Badge>}
+                      : version?.requestStatus === "PENDING"
+                        ? <Badge tone="violet">本次有变更</Badge>
+                        : version && version.version !== candidate.previousTestVersion
+                          ? <Badge tone="amber">版本有调整</Badge>
+                          : <Badge tone="slate">沿用上次</Badge>}
                   </td>
                 </tr>
               ))}
@@ -84,7 +120,7 @@ export function BatchBuilder({
 
       <div className="archive-preview" style={{ marginTop: 9 }}>
         <Archive size={11} style={{ display: "inline", marginRight: 4, verticalAlign: -1 }} />
-        创建批次时会固化整套软件包当前版本、归档地址、当前试制版本和上次转测版本。
+        创建批次时会固化每行选择的版本、归档地址、当前正式/试制版本及上次转测版本。没有待测版本的配套不能创建批次。
       </div>
     </ActionForm>
   );

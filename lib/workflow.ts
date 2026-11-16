@@ -189,6 +189,7 @@ export type CreateBatchInput = {
   projectId: number;
   code: string;
   title: string;
+  items: Array<{ packageId: number; packageVersionId: number }>;
 };
 
 export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
@@ -198,69 +199,79 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
   const existingCode = one<{ id: number }>("SELECT id FROM integration_batches WHERE UPPER(code) = ?", code);
   assert(!existingCode, `批次号 ${code} 已存在，请更换批次号。`);
 
-  const packageRows = all<{ packageId: number; packageName: string; packageCode: string }>(
+  const projectPackages = all<{ packageId: number; packageName: string; packageCode: string }>(
     `SELECT DISTINCT p.id AS packageId, p.name AS packageName, p.code AS packageCode
      FROM package_usages u JOIN packages p ON p.id = u.package_id
      WHERE u.project_id = ? AND p.is_active = 1
      ORDER BY p.name`,
     input.projectId,
   );
-  assert(packageRows.length > 0, "该项目尚未关联任何启用中的软件包，无法组织转测。");
+  assert(projectPackages.length > 0, "该项目尚未关联任何启用中的软件包，无法组织转测。");
+  const selectedByPackage = new Map<number, number>();
+  for (const item of input.items) {
+    assert(!selectedByPackage.has(item.packageId), "同一个软件包不能在批次中重复出现。");
+    selectedByPackage.set(item.packageId, item.packageVersionId);
+  }
+  assert(
+    projectPackages.length === selectedByPackage.size &&
+      projectPackages.every((pkg) => selectedByPackage.has(pkg.packageId)),
+    "整套配套必须包含本项目全部在用软件包，请刷新页面后重试。",
+  );
 
-  const items = packageRows.map((pkg) => {
-    const pending = one<{
-      requestId: number;
-      versionId: number;
+  const items = projectPackages.map((pkg) => {
+    const selectedVersionId = selectedByPackage.get(pkg.packageId);
+    assert(selectedVersionId, `请选择 ${pkg.packageName} 的转测版本。`);
+    const selected = one<{
+      id: number;
       version: string;
+      status: string;
       archiveUrl: string;
       changeSummary: string;
-      submittedAt: string;
     }>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pv.version, pv.archive_url AS archiveUrl,
-              pv.change_summary AS changeSummary, pv.submitted_at AS submittedAt
-       FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'PENDING'
-       ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT 1`,
-      input.projectId,
+      `SELECT id, version, status, archive_url AS archiveUrl, change_summary AS changeSummary
+       FROM package_versions WHERE id = ? AND package_id = ?`,
+      selectedVersionId,
       pkg.packageId,
     );
-    const formal = one<{ versionId: number; version: string; archiveUrl: string; changeSummary: string }>(
-      `SELECT pv.id AS versionId, pv.version, pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary
-       FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
+    assert(selected, `${pkg.packageName} 选择的版本不存在。`);
+    const usedInProject = one<{ id: number }>(
+      "SELECT id FROM package_usages WHERE package_id = ? AND project_id = ? LIMIT 1",
+      pkg.packageId,
+      input.projectId,
+    );
+    assert(usedInProject, `${pkg.packageName} 不在 ${project.name} 项目的使用范围内。`);
+    const pendingRequest = one<{ id: number }>(
+      "SELECT id FROM version_transfer_requests WHERE package_version_id = ? AND project_id = ? AND status = 'PENDING'",
+      selected.id,
+      input.projectId,
+    );
+    if (pendingRequest) {
+      const conflict = one<{ id: number }>(
+        `SELECT bi.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+         WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') LIMIT 1`,
+        pendingRequest.id,
+      );
+      assert(!conflict, `${pkg.packageName} ${selected.version} 已在另一个转测批次中。`);
+    }
+    const formal = one<{ version: string }>(
+      `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
        WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'FORMAL'
        ORDER BY r.formal_released_at DESC, pv.id DESC LIMIT 1`,
       input.projectId,
       pkg.packageId,
-    ) ?? one<{ versionId: number; version: string; archiveUrl: string; changeSummary: string }>(
-      `SELECT id AS versionId, version, archive_url AS archiveUrl, change_summary AS changeSummary
-       FROM package_versions WHERE package_id = ? AND status = 'FORMAL'
-       ORDER BY id DESC LIMIT 1`,
+    ) ?? one<{ version: string }>(
+      `SELECT version FROM package_versions WHERE package_id = ? AND status = 'FORMAL' ORDER BY id DESC LIMIT 1`,
       pkg.packageId,
     );
-    const selected = pending ?? formal;
-    assert(selected, `${pkg.packageName} 没有可用的正式版本或待转测版本，无法加入配套。`);
-    if (pending) {
-      const conflict = one<{ id: number }>(
-        `SELECT bi.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') LIMIT 1`,
-        pending.requestId,
-      );
-      assert(!conflict, `${pkg.packageName} ${pending.version} 已在另一个转测批次中。`);
-    }
-    const formalForSnapshot = formal;
     const trialVersions = all<{ version: string }>(
-      `SELECT pv.version FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
+      `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
        WHERE r.project_id = ? AND pv.package_id = ? AND r.status IN ('TRIAL','PENDING_FORMAL')
        ORDER BY r.trial_released_at DESC, pv.id DESC`,
       input.projectId,
       pkg.packageId,
     );
     const previous = one<{ version: string }>(
-      `SELECT bi.version FROM batch_items bi
-       JOIN integration_batches b ON b.id = bi.batch_id
+      `SELECT bi.version FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
        WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
        ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC LIMIT 1`,
       input.projectId,
@@ -268,19 +279,19 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
     );
     return {
       ...pkg,
-      versionId: selected.versionId,
+      versionId: selected.id,
       version: selected.version,
       archiveUrl: selected.archiveUrl,
       changeSummary: selected.changeSummary,
-      requestId: pending?.requestId ?? null,
-      formalVersion: formalForSnapshot?.version ?? null,
+      requestId: pendingRequest?.id ?? null,
+      formalVersion: formal?.version ?? null,
       trialVersions: trialVersions.map((row) => row.version).join(", "),
       previousVersion: previous?.version ?? null,
       changedVsPrevious: previous?.version !== selected.version,
     };
   });
   const changedCount = items.filter((item) => item.requestId !== null).length;
-  assert(changedCount > 0, "本次整套配套中没有待转测的新版本，无需组织转测。");
+  assert(changedCount > 0, "本次配套中没有选择待转测的新版本。请为有变更的软件包选择待转测版本。");
 
   return transaction(() => {
     const timestamp = now();
@@ -387,7 +398,7 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
   assert(batch, "转测批次不存在。", "NOT_FOUND");
   assertProjectManager(actor, batch.project_id);
   assert(batch.status === "IN_TEST", "只有集成测试中的批次可以终止。");
-  assert(reason.trim().length >= 8, "请填写终止原因，并说明背景（至少 8 个字符）。");
+  assert(reason.trim().length >= 4, "请填写终止原因（至少 4 个字符）。");
   const requests = all<{ id: number; package_version_id: number }>(
     `SELECT r.id, r.package_version_id FROM batch_items bi
      JOIN version_transfer_requests r ON r.id = bi.transfer_request_id
@@ -431,6 +442,32 @@ async function storeReport(actor: SessionUser, file: File): Promise<{ id: number
     timestamp,
   );
   return { id: Number(result.lastInsertRowid), name: file.name };
+}
+
+export function addBatchProgress(actor: SessionUser, batchId: number, content: string) {
+  assert(content.trim().length >= 2, "请填写进展说明（至少 2 个字符）。");
+  const batch = one<{ id: number; code: string; project_id: number; project_name: string; status: string }>(
+    `SELECT b.id, b.code, b.project_id, p.name AS project_name, b.status
+     FROM integration_batches b JOIN projects p ON p.id = b.project_id WHERE b.id = ?`,
+    batchId,
+  );
+  assert(batch, "转测批次不存在。", "NOT_FOUND");
+  assert(
+    canSubmitIntegrationConclusionForProject(actor, batch.project_id),
+    "只有本项目集成测试责任田负责人或系统管理员可以提交进展说明。",
+    "FORBIDDEN",
+  );
+  transaction(() => {
+    const timestamp = now();
+    run(
+      "INSERT INTO batch_progress_notes (batch_id, author_id, content, created_at) VALUES (?, ?, ?, ?)",
+      batchId,
+      actor.id,
+      content.trim(),
+      timestamp,
+    );
+    audit(actor.id, "ADD_BATCH_PROGRESS", "BATCH", batchId, `${batch.code} 提交集成测试进展说明：${content.trim().slice(0, 80)}`);
+  });
 }
 
 export async function completeBatchTest(
@@ -554,8 +591,8 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       requestId,
     );
     for (const usage of usages) {
-      run(
-        `INSERT OR IGNORE INTO binding_requirements
+      const insertResult = run(
+        `INSERT INTO binding_requirements
           (request_id, package_version_id, project_id, node_id, required_count, binding_owner_id, approver_id, status, created_at, updated_at)
          VALUES (?, (SELECT package_version_id FROM version_transfer_requests WHERE id = ?), ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
         requestId,
@@ -568,6 +605,22 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         timestamp,
         timestamp,
       );
+      const requirementId = Number(insertResult.lastInsertRowid);
+      const approvers = all<{ user_id: number }>(
+        "SELECT user_id FROM project_node_approvers WHERE node_id = ? ORDER BY id",
+        usage.node_id,
+      );
+      const pool = approvers.length > 0
+        ? approvers.map((row) => row.user_id)
+        : usage.binding_approver_id ? [usage.binding_approver_id] : [];
+      for (const approverId of pool) {
+        run(
+          "INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at) VALUES (?, ?, ?)",
+          requirementId,
+          approverId,
+          timestamp,
+        );
+      }
     }
     const versionRow = one<{ package_version_id: number }>(
       "SELECT package_version_id FROM version_transfer_requests WHERE id = ?",
@@ -628,7 +681,7 @@ export function voidTrial(actor: SessionUser, requestId: number, reason: string)
   });
 }
 
-export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[]) {
+export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[], approverId: number) {
   const normalizedBarcodes = [...new Set(barcodes.map((barcode) => barcode.trim()).filter(Boolean))];
   assert(normalizedBarcodes.length > 0, "请至少添加一个设备条码。");
   for (const barcode of normalizedBarcodes) {
@@ -668,8 +721,18 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     "只有该节点的绑定验证责任人、硬件验证角色或管理人员可以提交绑定电子流。",
     "FORBIDDEN",
   );
-  assert(requirement.approver_id, "该节点未配置绑定电子流审批人。");
-  assert(requirement.approver_id !== actor.id, "绑定电子流审批人不能与提交人相同。");
+  const approvers = all<{ userId: number }>(
+    "SELECT user_id AS userId FROM binding_requirement_approvers WHERE requirement_id = ? ORDER BY id",
+    requirementId,
+  );
+  const approverPool = approvers.length > 0
+    ? approvers.map((row) => row.userId)
+    : requirement.approver_id ? [requirement.approver_id] : [];
+  assert(approverPool.length > 0, "该节点未配置绑定电子流审批人范围。");
+  assert(approverPool.includes(approverId), "请选择该节点审批人范围内的审批人。");
+  assert(approverId !== actor.id, "绑定电子流审批人不能与提交人相同。");
+  const selectedApprover = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", approverId);
+  assert(selectedApprover, "选择的审批人不存在或已停用。");
   for (const barcode of normalizedBarcodes) {
     const duplicate = one<{ id: number }>(
       `SELECT f.id FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
@@ -693,7 +756,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
       requirement.node_id,
       normalizedBarcodes.join(", "),
       actor.id,
-      requirement.approver_id,
+      approverId,
       timestamp,
     );
     const flowId = Number(result.lastInsertRowid);
@@ -702,7 +765,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     for (const barcode of normalizedBarcodes) {
       run("INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)", flowId, barcode, timestamp);
     }
-    audit(actor.id, "SUBMIT_BINDING_FLOW", "BINDING_FLOW", flowId, `提交 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定电子流，条码：${normalizedBarcodes.join("、")}`);
+    audit(actor.id, "SUBMIT_BINDING_FLOW", "BINDING_FLOW", flowId, `提交 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定电子流，审批人 ${selectedApprover.name}，条码：${normalizedBarcodes.join("、")}`);
     return { flowId, flowNo };
   });
 }

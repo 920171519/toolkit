@@ -1,6 +1,3 @@
-"use client";
-
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Archive, ArrowUpRight, Boxes, CalendarClock, UserRound } from "lucide-react";
 import type { ProjectView } from "@/lib/queries";
@@ -9,23 +6,20 @@ import { Avatar, Badge, EmptyState, StatusPill } from "@/components/ui";
 
 type ProjectGroup = "active" | "archived";
 
-export function ProjectBoard({ projects }: { projects: ProjectView[] }) {
-  const activeProjects = useMemo(
-    () => projects.filter((project) => project.status !== "ARCHIVED"),
-    [projects],
-  );
-  const archivedProjects = useMemo(
-    () => projects.filter((project) => project.status === "ARCHIVED"),
-    [projects],
-  );
-  const [group, setGroup] = useState<ProjectGroup>(activeProjects.length > 0 ? "active" : "archived");
-  const [selectedId, setSelectedId] = useState<number>(
-    activeProjects[0]?.id ?? archivedProjects[0]?.id ?? 0,
-  );
-
+export function ProjectBoard({
+  projects,
+  group,
+  selectedProjectId,
+}: {
+  projects: ProjectView[];
+  group: ProjectGroup;
+  selectedProjectId: number | null;
+}) {
+  const activeProjects = projects.filter((project) => project.status !== "ARCHIVED");
+  const archivedProjects = projects.filter((project) => project.status === "ARCHIVED");
   const projectsInGroup = group === "active" ? activeProjects : archivedProjects;
   const selected =
-    projectsInGroup.find((project) => project.id === selectedId) ?? projectsInGroup[0];
+    projectsInGroup.find((project) => project.id === selectedProjectId) ?? projectsInGroup[0];
 
   if (projects.length === 0) {
     return <EmptyState title="暂无项目" description="管理员添加项目后，会显示在这里。" />;
@@ -35,47 +29,40 @@ export function ProjectBoard({ projects }: { projects: ProjectView[] }) {
     <div>
       <div className="project-view-switch">
         <div className="stage-tabs">
-          <button
-            type="button"
+          <Link
             className="stage-tab"
             data-active={group === "active"}
-            onClick={() => {
-              setGroup("active");
-              setSelectedId(activeProjects[0]?.id ?? 0);
-            }}
+            href={`/projects?group=active${activeProjects[0] ? `&project=${activeProjects[0].id}` : ""}`}
+            prefetch={false}
           >
             在行项目
-          </button>
-          <button
-            type="button"
+          </Link>
+          <Link
             className="stage-tab"
             data-active={group === "archived"}
-            onClick={() => {
-              setGroup("archived");
-              setSelectedId(archivedProjects[0]?.id ?? 0);
-            }}
+            href={`/projects?group=archived${archivedProjects[0] ? `&project=${archivedProjects[0].id}` : ""}`}
+            prefetch={false}
           >
             存档项目
-          </button>
+          </Link>
         </div>
         {projectsInGroup.length > 0 && (
-          <label className="project-select">
-            <span>选择项目</span>
-            <select
-              value={selected?.id ?? ""}
-              onChange={(event) => setSelectedId(Number(event.target.value))}
-              aria-label="选择项目"
-            >
-              {projectsInGroup.map((project) => (
-                <option value={project.id} key={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <form method="get" action="/projects" className="project-select-form">
+            <input type="hidden" name="group" value={group} />
+            <label className="project-select">
+              <span>选择项目</span>
+              <select name="project" defaultValue={selected?.id ?? ""} aria-label="选择项目">
+                {projectsInGroup.map((project) => (
+                  <option value={project.id} key={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="button button-secondary button-sm">打开项目</button>
+          </form>
         )}
       </div>
-
       {!selected ? (
         <div className="card">
           <EmptyState
@@ -200,7 +187,7 @@ export function ProjectBoard({ projects }: { projects: ProjectView[] }) {
                       {selected.packages.map((pkg) => (
                         <tr key={pkg.id}>
                           <td>
-                            <Link href={`/packages?open=${pkg.id}`} style={{ fontWeight: 600 }}>
+                            <Link prefetch={false} href={`/packages?open=${pkg.id}`} style={{ fontWeight: 600 }}>
                               {pkg.name}
                             </Link>
                             <div className="small muted">{pkg.code}</div>
@@ -244,7 +231,7 @@ export function ProjectBoard({ projects }: { projects: ProjectView[] }) {
                             )}
                           </td>
                           <td className="cell-actions">
-                            <Link href={`/packages?open=${pkg.id}`} className="archive-link">
+                            <Link prefetch={false} href={`/packages?open=${pkg.id}`} className="archive-link">
                               详情 <ArrowUpRight size={12} />
                             </Link>
                           </td>

@@ -312,7 +312,7 @@ export function sendBatch(actor: SessionUser, batchId: number): void {
 
 export function terminateBatch(actor: SessionUser, batchId: number, reason: string) {
   assert(canManageWorkflow(actor), "只有软件经理或系统管理员可以终止转测。", "FORBIDDEN");
-  assert(reason.trim().length >= 8, "请填写终止原因，并说明背景（至少 8 个字符）。");
+  assert(reason.trim().length >= 4, "请填写终止原因（至少 4 个字符）。");
   const batch = one<{ id: number; code: string; status: string }>(
     "SELECT id, code, status FROM integration_batches WHERE id = ?",
     batchId,

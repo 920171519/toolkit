@@ -77,12 +77,12 @@ export default async function TrialDetailPage({
                       </div>
                       <div className="toolbar" style={{ gap: 12, marginTop: 5, fontSize: 11, color: "var(--muted)" }}>
                         <span>绑定责任人 {requirement.bindingOwnerName ?? "未配置"}</span>
-                        <span>电子流审批人 {requirement.approverName ?? "未配置"}</span>
+                        <span>审批人范围 {requirement.approverOptions.map((approver) => approver.userName).join(" / ") || "未配置"}</span>
                       </div>
                     </div>
                     {request.status === "TRIAL" && requirement.status === "PENDING" && canSubmitBindingFlow(user, requirement.bindingOwnerId) && (
                       <div style={{ minWidth: 360 }}>
-                        <BindingFlowForm requirementId={requirement.id} requestId={requestId} />
+                        <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} />
                       </div>
                     )}
                   </div>

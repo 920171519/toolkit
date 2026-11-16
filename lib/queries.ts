@@ -816,6 +816,12 @@ export type ProjectConfig = {
     bindingApproverId: number | null;
     bindingApproverName: string | null;
     requiredBindingCount: number;
+    approvers: Array<{
+      id: number;
+      userId: number;
+      userName: string;
+      userEmployeeId: string;
+    }>;
   }>;
   packageCount: number;
 };
@@ -851,7 +857,15 @@ export function getProjectConfigs(): ProjectConfig[] {
        LEFT JOIN users ba ON ba.id = n.binding_approver_id
        WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
       project.id,
-    ),
+    ).map((node) => ({
+      ...node,
+      approvers: all<{ id: number; userId: number; userName: string; userEmployeeId: string }>(
+        `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+         FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
+         WHERE pna.node_id = ? ORDER BY pna.id`,
+        node.id,
+      ),
+    })),
   }));
 }
 

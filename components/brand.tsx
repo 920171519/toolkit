@@ -8,7 +8,7 @@ export function Brand({
   compact?: boolean;
 }) {
   return (
-    <Link href={href} className="brand" aria-label="工程协同台首页">
+    <Link href={href} prefetch={false} className="brand" aria-label="工程协同台首页">
       <span className="brand-mark">工</span>
       {!compact && (
         <span className="brand-copy">

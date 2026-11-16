@@ -17,7 +17,7 @@ import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import type { ActionState } from "@/lib/action-state";
 import { Avatar, Badge, StatusPill } from "@/components/ui";
 
-type DrawerPayload = PackageDetailData & { canEdit: boolean };
+export type DrawerPayload = PackageDetailData & { canEdit: boolean };
 type PackageUsage = PackageDetailData["usages"][number];
 
 const initialActionState: ActionState = {};
@@ -49,13 +49,15 @@ export function PackageDrawer({
   packageId,
   people,
   onClose,
+  initialDetail = null,
 }: {
   packageId: number;
   people: PersonOption[];
   onClose: () => void;
+  initialDetail?: DrawerPayload | null;
 }) {
   const router = useRouter();
-  const [detail, setDetail] = useState<DrawerPayload | null>(null);
+  const [detail, setDetail] = useState<DrawerPayload | null>(initialDetail);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -83,9 +85,10 @@ export function PackageDrawer({
   }, [packageId]);
 
   useEffect(() => {
+    if (initialDetail) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loading drawer data from an external API
     void loadDetail();
-  }, [loadDetail]);
+  }, [initialDetail, loadDetail]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

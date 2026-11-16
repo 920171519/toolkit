@@ -3,10 +3,12 @@ import Link from "next/link";
 import { ArrowRight, Boxes, LayoutGrid } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import {
+  getPackageDetail,
   getPackageOverviewRows,
   getPeople,
   parseFlash,
 } from "@/lib/queries";
+import { canEditPackageById } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { getProjectOptions } from "@/lib/workflow-queries";
 import { FlashMessage, PageHeader } from "@/components/ui";
@@ -19,7 +21,7 @@ export default async function PackagesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const projects = getProjectOptions();
@@ -29,6 +31,8 @@ export default async function PackagesPage({
   const people = getPeople();
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
+  const initialDetail = initialOpenId ? getPackageDetail(initialOpenId, true) : null;
+  const initialCanEdit = initialOpenId ? canEditPackageById(user, initialOpenId) : false;
   const withFormal = packages.filter((pkg) => pkg.formalVersion).length;
   const inFlight = packages.filter((pkg) => pkg.currentVersion).length;
   const inTrial = packages.filter((pkg) => pkg.trialVersions.length > 0).length;
@@ -94,10 +98,13 @@ export default async function PackagesPage({
       </div>
 
       <PackageOverviewTable
+        key={initialOpenId ?? "closed"}
         packages={packages}
         people={people}
         initialOpenId={initialOpenId}
         scopeLabel={selectedProject?.name ?? "全部在行项目"}
+        selectedProjectId={selectedProject?.id}
+        initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit } : null}
       />
     </>
   );

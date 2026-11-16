@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ExternalLink, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
-import { getPersonalTaskCount, getWorkflowSidebarCounts } from "@/lib/workflow-queries";
 import { hasAreaLeadership } from "@/lib/access";
 import { Avatar } from "@/components/ui";
 import { Brand } from "@/components/brand";
@@ -14,14 +13,12 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const counts = getWorkflowSidebarCounts(user);
-  const personalTaskCount = getPersonalTaskCount(user);
   const canConfigure = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const isAdmin = user.role === "ADMIN";
   const canManageAreaConfig = isAdmin || hasAreaLeadership(user.id);
 
   const departmentItems: SidebarItem[] = [
-    { href: "/dashboard", label: "我的工作台", icon: "dashboard", count: personalTaskCount },
+    { href: "/dashboard", label: "我的工作台", icon: "dashboard" },
     { href: "/overview", label: "部门总览", icon: "overview" },
     { href: "/projects", label: "项目视图", icon: "projects" },
   ];
@@ -32,25 +29,21 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       href: "/submissions",
       label: "待转测申请",
       icon: "submissions",
-      count: counts.pendingSubmissions,
     },
     {
       href: "/integration",
       label: "集成测试",
       icon: "integration",
-      count: counts.activeBatches,
     },
     {
       href: "/trial",
       label: "试制与绑定验证",
       icon: "trial",
-      count: counts.trialQueue,
     },
     {
       href: "/formal",
       label: "转正发布",
       icon: "formal",
-      count: counts.pendingFormal,
     },
   ];
 

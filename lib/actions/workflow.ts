@@ -7,6 +7,7 @@ import type { ActionState } from "@/lib/action-state";
 import { failure, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
 import {
+  addBatchProgress,
   cancelBindingFlow,
   cancelTransfer,
   completeBatchTest,
@@ -72,14 +73,42 @@ export async function createBatchAction(_prev: ActionState, formData: FormData):
   const title = text(formData, "title");
   if (!projectId) return { error: "请选择项目。" };
   if (!code) return { error: "请填写批次号。" };
+  let items: Array<{ packageId: number; packageVersionId: number }> = [];
+  try {
+    const payload = JSON.parse(text(formData, "items")) as unknown;
+    if (!Array.isArray(payload)) throw new Error("invalid items");
+    items = payload.map((item) => {
+      const record = item as { packageId?: unknown; packageVersionId?: unknown };
+      const packageId = Number(record.packageId);
+      const packageVersionId = Number(record.packageVersionId);
+      if (!Number.isInteger(packageId) || !Number.isInteger(packageVersionId)) throw new Error("invalid item");
+      return { packageId, packageVersionId };
+    });
+  } catch {
+    return { error: "配套版本选择已失效，请刷新页面后重试。" };
+  }
+  if (items.length === 0) return { error: "请为整套配套选择版本。" };
   let batchId: number;
   try {
-    batchId = createBatchDraft(user, { projectId, code, title });
+    batchId = createBatchDraft(user, { projectId, code, title, items });
   } catch (error) {
     return failure(error);
   }
   refreshAll();
   successRedirect(`/integration/${batchId}`, "整套配套转测草稿已创建，确认快照后发起转测。");
+}
+
+export async function addBatchProgressAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const batchId = numberValue(formData, "batchId");
+  if (!batchId) return { error: "批次参数无效。" };
+  try {
+    addBatchProgress(user, batchId, text(formData, "content"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(`/integration/${batchId}`, "进展说明已提交。");
 }
 
 export async function deleteDraftBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -177,18 +206,15 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
   const user = await actionUser();
   const requirementId = numberValue(formData, "requirementId");
   const requestId = numberValue(formData, "requestId");
+  const approverId = numberValue(formData, "approverId");
   if (!requirementId || !requestId) return { error: "绑定任务参数无效。" };
-  let barcodes: string[] = [];
-  const payload = text(formData, "barcodes");
-  try {
-    const parsed = JSON.parse(payload);
-    if (!Array.isArray(parsed)) throw new Error("invalid");
-    barcodes = parsed.filter((item): item is string => typeof item === "string");
-  } catch {
+  if (!approverId) return { error: "请选择绑定电子流审批人。" };
+  const barcodes = formData.getAll("barcodes").filter((item): item is string => typeof item === "string");
+  if (barcodes.every((barcode) => !barcode.trim())) {
     return { error: "请至少添加一个有效设备条码。" };
   }
   try {
-    submitBindingFlow(user, requirementId, barcodes);
+    submitBindingFlow(user, requirementId, barcodes, approverId);
   } catch (error) {
     return failure(error);
   }

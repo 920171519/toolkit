@@ -187,6 +187,10 @@ function seedAll(db: DatabaseSync) {
   const nodeNames = ["EVT", "DVT", "PVT"];
   const nodeDescriptions = ["工程验证", "设计验证", "生产验证"];
   const projectApprovers = [wangLei, chenXi, zhaoMin, xuYan];
+  const projectManagers = [manager, manager2, manager3, manager];
+  const insertNodeApprover = db.prepare(
+    "INSERT INTO project_node_approvers (node_id, user_id, created_at) VALUES (?, ?, ?)",
+  );
   projectIds.forEach((projectId, projectIndex) => {
     const nodeIds: number[] = [];
     nodeNames.forEach((name, index) => {
@@ -199,7 +203,10 @@ function seedAll(db: DatabaseSync) {
         1,
         index + 1,
       );
-      nodeIds.push(Number(result.lastInsertRowid));
+      const nodeId = Number(result.lastInsertRowid);
+      nodeIds.push(nodeId);
+      insertNodeApprover.run(nodeId, projectApprovers[projectIndex], createdAt);
+      insertNodeApprover.run(nodeId, projectManagers[projectIndex], createdAt);
     });
     nodesByProject.push(nodeIds);
   });
@@ -678,6 +685,19 @@ function seedAll(db: DatabaseSync) {
       );
     }
   }
+
+  db.exec(`
+    INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at)
+    SELECT br.id, pna.user_id, '${iso("2026-11-14T10:00:00+08:00")}'
+    FROM binding_requirements br
+    JOIN project_node_approvers pna ON pna.node_id = br.node_id
+  `);
+
+  const insertProgress = db.prepare(
+    "INSERT INTO batch_progress_notes (batch_id, author_id, content, created_at) VALUES (?, ?, ?, ?)",
+  );
+  insertProgress.run(4, tester, "N1 DVT 配套已完成第一轮冒烟，配置下发与回读通过，继续覆盖异常断电场景。", iso("2026-11-13T11:00:00+08:00"));
+  insertProgress.run(5, tester2, "M2 媒体专项已开始，4K 解码基础场景通过，等待高码率片源完成。", iso("2026-11-14T10:30:00+08:00"));
 
   const audit = db.prepare(
     "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",

@@ -9,7 +9,7 @@ import { parseFlash } from "@/lib/queries";
 import { getBatchDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
-import { completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
+import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { Badge, BatchStatusPill, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 
@@ -31,7 +31,7 @@ export default async function BatchDetailPage({
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
-  const { batch, items } = data;
+  const { batch, items, progressNotes } = data;
   const manager = canManageProjectWorkflow(user, batch.softwareManagerId);
   const canTest = canSubmitIntegrationConclusionForProject(user, batch.projectId);
   const changedItems = items.filter((item) => item.isChanged);
@@ -80,6 +80,24 @@ export default async function BatchDetailPage({
             </div>
           </section>
 
+
+          <section className="card">
+            <div className="card-header"><div><h2 style={{ fontSize: 18 }}>集成测试进展</h2><p className="small muted" style={{ marginTop: 3 }}>本项目集成测试负责人可随时记录测试进展、阻塞和风险。</p></div><Badge tone="slate">{progressNotes.length} 条</Badge></div>
+            <div className="card-body" style={{ paddingTop: 12 }}>
+              {canTest && (
+                <ActionForm action={addBatchProgressAction} testId="add-batch-progress-form" hidden={{ batchId: batch.id }} submitText="提交进展说明" submitClassName="button-sm">
+                  <label className="field"><span className="label">进展说明</span><textarea className="textarea" name="content" required minLength={2} placeholder="记录本轮测试进展、发现的问题、阻塞项或下一步安排。" /></label>
+                </ActionForm>
+              )}
+              <div className="timeline" style={{ marginTop: canTest ? 16 : 0 }}>
+                {progressNotes.map((note) => (
+                  <div className="timeline-item" key={note.id}><span className="timeline-line" /><span className="timeline-dot" /><div><div className="timeline-title">{note.content}</div><div className="timeline-meta">{note.authorName ?? "未知"} · {formatDateTime(note.createdAt)}</div></div></div>
+                ))}
+                {progressNotes.length === 0 && <p className="muted small">暂无进展说明。</p>}
+              </div>
+            </div>
+          </section>
+
           {changedItems.length > 0 && (
             <div className="muted-panel">
               {changedItems.map((item) => `${item.packageName} ${item.version}`).join("、")} 为本批次变更包。测试结论只回写这些包在本项目下的转测申请。
@@ -122,7 +140,7 @@ export default async function BatchDetailPage({
             <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 16 }}>终止本轮测试</h2></div></div><div className="card-body" style={{ paddingTop: 12 }}>
               <details><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写原因并终止</summary><div style={{ marginTop: 12 }}>
                 <ActionForm action={terminateBatchAction} testId="terminate-batch-form" hidden={{ batchId: batch.id }} submitText="确认终止测试" submitVariant="danger" confirmMessage="终止后，本批次变更版本在该项目下退回待转测。确认继续？">
-                  <label className="field"><span className="label">终止原因</span><textarea className="textarea" name="reason" required minLength={8} placeholder="说明终止原因和后续安排。" /></label>
+                  <label className="field"><span className="label">终止原因</span><textarea className="textarea" name="reason" required minLength={4} placeholder="说明终止原因和后续安排。" /></label>
                 </ActionForm>
               </div></details>
             </div></section>

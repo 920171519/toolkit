@@ -255,7 +255,7 @@ export type SaveProjectInput = {
   pmUserId: number | null;
   softwareManagerId: number | null;
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
-  sortOrder: number;
+  sortOrder?: number | null;
 };
 
 export function saveProject(actor: SessionUser, input: SaveProjectInput): number {
@@ -294,8 +294,9 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
   return transaction(() => {
     let projectId = input.id ?? 0;
     if (projectId) {
-      const existing = one<{ id: number }>("SELECT id FROM projects WHERE id = ?", projectId);
+      const existing = one<{ id: number; sort_order: number }>("SELECT id, sort_order FROM projects WHERE id = ?", projectId);
       assert(existing, "项目不存在。", "NOT_FOUND");
+      const sortOrder = input.sortOrder == null ? existing.sort_order : Math.max(0, Math.floor(input.sortOrder));
       run(
         `UPDATE projects
          SET name = ?, code = ?, description = ?, pm_user_id = ?, software_manager_id = ?,
@@ -307,10 +308,14 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         input.pmUserId,
         input.softwareManagerId,
         input.status,
-        Math.max(0, Math.floor(input.sortOrder)),
+        sortOrder,
         projectId,
       );
     } else {
+      const maxOrder = one<{ value: number }>("SELECT COALESCE(MAX(sort_order), 0) AS value FROM projects");
+      const sortOrder = input.sortOrder == null
+        ? Number(maxOrder?.value ?? 0) + 1
+        : Math.max(0, Math.floor(input.sortOrder));
       const result = run(
         `INSERT INTO projects
           (name, code, description, pm_user_id, software_manager_id, status, sort_order, created_at)
@@ -321,7 +326,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         input.pmUserId,
         input.softwareManagerId,
         input.status,
-        Math.max(0, Math.floor(input.sortOrder)),
+        sortOrder,
         new Date().toISOString(),
       );
       projectId = Number(result.lastInsertRowid);
@@ -403,6 +408,12 @@ export function addProjectNode(
       owners.requiredBindingCount,
       Number(maxOrder?.value ?? 0) + 1,
     );
+    run(
+      "INSERT OR IGNORE INTO project_node_approvers (node_id, user_id, created_at) VALUES (?, ?, ?)",
+      Number(result.lastInsertRowid),
+      owners.bindingApproverId,
+      new Date().toISOString(),
+    );
     audit(
       actor.id,
       "ADD_PROJECT_NODE",
@@ -449,6 +460,12 @@ export function updateProjectNode(
       owners.requiredBindingCount,
       nodeId,
     );
+    run(
+      "INSERT OR IGNORE INTO project_node_approvers (node_id, user_id, created_at) VALUES (?, ?, ?)",
+      nodeId,
+      owners.bindingApproverId,
+      new Date().toISOString(),
+    );
     audit(
       actor.id,
       "UPDATE_PROJECT_NODE",
@@ -456,6 +473,67 @@ export function updateProjectNode(
       node.project_id,
       `更新 ${node.project_name} 节点 ${node.old_name} 的绑定责任人、审批人与通过数量`,
     );
+  });
+}
+
+export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userId: number) {
+  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护节点审批人范围。", "FORBIDDEN");
+  const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
+    `SELECT n.id, n.name, n.project_id, p.name AS project_name
+     FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
+    nodeId,
+  );
+  assert(node, "项目节点不存在。", "NOT_FOUND");
+  const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
+  assert(person, "审批人不存在或已停用。");
+  const existing = one<{ id: number }>(
+    "SELECT id FROM project_node_approvers WHERE node_id = ? AND user_id = ?",
+    nodeId,
+    userId,
+  );
+  assert(!existing, "该人员已在此节点的审批人范围内。");
+  transaction(() => {
+    run(
+      "INSERT INTO project_node_approvers (node_id, user_id, created_at) VALUES (?, ?, ?)",
+      nodeId,
+      userId,
+      new Date().toISOString(),
+    );
+    audit(actor.id, "ADD_NODE_APPROVER", "PROJECT", node.project_id, `${node.project_name}/${node.name} 添加绑定电子流审批人 ${person.name}`);
+  });
+}
+
+export function removeProjectNodeApprover(actor: SessionUser, assignmentId: number) {
+  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护节点审批人范围。", "FORBIDDEN");
+  const assignment = one<{
+    id: number;
+    node_id: number;
+    user_id: number;
+    node_name: string;
+    project_id: number;
+    project_name: string;
+    user_name: string;
+    primary_approver_id: number | null;
+  }>(
+    `SELECT pna.id, pna.node_id, pna.user_id, n.name AS node_name, n.project_id,
+            p.name AS project_name, u.name AS user_name, n.binding_approver_id AS primary_approver_id
+     FROM project_node_approvers pna
+     JOIN project_nodes n ON n.id = pna.node_id
+     JOIN projects p ON p.id = n.project_id
+     JOIN users u ON u.id = pna.user_id
+     WHERE pna.id = ?`,
+    assignmentId,
+  );
+  assert(assignment, "节点审批人配置不存在。", "NOT_FOUND");
+  assert(assignment.user_id !== assignment.primary_approver_id, "主审批人不能从审批人范围移除，请先修改节点审批人。");
+  const count = one<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM project_node_approvers WHERE node_id = ?",
+    assignment.node_id,
+  );
+  assert(Number(count?.count ?? 0) > 1, "节点至少需要保留一个审批人。");
+  transaction(() => {
+    run("DELETE FROM project_node_approvers WHERE id = ?", assignmentId);
+    audit(actor.id, "REMOVE_NODE_APPROVER", "PROJECT", assignment.project_id, `${assignment.project_name}/${assignment.node_name} 移除绑定电子流审批人 ${assignment.user_name}`);
   });
 }
 

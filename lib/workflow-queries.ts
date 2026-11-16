@@ -93,6 +93,9 @@ export type BatchCandidatePackage = {
   versionId: number;
   version: string;
   versionStatus: string;
+  versions: Array<{ id: number; version: string; status: string; requestStatus: string | null }>;
+  defaultVersionId: number;
+  previousTestVersionId: number | null;
   requestId: number | null;
   formalVersion: string | null;
   currentTrialVersions: string[];
@@ -120,62 +123,64 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
      ORDER BY p.name`,
     projectId,
   );
+  const projectRequests = all<{ requestId: number; versionId: number; status: string }>(
+    `SELECT r.id AS requestId, r.package_version_id AS versionId, r.status
+     FROM version_transfer_requests r WHERE r.project_id = ?`,
+    projectId,
+  );
+  const requestByVersion = new Map(projectRequests.map((request) => [request.versionId, request]));
   return packages.map((pkg) => {
-    const pending = one<{
-      requestId: number;
-      versionId: number;
+    const versionRows = all<{
+      id: number;
       version: string;
+      status: string;
       archiveUrl: string;
       changeSummary: string;
+      submittedAt: string;
     }>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pv.version,
-              pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary
-       FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'PENDING'
-       ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT 1`,
-      projectId,
+      `SELECT id, version, status, archive_url AS archiveUrl, change_summary AS changeSummary,
+              submitted_at AS submittedAt
+       FROM package_versions WHERE package_id = ? AND status != 'VOID'
+       ORDER BY submitted_at DESC, id DESC`,
       pkg.packageId,
     );
-    const formal = one<{ versionId: number; version: string; archiveUrl: string; changeSummary: string }>(
-      `SELECT pv.id AS versionId, pv.version, pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary
-       FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'FORMAL'
-       ORDER BY r.formal_released_at DESC, pv.id DESC LIMIT 1`,
-      projectId,
-      pkg.packageId,
-    ) ?? one<{ versionId: number; version: string; archiveUrl: string; changeSummary: string }>(
-      `SELECT id AS versionId, version, archive_url AS archiveUrl, change_summary AS changeSummary
-       FROM package_versions WHERE package_id = ? AND status = 'FORMAL' ORDER BY id DESC LIMIT 1`,
-      pkg.packageId,
-    );
-    const selected = pending ?? formal;
-    if (!selected) return null;
-    const trialVersions = all<{ version: string }>(
-      `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status IN ('TRIAL','PENDING_FORMAL')
-       ORDER BY r.trial_released_at DESC, pv.id DESC`,
-      projectId,
-      pkg.packageId,
-    );
-    const previous = one<{ version: string }>(
-      `SELECT bi.version FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+    const versions = versionRows.map((version) => ({
+      id: version.id,
+      version: version.version,
+      status: version.status,
+      requestStatus: requestByVersion.get(version.id)?.status ?? null,
+    }));
+    const pending = versions.find((version) => version.requestStatus === "PENDING") ?? null;
+    const formal = versions.find((version) => version.status === "FORMAL") ?? null;
+    const trialVersions = versions.filter((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
+    const previous = one<{ versionId: number; version: string }>(
+      `SELECT bi.package_version_id AS versionId, bi.version FROM batch_items bi
+       JOIN integration_batches b ON b.id = bi.batch_id
        WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
        ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC LIMIT 1`,
       projectId,
       pkg.packageId,
     );
+    const previousVersion = previous ? versions.find((version) => version.id === previous.versionId) ?? null : null;
+    const defaultVersion = pending ?? previousVersion ?? formal ?? versions[0] ?? null;
+    if (!defaultVersion) return null;
+    const selectedRow = versionRows.find((version) => version.id === defaultVersion.id);
+    const selectedRequest = requestByVersion.get(defaultVersion.id);
     return {
       ...pkg,
-      versionId: selected.versionId,
-      version: selected.version,
-      versionStatus: pending ? "PENDING" : "FORMAL",
-      requestId: pending?.requestId ?? null,
+      versionId: defaultVersion.id,
+      version: defaultVersion.version,
+      versionStatus: selectedRequest?.status ?? defaultVersion.status,
+      versions,
+      defaultVersionId: defaultVersion.id,
+      previousTestVersionId: previousVersion?.id ?? null,
+      requestId: selectedRequest?.status === "PENDING" ? selectedRequest.requestId : null,
       formalVersion: formal?.version ?? null,
-      currentTrialVersions: trialVersions.map((row) => row.version),
-      previousTestVersion: previous?.version ?? null,
-      changedVsPrevious: previous?.version !== selected.version,
-      changeSummary: selected.changeSummary,
-      archiveUrl: selected.archiveUrl,
+      currentTrialVersions: trialVersions.map((version) => version.version),
+      previousTestVersion: previousVersion?.version ?? null,
+      changedVsPrevious: previousVersion ? previousVersion.version !== defaultVersion.version : true,
+      changeSummary: selectedRow?.changeSummary ?? "",
+      archiveUrl: selectedRow?.archiveUrl ?? "",
     };
   }).filter((item): item is BatchCandidatePackage => item !== null);
 }
@@ -248,7 +253,14 @@ export type BatchItemRow = {
   ownerName: string | null;
 };
 
-export type BatchDetailRow = { batch: BatchSummaryRow; items: BatchItemRow[] };
+export type BatchProgressNote = {
+  id: number;
+  content: string;
+  createdAt: string;
+  authorName: string | null;
+};
+
+export type BatchDetailRow = { batch: BatchSummaryRow; items: BatchItemRow[]; progressNotes: BatchProgressNote[] };
 
 export function getBatchDetail(batchId: number): BatchDetailRow | null {
   const batch = getBatches(500).find((item) => item.id === batchId);
@@ -273,7 +285,13 @@ export function getBatchDetail(batchId: number): BatchDetailRow | null {
     isChanged: Boolean(item.isChanged),
     changedVsPrevious: Boolean(item.changedVsPrevious),
   }));
-  return { batch, items };
+  const progressNotes = all<BatchProgressNote>(
+    `SELECT n.id, n.content, n.created_at AS createdAt, u.name AS authorName
+     FROM batch_progress_notes n LEFT JOIN users u ON u.id = n.author_id
+     WHERE n.batch_id = ? ORDER BY n.created_at DESC, n.id DESC`,
+    batchId,
+  );
+  return { batch, items, progressNotes };
 }
 
 export type TrialReadyVersion = {
@@ -400,6 +418,7 @@ export type BindingRequirementRow = {
   bindingOwnerName: string | null;
   approverId: number | null;
   approverName: string | null;
+  approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string }>;
   flows: BindingFlowRow[];
 };
 
@@ -482,11 +501,21 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
       barcodeMap.set(row.flowId, list);
     }
     const flows: BindingFlowRow[] = flowRows.map((flow) => ({ ...flow, barcodes: barcodeMap.get(flow.id) ?? [] }));
+    const approverOptions = all<{ userId: number; userName: string; userEmployeeId: string }>(
+      `SELECT bra.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+       FROM binding_requirement_approvers bra JOIN users u ON u.id = bra.user_id
+       WHERE bra.requirement_id = ? ORDER BY bra.id`,
+      requirement.id,
+    );
+    if (approverOptions.length === 0 && requirement.approverId && requirement.approverName) {
+      approverOptions.push({ userId: requirement.approverId, userName: requirement.approverName, userEmployeeId: "" });
+    }
     const approvedCount = flows.filter((flow) => flow.status === "APPROVED").reduce((total, flow) => total + flow.barcodes.length, 0);
     return {
       ...requirement,
       approvedCount,
       pendingCount: flows.filter((flow) => flow.status === "PENDING").length,
+      approverOptions,
       flows,
     };
   });
@@ -898,16 +927,25 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     }
   }
 
+  const readKeys = new Set(
+    all<{ notificationKey: string }>(
+      "SELECT notification_key AS notificationKey FROM notification_reads WHERE user_id = ?",
+      user.id,
+    ).map((row) => row.notificationKey),
+  );
+  const unreadAlerts = alerts.filter((alert) => !readKeys.has(alert.key));
+  const unreadNotifications = notifications.filter((notification) => !readKeys.has(notification.key));
+
   return {
     tasks,
-    alerts,
-    notifications,
+    alerts: unreadAlerts,
+    notifications: unreadNotifications,
     myVersions,
     myBindingFlows,
     counts: {
       tasks: tasks.length,
-      alerts: alerts.length,
-      notifications: notifications.length,
+      alerts: unreadAlerts.length,
+      notifications: unreadNotifications.length,
       myActiveVersions: myVersions.filter((version) => !["FORMAL", "VOID"].includes(version.status)).length,
     },
   };

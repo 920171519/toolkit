@@ -40,6 +40,19 @@ function migrateSchema(database: DatabaseSync) {
      )
      WHERE software_manager_id IS NULL`,
   );
+  // Existing databases predate the multi-approver pool. Backfill the primary approver
+  // so node configuration and old binding requirements expose a selectable approver range.
+  database.exec(
+    `INSERT OR IGNORE INTO project_node_approvers (node_id, user_id, created_at)
+     SELECT id, binding_approver_id, datetime('now')
+     FROM project_nodes WHERE binding_approver_id IS NOT NULL`,
+  );
+  database.exec(
+    `INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at)
+     SELECT br.id, pna.user_id, datetime('now')
+     FROM binding_requirements br
+     JOIN project_node_approvers pna ON pna.node_id = br.node_id`,
+  );
 }
 
 // The database is opened lazily. This keeps `next build` from touching the data file

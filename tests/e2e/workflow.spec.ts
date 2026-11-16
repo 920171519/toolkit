@@ -46,8 +46,11 @@ async function approveAllBindingFlows(page: Page) {
   }
 }
 
-async function submitBindingFlow(page: Page, nodeName: string, barcodes: string[]) {
+async function submitBindingFlow(page: Page, nodeName: string, barcodes: string[], approverName?: string) {
   const requirement = page.locator(".binding-requirement").filter({ hasText: nodeName }).first();
+  if (approverName) {
+    await chooseByText(requirement.locator('select[name="approverId"]'), approverName);
+  }
   const addButton = requirement.getByRole("button", { name: "添加条码" });
   let inputs = requirement.locator('input[placeholder="输入或扫描设备条码"]');
   while ((await inputs.count()) < barcodes.length) {
@@ -121,6 +124,11 @@ test.describe("工程协同台项目维度流程", () => {
     await expectFlash(page, "项目已创建");
 
     const projectCard = cardByHeading(page, projectName);
+    await projectCard.locator("summary").filter({ hasText: "编辑项目" }).click();
+    const editForm = projectCard.locator('form[data-testid^="edit-project-form-"]').first();
+    await expect(editForm).toBeVisible();
+    await expect(editForm.locator('input[name="sortOrder"]')).toHaveCount(0);
+    await projectCard.getByText("取消编辑", { exact: true }).click();
     await projectCard.locator("summary").filter({ hasText: "添加节点" }).click();
     const addForm = projectCard.locator('form[data-testid^="add-node-form-"]').first();
     await expect(addForm).toBeVisible();
@@ -164,10 +172,34 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.locator(".personal-task").filter({ hasText: "极光 M2" }).filter({ hasText: "提交测试结论" }).first()).toBeVisible();
     await expect(page.locator(".personal-task").filter({ hasText: "星云 N1" })).toHaveCount(0);
 
+    await page.goto("/submissions");
+    await expect(page.locator(".project-request-group").filter({ hasText: "极光 M2" }).first()).toBeVisible();
+    await expect(page.locator(".project-request-group").filter({ hasText: "星云 N1" })).toHaveCount(0);
+    await page.goto("/integration");
+    await expect(page.locator("article.card").filter({ hasText: "极光 M2" }).first()).toBeVisible();
+    await expect(page.locator("article.card").filter({ hasText: "星云 N1" })).toHaveCount(0);
+
+    await login(page, "TEST001");
+    await page.goto("/submissions");
+    await expect(page.locator(".project-request-group").filter({ hasText: "星云 N1" }).first()).toBeVisible();
+    await expect(page.locator(".project-request-group").filter({ hasText: "极光 M2" }).first()).toBeVisible();
+    await expect(page.locator(".project-request-group").filter({ hasText: "磐石 T3" }).first()).toBeVisible();
+
     await login(page, "OWNER001");
     await expect(page.locator(".personal-alert").filter({ hasText: "1008MED 4.2.0" })).toContainText("测试异常");
     await login(page, "VALID001");
     await expect(page.locator(".personal-task").filter({ hasText: "1006KEY" }).first()).toBeVisible();
+  });
+
+  test("通知点击后标记已读并从工作台消失", async ({ page }) => {
+    await login(page, "VALID001");
+    const alert = page.locator(".personal-alert").filter({ hasText: "被驳回" }).first();
+    await expect(alert).toBeVisible();
+    await alert.click();
+    await page.waitForLoadState("networkidle");
+    expect(page.url()).toContain("/trial/");
+    await page.goto("/dashboard");
+    await expect(page.locator(".personal-alert").filter({ hasText: "被驳回" })).toHaveCount(0);
   });
 
   test("整套配套转测不提供可选框，允许并行批次，软件经理不能提交测试结论", async ({ page }) => {
@@ -179,17 +211,26 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(builder).toBeVisible();
     await expect(builder.locator('input[type="checkbox"]')).toHaveCount(0);
     await expect(builder.locator(".compact-batch-table tbody tr")).toHaveCount(8);
+    await expect(builder.locator(".compact-batch-table select")).toHaveCount(8);
+    const otaRow = builder.locator(".compact-batch-table tbody tr").filter({ hasText: "1001OTA" }).first();
+    await expect(otaRow.locator("select option:checked")).toContainText("1.5.2");
+    const comRow = builder.locator(".compact-batch-table tbody tr").filter({ hasText: "1003COM" }).first();
+    await expect(comRow.locator("select option:checked")).toContainText("2.1.0");
+    await chooseByText(comRow.locator("select"), "2.0.3");
+    await expect(comRow.locator("select option:checked")).toContainText("2.0.3");
     await page.locator('input[name="code"]').fill("B950");
     await page.locator('input[name="title"]').fill("星云 N1 整套配套自动化验证");
     await page.getByRole("button", { name: "创建整套配套批次" }).click();
     await expectFlash(page, "整套配套转测草稿已创建");
     await expect(page.locator("h1")).toContainText("B950");
     await expect(page.locator(".data-table tbody tr")).toHaveCount(8);
+    const batchComRow = page.locator(".data-table tbody tr").filter({ hasText: "1003COM" }).first();
+    await expect(batchComRow).toContainText("2.0.3");
     await page.getByRole("button", { name: "发起转测" }).click();
     await expectFlash(page, "B950 已发起集成测试");
     await expect(page.locator('input[name="reportFile"]')).toHaveCount(0);
     await page.locator("summary").filter({ hasText: "填写原因并终止" }).click();
-    await page.locator('textarea[name="reason"]').fill("自动化验证：整套配套草稿与并发批次流程验证完成。");
+    await page.locator('textarea[name="reason"]').fill("验证完成");
     await page.getByRole("button", { name: "确认终止测试" }).click();
     await expectFlash(page, "本批次已终止");
   });
@@ -208,6 +249,10 @@ test.describe("工程协同台项目维度流程", () => {
     await login(page, "TEST001");
     await page.goto("/integration/4");
     await expect(page.locator('input[name="reportFile"]')).toHaveCount(1);
+    await page.locator('[data-testid="add-batch-progress-form"] textarea[name="content"]').fill("N1 配置专项已完成第一轮验证，配置下发、回读和异常断电场景均通过，准备提交最终结论。");
+    await page.getByRole("button", { name: "提交进展说明" }).click();
+    await expectFlash(page, "进展说明已提交");
+    await expect(page.locator(".timeline-title").filter({ hasText: "第一轮验证" })).toBeVisible();
     await page.locator('textarea[name="testSummary"]').fill("集成测试责任田验证：N1 配置专项全部通过，无新增阻塞问题。");
     await page.locator('input[name="reportFile"]').setInputFiles({
       name: "B120-verification-report.pdf",
@@ -236,9 +281,13 @@ test.describe("工程协同台项目维度流程", () => {
 
     await login(page, "VALID001");
     await page.goto(otaTrialUrl);
+    const approverSelect = page.locator('select[name="approverId"]').first();
+    await expect(approverSelect).toBeVisible();
+    expect(await approverSelect.locator("option").count()).toBeGreaterThanOrEqual(2);
+    await page.goto(otaTrialUrl);
     await submitBindingFlow(page, "EVT", ["N1-OTA-EVT-001", "N1-OTA-EVT-002"]);
     await submitBindingFlow(page, "EVT", ["N1-OTA-EVT-003"]);
-    await submitBindingFlow(page, "DVT", ["N1-OTA-DVT-001"]);
+    await submitBindingFlow(page, "DVT", ["N1-OTA-DVT-001"], "林澈");
     await submitBindingFlow(page, "PVT", ["N1-OTA-PVT-001"]);
     await expect(page.getByText("N1-OTA-EVT-003")).toHaveCount(1);
 
@@ -246,9 +295,13 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto(otaTrialUrl);
     await approveAllBindingFlows(page);
     await page.waitForTimeout(300);
-    expect(page.url()).toContain("/formal");
 
     await login(page, "MGR001");
+    await page.goto(otaTrialUrl);
+    await approveAllBindingFlows(page);
+    await page.waitForTimeout(300);
+    expect(page.url()).toContain("/formal");
+
     await page.goto("/formal");
     const formalCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "星云 N1" }).first();
     await expect(formalCard).toContainText("待转正");
@@ -299,8 +352,16 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(table).not.toContainText("远山 X0");
     await expect(table).not.toContainText("极光 M2");
 
+    await page.getByRole("link", { name: "1001OTA", exact: true }).click();
+    await expect(page.getByTestId("package-drawer")).toBeVisible();
+    await expect(page.getByTestId("package-drawer")).toContainText("1001OTA");
+
     await page.goto("/projects");
-    await page.getByRole("button", { name: "存档项目" }).click();
+    await page.getByLabel("选择项目").selectOption({ label: "极光 M2" });
+    await page.getByRole("button", { name: "打开项目" }).click();
+    await expect(page.getByRole("heading", { name: "极光 M2" })).toBeVisible();
+
+    await page.getByRole("link", { name: "存档项目" }).click();
     await expect(page.getByRole("heading", { name: "远山 X0" })).toBeVisible();
     await expect(page.locator(".data-table")).toContainText("1001OTA");
     await expect(page.locator(".data-table")).toContainText("1008MED");

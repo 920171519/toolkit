@@ -15,6 +15,7 @@ import {
 import {
   addAreaLeader,
   addProjectNode,
+  addProjectNodeApprover,
   updateProjectNode,
   assignAreaProjectLead,
   deleteArea,
@@ -23,6 +24,7 @@ import {
   removeAreaLeader,
   removeAreaProjectLead,
   removeAreaProjectMember,
+  removeProjectNodeApprover,
   saveArea,
   assignAreaProjectMember,
   savePackage,
@@ -230,6 +232,39 @@ export async function addProjectNodeAction(
   }
   refreshAll();
   successRedirect("/settings/projects", "项目测试节点已添加。");
+}
+
+export async function addProjectNodeApproverAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await actionUser();
+  const nodeId = numberValue(formData, "nodeId");
+  const userId = numberValue(formData, "userId");
+  if (!nodeId || !userId) return { error: "请选择审批人。" };
+  try {
+    addProjectNodeApprover(user, nodeId, userId);
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect("/settings/projects", "节点审批人范围已更新。");
+}
+
+export async function removeProjectNodeApproverAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await actionUser();
+  const assignmentId = numberValue(formData, "assignmentId");
+  if (!assignmentId) return { error: "审批人参数无效。" };
+  try {
+    removeProjectNodeApprover(user, assignmentId);
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect("/settings/projects", "节点审批人已移除。");
 }
 
 export async function updateProjectNodeAction(

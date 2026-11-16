@@ -28,6 +28,10 @@ const categoryMeta = {
   alert: { label: "异常处理", icon: AlertTriangle, tone: "rose" },
 } as const;
 
+function notificationReadHref(key: string, next: string) {
+  return `/api/notifications/read?key=${encodeURIComponent(key)}&next=${encodeURIComponent(next)}`;
+}
+
 const alertTone: Record<string, string> = {
   danger: "rose",
   warning: "amber",
@@ -69,8 +73,8 @@ export default async function DashboardPage({
         description="这里只展示与你有关、需要你处理或关注的事项。转测申请按项目分发，测试异常、绑定任务与绑定电子流审批会主动出现在这里。"
         actions={
           <>
-            <Link href="/overview" className="button button-secondary">部门总览</Link>
-            <Link href="/submissions" className="button button-primary">提交转测申请 <ArrowRight size={14} /></Link>
+            <Link prefetch={false} href="/overview" className="button button-secondary">部门总览</Link>
+            <Link prefetch={false} href="/submissions" className="button button-primary">提交转测申请 <ArrowRight size={14} /></Link>
           </>
         }
       />
@@ -113,7 +117,7 @@ export default async function DashboardPage({
           <div className="card-body" style={{ paddingTop: 10 }}>
             <div className="personal-alert-list">
               {data.alerts.map((alert) => (
-                <Link href={alert.href} className="personal-alert" key={alert.key}>
+                <a href={notificationReadHref(alert.key, alert.href)} className="personal-alert" key={alert.key}>
                   <AlertTriangle size={16} style={{ color: alert.tone === "danger" ? "var(--danger)" : "var(--warning)", flex: "none", marginTop: 2 }} />
                   <div style={{ flex: 1 }}>
                     <div className="personal-task-title">{alert.title}</div>
@@ -121,7 +125,7 @@ export default async function DashboardPage({
                     {alert.at && <div className="personal-task-meta">{formatRelative(alert.at)}</div>}
                   </div>
                   <Badge tone={alertTone[alert.tone] ?? "slate"}>{alert.tone === "danger" ? "异常" : alert.tone === "warning" ? "关注" : "通知"}</Badge>
-                </Link>
+                </a>
               ))}
             </div>
           </div>
@@ -158,7 +162,7 @@ export default async function DashboardPage({
                         </div>
                         <div className="personal-task-list">
                           {group.items.map((task) => (
-                            <Link href={task.href} className="personal-task" key={task.key}>
+                            <Link prefetch={false} href={task.href} className="personal-task" key={task.key}>
                               <div style={{ flex: 1 }}>
                                 <div className="personal-task-title">{task.title}</div>
                                 <div className="personal-task-desc">{task.description}</div>
@@ -184,7 +188,7 @@ export default async function DashboardPage({
                   关注自己提交的软件包在各项目中的测试进度。
                 </p>
               </div>
-              <Link href="/packages" className="archive-link">版本总览 <ArrowRight size={11} /></Link>
+              <Link prefetch={false} href="/packages" className="archive-link">版本总览 <ArrowRight size={11} /></Link>
             </div>
             <div className="card-body" style={{ paddingTop: 8 }}>
               {data.myVersions.length === 0 ? (
@@ -207,7 +211,7 @@ export default async function DashboardPage({
                         return (
                           <tr key={version.id}>
                             <td>
-                              <Link href={`/packages?open=${version.packageId}`} style={{ fontWeight: 600 }}>
+                              <Link prefetch={false} href={`/packages?open=${version.packageId}`} style={{ fontWeight: 600 }}>
                                 {version.packageName}
                               </Link>
                             </td>
@@ -273,13 +277,13 @@ export default async function DashboardPage({
               <div className="card-body" style={{ paddingTop: 8 }}>
                 <div className="side-list">
                   {data.notifications.slice(0, 5).map((item) => (
-                    <div className="side-list-item" key={item.key}>
+                    <a className="side-list-item notification-link" href={notificationReadHref(item.key, item.href)} key={item.key}>
                       <span className="timeline-dot" style={{ background: item.tone === "danger" ? "var(--danger)" : "var(--brand)", flex: "none" }} />
                       <div>
                         <div className="personal-task-title">{item.title}</div>
                         <div className="personal-task-desc">{item.description}</div>
                       </div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               </div>

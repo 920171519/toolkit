@@ -1,10 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowUpRight, Search } from "lucide-react";
 import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
 import { Badge, EmptyState, StatusPill } from "@/components/ui";
-import { PackageDrawer } from "@/components/package-drawer";
+import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
+
+function packageHref(packageId: number, projectId?: number) {
+  return `/packages?open=${packageId}${projectId ? `&project=${projectId}` : ""}`;
+}
 
 function syncOpenParam(packageId: number | null) {
   if (typeof window === "undefined") return;
@@ -19,11 +24,15 @@ export function PackageOverviewTable({
   people,
   initialOpenId,
   scopeLabel = "全部",
+  initialDetail = null,
+  selectedProjectId,
 }: {
   packages: PackageOverviewRow[];
   people: PersonOption[];
   initialOpenId?: number;
   scopeLabel?: string;
+  initialDetail?: DrawerPayload | null;
+  selectedProjectId?: number;
 }) {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
@@ -45,11 +54,6 @@ export function PackageOverviewTable({
         .includes(normalized),
     );
   }, [packages, query]);
-
-  function openPackage(packageId: number) {
-    setOpenId(packageId);
-    syncOpenParam(packageId);
-  }
 
   function closePackage() {
     setOpenId(null);
@@ -98,14 +102,14 @@ export function PackageOverviewTable({
                 {filtered.map((pkg) => (
                   <tr key={pkg.id}>
                     <td>
-                      <button
-                        type="button"
+                      <Link
+                        href={packageHref(pkg.id, selectedProjectId)}
                         className="link-button"
                         style={{ fontWeight: 600, textAlign: "left" }}
-                        onClick={() => openPackage(pkg.id)}
+                        prefetch={false}
                       >
                         {pkg.name}
-                      </button>
+                      </Link>
                       <div className="toolbar" style={{ gap: 5, marginTop: 2 }}>
                         <span className="small muted">{pkg.code}</span>
                         {!pkg.isActive && <Badge tone="slate">已停用</Badge>}
@@ -175,14 +179,14 @@ export function PackageOverviewTable({
                       )}
                     </td>
                     <td className="cell-actions">
-                      <button
-                        type="button"
+                      <Link
+                        href={packageHref(pkg.id, selectedProjectId)}
                         className="archive-link"
-                        onClick={() => openPackage(pkg.id)}
+                        prefetch={false}
                         aria-label={`查看 ${pkg.name} 详情`}
                       >
                         详情 <ArrowUpRight size={12} />
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -196,7 +200,7 @@ export function PackageOverviewTable({
       </p>
 
       {openId && (
-        <PackageDrawer packageId={openId} people={people} onClose={closePackage} />
+        <PackageDrawer packageId={openId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
       )}
     </div>
   );

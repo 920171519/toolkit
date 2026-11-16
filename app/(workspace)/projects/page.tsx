@@ -22,6 +22,9 @@ export default async function ProjectsPage({
   const manager = canManageConfig(user);
   const activeCount = projects.filter((project) => project.status !== "ARCHIVED").length;
   const archivedCount = projects.length - activeCount;
+  const group = params.group === "archived" ? "archived" : "active";
+  const projectParam = Array.isArray(params.project) ? params.project[0] : params.project;
+  const selectedProjectId = projectParam && Number.isInteger(Number(projectParam)) ? Number(projectParam) : null;
 
   return (
     <>
@@ -54,7 +57,7 @@ export default async function ProjectsPage({
         <span style={{ marginLeft: "auto" }}>项目结束后可在项目配置中归档</span>
       </div>
 
-      <ProjectBoard projects={projects} />
+      <ProjectBoard projects={projects} group={group} selectedProjectId={selectedProjectId} />
     </>
   );
 }
