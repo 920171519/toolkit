@@ -10,13 +10,25 @@ const items = [
   { href: "/settings/users", label: "人员与角色", adminOnly: true },
 ];
 
-export function SettingsTabs({ isAdmin, showManagementTabs = true }: { isAdmin: boolean; showManagementTabs?: boolean }) {
+export function SettingsTabs({
+  isAdmin,
+  showManagementTabs = true,
+  canManageProjects = true,
+  canManagePackages = true,
+}: {
+  isAdmin: boolean;
+  showManagementTabs?: boolean;
+  canManageProjects?: boolean;
+  canManagePackages?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <nav className="settings-tabs" aria-label="基础配置">
       {items
         .filter((item) => !item.adminOnly || isAdmin)
         .filter((item) => showManagementTabs || item.href === "/settings/areas")
+        .filter((item) => item.href !== "/settings/projects" || canManageProjects)
+        .filter((item) => item.href !== "/settings/packages" || canManagePackages)
         .map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (

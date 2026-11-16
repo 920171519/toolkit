@@ -3,7 +3,7 @@ import "server-only";
 import { all, one, run, transaction } from "./db";
 import { ROLES, type Role } from "./constants";
 import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
-import { isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
+import { canManagePackageArea, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
 import { assert } from "./services";
 import type { SessionUser } from "./types";
 
@@ -260,6 +260,9 @@ export type SaveProjectInput = {
 
 export function saveProject(actor: SessionUser, input: SaveProjectInput): number {
   assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目。", "FORBIDDEN");
+  if (!input.id) {
+    assert(isAdmin(actor), "只有系统管理员可以新建项目。", "FORBIDDEN");
+  }
   assert(input.name.trim().length >= 2, "项目名称至少需要 2 个字符。");
   assert(/^[A-Za-z0-9_-]{2,20}$/.test(input.code.trim()), "项目编码需为 2-20 位字母、数字、下划线或中划线。");
   const duplicateName = one<{ id: number }>(
@@ -590,7 +593,28 @@ export type SavePackageInput = {
 };
 
 export function savePackage(actor: SessionUser, input: SavePackageInput): number {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护软件包。", "FORBIDDEN");
+  const existingPackage = input.id
+    ? one<{ id: number; area_id: number | null }>("SELECT id, area_id FROM packages WHERE id = ?", input.id)
+    : null;
+  if (input.id) {
+    assert(existingPackage, "软件包不存在。", "NOT_FOUND");
+    assert(
+      canManagePackageArea(actor, existingPackage.area_id),
+      "只有责任田主管或系统管理员可以维护该软件包。",
+      "FORBIDDEN",
+    );
+    assert(
+      input.areaId === existingPackage.area_id || isAdmin(actor),
+      "只有系统管理员可以调整软件包所属责任田。",
+      "FORBIDDEN",
+    );
+  } else {
+    assert(
+      canManagePackageArea(actor, input.areaId),
+      "只有责任田主管或系统管理员可以在该责任田下新建软件包。",
+      "FORBIDDEN",
+    );
+  }
   assert(input.name.trim().length >= 2, "软件包名称至少需要 2 个字符。");
   assert(/^[A-Za-z0-9_-]{2,24}$/.test(input.code.trim()), "软件包编码需为 2-24 位字母、数字、下划线或中划线。");
   assert(input.ownerId, "请为软件包指定责任人。");
@@ -677,8 +701,8 @@ export function updatePackageResponsibility(
   );
   assert(pkg, "软件包不存在。", "NOT_FOUND");
   assert(
-    canManageConfig(actor) || isAreaProjectLead(actor.id, pkg.area_id),
-    "只有责任田项目负责人、软件经理或系统管理员可以修改软件包责任信息。",
+    isAdmin(actor) || isAreaLeader(actor.id, pkg.area_id) || isAreaProjectLead(actor.id, pkg.area_id),
+    "只有责任田主管、项目负责人或系统管理员可以修改软件包责任信息。",
     "FORBIDDEN",
   );
   assert(input.ownerId, "请为软件包指定责任人。");
@@ -713,9 +737,12 @@ export function updatePackageResponsibility(
 }
 
 export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds: number[]) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护软件包使用范围。", "FORBIDDEN");
-  const pkg = one<{ id: number; name: string }>("SELECT id, name FROM packages WHERE id = ?", packageId);
+  const pkg = one<{ id: number; name: string; area_id: number | null }>(
+    "SELECT id, name, area_id FROM packages WHERE id = ?",
+    packageId,
+  );
   assert(pkg, "软件包不存在。", "NOT_FOUND");
+  assert(canManagePackageArea(actor, pkg.area_id), "只有责任田主管或系统管理员可以维护该软件包使用范围。", "FORBIDDEN");
   const bindingActive = one<{ version: string }>(
     "SELECT version FROM package_versions WHERE package_id = ? AND status IN ('TRIAL','PENDING_FORMAL') LIMIT 1",
     packageId,

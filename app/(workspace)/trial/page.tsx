@@ -27,7 +27,8 @@ export default async function TrialPage({
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const scope = getWorkflowProjectScope(user);
-  const ready = getTrialReadyVersions(scope);
+  const canViewReleaseQueue = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
+  const ready = canViewReleaseQueue ? getTrialReadyVersions(scope) : [];
   const trials = getTrialVersions(scope);
   const canRelease = (managerId: number | null) => canManageProjectWorkflow(user, managerId);
 
@@ -41,13 +42,13 @@ export default async function TrialPage({
       />
       <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 18 }}>
-        <span><strong>{ready.length}</strong> 个项目版本待发布试制</span>
+        {canViewReleaseQueue && <span><strong>{ready.length}</strong> 个项目版本待发布试制</span>}
         <span><strong>{trials.length}</strong> 个项目试制版本绑定中</span>
         <span>绑定只覆盖本项目节点</span>
         <span style={{ marginLeft: "auto" }}>试制、绑定、转正均按项目独立运作</span>
       </div>
 
-      <section className="card">
+      {canViewReleaseQueue && <section className="card">
         <div className="card-header"><div><div className="eyebrow">Release gate</div><h2 style={{ marginTop: 5, fontSize: 19 }}>待发布试制</h2><p className="small muted" style={{ marginTop: 3 }}>本项目集成测试已结束的版本。发布时必须提交本项目的发布试制电子流。</p></div><Badge tone="violet">{ready.length} 待处理</Badge></div>
         <div className="card-body" style={{ paddingTop: 14 }}>
           {ready.length === 0 ? (
@@ -92,9 +93,9 @@ export default async function TrialPage({
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
-      <section className="card" style={{ marginTop: 18 }}>
+      <section className="card" style={canViewReleaseQueue ? { marginTop: 18 } : undefined}>
         <div className="card-header"><div><div className="eyebrow">Binding verification</div><h2 style={{ marginTop: 5, fontSize: 19 }}>试制版本绑定验证</h2><p className="small muted" style={{ marginTop: 3 }}>仅覆盖本项目全部测试节点。设备条码可由多个批次电子流提交，审批通过数量按条码计算。</p></div><Badge tone="teal">{trials.length} 个版本</Badge></div>
         <div className="card-body" style={{ paddingTop: 14 }}>
           {trials.length === 0 ? (

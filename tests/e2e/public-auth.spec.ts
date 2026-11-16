@@ -61,8 +61,9 @@ test.describe("公开项目联系人与账号", () => {
     await expect(page.locator("h1")).toContainText("测试成员");
 
     await page.goto("/settings/areas");
-    await expect(page).toHaveURL(/\/dashboard\?flash=/);
-    await expect(page.locator(".flash")).toContainText("当前角色无权访问该页面");
+    await expect(page).toHaveURL(/\/settings\/areas/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("责任田配置");
+    await expect(page.getByTestId("new-area-trigger")).toHaveCount(0);
 
     await page.getByRole("button", { name: "退出登录" }).click();
     await expect(page).toHaveURL(/\/$/);

@@ -514,3 +514,32 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .skeleton-panel-small { height: 140px; }
 @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @media (max-width: 800px) { .skeleton-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+/* Modal dialogs */
+.modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(24, 35, 30, 0.42); display: flex; align-items: flex-start; justify-content: center; padding: 7vh 20px 30px; overflow-y: auto; }
+.modal-panel { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 28px 70px rgba(20, 35, 28, 0.22); }
+.modal-panel-wide { width: min(1100px, 100%); }
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 22px 14px; border-bottom: 1px solid var(--line); }
+.modal-header h2 { font-size: 20px; }
+.modal-header p { margin-top: 4px; }
+.modal-body { padding: 18px 22px 22px; }
+.void-version-warning { margin-top: 5px; padding: 5px 7px; border-radius: 5px; background: #fff7f5; border: 1px solid #efd4cc; color: var(--danger); font-size: 10px; line-height: 1.45; }
+.barcode-textarea { min-height: 92px; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; }
+.barcode-details { margin-top: 5px; font-size: 11px; }
+.barcode-details summary { color: var(--brand); cursor: pointer; }
+.barcode-chip-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; max-height: 110px; overflow: auto; }
+.barcode-chip { display: inline-block; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-muted); font-size: 10px; }
+.flow-web-link { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; font-size: 11px; }
+.formal-binding-details { margin-top: 8px; font-size: 11px; }
+.formal-binding-details summary { color: var(--brand); cursor: pointer; }
+.formal-requirement-list { margin-top: 8px; padding: 9px; background: var(--surface-muted); border-radius: 7px; display: flex; flex-direction: column; gap: 8px; }
+.formal-requirement { padding-bottom: 7px; border-bottom: 1px dashed var(--line); }
+.formal-requirement:last-child { border-bottom: 0; padding-bottom: 0; }
+.formal-flow-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 5px; font-size: 10.5px; }
+
+/* Keep inline action buttons compact inside chips */
+.person-chip .form-footer, .member-pill .form-footer { display: inline-flex; align-items: center; margin: 0; padding: 0; gap: 0; }
+.person-chip .form-footer button, .member-pill .form-footer button { min-height: 16px; height: 16px; width: 16px; padding: 0; border-radius: 50%; line-height: 1; font-size: 11px; }
+.node-approver-range .member-pill { padding: 2px 5px 2px 7px; font-size: 10.5px; gap: 3px; min-height: 22px; }
+.node-approver-range .member-pill form { margin: 0; }
+.node-approver-range .member-pill .chip-remove { width: 16px !important; height: 16px !important; min-height: 16px !important; }

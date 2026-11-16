@@ -53,6 +53,12 @@ function migrateSchema(database: DatabaseSync) {
      FROM binding_requirements br
      JOIN project_node_approvers pna ON pna.node_id = br.node_id`,
   );
+  const flowColumns = database
+    .prepare("PRAGMA table_info(binding_flows)")
+    .all() as Array<{ name: string }>;
+  if (!flowColumns.some((column) => column.name === "web_url")) {
+    database.exec("ALTER TABLE binding_flows ADD COLUMN web_url TEXT");
+  }
 }
 
 // The database is opened lazily. This keeps `next build` from touching the data file

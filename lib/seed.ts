@@ -554,9 +554,9 @@ function seedAll(db: DatabaseSync) {
   );
   const insertFlow = db.prepare(
     `INSERT INTO binding_flows
-      (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode,
+      (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode, web_url,
        submitted_by, approver_id, status, submitted_at, reviewed_at, review_comment, cancelled_at, cancel_reason)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
   );
   const insertFlowBarcode = db.prepare(
     "INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)",
@@ -582,6 +582,7 @@ function seedAll(db: DatabaseSync) {
       projectId,
       nodeId,
       barcodes.join(", "),
+      `https://eflow.example.com/binding/BF-2026-${String(flowSequence).padStart(4, "0")}`,
       hanSong,
       approver,
       status,

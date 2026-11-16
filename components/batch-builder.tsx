@@ -96,11 +96,12 @@ export function BatchBuilder({
                     >
                       {candidate.versions.map((option) => (
                         <option value={option.id} key={option.id}>
-                          {option.version} · {option.requestStatus === "PENDING" ? "本次待转测" : statusLabel(option.status)}
+                          {option.version} · {option.requestStatus === "PENDING" ? "本次待转测" : option.requestStatus === "VOID" ? "本项目已作废" : statusLabel(option.status)}
                         </option>
                       ))}
                     </select>
                     {version?.requestStatus === "PENDING" && <div style={{ marginTop: 4 }}><Badge tone="amber">本次新增转测</Badge></div>}
+                    {(version?.requestStatus === "VOID" || version?.status === "VOID") && <div className="void-version-warning">该版本在本项目已作废，如继续选择请确认已修复问题并重新验证。</div>}
                   </td>
                   <td>
                     {!candidate.previousTestVersion

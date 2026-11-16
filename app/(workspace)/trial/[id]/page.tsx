@@ -100,8 +100,17 @@ export default async function TrialDetailPage({
                             <Link2 size={13} style={{ color: "var(--muted-light)" }} />
                             <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{flow.flowNo}</span>
                             <Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? flow.status}</Badge>
-                            <span className="small">条码：{flow.barcodes.join("、") || "—"}</span>
+                            <span className="small">条码 {flow.barcodes.length} 个</span>
+                            {flow.webUrl && <ExternalLink href={flow.webUrl} className="flow-web-link">网页电子流</ExternalLink>}
                           </div>
+                          {flow.barcodes.length > 0 && (
+                            <details className="barcode-details">
+                              <summary>查看绑定条码</summary>
+                              <div className="barcode-chip-list">
+                                {flow.barcodes.map((barcode) => <span className="mono barcode-chip" key={barcode}>{barcode}</span>)}
+                              </div>
+                            </details>
+                          )}
                           <div className="small muted" style={{ marginTop: 4 }}>
                             {flow.submittedByName ?? "—"} 提交 · 审批人 {flow.approverName ?? "—"} · {formatDateTime(flow.submittedAt)}
                             {flow.reviewComment ? ` · ${flow.reviewComment}` : ""}

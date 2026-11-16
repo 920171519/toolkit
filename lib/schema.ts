@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS binding_flows (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
   node_id INTEGER NOT NULL REFERENCES project_nodes(id) ON DELETE RESTRICT,
   device_barcode TEXT NOT NULL,
+  web_url TEXT,
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),

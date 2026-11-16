@@ -1,7 +1,3 @@
-"use client";
-
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
 import { submitBindingFlowAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 
@@ -19,9 +15,6 @@ export function BindingFlowForm({
   currentUserId: number;
 }) {
   const selectableApprovers = approvers.filter((approver) => approver.userId !== currentUserId);
-  const [barcodes, setBarcodes] = useState<string[]>([""]);
-  const normalized = barcodes.map((barcode) => barcode.trim()).filter(Boolean);
-
   if (selectableApprovers.length === 0) {
     return <div className="muted-panel">该节点审批人范围为空，请联系软件经理在项目配置中维护审批人。</div>;
   }
@@ -32,8 +25,7 @@ export function BindingFlowForm({
       hidden={{ requirementId, requestId }}
       submitText="提交绑定电子流"
       submitClassName="button-sm"
-      disabled={normalized.length === 0}
-      footerNote="一个电子流可绑定多个设备条码；可多次提交。"
+      footerNote="设备条码每行一个，支持扫码枪连续录入或一次粘贴多个条码。"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label className="field">
@@ -46,31 +38,14 @@ export function BindingFlowForm({
             ))}
           </select>
         </label>
-        {barcodes.map((barcode, index) => (
-          <div className="barcode-input-row" key={index}>
-            <label className="field" style={{ flex: 1 }}>
-              <span className="label">设备条码 {index + 1} <span className="required-mark">*</span></span>
-              <input
-                className="input"
-                name="barcodes"
-                value={barcode}
-                placeholder="输入或扫描设备条码"
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setBarcodes((current) => current.map((item, itemIndex) => itemIndex === index ? value : item));
-                }}
-              />
-            </label>
-            {barcodes.length > 1 && (
-              <button type="button" className="button button-ghost button-sm" title="移除条码" aria-label="移除条码" onClick={() => setBarcodes((current) => current.filter((_, itemIndex) => itemIndex !== index))} style={{ marginTop: 20 }}>
-                <Trash2 size={13} />
-              </button>
-            )}
-          </div>
-        ))}
-        <button type="button" className="button button-secondary button-sm" onClick={() => setBarcodes((current) => [...current, ""])} style={{ alignSelf: "flex-start" }}>
-          <Plus size={13} /> 添加条码
-        </button>
+        <label className="field">
+          <span className="label">设备条码 <span className="required-mark">*</span><span className="hint">每行一个</span></span>
+          <textarea className="textarea barcode-textarea" name="barcodes" rows={4} required placeholder="每行一个设备条码，例如 SN0001" />
+        </label>
+        <label className="field">
+          <span className="label">网页电子流地址 <span className="required-mark">*</span><span className="hint">审批人可打开核验</span></span>
+          <input className="input" name="webUrl" type="url" required placeholder="https://eflow.example.com/binding/..." />
+        </label>
       </div>
     </ActionForm>
   );

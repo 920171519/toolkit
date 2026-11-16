@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { Crown, Plus, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { hasAreaLeadership } from "@/lib/access";
 import { getAreaConfigs, getPeople, parseFlash } from "@/lib/queries";
 import { getProjectOptions } from "@/lib/workflow-queries";
 import {
@@ -17,6 +15,7 @@ import {
 } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
+import { FormDialog } from "@/components/form-dialog";
 import { SettingsTabs } from "@/components/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -29,27 +28,34 @@ export default async function AreasSettingsPage({
 }) {
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
-  if (!isAdmin && !hasAreaLeadership(user.id)) {
-    redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
-  }
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const areas = getAreaConfigs();
   const people = getPeople();
   const projects = getProjectOptions(true);
+  const hasAreaRole = isAdmin || areas.some((area) => area.leaders.some((leader) => leader.userId === user.id));
 
   return (
     <>
       <PageHeader
         eyebrow="Settings / Responsibility areas"
         title="责任田配置"
-        description="责任田实行主管负责制。管理员创建责任田并指定主管；主管添加各项目负责人；项目负责人再添加项目成员。项目负责人可按项目维护责任田内的软件包责任信息。"
+        description="所有成员都可以查看责任田。管理员创建责任田并指定主管；主管添加各项目负责人；项目负责人再添加项目成员。项目负责人可按项目维护责任田内的软件包责任信息。"
+        actions={isAdmin ? (
+          <FormDialog label={<><Plus size={14} /> 新建责任田</>} title="新建责任田" description="管理员创建责任田后，再在责任田卡片中指定责任田主管。" triggerClassName="button button-primary" testId="new-area-trigger">
+            <ActionForm action={saveAreaAction} submitText="创建责任田" testId="new-area-form">
+              <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+                <label className="field"><span className="label">责任田名称</span><input className="input" name="name" placeholder="例如 显示与图形" required /></label>
+                <label className="field"><span className="label">责任田说明</span><textarea className="textarea" name="description" placeholder="说明责任田负责的软件包范围和职责。" /></label>
+              </div>
+            </ActionForm>
+          </FormDialog>
+        ) : undefined}
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin={isAdmin} showManagementTabs={isAdmin || user.role === "SOFTWARE_MANAGER"} />
+      <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} canManagePackages={hasAreaRole} />
 
-      <div className="two-col">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {areas.map((area) => {
             const areaLeader = area.leaders.some((leader) => leader.userId === user.id);
             const canManageLeads = isAdmin || areaLeader;
@@ -183,27 +189,6 @@ export default async function AreasSettingsPage({
             );
           })}
         </div>
-
-        <aside>
-          {isAdmin && (
-            <section className="card">
-              <div className="card-header"><div><div className="eyebrow">New area</div><h2 style={{ fontSize: 18, marginTop: 5 }}>新建责任田</h2></div><Plus size={17} style={{ color: "var(--brand)" }} /></div>
-              <div className="card-body" style={{ paddingTop: 14 }}>
-                <ActionForm action={saveAreaAction} submitText="创建责任田" testId="new-area-form">
-                  <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-                    <label className="field"><span className="label">责任田名称</span><input className="input" name="name" placeholder="例如 显示与图形" required /></label>
-                    <label className="field"><span className="label">责任田说明</span><textarea className="textarea" name="description" placeholder="说明责任田负责的软件包范围和职责。" /></label>
-                  </div>
-                </ActionForm>
-                <p className="page-footnote">管理员创建责任田后，再在责任田卡片中添加责任田主管。项目负责人和项目成员由责任田主管及项目负责人继续维护。</p>
-              </div>
-            </section>
-          )}
-          <div className="muted-panel" style={{ marginTop: isAdmin ? 14 : 0 }}>
-            责任田主管可添加/更换各项目负责人；项目负责人可为本项目添加成员。集成测试责任田的项目负责人负责提交对应项目的集成测试结论。
-          </div>
-        </aside>
-      </div>
     </>
   );
 }

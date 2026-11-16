@@ -681,9 +681,10 @@ export function voidTrial(actor: SessionUser, requestId: number, reason: string)
   });
 }
 
-export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[], approverId: number) {
+export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[], approverId: number, webUrl: string) {
   const normalizedBarcodes = [...new Set(barcodes.map((barcode) => barcode.trim()).filter(Boolean))];
   assert(normalizedBarcodes.length > 0, "请至少添加一个设备条码。");
+  assert(/^https?:\/\//i.test(webUrl.trim()), "请填写有效的网页电子流地址（http/https）。");
   for (const barcode of normalizedBarcodes) {
     assert(barcode.length >= 3 && barcode.length <= 80, "设备条码长度需为 3-80 个字符。");
   }
@@ -747,8 +748,8 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     const result = run(
       `INSERT INTO binding_flows
         (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode,
-         submitted_by, approver_id, status, submitted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)`,
+         submitted_by, approver_id, status, submitted_at, web_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
       `TEMP-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
       requirementId,
       requirement.package_version_id,
@@ -758,6 +759,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
       actor.id,
       approverId,
       timestamp,
+      webUrl.trim(),
     );
     const flowId = Number(result.lastInsertRowid);
     const flowNo = `BF-${new Date().getFullYear()}-${String(flowId).padStart(4, "0")}`;

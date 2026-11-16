@@ -88,14 +88,13 @@ export async function createBatchAction(_prev: ActionState, formData: FormData):
     return { error: "配套版本选择已失效，请刷新页面后重试。" };
   }
   if (items.length === 0) return { error: "请为整套配套选择版本。" };
-  let batchId: number;
   try {
-    batchId = createBatchDraft(user, { projectId, code, title, items });
+    createBatchDraft(user, { projectId, code, title, items });
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/integration/${batchId}`, "整套配套转测草稿已创建，确认快照后发起转测。");
+  successRedirect("/submissions", "整套配套转测草稿已创建，请在待转测申请页确认并发起。");
 }
 
 export async function addBatchProgressAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -121,7 +120,7 @@ export async function deleteDraftBatchAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  successRedirect("/integration", "转测草稿已删除。");
+  successRedirect("/submissions", "转测草稿已删除。");
 }
 
 export async function sendBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -135,7 +134,7 @@ export async function sendBatchAction(_prev: ActionState, formData: FormData): P
   }
   refreshAll();
   const batch = one<{ code: string }>("SELECT code FROM integration_batches WHERE id = ?", batchId);
-  successRedirect(`/integration/${batchId}`, `${batch?.code ?? "批次"} 已发起集成测试，等待本项目集成测试负责人提交结论。`);
+  successRedirect("/submissions", `${batch?.code ?? "批次"} 已发起集成测试，等待本项目集成测试负责人提交结论。`);
 }
 
 export async function terminateBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -209,12 +208,14 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
   const approverId = numberValue(formData, "approverId");
   if (!requirementId || !requestId) return { error: "绑定任务参数无效。" };
   if (!approverId) return { error: "请选择绑定电子流审批人。" };
-  const barcodes = formData.getAll("barcodes").filter((item): item is string => typeof item === "string");
-  if (barcodes.every((barcode) => !barcode.trim())) {
+  const rawBarcodes = formData.getAll("barcodes").filter((item): item is string => typeof item === "string").join("\n");
+  const barcodes = rawBarcodes.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean);
+  if (barcodes.length === 0) {
     return { error: "请至少添加一个有效设备条码。" };
   }
+  const webUrl = text(formData, "webUrl");
   try {
-    submitBindingFlow(user, requirementId, barcodes, approverId);
+    submitBindingFlow(user, requirementId, barcodes, approverId, webUrl);
   } catch (error) {
     return failure(error);
   }

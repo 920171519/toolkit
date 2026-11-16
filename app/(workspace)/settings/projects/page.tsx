@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CalendarDays, LayoutGrid, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
+import { getLedAreaIds } from "@/lib/access";
 import {
   addProjectNodeAction,
   addProjectNodeApproverAction,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
+import { FormDialog } from "@/components/form-dialog";
 import { SettingsTabs } from "@/components/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +44,26 @@ export default async function ProjectsSettingsPage({
         eyebrow="Settings / Projects"
         title="项目与测试节点"
         description="维护项目 PM、测试节点和项目状态。每个测试节点需要规划设备条码绑定验证责任人、主审批人与审批人范围、绑定通过数量，试制发布会按这些配置生成绑定任务。"
+        actions={user.role === "ADMIN" ? (
+          <FormDialog label="新增项目" title="新建项目" description="仅管理员可以新建项目。" triggerClassName="button button-primary" testId="new-project-trigger">
+            <ActionForm action={saveProjectAction} submitText="创建项目" testId="new-project-form">
+              <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+                <label className="field"><span className="label">项目名称</span><input className="input" name="name" placeholder="例如 星云 N2" required /></label>
+                <label className="field"><span className="label">项目编码</span><input className="input" name="code" placeholder="N2" required /></label>
+                <label className="field"><span className="label">PM <span className="required-mark">*</span></span><select className="select" name="pmUserId" defaultValue="" required><option value="" disabled>选择 PM</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+                <label className="field"><span className="label">软件经理 <span className="required-mark">*</span></span><select className="select" name="softwareManagerId" defaultValue="" required><option value="" disabled>选择软件经理</option>{softwareManagers.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+                <label className="field"><span className="label">项目说明</span><textarea className="textarea" name="description" placeholder="简要说明项目定位与交付目标。" /></label>
+                <input type="hidden" name="status" value="ACTIVE" />
+              </div>
+            </ActionForm>
+            <p className="page-footnote">创建项目后，请在项目卡片中添加测试节点（如 EVT / DVT / PVT）。节点是绑定验证的最小单位。</p>
+          </FormDialog>
+        ) : undefined}
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin={user.role === "ADMIN"} />
+      <SettingsTabs isAdmin={user.role === "ADMIN"} canManagePackages={user.role === "ADMIN" || getLedAreaIds(user.id).length > 0} />
 
-      <div className="two-col">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {projects.map((project) => (
             <section className="card" key={project.id}>
               <div className="card-body" style={{ padding: 19 }}>
@@ -259,68 +275,6 @@ export default async function ProjectsSettingsPage({
             <div className="card"><div className="card-body muted">暂无项目，请先创建。</div></div>
           )}
         </div>
-
-        <aside>
-          <section className="card">
-            <div className="card-header">
-              <div>
-                <div className="eyebrow">New project</div>
-                <h2 style={{ fontSize: 18, marginTop: 5 }}>新建项目</h2>
-              </div>
-              <Plus size={17} style={{ color: "var(--brand)" }} />
-            </div>
-            <div className="card-body" style={{ paddingTop: 14 }}>
-              <ActionForm action={saveProjectAction} submitText="创建项目" testId="new-project-form">
-                <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-                  <label className="field">
-                    <span className="label">项目名称</span>
-                    <input className="input" name="name" placeholder="例如 星云 N2" required />
-                  </label>
-                  <div className="form-grid">
-                    <label className="field">
-                      <span className="label">项目编码</span>
-                      <input className="input" name="code" placeholder="N2" required />
-                    </label>
-                    <label className="field">
-                      <span className="label">排序</span>
-                      <input className="input" type="number" name="sortOrder" min={0} defaultValue={projects.length + 1} />
-                    </label>
-                  </div>
-                  <label className="field">
-                    <span className="label">PM <span className="required-mark">*</span></span>
-                    <select className="select" name="pmUserId" defaultValue="" required>
-                      <option value="" disabled>选择 PM</option>
-                      {people.map((person) => (
-                        <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span className="label">软件经理 <span className="required-mark">*</span></span>
-                    <select className="select" name="softwareManagerId" defaultValue="" required>
-                      <option value="" disabled>选择软件经理</option>
-                      {softwareManagers.map((person) => (
-                        <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span className="label">项目说明</span>
-                    <textarea className="textarea" name="description" placeholder="简要说明项目定位与交付目标。" />
-                  </label>
-                  <input type="hidden" name="status" value="ACTIVE" />
-                </div>
-              </ActionForm>
-              <p className="page-footnote">
-                创建项目后，请在项目卡片中添加测试节点（如 EVT / DVT / PVT）。节点是绑定验证的最小单位。
-              </p>
-            </div>
-          </section>
-          <div className="muted-panel" style={{ marginTop: 14 }}>
-            删除节点前需确保该节点没有被任何软件包使用；已有绑定验证历史的节点也不能删除，避免覆盖证据丢失。
-          </div>
-        </aside>
-      </div>
     </>
   );
 }

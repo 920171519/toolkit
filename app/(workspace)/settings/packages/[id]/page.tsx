@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Boxes, CheckSquare2, ShieldAlert } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { getLedAreaIds } from "@/lib/access";
+import { redirect } from "next/navigation";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
@@ -19,15 +21,21 @@ export default async function PackageSettingsDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["ADMIN", "SOFTWARE_MANAGER"]);
+  const user = await requireUser();
+  const isAdmin = user.role === "ADMIN";
+  const ledAreaIds = getLedAreaIds(user.id);
   const { id } = await params;
   const packageId = Number(id);
   if (!Number.isInteger(packageId)) notFound();
   const data = getPackageDetail(packageId, true);
   if (!data) notFound();
+  if (!isAdmin && (data.package.areaId === null || !ledAreaIds.includes(data.package.areaId))) {
+    redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
+  }
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
-  const areas = getAreaConfigs();
+  const allAreas = getAreaConfigs();
+  const areas = isAdmin ? allAreas : allAreas.filter((area) => ledAreaIds.includes(area.id));
   const people = getPeople();
   const projects = getProjectConfigs();
   const { package: pkg, usages } = data;
@@ -47,7 +55,7 @@ export default async function PackageSettingsDetailPage({
         }
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin={user.role === "ADMIN"} />
+      <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} />
 
       <div className="two-col">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

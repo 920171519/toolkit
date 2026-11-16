@@ -1,7 +1,6 @@
 import "server-only";
 
 import { all, one } from "./db";
-import { canManageConfig } from "./permissions";
 import type { SessionUser } from "./types";
 
 export function isAreaProjectLead(userId: number, areaId: number | null): boolean {
@@ -92,7 +91,7 @@ export function canEditPackageResponsibility(
   packageAreaId: number | null,
 ): boolean {
   if (!user) return false;
-  if (canManageConfig(user)) return true;
+  if (user.role === "ADMIN") return true;
   if (packageAreaId && isAreaLeader(user.id, packageAreaId)) return true;
   return isAreaProjectLead(user.id, packageAreaId);
 }
@@ -102,7 +101,7 @@ export function canEditPackageById(
   packageId: number,
 ): boolean {
   if (!user) return false;
-  if (canManageConfig(user)) return true;
+  if (user.role === "ADMIN") return true;
   const row = one<{ area_id: number | null }>(
     "SELECT area_id FROM packages WHERE id = ?",
     packageId,
@@ -119,4 +118,17 @@ export function hasAreaLeadership(userId: number): boolean {
     userId,
   );
   return Boolean(projectLead);
+}
+
+export function canManagePackageArea(user: SessionUser | null, areaId: number | null): boolean {
+  if (!user) return false;
+  if (user.role === "ADMIN") return true;
+  return areaId !== null && isAreaLeader(user.id, areaId);
+}
+
+export function getLedAreaIds(userId: number): number[] {
+  return all<{ areaId: number }>(
+    "SELECT area_id AS areaId FROM area_leaders WHERE user_id = ? ORDER BY area_id",
+    userId,
+  ).map((row) => row.areaId);
 }

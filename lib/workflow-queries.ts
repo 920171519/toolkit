@@ -140,7 +140,7 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
     }>(
       `SELECT id, version, status, archive_url AS archiveUrl, change_summary AS changeSummary,
               submitted_at AS submittedAt
-       FROM package_versions WHERE package_id = ? AND status != 'VOID'
+       FROM package_versions WHERE package_id = ?
        ORDER BY submitted_at DESC, id DESC`,
       pkg.packageId,
     );
@@ -162,7 +162,9 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
       pkg.packageId,
     );
     const previousVersion = previous ? versions.find((version) => version.id === previous.versionId) ?? null : null;
-    const defaultVersion = pending ?? previousVersion ?? formal ?? versions[0] ?? null;
+    const previousSafe = previousVersion && previousVersion.status !== "VOID" && previousVersion.requestStatus !== "VOID" ? previousVersion : null;
+    const firstSafe = versions.find((version) => version.status !== "VOID" && version.requestStatus !== "VOID") ?? null;
+    const defaultVersion = pending ?? previousSafe ?? formal ?? firstSafe ?? versions[0] ?? null;
     if (!defaultVersion) return null;
     const selectedRow = versionRows.find((version) => version.id === defaultVersion.id);
     const selectedRequest = requestByVersion.get(defaultVersion.id);
@@ -392,6 +394,7 @@ export type BindingFlowRow = {
   flowNo: string;
   requirementId: number;
   barcodes: string[];
+  webUrl: string | null;
   status: string;
   submittedByName: string | null;
   submittedById: number | null;
@@ -480,7 +483,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
   ).map((requirement) => {
     const flowRows = all<Omit<BindingFlowRow, "barcodes">>(
       `SELECT f.id, f.flow_no AS flowNo, f.requirement_id AS requirementId, f.status,
-              su.name AS submittedByName, f.submitted_by AS submittedById, f.submitted_at AS submittedAt,
+              f.web_url AS webUrl, su.name AS submittedByName, f.submitted_by AS submittedById, f.submitted_at AS submittedAt,
               ap.name AS approverName, f.approver_id AS approverId, f.reviewed_at AS reviewedAt,
               f.review_comment AS reviewComment, f.cancelled_at AS cancelledAt, f.cancel_reason AS cancelReason
        FROM binding_flows f

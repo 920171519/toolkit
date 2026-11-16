@@ -4,7 +4,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflow } from "@/lib/permissions";
 import { parseFlash } from "@/lib/queries";
-import { getPendingFormalVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getPendingFormalVersions, getTrialDetail, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
@@ -21,7 +21,7 @@ export default async function FormalPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const versions = getPendingFormalVersions(getWorkflowProjectScope(user));
+  const versions = getPendingFormalVersions(getWorkflowProjectScope(user)).map((version) => ({ ...version, detail: getTrialDetail(version.requestId) }));
 
   return (
     <>
@@ -56,6 +56,30 @@ export default async function FormalPage({
                         <span className="chip">{version.projectName}</span>
                       </div>
                       <p className="change-copy" style={{ marginTop: 7 }}>{version.changeSummary}</p>
+                      {version.detail && (
+                        <details className="formal-binding-details">
+                          <summary>查看实际绑定条码与电子流（{version.detail.requirements.reduce((total, item) => total + item.flows.filter((flow) => flow.status === "APPROVED").reduce((sum, flow) => sum + flow.barcodes.length, 0), 0)} 个通过条码）</summary>
+                          <div className="formal-requirement-list">
+                            {version.detail.requirements.map((requirement) => (
+                              <div className="formal-requirement" key={requirement.id}>
+                                <div className="toolbar" style={{ gap: 7 }}>
+                                  <span className="chip">{requirement.nodeName}</span>
+                                  <Badge tone={requirement.status === "PASSED" ? "emerald" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : "待通过"}</Badge>
+                                  <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
+                                </div>
+                                {requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => (
+                                  <div className="formal-flow-line" key={flow.id}>
+                                    <span className="mono small">{flow.flowNo}</span>
+                                    <span className="small">{flow.barcodes.length} 个条码：{flow.barcodes.join("、")}</span>
+                                    {flow.webUrl && <ExternalLink href={flow.webUrl}>网页电子流</ExternalLink>}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                          <Link href={`/trial/${version.requestId}`} className="archive-link" style={{ marginTop: 8 }}>进入绑定验证详情 <ArrowRight size={11} /></Link>
+                        </details>
+                      )}
                       <div className="toolbar" style={{ gap: 14, marginTop: 8, fontSize: 11, color: "var(--muted)" }}>
                         <span>试制电子流 {version.trialFormNo ?? "—"}</span>
                         <span>发布 {formatDateTime(version.trialReleasedAt)}</span>

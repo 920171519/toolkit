@@ -15,7 +15,8 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const user = await requireUser();
   const canConfigure = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const isAdmin = user.role === "ADMIN";
-  const canManageAreaConfig = isAdmin || hasAreaLeadership(user.id);
+  const hasAreaRole = hasAreaLeadership(user.id);
+  const canManagePackages = isAdmin || hasAreaRole;
 
   const departmentItems: SidebarItem[] = [
     { href: "/dashboard", label: "我的工作台", icon: "dashboard" },
@@ -48,13 +49,9 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   ];
 
   const configItems: SidebarItem[] = [
-    ...(canManageAreaConfig ? [{ href: "/settings/areas", label: "责任田配置", icon: "areas" } as SidebarItem] : []),
-    ...(canConfigure
-      ? [
-          { href: "/settings/projects", label: "项目配置", icon: "projectSettings" } as SidebarItem,
-          { href: "/settings/packages", label: "软件包配置", icon: "packageSettings" } as SidebarItem,
-        ]
-      : []),
+    { href: "/settings/areas", label: "责任田", icon: "areas" },
+    ...(canConfigure ? [{ href: "/settings/projects", label: "项目配置", icon: "projectSettings" } as SidebarItem] : []),
+    ...(canManagePackages ? [{ href: "/settings/packages", label: "软件包配置", icon: "packageSettings" } as SidebarItem] : []),
     ...(isAdmin ? [{ href: "/settings/users", label: "人员与角色", icon: "users" } as SidebarItem] : []),
   ];
 
