@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/format";
 import {
   BINDING_FLOW_STATUS_META,
   CONCLUSION_META,
+  TRANSFER_REQUEST_STATUS_META,
   type BatchConclusion,
   type BindingFlowStatus,
 } from "@/lib/constants";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { BindingFlowForm } from "@/components/binding-flow-form";
-import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
+import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "绑定验证详情" };
@@ -46,6 +47,10 @@ export default async function TrialDetailPage({
   const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
+  const transferStatusMeta = TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? {
+    label: request.status === "TRIAL" ? "试制中" : request.status === "PENDING_FORMAL" ? "待转正" : request.status === "FORMAL" ? "已转正" : request.status === "VOID" ? "已作废" : request.status,
+    tone: request.status === "TRIAL" ? "teal" : request.status === "FORMAL" ? "emerald" : request.status === "VOID" ? "slate" : "violet",
+  };
 
   return (
     <>
@@ -53,7 +58,7 @@ export default async function TrialDetailPage({
         eyebrow="Trial / Project binding"
         title={`${request.projectName} · ${request.packageName} ${request.version}`}
         description={<>项目试制电子流 {request.trialFormNo ?? "—"} · 发布 {formatDateTime(request.trialReleasedAt)} · 项目软件经理 {request.softwareManagerName ?? "—"}</>}
-        actions={<><Link href="/trial" className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><Link href={`/versions/${request.versionId}`} className="button button-secondary">版本全链路</Link><StatusPill status={request.status as "TRIAL" | "PENDING_FORMAL" | "VOID" | "FORMAL"} /></>}
+        actions={<><Link href="/trial" className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><Link href={`/versions/${request.versionId}`} className="button button-secondary">版本全链路</Link><Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge></>}
       />
       <FlashMessage notice={notice} />
 
@@ -75,8 +80,8 @@ export default async function TrialDetailPage({
           <section className="card">
             <div className="card-header"><div><h2 style={{ fontSize: 18 }}>本项目节点绑定要求</h2><p className="small muted" style={{ marginTop: 3 }}>只有本项目使用的测试节点需要完成设备条码绑定，通过数量按审批通过的条码数计算。</p></div><span className="small muted">{passed}/{requirements.length} 节点通过</span></div>
             <div className="card-body" style={{ paddingTop: 12 }}>
-              <div style={{ marginBottom: 12 }}><ProgressBar value={passed} max={requirements.length} /></div>
-              <div className="binding-table">
+              {requirements.length > 0 && <div style={{ marginBottom: 12 }}><ProgressBar value={passed} max={requirements.length} /></div>}
+              {requirements.length === 0 ? <EmptyState title="该版本尚未发布试制" description="版本完成集成测试并发布共享试制后，才会生成项目节点绑定要求。" /> : <div className="binding-table">
                 <div className="binding-table-head">
                   <span>节点</span><span>绑定责任人</span><span>审批人范围</span><span>通过条码</span><span>状态</span><span>操作</span>
                 </div>
@@ -154,7 +159,7 @@ export default async function TrialDetailPage({
                     </details>
                   );
                 })}
-              </div>
+              </div>}
             </div>
           </section>
         </div>

@@ -482,6 +482,7 @@ test.describe("工程协同台项目维度流程", () => {
     await page.locator(".project-overview-row").filter({ hasText: "远山 X0" }).getByRole("link", { name: "远山 X0", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/4$/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("远山 X0");
+    await expect(page.locator(".card").filter({ hasText: "软件包与全局使用范围" })).toContainText("1001OTA");
   });
 
 

@@ -599,3 +599,15 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .version-trace-project { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; background: var(--surface-muted); }
 .version-trace-requirement { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .version-trace-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; padding-left: 4px; font-size: 11px; }
+
+/* Responsive hardening: prevent cards/tables from forcing body overflow on narrow screens */
+.card, .card-body, .table-wrap, .two-col > * { min-width: 0; }
+.table-wrap { max-width: 100%; }
+@media (max-width: 900px) {
+  .two-col > * { min-width: 0; width: 100%; }
+}
+@media (max-width: 760px) {
+  .split-row { flex-wrap: wrap; align-items: flex-start; }
+  .split-row > * { min-width: 0 !important; max-width: 100%; }
+  .card-header { flex-wrap: wrap; }
+}

@@ -142,7 +142,7 @@ export type PackageOverviewRow = PackageSummary & {
   usages: PackageUsageScope[];
 };
 
-export function getPackageOverviewRows(projectId?: number): PackageOverviewRow[] {
+export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
   let packages = getPackagesOverview(true);
   const usageRows = all<{
     packageId: number;
@@ -157,7 +157,7 @@ export function getPackageOverviewRows(projectId?: number): PackageOverviewRow[]
      FROM package_usages u
      JOIN projects pr ON pr.id = u.project_id
      JOIN project_nodes n ON n.id = u.node_id
-     WHERE pr.status != 'ARCHIVED'
+     WHERE ${includeArchivedUsage ? "1 = 1" : "pr.status != 'ARCHIVED'"}
      ORDER BY pr.sort_order, n.sort_order`,
   );
   if (projectId) {

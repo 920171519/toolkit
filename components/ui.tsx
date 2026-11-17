@@ -146,8 +146,11 @@ export function ProgressBar({
   );
 }
 
-export function StatusPill({ status }: { status: PackageStatus }) {
-  const meta = PACKAGE_STATUS_META[status];
+export function StatusPill({ status }: { status: string }) {
+  const meta = PACKAGE_STATUS_META[status as PackageStatus];
+  if (!meta) {
+    return <Badge tone="slate">{status}</Badge>;
+  }
   return (
     <Badge tone={meta.tone} dot>
       {meta.label}

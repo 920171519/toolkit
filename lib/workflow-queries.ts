@@ -1125,7 +1125,7 @@ export function getVersionTrace(versionId: number): VersionTrace | null {
      LEFT JOIN integration_batches b ON b.id = (
        SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
      )
-     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+     WHERE r.package_version_id = ?
      ORDER BY pr.sort_order`,
     versionId,
   );

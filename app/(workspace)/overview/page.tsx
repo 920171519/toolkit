@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Building2, Layers3, Package, UsersRound } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getProjectConfigs } from "@/lib/queries";
+import { getProjectConfigs, parseFlash } from "@/lib/queries";
 import {
   getBatches,
   getPendingFormalVersions,
@@ -13,13 +13,19 @@ import {
 } from "@/lib/workflow-queries";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
-import { Badge, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "部门总览" };
 
-export default async function OverviewPage() {
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const scope = getWorkflowProjectScope(user);
   const scopeSet = scope ? new Set(scope) : null;
   const projects = getProjectConfigs().filter(
@@ -50,6 +56,7 @@ export default async function OverviewPage() {
         description="按行查看各项目当前状态；点击项目进入项目页面，查看该项目的软件包、转测、集成测试、试制绑定和转正全部信息。"
         actions={<Link href="/packages" className="button button-primary">软件版本总览 <ArrowRight size={14} /></Link>}
       />
+      <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 16 }}>
         <span><strong>{projects.length}</strong> 个项目</span>
         <span><strong>{pendingGroups.reduce((sum, group) => sum + group.items.length, 0)}</strong> 个待转测申请</span>

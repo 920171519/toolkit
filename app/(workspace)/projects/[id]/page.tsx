@@ -53,7 +53,7 @@ export default async function ProjectWorkspacePage({
   const ready = getTrialReadyVersions(scope).filter((version) => version.projectId === projectId);
   const trials = getTrialVersions(scope).filter((version) => version.projectId === projectId);
   const formal = getPendingFormalVersions(scope).filter((version) => version.projectId === projectId);
-  const packageRows = getPackageOverviewRows(projectId);
+  const packageRows = getPackageOverviewRows(projectId, true);
   const projectVersions = getProjectVersionRows(projectId);
   const activeBatches = batches.filter((batch) => batch.status === "IN_TEST");
   const visibleBatches = [...activeBatches, ...batches.filter((batch) => batch.status !== "IN_TEST")];
@@ -109,7 +109,7 @@ export default async function ProjectWorkspacePage({
                   <td><Link href={`/packages?project=${projectId}&open=${pkg.id}`} style={{ fontWeight: 600 }}>{pkg.name}</Link><div className="small muted">{pkg.code} · {pkg.areaName ?? "未归属"}</div></td>
                   <td><div className="small">正式 {pkg.formalVersion ?? "—"}</div><div className="small muted">试制 {pkg.trialVersions.join(" / ") || "—"} · 在途 {pkg.currentVersion ?? "—"}</div>{pkg.currentStatus && <StatusPill status={pkg.currentStatus} />}</td>
                   <td><div className="project-nodes" style={{ marginTop: 0 }}>{(pkg.usages.find((usage) => usage.projectId === projectId)?.nodeNames ?? []).map((node) => <span className="chip" key={node}>{node}</span>)}</div></td>
-                  <td><div className="usage-scope-list">{pkg.usages.map((usage) => <span className="usage-scope" key={usage.projectId}><strong>{usage.projectName}</strong> {usage.nodeNames.join(" / ")}</span>)}</div></td>
+                  <td><div className="usage-scope-list">{pkg.usages.map((usage) => <span className="usage-scope" key={usage.projectId}><strong>{usage.projectName}</strong> {usage.nodeNames.join(" / ")}{usage.projectStatus === "ARCHIVED" && <span className="small muted">存档</span>}</span>)}</div></td>
                   <td className="cell-actions"><Link href={`/packages?project=${projectId}&open=${pkg.id}`} className="archive-link">详情 <ArrowRight size={11} /></Link></td>
                 </tr>
               ))}</tbody>
