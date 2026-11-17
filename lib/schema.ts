@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS package_versions (
   trial_released_at TEXT,
   formal_released_at TEXT,
   form_flow_no TEXT,
+  release_mode TEXT NOT NULL DEFAULT 'INTEGRATION',
+  risk_conclusion TEXT,
   void_reason TEXT,
   voided_at TEXT,
   updated_at TEXT NOT NULL,
@@ -333,6 +335,23 @@ CREATE INDEX IF NOT EXISTS idx_binding_flows_submitter ON binding_flows(submitte
 CREATE INDEX IF NOT EXISTS idx_usages_package ON package_usages(package_id);
 CREATE INDEX IF NOT EXISTS idx_usages_project ON package_usages(project_id, node_id);
 CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(software_manager_id);
+
+CREATE TABLE IF NOT EXISTS project_pms (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS project_software_managers (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_pms_user ON project_pms(user_id);
+CREATE INDEX IF NOT EXISTS idx_project_managers_user ON project_software_managers(user_id);
 CREATE INDEX IF NOT EXISTS idx_versions_submitter ON package_versions(submitted_by);
 CREATE INDEX IF NOT EXISTS idx_requirements_owner ON binding_requirements(binding_owner_id, status);
 CREATE INDEX IF NOT EXISTS idx_binding_version ON binding_tasks(package_version_id);

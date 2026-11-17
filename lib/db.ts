@@ -59,6 +59,23 @@ function migrateSchema(database: DatabaseSync) {
   if (!flowColumns.some((column) => column.name === "web_url")) {
     database.exec("ALTER TABLE binding_flows ADD COLUMN web_url TEXT");
   }
+  const requestColumns = database
+    .prepare("PRAGMA table_info(version_transfer_requests)")
+    .all() as Array<{ name: string }>;
+  if (!requestColumns.some((column) => column.name === "release_mode")) {
+    database.exec("ALTER TABLE version_transfer_requests ADD COLUMN release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'");
+  }
+  if (!requestColumns.some((column) => column.name === "risk_conclusion")) {
+    database.exec("ALTER TABLE version_transfer_requests ADD COLUMN risk_conclusion TEXT");
+  }
+  database.exec(
+    `INSERT OR IGNORE INTO project_pms (project_id, user_id, created_at)
+     SELECT id, pm_user_id, datetime('now') FROM projects WHERE pm_user_id IS NOT NULL`,
+  );
+  database.exec(
+    `INSERT OR IGNORE INTO project_software_managers (project_id, user_id, created_at)
+     SELECT id, software_manager_id, datetime('now') FROM projects WHERE software_manager_id IS NOT NULL`,
+  );
 }
 
 // The database is opened lazily. This keeps `next build` from touching the data file

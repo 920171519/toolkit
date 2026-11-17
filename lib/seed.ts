@@ -138,6 +138,18 @@ function seedAll(db: DatabaseSync) {
     projectIds.push(Number(result.lastInsertRowid));
   }
 
+  const insertProjectPm = db.prepare(
+    "INSERT INTO project_pms (project_id, user_id, created_at) VALUES (?, ?, ?)",
+  );
+  const insertProjectManager = db.prepare(
+    "INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)",
+  );
+  for (let index = 0; index < projectIds.length; index += 1) {
+    const [, , , pm, softwareManager] = projectSeeds[index];
+    insertProjectPm.run(projectIds[index], pm, createdAt);
+    insertProjectManager.run(projectIds[index], softwareManager, createdAt);
+  }
+
   const insertAreaProjectLead = db.prepare(
     `INSERT INTO area_project_leads (area_id, project_id, user_id, created_at)
      VALUES (?, ?, ?, ?)`,
@@ -699,6 +711,31 @@ function seedAll(db: DatabaseSync) {
   );
   insertProgress.run(4, tester, "N1 DVT 配套已完成第一轮冒烟，配置下发与回读通过，继续覆盖异常断电场景。", iso("2026-11-13T11:00:00+08:00"));
   insertProgress.run(5, tester2, "M2 媒体专项已开始，4K 解码基础场景通过，等待高码率片源完成。", iso("2026-11-14T10:30:00+08:00"));
+
+  // 历史风险发布示例：NET M2/T3 没有关联集成测试批次，直接按风险结论进入待发布试制。
+  db.prepare(
+    `UPDATE version_transfer_requests
+     SET release_mode = 'RISK', risk_conclusion = '集成测试资源不足，结合历史版本回归结论按风险发布。'
+     WHERE id IN (
+       SELECT r.id FROM version_transfer_requests r
+       JOIN package_versions pv ON pv.id = r.package_version_id
+       JOIN packages p ON p.id = pv.package_id
+       JOIN projects pr ON pr.id = r.project_id
+       WHERE p.code = 'NET' AND pv.version = '2.0.0' AND pr.code IN ('M2','T3')
+     )`,
+  ).run();
+  // 历史风险发布示例：KEY N1 试制版本没有关联集成测试批次。
+  db.prepare(
+    `UPDATE version_transfer_requests
+     SET release_mode = 'RISK', risk_conclusion = '试制前无可用集成测试环境，按风险评审结论直接发布试制。'
+     WHERE id IN (
+       SELECT r.id FROM version_transfer_requests r
+       JOIN package_versions pv ON pv.id = r.package_version_id
+       JOIN packages p ON p.id = pv.package_id
+       JOIN projects pr ON pr.id = r.project_id
+       WHERE p.code = 'KEY' AND pv.version = '1.3.0' AND pr.code = 'N1' AND r.status = 'TRIAL'
+     )`,
+  ).run();
 
   const audit = db.prepare(
     "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",

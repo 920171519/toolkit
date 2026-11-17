@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, FileText, GitBranch, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflow } from "@/lib/permissions";
-import { canSubmitIntegrationConclusionForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { getBatchDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
@@ -32,7 +31,7 @@ export default async function BatchDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { batch, items, progressNotes } = data;
-  const manager = canManageProjectWorkflow(user, batch.softwareManagerId);
+  const manager = canManageProjectWorkflowForProject(user, batch.projectId);
   const canTest = canSubmitIntegrationConclusionForProject(user, batch.projectId);
   const changedItems = items.filter((item) => item.isChanged);
 

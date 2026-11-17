@@ -180,7 +180,7 @@ export async function releaseTrialAction(_prev: ActionState, formData: FormData)
   if (!requestId) return { error: "项目版本参数无效。" };
   let taskCount = 0;
   try {
-    taskCount = releaseTrial(user, requestId, text(formData, "trialFormNo"));
+    taskCount = releaseTrial(user, requestId, text(formData, "trialFormNo"), text(formData, "riskConclusion"));
   } catch (error) {
     return failure(error);
   }

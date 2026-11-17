@@ -50,8 +50,8 @@ export default async function ProjectsSettingsPage({
               <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
                 <label className="field"><span className="label">项目名称</span><input className="input" name="name" placeholder="例如 星云 N2" required /></label>
                 <label className="field"><span className="label">项目编码</span><input className="input" name="code" placeholder="N2" required /></label>
-                <label className="field"><span className="label">PM <span className="required-mark">*</span></span><select className="select" name="pmUserId" defaultValue="" required><option value="" disabled>选择 PM</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
-                <label className="field"><span className="label">软件经理 <span className="required-mark">*</span></span><select className="select" name="softwareManagerId" defaultValue="" required><option value="" disabled>选择软件经理</option>{softwareManagers.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+                <div className="field"><span className="label">PM <span className="required-mark">*</span><span className="hint">可多选</span></span><div className="person-check-grid">{people.map((person) => <label className="person-check" key={person.id}><input type="checkbox" name="pmUserIds" value={person.id} /><span>{person.name} · {person.employeeId}</span></label>)}</div></div>
+                <div className="field"><span className="label">软件经理 <span className="required-mark">*</span><span className="hint">可多选</span></span><div className="person-check-grid">{softwareManagers.map((person) => <label className="person-check" key={person.id}><input type="checkbox" name="softwareManagerIds" value={person.id} /><span>{person.name} · {person.employeeId}</span></label>)}</div></div>
                 <label className="field"><span className="label">项目说明</span><textarea className="textarea" name="description" placeholder="简要说明项目定位与交付目标。" /></label>
                 <input type="hidden" name="status" value="ACTIVE" />
               </div>
@@ -112,24 +112,28 @@ export default async function ProjectsSettingsPage({
                             <span className="label">项目编码</span>
                             <input className="input" name="code" defaultValue={project.code} required />
                           </label>
-                          <label className="field">
-                            <span className="label">PM <span className="required-mark">*</span></span>
-                            <select className="select" name="pmUserId" defaultValue={project.pmUserId ?? ""} required>
-                              <option value="" disabled>选择 PM</option>
+                          <div className="field span-2">
+                            <span className="label">PM <span className="required-mark">*</span><span className="hint">可多选</span></span>
+                            <div className="person-check-grid">
                               {people.map((person) => (
-                                <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>
+                                <label className="person-check" key={person.id}>
+                                  <input type="checkbox" name="pmUserIds" value={person.id} defaultChecked={project.pms.some((item) => item.id === person.id)} />
+                                  <span>{person.name} · {person.employeeId}</span>
+                                </label>
                               ))}
-                            </select>
-                          </label>
-                          <label className="field">
-                            <span className="label">软件经理 <span className="required-mark">*</span></span>
-                            <select className="select" name="softwareManagerId" defaultValue={project.softwareManagerUserId ?? ""} required>
-                              <option value="" disabled>选择软件经理</option>
+                            </div>
+                          </div>
+                          <div className="field span-2">
+                            <span className="label">软件经理 <span className="required-mark">*</span><span className="hint">可多选</span></span>
+                            <div className="person-check-grid">
                               {softwareManagers.map((person) => (
-                                <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>
+                                <label className="person-check" key={person.id}>
+                                  <input type="checkbox" name="softwareManagerIds" value={person.id} defaultChecked={project.softwareManagers.some((item) => item.id === person.id)} />
+                                  <span>{person.name} · {person.employeeId}</span>
+                                </label>
                               ))}
-                            </select>
-                          </label>
+                            </div>
+                          </div>
                           <label className="field">
                             <span className="label">状态</span>
                             <select className="select" name="status" defaultValue={project.status}>

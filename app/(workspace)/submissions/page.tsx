@@ -15,11 +15,11 @@ import {
   cancelTransferAction,
   deleteDraftBatchAction,
   sendBatchAction,
-  submitTransferAction,
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { BatchBuilder } from "@/components/batch-builder";
 import { FormDialog } from "@/components/form-dialog";
+import { TransferRequestForm } from "@/components/transfer-request-form";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -66,27 +66,11 @@ export default async function SubmissionsPage({
     <FormDialog
       label={<><ClipboardList size={14} /> 提交转测申请</>}
       title="提交转测申请"
-      description="提交后会同步发送到该软件包涉及的全部在行项目。"
+      description="提交后会同步发送到该软件包涉及的全部在行项目。四项信息均为必填。"
       triggerClassName="button button-primary"
       testId="submit-transfer-trigger"
     >
-      <ActionForm action={submitTransferAction} testId="transfer-form" submitText="提交申请" pendingText="发送中…">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <label className="field">
-            <span className="label">软件包 <span className="required-mark">*</span></span>
-            <select className="select" name="packageId" required defaultValue="" aria-required="true">
-              <option value="" disabled>选择软件包</option>
-              {availablePackages.map((pkg) => (
-                <option value={pkg.id} key={pkg.id}>{pkg.name} · {pkg.code}{pkg.ownerName ? ` / ${pkg.ownerName}` : ""}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field"><span className="label">版本号 <span className="required-mark">*</span><span className="hint">例如 2.1.0</span></span><input className="input" name="version" placeholder="填写本次提交的新版本号" required maxLength={40} /></label>
-          <label className="field"><span className="label">修复问题 / 完成需求 <span className="required-mark">*</span></span><textarea className="textarea" name="changeSummary" placeholder="说明本次版本解决了哪些问题、完成了哪些需求。" required minLength={5} /></label>
-          <label className="field"><span className="label">包归档链接 <span className="required-mark">*</span><span className="hint">http(s) 地址</span></span><input className="input" name="archiveUrl" type="url" placeholder="https://packages.example.com/..." required /></label>
-        </div>
-        <div className="form-note" style={{ marginTop: 11 }}>提交后将自动发送到此软件包涉及的全部在行项目，并等待各项目安排集成测试。</div>
-      </ActionForm>
+      <TransferRequestForm packages={availablePackages} />
     </FormDialog>
   ) : null;
 

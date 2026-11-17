@@ -5,11 +5,10 @@ import { extname, join } from "node:path";
 import { all, one, run, transaction } from "./db";
 import {
   canApproveBindingFlow,
-  canManageProjectWorkflow,
   canSubmitBindingFlow,
   canSubmitForPackage,
 } from "./permissions";
-import { canSubmitIntegrationConclusionForProject } from "./access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "./access";
 import { assert } from "./services";
 import type { SessionUser } from "./types";
 
@@ -45,7 +44,7 @@ function assertProjectManager(actor: SessionUser, projectId: number) {
   const project = projectForManagement(projectId);
   assert(project.status !== "ARCHIVED", "存档项目不能发起新的版本流程。");
   assert(
-    canManageProjectWorkflow(actor, project.software_manager_id),
+    canManageProjectWorkflowForProject(actor, project.id),
     "只有本项目软件经理或系统管理员可以组织项目版本流程。",
     "FORBIDDEN",
   );
@@ -530,7 +529,7 @@ export async function completeBatchTest(
   });
 }
 
-export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string) {
+export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, riskConclusion = "") {
   assert(trialFormNo.trim().length >= 3, "请填写发布试制电子流编号。");
   const request = one<{
     id: number;
@@ -541,9 +540,11 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
     version: string;
     status: string;
     software_manager_id: number | null;
+    release_mode: "INTEGRATION" | "RISK";
+    risk_conclusion: string | null;
   }>(
     `SELECT r.id, r.project_id, pr.name AS project_name, p.id AS package_id, p.name AS package_name,
-            pv.version, r.status, pr.software_manager_id
+            pv.version, r.status, pr.software_manager_id, r.release_mode, r.risk_conclusion
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
@@ -553,11 +554,24 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
   );
   assert(request, "项目版本记录不存在。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflow(actor, request.software_manager_id),
+    canManageProjectWorkflowForProject(actor, request.project_id),
     "只有本项目软件经理或系统管理员可以发布试制。",
     "FORBIDDEN",
   );
-  assert(["PASSED", "FAILED", "BLOCKED"].includes(request.status), "只有本项目集成测试结束的版本可以发布试制。");
+  assert(
+    ["PASSED", "FAILED", "BLOCKED"].includes(request.status),
+    "只有本项目集成测试结束的版本可以发布试制。",
+  );
+  const batch = one<{ id: number; conclusion: string | null }>(
+    `SELECT b.id, b.conclusion FROM integration_batches b
+     JOIN batch_items bi ON bi.batch_id = b.id
+     WHERE bi.transfer_request_id = ? ORDER BY bi.id DESC LIMIT 1`,
+    requestId,
+  );
+  const riskRequired = request.status !== "PASSED" || !batch;
+  if (riskRequired) {
+    assert(riskConclusion.trim().length >= 5, "该版本未通过集成测试或未关联转测批次，请填写风险发布结论。");
+  }
   const usages = all<{
     node_id: number;
     node_name: string;
@@ -582,11 +596,14 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
     const timestamp = now();
     run(
       `UPDATE version_transfer_requests
-       SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?, updated_at = ?
+       SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?,
+           release_mode = ?, risk_conclusion = ?, updated_at = ?
        WHERE id = ?`,
       trialFormNo.trim(),
       timestamp,
       actor.id,
+      riskRequired ? "RISK" : "INTEGRATION",
+      riskRequired ? riskConclusion.trim() : null,
       timestamp,
       requestId,
     );
@@ -662,7 +679,7 @@ export function voidTrial(actor: SessionUser, requestId: number, reason: string)
   );
   assert(request, "项目版本记录不存在。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflow(actor, request.software_manager_id),
+    canManageProjectWorkflowForProject(actor, request.project_id),
     "只有本项目软件经理或系统管理员可以作废试制版本。",
     "FORBIDDEN",
   );
@@ -903,7 +920,7 @@ export function decideBindingFlow(
 }
 
 export function releaseFormal(actor: SessionUser, requestId: number, flowNo: string) {
-  assert(flowNo.trim().length >= 3, "请填写转正电子流编号。");
+  assert(flowNo.trim().length >= 3, "请填写转正电子流。");
   const request = one<{
     id: number;
     project_id: number;
@@ -926,7 +943,7 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
   );
   assert(request, "项目版本记录不存在。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflow(actor, request.software_manager_id),
+    canManageProjectWorkflowForProject(actor, request.project_id),
     "只有本项目软件经理或系统管理员可以发布正式版本。",
     "FORBIDDEN",
   );

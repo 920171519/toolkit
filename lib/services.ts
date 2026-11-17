@@ -781,7 +781,7 @@ export function decideFormalReview(
 
 export function releaseFormal(actor: SessionUser, versionId: number, flowNo: string) {
   assert(canManageWorkflow(actor), "只有软件经理或系统管理员可以发布正式版本。", "FORBIDDEN");
-  assert(flowNo.trim().length >= 3, "请填写转正电子流编号。");
+  assert(flowNo.trim().length >= 3, "请填写转正电子流。");
   const version = one<{
     id: number;
     package_id: number;

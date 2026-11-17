@@ -3,15 +3,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import {
-  canApproveBindingFlow,
-  canManageProjectWorkflow,
-  canSubmitBindingFlow,
-} from "@/lib/permissions";
+import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
+import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { getTrialDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
-import { BINDING_FLOW_STATUS_META, type BindingFlowStatus } from "@/lib/constants";
+import {
+  BINDING_FLOW_STATUS_META,
+  CONCLUSION_META,
+  type BatchConclusion,
+  type BindingFlowStatus,
+} from "@/lib/constants";
 import {
   cancelBindingFlowAction,
   decideBindingFlowAction,
@@ -40,8 +42,10 @@ export default async function TrialDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { request, requirements } = data;
-  const manager = canManageProjectWorkflow(user, request.softwareManagerId);
+  const manager = canManageProjectWorkflowForProject(user, request.projectId);
   const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
+  const riskRelease = request.releaseMode === "RISK" || !request.batchId;
+  const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
 
   return (
     <>
@@ -54,93 +58,103 @@ export default async function TrialDetailPage({
       <FlashMessage notice={notice} />
 
       {request.status === "VOID" && (
-        <div className="workflow-banner" data-tone="danger" style={{ marginBottom: 18 }}>
+        <div className="workflow-banner" data-tone="danger" style={{ marginBottom: 16 }}>
           <ShieldAlert size={18} style={{ color: "var(--danger)", flex: "none" }} />
           <div><h3>本项目试制版本已作废</h3><p>{request.voidReason ?? "该试制版本被判定为绑定不通过。"} 作废时间：{formatDateTime(request.voidedAt)}。仍处于待审批的绑定电子流提交人会在个人工作台收到撤销提醒。</p></div>
         </div>
       )}
 
+      {riskRelease && request.status !== "VOID" && (
+        <div className="risk-callout" style={{ marginBottom: 16 }}>
+          <strong>风险发布版本。</strong>{request.riskConclusion ? `风险结论：${request.riskConclusion}` : "该版本没有关联集成测试批次，按风险发布处理。"}
+        </div>
+      )}
+
       <div className="two-col">
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <section className="card">
             <div className="card-header"><div><h2 style={{ fontSize: 18 }}>本项目节点绑定要求</h2><p className="small muted" style={{ marginTop: 3 }}>只有本项目使用的测试节点需要完成设备条码绑定，通过数量按审批通过的条码数计算。</p></div><span className="small muted">{passed}/{requirements.length} 节点通过</span></div>
-            <div className="card-body" style={{ paddingTop: 14 }}>
-              <div style={{ marginBottom: 16 }}><ProgressBar value={passed} max={requirements.length} /></div>
-              {requirements.map((requirement) => (
-                <div className="binding-requirement" key={requirement.id}>
-                  <div className="split-row" style={{ alignItems: "flex-start" }}>
-                    <div>
-                      <div className="toolbar" style={{ gap: 7 }}>
-                        <span className="chip">{requirement.nodeName}</span>
-                        {requirement.status === "PASSED" ? <Badge tone="emerald" dot>绑定通过</Badge> : <Badge tone="amber" dot>待绑定</Badge>}
-                        <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
-                      </div>
-                      <div className="toolbar" style={{ gap: 12, marginTop: 5, fontSize: 11, color: "var(--muted)" }}>
-                        <span>绑定责任人 {requirement.bindingOwnerName ?? "未配置"}</span>
-                        <span>审批人范围 {requirement.approverOptions.map((approver) => approver.userName).join(" / ") || "未配置"}</span>
-                      </div>
-                    </div>
-                    {request.status === "TRIAL" && requirement.status === "PENDING" && canSubmitBindingFlow(user, requirement.bindingOwnerId) && (
-                      <div style={{ minWidth: 360 }}>
-                        <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="binding-flow-list">
-                    {requirement.flows.length === 0 ? (
-                      <span className="small muted">暂无绑定电子流。</span>
-                    ) : requirement.flows.map((flow) => {
-                      const meta = BINDING_FLOW_STATUS_META[flow.status as BindingFlowStatus];
-                      const canApprove = request.status === "TRIAL" && flow.status === "PENDING" && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
-                      const canCancel = (request.status === "TRIAL" || request.status === "VOID") && flow.status === "PENDING" && (flow.submittedById === user.id || manager);
-                      return (
-                        <div className="binding-flow-row" key={flow.id}>
-                          <div className="toolbar" style={{ gap: 7, flexWrap: "wrap" }}>
-                            <Link2 size={13} style={{ color: "var(--muted-light)" }} />
-                            <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{flow.flowNo}</span>
-                            <Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? flow.status}</Badge>
-                            <span className="small">条码 {flow.barcodes.length} 个</span>
-                            {flow.webUrl && <ExternalLink href={flow.webUrl} className="flow-web-link">网页电子流</ExternalLink>}
-                          </div>
-                          {flow.barcodes.length > 0 && (
-                            <details className="barcode-details">
-                              <summary>查看绑定条码</summary>
-                              <div className="barcode-chip-list">
-                                {flow.barcodes.map((barcode) => <span className="mono barcode-chip" key={barcode}>{barcode}</span>)}
-                              </div>
-                            </details>
-                          )}
-                          <div className="small muted" style={{ marginTop: 4 }}>
-                            {flow.submittedByName ?? "—"} 提交 · 审批人 {flow.approverName ?? "—"} · {formatDateTime(flow.submittedAt)}
-                            {flow.reviewComment ? ` · ${flow.reviewComment}` : ""}
-                          </div>
-                          {(canApprove || canCancel) && (
-                            <div className="binding-flow-actions">
-                              {canApprove && (
-                                <details>
-                                  <summary className="button button-primary button-sm" style={{ listStyle: "none" }}>审批电子流</summary>
-                                  <div style={{ marginTop: 8, minWidth: 340 }}>
-                                    <ActionForm action={decideBindingFlowAction} hidden={{ flowId: flow.id, requestId }} submitText="审批通过" submitName="decision" submitValue="APPROVED" secondarySubmit={{ text: "审批驳回", value: "REJECTED", variant: "outline-danger" }} submitClassName="button-sm">
-                                      <label className="field"><span className="label">审批意见 <span className="required-mark">*</span></span><textarea className="textarea" name="comment" required minLength={2} placeholder="说明本次电子流审批结论。" /></label>
-                                    </ActionForm>
-                                  </div>
-                                </details>
-                              )}
-                              {canCancel && (
-                                <ActionForm action={cancelBindingFlowAction} hidden={{ flowId: flow.id, requestId, reason: "提交人撤销绑定电子流" }} submitText="撤销电子流" submitVariant="ghost" submitClassName="button-sm" confirmMessage="确认撤销该绑定电子流？" />
-                              )}
-                            </div>
-                          )}
-                          {request.status === "VOID" && flow.status === "PENDING" && flow.submittedById === user.id && (
-                            <div className="risk-callout" data-tone="danger" style={{ marginTop: 7 }}>试制版本已作废，请及时撤销此绑定电子流。</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="card-body" style={{ paddingTop: 12 }}>
+              <div style={{ marginBottom: 12 }}><ProgressBar value={passed} max={requirements.length} /></div>
+              <div className="binding-table">
+                <div className="binding-table-head">
+                  <span>节点</span><span>绑定责任人</span><span>审批人范围</span><span>通过条码</span><span>状态</span><span>操作</span>
                 </div>
-              ))}
+                {requirements.map((requirement) => {
+                  const pendingOpen = requirement.status === "PENDING" && (request.status === "TRIAL" || request.status === "VOID");
+                  return (
+                    <details className="binding-table-item binding-requirement" key={requirement.id} open={pendingOpen}>
+                      <summary className="binding-table-row">
+                        <span><span className="chip">{requirement.nodeName}</span></span>
+                        <span className="small">{requirement.bindingOwnerName ?? "未配置"}</span>
+                        <span className="small muted binding-approver-range">{requirement.approverOptions.map((approver) => approver.userName).join(" / ") || "未配置"}</span>
+                        <span className="toolbar" style={{ gap: 6 }}><span className="mono small">{requirement.approvedCount}/{requirement.requiredCount}</span></span>
+                        <span>{requirement.status === "PASSED" ? <Badge tone="emerald" dot>绑定通过</Badge> : <Badge tone="amber" dot>待绑定</Badge>}</span>
+                        <span className="binding-row-action">展开 / 收起</span>
+                      </summary>
+                      <div className="binding-table-body">
+                        {request.status === "TRIAL" && requirement.status === "PENDING" && canSubmitBindingFlow(user, requirement.bindingOwnerId) && (
+                          <div style={{ marginBottom: 10 }}>
+                            <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} />
+                          </div>
+                        )}
+                        <div className="binding-flow-list">
+                          {requirement.flows.length === 0 ? (
+                            <span className="small muted">暂无绑定电子流。</span>
+                          ) : requirement.flows.map((flow) => {
+                            const meta = BINDING_FLOW_STATUS_META[flow.status as BindingFlowStatus];
+                            const canApprove = request.status === "TRIAL" && flow.status === "PENDING" && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
+                            const canCancel = (request.status === "TRIAL" || request.status === "VOID") && flow.status === "PENDING" && (flow.submittedById === user.id || manager);
+                            return (
+                              <div className="binding-flow-row" key={flow.id}>
+                                <div className="toolbar" style={{ gap: 7, flexWrap: "wrap" }}>
+                                  <Link2 size={13} style={{ color: "var(--muted-light)" }} />
+                                  <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{flow.flowNo}</span>
+                                  <Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? flow.status}</Badge>
+                                  <span className="small">条码 {flow.barcodes.length} 个</span>
+                                  {flow.webUrl && <ExternalLink href={flow.webUrl} className="flow-web-link">网页电子流</ExternalLink>}
+                                </div>
+                                {flow.barcodes.length > 0 && (
+                                  <details className="barcode-details">
+                                    <summary>查看绑定条码</summary>
+                                    <div className="barcode-chip-list">
+                                      {flow.barcodes.map((barcode) => <span className="mono barcode-chip" key={barcode}>{barcode}</span>)}
+                                    </div>
+                                  </details>
+                                )}
+                                <div className="small muted" style={{ marginTop: 4 }}>
+                                  {flow.submittedByName ?? "—"} 提交 · 审批人 {flow.approverName ?? "—"} · {formatDateTime(flow.submittedAt)}
+                                  {flow.reviewComment ? ` · ${flow.reviewComment}` : ""}
+                                </div>
+                                {(canApprove || canCancel) && (
+                                  <div className="binding-flow-actions">
+                                    {canApprove && (
+                                      <details>
+                                        <summary className="button button-primary button-sm" style={{ listStyle: "none" }}>审批电子流</summary>
+                                        <div style={{ marginTop: 8, minWidth: 340 }}>
+                                          <ActionForm action={decideBindingFlowAction} hidden={{ flowId: flow.id, requestId }} submitText="审批通过" submitName="decision" submitValue="APPROVED" secondarySubmit={{ text: "审批驳回", value: "REJECTED", variant: "outline-danger" }} submitClassName="button-sm">
+                                            <label className="field"><span className="label">审批意见 <span className="required-mark">*</span></span><textarea className="textarea" name="comment" required minLength={2} placeholder="说明本次电子流审批结论。" /></label>
+                                          </ActionForm>
+                                        </div>
+                                      </details>
+                                    )}
+                                    {canCancel && (
+                                      <ActionForm action={cancelBindingFlowAction} hidden={{ flowId: flow.id, requestId, reason: "提交人撤销绑定电子流" }} submitText="撤销电子流" submitVariant="ghost" submitClassName="button-sm" confirmMessage="确认撤销该绑定电子流？" />
+                                    )}
+                                  </div>
+                                )}
+                                {request.status === "VOID" && flow.status === "PENDING" && flow.submittedById === user.id && (
+                                  <div className="risk-callout" data-tone="danger" style={{ marginTop: 7 }}>试制版本已作废，请及时撤销此绑定电子流。</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
             </div>
           </section>
         </div>
@@ -151,6 +165,9 @@ export default async function TrialDetailPage({
               <div className="detail-row"><dt>项目</dt><dd>{request.projectName}</dd></div>
               <div className="detail-row"><dt>软件包</dt><dd>{request.packageName}</dd></div>
               <div className="detail-row"><dt>版本</dt><dd className="mono">{request.version}</dd></div>
+              <div className="detail-row"><dt>发布来源</dt><dd>{riskRelease ? <Badge tone="rose">风险发布</Badge> : <Badge tone="violet">集成测试通过</Badge>}</dd></div>
+              {request.batchId && <div className="detail-row"><dt>转测批次</dt><dd><Link href={`/integration/${request.batchId}`} className="archive-link">{request.batchCode} · {batchConclusion?.label ?? "已提交"}</Link></dd></div>}
+              {request.riskConclusion && <div className="detail-row"><dt>风险结论</dt><dd>{request.riskConclusion}</dd></div>}
               <div className="detail-row"><dt>发布试制电子流</dt><dd>{request.trialFormNo ?? "—"}</dd></div>
               <div className="detail-row"><dt>试制发布</dt><dd>{formatDateTime(request.trialReleasedAt)}</dd></div>
               <div className="detail-row"><dt>归档地址</dt><dd><ExternalLink href={request.archiveUrl}>下载归档</ExternalLink></dd></div>

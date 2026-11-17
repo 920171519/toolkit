@@ -196,10 +196,10 @@ export async function saveProjectAction(
       name: text(formData, "name"),
       code: text(formData, "code"),
       description: text(formData, "description"),
-      pmUserId: numberValue(formData, "pmUserId"),
-      softwareManagerId: numberValue(formData, "softwareManagerId"),
+      pmUserIds: formData.getAll("pmUserIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
+      softwareManagerIds: formData.getAll("softwareManagerIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
       status: status || "ACTIVE",
-      sortOrder: numberValue(formData, "sortOrder") ?? 0,
+      sortOrder: undefined,
     });
   } catch (error) {
     return failure(error);

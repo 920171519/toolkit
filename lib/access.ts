@@ -126,6 +126,36 @@ export function canManagePackageArea(user: SessionUser | null, areaId: number | 
   return areaId !== null && isAreaLeader(user.id, areaId);
 }
 
+export function getProjectSoftwareManagerIds(projectId: number): number[] {
+  return all<{ userId: number }>(
+    "SELECT user_id AS userId FROM project_software_managers WHERE project_id = ? ORDER BY user_id",
+    projectId,
+  ).map((row) => row.userId);
+}
+
+export function isProjectSoftwareManager(userId: number, projectId: number): boolean {
+  return Boolean(
+    one<{ id: number }>(
+      "SELECT 1 AS id FROM project_software_managers WHERE project_id = ? AND user_id = ? LIMIT 1",
+      projectId,
+      userId,
+    ),
+  );
+}
+
+export function canManageProjectWorkflowForProject(user: SessionUser | null, projectId: number): boolean {
+  if (!user) return false;
+  if (user.role === "ADMIN") return true;
+  return isProjectSoftwareManager(user.id, projectId);
+}
+
+export function getManagedProjectIdsForUser(userId: number): number[] {
+  return all<{ projectId: number }>(
+    "SELECT project_id AS projectId FROM project_software_managers WHERE user_id = ? ORDER BY project_id",
+    userId,
+  ).map((row) => row.projectId);
+}
+
 export function getLedAreaIds(userId: number): number[] {
   return all<{ areaId: number }>(
     "SELECT area_id AS areaId FROM area_leaders WHERE user_id = ? ORDER BY area_id",

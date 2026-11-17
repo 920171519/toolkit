@@ -14,7 +14,10 @@ export function getProjectOptions(includeArchived = false): ProjectOption[] {
 export function getManagedProjectIds(user: SessionUser): number[] {
   if (user.role === "ADMIN") return getProjectOptions().map((project) => project.id);
   return all<{ id: number }>(
-    "SELECT id FROM projects WHERE software_manager_id = ? AND status != 'ARCHIVED' ORDER BY sort_order",
+    `SELECT p.id FROM project_software_managers psm
+     JOIN projects p ON p.id = psm.project_id
+     WHERE psm.user_id = ? AND p.status != 'ARCHIVED'
+     ORDER BY p.sort_order`,
     user.id,
   ).map((row) => row.id);
 }
@@ -314,6 +317,13 @@ export type TrialReadyVersion = {
   ownerName: string | null;
   softwareManagerName: string | null;
   softwareManagerId: number | null;
+  releaseMode: "INTEGRATION" | "RISK";
+  riskConclusion: string | null;
+  batchId: number | null;
+  batchCode: string | null;
+  batchConclusion: string | null;
+  batchTestSummary: string | null;
+  batchReportUrl: string | null;
 };
 
 export function getTrialReadyVersions(projectIds: number[] | null = null): TrialReadyVersion[] {
@@ -323,7 +333,10 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.status AS integrationStatus, pv.change_summary AS changeSummary,
               pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
-              o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
+              o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
+              r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+              b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
+              b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
@@ -331,6 +344,9 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
        LEFT JOIN users su ON su.id = pv.submitted_by
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
+       LEFT JOIN integration_batches b ON b.id = (
+         SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
+       )
        WHERE r.status IN ('PASSED','FAILED','BLOCKED')
        ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
     ),
@@ -355,6 +371,11 @@ export type TrialVersionRow = {
   ownerName: string | null;
   softwareManagerName: string | null;
   softwareManagerId: number | null;
+  releaseMode: "INTEGRATION" | "RISK";
+  riskConclusion: string | null;
+  batchId: number | null;
+  batchCode: string | null;
+  batchConclusion: string | null;
   requirementTotal: number;
   requirementPassed: number;
   pendingFlowCount: number;
@@ -368,6 +389,8 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
               pv.version, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
               pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
               sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
+              r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+              b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
@@ -377,6 +400,9 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
        JOIN projects pr ON pr.id = r.project_id
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
+       LEFT JOIN integration_batches b ON b.id = (
+         SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
+       )
        WHERE r.status = 'TRIAL'
        ORDER BY r.trial_released_at DESC, r.id DESC`,
     ),
@@ -441,6 +467,11 @@ export type TrialDetail = {
     archiveUrl: string;
     trialFormNo: string | null;
     trialReleasedAt: string | null;
+    releaseMode: "INTEGRATION" | "RISK";
+    riskConclusion: string | null;
+    batchId: number | null;
+    batchCode: string | null;
+    batchConclusion: string | null;
     voidReason: string | null;
     voidedAt: string | null;
     ownerName: string | null;
@@ -456,6 +487,8 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.id AS versionId,
             pv.version, r.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
+            r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+            b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
             r.void_reason AS voidReason, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
      FROM version_transfer_requests r
@@ -464,6 +497,9 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
+     LEFT JOIN integration_batches b ON b.id = (
+       SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
+     )
      WHERE r.id = ?`,
     requestId,
   );

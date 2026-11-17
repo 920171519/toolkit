@@ -15,33 +15,63 @@ import type {
 
 type CountRow = { count: number };
 
+export type ProjectContact = {
+  id: number;
+  name: string;
+  employeeId: string;
+  title: string;
+};
+
 export type PublicProject = {
   id: number;
   name: string;
   code: string;
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
-  pmId: number | null;
+  pms: ProjectContact[];
+  softwareManagers: ProjectContact[];
   pmName: string | null;
   pmEmployeeId: string | null;
   pmTitle: string | null;
-  softwareManagerId: number | null;
   softwareManagerName: string | null;
   softwareManagerEmployeeId: string | null;
   softwareManagerTitle: string | null;
 };
 
 export function getPublicProjects(): PublicProject[] {
-  return all<PublicProject>(
-    `SELECT p.id, p.name, p.code, p.status,
-            pm.id AS pmId, pm.name AS pmName, pm.employee_id AS pmEmployeeId, pm.title AS pmTitle,
-            sm.id AS softwareManagerId, sm.name AS softwareManagerName,
-            sm.employee_id AS softwareManagerEmployeeId, sm.title AS softwareManagerTitle
-     FROM projects p
-     LEFT JOIN users pm ON pm.id = p.pm_user_id
-     LEFT JOIN users sm ON sm.id = p.software_manager_id
-     WHERE p.status != 'ARCHIVED'
-     ORDER BY p.sort_order, p.id`,
+  const projects = all<{
+    id: number;
+    name: string;
+    code: string;
+    status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  }>(
+    `SELECT id, name, code, status FROM projects
+     WHERE status != 'ARCHIVED' ORDER BY sort_order, id`,
   );
+  return projects.map((project) => {
+    const pms = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_pms pp JOIN users u ON u.id = pp.user_id
+       WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
+      project.id,
+    );
+    const softwareManagers = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
+       WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
+      project.id,
+    );
+    return {
+      ...project,
+      pms,
+      softwareManagers,
+      pmName: pms.map((person) => person.name).join(" / ") || null,
+      pmEmployeeId: pms[0]?.employeeId ?? null,
+      pmTitle: pms[0]?.title ?? null,
+      softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
+      softwareManagerEmployeeId: softwareManagers[0]?.employeeId ?? null,
+      softwareManagerTitle: softwareManagers[0]?.title ?? null,
+    };
+  });
 }
 
 const PACKAGE_SUMMARY_SQL = `
@@ -802,6 +832,8 @@ export type ProjectConfig = {
   code: string;
   description: string;
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  pms: ProjectContact[];
+  softwareManagers: ProjectContact[];
   pmUserId: number | null;
   pmName: string | null;
   softwareManagerUserId: number | null;
@@ -827,46 +859,63 @@ export type ProjectConfig = {
 };
 
 export function getProjectConfigs(): ProjectConfig[] {
-  return all<Omit<ProjectConfig, "nodes" | "packageCount"> & { packageCount: number }>(
-    `SELECT p.id, p.name, p.code, p.description, p.status, p.pm_user_id AS pmUserId,
-            u.name AS pmName, p.software_manager_id AS softwareManagerUserId,
-            sm.name AS softwareManagerName, p.sort_order AS sortOrder,
+  return all<Omit<ProjectConfig, "nodes" | "packageCount" | "pms" | "softwareManagers"> & { packageCount: number }>(
+    `SELECT p.id, p.name, p.code, p.description, p.status,
+            p.sort_order AS sortOrder,
             (SELECT COUNT(DISTINCT pu.package_id) FROM package_usages pu WHERE pu.project_id = p.id) AS packageCount
      FROM projects p
-     LEFT JOIN users u ON u.id = p.pm_user_id
-     LEFT JOIN users sm ON sm.id = p.software_manager_id
      ORDER BY p.sort_order, p.id`,
-  ).map((project) => ({
-    ...project,
-    packageCount: Number(project.packageCount),
-    nodes: all<{
-      id: number;
-      name: string;
-      description: string;
-      bindingOwnerId: number | null;
-      bindingOwnerName: string | null;
-      bindingApproverId: number | null;
-      bindingApproverName: string | null;
-      requiredBindingCount: number;
-    }>(
-      `SELECT n.id, n.name, n.description, n.binding_owner_id AS bindingOwnerId,
-              bo.name AS bindingOwnerName, n.binding_approver_id AS bindingApproverId,
-              ba.name AS bindingApproverName, n.required_binding_count AS requiredBindingCount
-       FROM project_nodes n
-       LEFT JOIN users bo ON bo.id = n.binding_owner_id
-       LEFT JOIN users ba ON ba.id = n.binding_approver_id
-       WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
+  ).map((project) => {
+    const pms = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_pms pp JOIN users u ON u.id = pp.user_id
+       WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
       project.id,
-    ).map((node) => ({
-      ...node,
-      approvers: all<{ id: number; userId: number; userName: string; userEmployeeId: string }>(
-        `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
-         FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
-         WHERE pna.node_id = ? ORDER BY pna.id`,
-        node.id,
-      ),
-    })),
-  }));
+    );
+    const softwareManagers = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
+       WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
+      project.id,
+    );
+    return {
+      ...project,
+      pms,
+      softwareManagers,
+      pmUserId: pms[0]?.id ?? null,
+      pmName: pms.map((person) => person.name).join(" / ") || null,
+      softwareManagerUserId: softwareManagers[0]?.id ?? null,
+      softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
+      packageCount: Number(project.packageCount),
+      nodes: all<{
+        id: number;
+        name: string;
+        description: string;
+        bindingOwnerId: number | null;
+        bindingOwnerName: string | null;
+        bindingApproverId: number | null;
+        bindingApproverName: string | null;
+        requiredBindingCount: number;
+      }>(
+        `SELECT n.id, n.name, n.description, n.binding_owner_id AS bindingOwnerId,
+                bo.name AS bindingOwnerName, n.binding_approver_id AS bindingApproverId,
+                ba.name AS bindingApproverName, n.required_binding_count AS requiredBindingCount
+         FROM project_nodes n
+         LEFT JOIN users bo ON bo.id = n.binding_owner_id
+         LEFT JOIN users ba ON ba.id = n.binding_approver_id
+         WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
+        project.id,
+      ).map((node) => ({
+        ...node,
+        approvers: all<{ id: number; userId: number; userName: string; userEmployeeId: string }>(
+          `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+           FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
+           WHERE pna.node_id = ? ORDER BY pna.id`,
+          node.id,
+        ),
+      })),
+    };
+  });
 }
 
 export type AdminPackage = PackageSummary & {
@@ -1063,6 +1112,8 @@ export type ProjectView = {
   code: string;
   description: string;
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  pms: ProjectContact[];
+  softwareManagers: ProjectContact[];
   pmName: string | null;
   pmEmployeeId: string | null;
   pmTitle: string | null;
@@ -1085,22 +1136,35 @@ export function getProjectViews(): ProjectView[] {
     code: string;
     description: string;
     status: "ACTIVE" | "PAUSED" | "ARCHIVED";
-    pmName: string | null;
-    pmEmployeeId: string | null;
-    pmTitle: string | null;
-    softwareManagerName: string | null;
-    softwareManagerEmployeeId: string | null;
-    softwareManagerTitle: string | null;
   }>(
-    `SELECT p.id, p.name, p.code, p.description, p.status,
-            u.name AS pmName, u.employee_id AS pmEmployeeId, u.title AS pmTitle,
-            sm.name AS softwareManagerName, sm.employee_id AS softwareManagerEmployeeId,
-            sm.title AS softwareManagerTitle
+    `SELECT p.id, p.name, p.code, p.description, p.status
      FROM projects p
-     LEFT JOIN users u ON u.id = p.pm_user_id
-     LEFT JOIN users sm ON sm.id = p.software_manager_id
      ORDER BY p.sort_order, p.id`,
-  );
+  ).map((project) => {
+    const pms = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_pms pp JOIN users u ON u.id = pp.user_id
+       WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
+      project.id,
+    );
+    const softwareManagers = all<ProjectContact>(
+      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+       FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
+       WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
+      project.id,
+    );
+    return {
+      ...project,
+      pms,
+      softwareManagers,
+      pmName: pms.map((person) => person.name).join(" / ") || null,
+      pmEmployeeId: pms[0]?.employeeId ?? null,
+      pmTitle: pms[0]?.title ?? null,
+      softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
+      softwareManagerEmployeeId: softwareManagers[0]?.employeeId ?? null,
+      softwareManagerTitle: softwareManagers[0]?.title ?? null,
+    };
+  });
   const allPackages = getPackagesOverview(true);
   return projects.map((project) => {
     const nodes = all<{ id: number; name: string; description: string }>(

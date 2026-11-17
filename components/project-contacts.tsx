@@ -39,10 +39,8 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
     return projects.filter((project) =>
       [
         project.name,
-        project.pmName ?? "",
-        project.pmEmployeeId ?? "",
-        project.softwareManagerName ?? "",
-        project.softwareManagerEmployeeId ?? "",
+        ...project.pms.flatMap((person) => [person.name, person.employeeId, person.title]),
+        ...project.softwareManagers.flatMap((person) => [person.name, person.employeeId, person.title]),
       ]
         .join(" ")
         .toLowerCase()
@@ -81,18 +79,14 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
             <article className="card project-contact-card" key={project.id}>
               <h2>{project.name}</h2>
               <div className="project-contact-people">
-                <ContactLine
-                  role="PM"
-                  name={project.pmName}
-                  title={project.pmTitle}
-                  employeeId={project.pmEmployeeId}
-                />
-                <ContactLine
-                  role="软件经理"
-                  name={project.softwareManagerName}
-                  title={project.softwareManagerTitle}
-                  employeeId={project.softwareManagerEmployeeId}
-                />
+                {project.pms.map((person) => (
+                  <ContactLine key={`pm-${person.id}`} role="PM" name={person.name} title={person.title} employeeId={person.employeeId} />
+                ))}
+                {project.pms.length === 0 && <ContactLine role="PM" name={null} title={null} employeeId={null} />}
+                {project.softwareManagers.map((person) => (
+                  <ContactLine key={`sm-${person.id}`} role="软件经理" name={person.name} title={person.title} employeeId={person.employeeId} />
+                ))}
+                {project.softwareManagers.length === 0 && <ContactLine role="软件经理" name={null} title={null} employeeId={null} />}
               </div>
             </article>
           ))}

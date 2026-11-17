@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflow } from "@/lib/permissions";
+import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { getPendingFormalVersions, getTrialDetail, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
@@ -88,9 +88,9 @@ export default async function FormalPage({
                       </div>
                     </div>
                     <div style={{ minWidth: 280 }}>
-                      {canManageProjectWorkflow(user, version.softwareManagerId) ? (
+                      {canManageProjectWorkflowForProject(user, version.projectId) ? (
                         <ActionForm action={releaseFormalAction} hidden={{ requestId: version.requestId }} submitText="提交转正电子流并发布" submitClassName="button-sm" confirmMessage={`确认发布 ${version.packageName} ${version.version} 正式版本？`}>
-                          <label className="field"><span className="label">转正电子流编号 <span className="required-mark">*</span></span><input className="input" name="flowNo" required minLength={3} placeholder="例如 EF-OTA-152" /></label>
+                          <label className="field"><span className="label">转正电子流 <span className="required-mark">*</span></span><input className="input" name="flowNo" required minLength={3} placeholder="例如 EF-OTA-152" /></label>
                         </ActionForm>
                       ) : <span className="small muted">等待本项目软件经理提交转正电子流</span>}
                     </div>

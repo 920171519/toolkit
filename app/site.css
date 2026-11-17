@@ -543,3 +543,40 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .node-approver-range .member-pill { padding: 2px 5px 2px 7px; font-size: 10.5px; gap: 3px; min-height: 22px; }
 .node-approver-range .member-pill form { margin: 0; }
 .node-approver-range .member-pill .chip-remove { width: 16px !important; height: 16px !important; min-height: 16px !important; }
+
+/* Multiple project contacts */
+.person-check-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow: auto; padding: 2px 0; }
+.person-check { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 11px; cursor: pointer; }
+.person-check input { accent-color: var(--brand); margin: 0; }
+.person-check:has(input:checked) { border-color: var(--brand-border); background: var(--brand-soft); color: var(--brand); }
+
+/* Searchable package picker in transfer form */
+.package-search-input { display: flex; align-items: center; gap: 8px; padding: 0 11px; }
+.package-search-input input { border: 0; outline: 0; background: transparent; width: 100%; min-height: 34px; font-size: 12px; }
+.package-pick-list { display: flex; flex-direction: column; max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: 7px; margin-top: 6px; background: var(--surface); }
+.package-pick-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 7px 9px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; font-size: 11.5px; cursor: pointer; }
+.package-pick-item:last-child { border-bottom: 0; }
+.package-pick-item:hover { background: var(--brand-soft); }
+.package-picked { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--brand-border); border-radius: 7px; background: var(--brand-soft); font-size: 12px; }
+
+/* Trial release source and risk */
+.trial-source-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11px; }
+.trial-summary { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Binding requirements as compact table rows */
+.binding-table { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.binding-table-head, .binding-table-row { display: grid; grid-template-columns: 110px 100px minmax(150px, 1fr) 80px 92px 82px; gap: 10px; align-items: center; padding: 8px 11px; }
+.binding-table-head { background: var(--surface-muted); color: var(--muted); font-size: 10.5px; font-weight: 600; }
+.binding-table-item { border-top: 1px solid var(--line); }
+.binding-table-item > summary { list-style: none; cursor: pointer; }
+.binding-table-item > summary::-webkit-details-marker { display: none; }
+.binding-table-item > summary:hover { background: var(--surface-muted); }
+.binding-table-item[open] > summary { background: var(--surface-muted); }
+.binding-table-row .binding-approver-range { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.binding-row-action { font-size: 10.5px; color: var(--brand); text-align: right; }
+.binding-table-body { padding: 10px 12px 12px; background: var(--surface); border-top: 1px dashed var(--line); }
+.binding-table .binding-requirement { background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0; }
+@media (max-width: 760px) {
+  .binding-table { overflow-x: auto; }
+  .binding-table-head, .binding-table-row { min-width: 720px; }
+}

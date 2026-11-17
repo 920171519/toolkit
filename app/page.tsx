@@ -23,7 +23,7 @@ export default async function HomePage() {
           <div className="container-wide">
             <div className="eyebrow">Project contacts / {DEPARTMENT_NAME}</div>
             <h1>项目联系人</h1>
-            <p>每个项目都有一位 PM 和一位软件经理。需要跨部门协作时，请先联系对应项目的 PM。</p>
+            <p>每个项目可以配置多位 PM 和软件经理。需要跨部门协作时，请联系对应项目的 PM 或软件经理。</p>
           </div>
         </section>
 

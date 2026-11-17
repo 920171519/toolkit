@@ -252,8 +252,8 @@ export type SaveProjectInput = {
   name: string;
   code: string;
   description: string;
-  pmUserId: number | null;
-  softwareManagerId: number | null;
+  pmUserIds: number[];
+  softwareManagerIds: number[];
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
   sortOrder?: number | null;
 };
@@ -277,22 +277,22 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     input.id ?? -1,
   );
   assert(!duplicateCode, "项目编码已存在。");
-  assert(input.pmUserId, "请为项目指定 PM。");
-  const pm = one<{ id: number }>(
-    "SELECT id FROM users WHERE id = ? AND is_active = 1",
-    input.pmUserId,
-  );
-  assert(pm, "选择的 PM 不存在或已停用。");
-  assert(input.softwareManagerId, "请为项目指定软件经理。");
-  const softwareManager = one<{ id: number; role: Role }>(
-    "SELECT id, role FROM users WHERE id = ? AND is_active = 1",
-    input.softwareManagerId,
-  );
-  assert(softwareManager, "选择的软件经理不存在或已停用。");
-  assert(
-    softwareManager.role === "SOFTWARE_MANAGER",
-    "选择的软件经理必须具有“软件经理”角色。",
-  );
+  const pmUserIds = [...new Set(input.pmUserIds)];
+  const softwareManagerIds = [...new Set(input.softwareManagerIds)];
+  assert(pmUserIds.length > 0, "请至少为项目指定一位 PM。");
+  for (const pmUserId of pmUserIds) {
+    const pm = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", pmUserId);
+    assert(pm, "选择的 PM 不存在或已停用。");
+  }
+  assert(softwareManagerIds.length > 0, "请至少为项目指定一位软件经理。");
+  for (const softwareManagerId of softwareManagerIds) {
+    const softwareManager = one<{ id: number; role: Role }>(
+      "SELECT id, role FROM users WHERE id = ? AND is_active = 1",
+      softwareManagerId,
+    );
+    assert(softwareManager, "选择的软件经理不存在或已停用。");
+    assert(softwareManager.role === "SOFTWARE_MANAGER", "选择的软件经理必须具有“软件经理”角色。");
+  }
   assert(["ACTIVE", "PAUSED", "ARCHIVED"].includes(input.status), "项目状态无效。");
   return transaction(() => {
     let projectId = input.id ?? 0;
@@ -308,8 +308,8 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         input.name.trim(),
         input.code.trim().toUpperCase(),
         input.description.trim(),
-        input.pmUserId,
-        input.softwareManagerId,
+        pmUserIds[0],
+        softwareManagerIds[0],
         input.status,
         sortOrder,
         projectId,
@@ -326,13 +326,22 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         input.name.trim(),
         input.code.trim().toUpperCase(),
         input.description.trim(),
-        input.pmUserId,
-        input.softwareManagerId,
+        pmUserIds[0],
+        softwareManagerIds[0],
         input.status,
         sortOrder,
         new Date().toISOString(),
       );
       projectId = Number(result.lastInsertRowid);
+    }
+    run("DELETE FROM project_pms WHERE project_id = ?", projectId);
+    run("DELETE FROM project_software_managers WHERE project_id = ?", projectId);
+    const timestamp = new Date().toISOString();
+    for (const pmUserId of pmUserIds) {
+      run("INSERT INTO project_pms (project_id, user_id, created_at) VALUES (?, ?, ?)", projectId, pmUserId, timestamp);
+    }
+    for (const softwareManagerId of softwareManagerIds) {
+      run("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)", projectId, softwareManagerId, timestamp);
     }
     audit(
       actor.id,
