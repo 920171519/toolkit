@@ -6,6 +6,7 @@ import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { getPendingFormalVersions, getTrialDetail, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
+import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
@@ -84,6 +85,15 @@ export default async function FormalPage({
                         <span>试制电子流 {version.trialFormNo ?? "—"}</span>
                         <span>发布 {formatDateTime(version.trialReleasedAt)}</span>
                         <span>绑定节点 {version.requirementPassed}/{version.requirementTotal} 通过</span>
+                        {version.detail?.request.batchId ? (
+                          <Link href={`/integration/${version.detail.request.batchId}`} className="archive-link">
+                            转测批次 {version.detail.request.batchCode}
+                            {version.detail.request.batchConclusion ? ` · ${CONCLUSION_META[version.detail.request.batchConclusion as BatchConclusion]?.label}` : ""}
+                          </Link>
+                        ) : (
+                          <Badge tone="rose">风险发布</Badge>
+                        )}
+                        {version.detail?.request.riskConclusion && <span>风险结论 {version.detail.request.riskConclusion}</span>}
                         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
                       </div>
                     </div>
