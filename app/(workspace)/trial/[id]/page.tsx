@@ -53,7 +53,7 @@ export default async function TrialDetailPage({
         eyebrow="Trial / Project binding"
         title={`${request.projectName} · ${request.packageName} ${request.version}`}
         description={<>项目试制电子流 {request.trialFormNo ?? "—"} · 发布 {formatDateTime(request.trialReleasedAt)} · 项目软件经理 {request.softwareManagerName ?? "—"}</>}
-        actions={<><Link href="/trial" className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><StatusPill status={request.status as "TRIAL" | "PENDING_FORMAL" | "VOID" | "FORMAL"} /></>}
+        actions={<><Link href="/trial" className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><Link href={`/versions/${request.versionId}`} className="button button-secondary">版本全链路</Link><StatusPill status={request.status as "TRIAL" | "PENDING_FORMAL" | "VOID" | "FORMAL"} /></>}
       />
       <FlashMessage notice={notice} />
 
@@ -181,9 +181,9 @@ export default async function TrialDetailPage({
           )}
 
           {manager && request.status === "TRIAL" && (
-            <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 16 }}>作废本项目试制版本</h2><p className="small muted" style={{ marginTop: 3 }}>绑定验证不通过时，可作废本项目试制版本；系统会提醒待审批电子流提交人撤销。</p></div></div><div className="card-body" style={{ paddingTop: 12 }}>
+            <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 16 }}>作废共享试制版本</h2><p className="small muted" style={{ marginTop: 3 }}>试制按软件包版本全项目共享；作废后全部项目的该试制版本都会失效，并提醒待审批电子流提交人撤销。</p></div></div><div className="card-body" style={{ paddingTop: 12 }}>
               <details><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写原因并作废</summary><div style={{ marginTop: 12 }}>
-                <ActionForm action={voidTrialAction} hidden={{ requestId }} submitText="确认作废本项目试制版本" submitVariant="danger" confirmMessage="确认作废本项目试制版本？待审批的绑定电子流需要提交人撤销。">
+                <ActionForm action={voidTrialAction} hidden={{ requestId }} submitText="确认作废共享试制版本" submitVariant="danger" confirmMessage="确认作废该软件包的共享试制版本？全部项目的待审批绑定电子流都需要提交人撤销。">
                   <label className="field"><span className="label">作废原因</span><textarea className="textarea" name="reason" required minLength={5} placeholder="说明绑定验证不通过的原因。" /></label>
                 </ActionForm>
               </div></details>

@@ -207,6 +207,12 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.locator("article.card").filter({ hasText: "极光 M2" }).first()).toBeVisible();
     await expect(page.locator("article.card").filter({ hasText: "星云 N1" })).toHaveCount(0);
 
+    await page.goto("/overview");
+    await expect(page.locator(".project-overview-row").filter({ hasText: "极光 M2" })).toHaveCount(1);
+    await expect(page.locator(".project-overview-row").filter({ hasText: "星云 N1" })).toHaveCount(0);
+    await page.goto("/projects/1");
+    await expect(page).toHaveURL(/\/overview\?flash=/);
+
     await login(page, "TEST001");
     await page.goto("/submissions");
     await expect(page.locator(".project-request-group").filter({ hasText: "星云 N1" }).first()).toBeVisible();
@@ -333,11 +339,11 @@ test.describe("工程协同台项目维度流程", () => {
     acceptDialogs(page);
     await login(page, "MGR001");
     await page.goto("/trial");
-    const readyCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "星云 N1" }).first();
+    const readyCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.0" }).filter({ hasText: "星云 N1" }).first();
     await expect(readyCard).toContainText("待发试制");
-    await readyCard.getByText("发布试制", { exact: true }).click();
+    await readyCard.getByText("发布全项目共享试制", { exact: true }).click();
     await readyCard.locator('input[name="trialFormNo"]').fill("EF-TRIAL-N1-OTA-160");
-    await readyCard.getByRole("button", { name: "发布本项目试制版本" }).click();
+    await readyCard.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await expectFlash(page, "试制版本已发布");
     otaTrialUrl = page.url().split("?")[0];
     expect(otaTrialUrl).toMatch(/\/trial\/\d+$/);
@@ -373,8 +379,25 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto(otaTrialUrl);
     await approveAllBindingFlows(page);
     await page.waitForTimeout(300);
+
+    // N1 绑定完成后，共享试制版本还等待 M2 完成绑定。
+    await login(page, "VALID001");
+    await page.goto("/trial");
+    const m2Row = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).filter({ hasText: "极光 M2" }).filter({ hasText: "1.6.0" }).first();
+    await expect(m2Row).toBeVisible();
+    const m2Href = await m2Row.getByRole("link", { name: /处理/ }).getAttribute("href");
+    expect(m2Href).toBeTruthy();
+    await page.goto(new URL(m2Href!, page.url()).toString());
+    await expect(page).toHaveURL(/\/trial\/\d+$/);
+    const m2TrialUrl = page.url().split("?")[0];
+    await submitBindingFlow(page, "PVT", ["M2-OTA-PVT-001"], "陈曦");
+    await login(page, "OWNER002");
+    await page.goto(m2TrialUrl);
+    await approveAllBindingFlows(page);
+    await page.waitForTimeout(300);
     expect(page.url()).toContain("/formal");
 
+    await login(page, "MGR001");
     await page.goto("/formal");
     const formalCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "星云 N1" }).first();
     await expect(formalCard).toContainText("待转正");
@@ -384,12 +407,11 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(bindingDetails.locator("a").filter({ hasText: "网页电子流" }).first()).toBeVisible();
     await formalCard.locator('input[name="flowNo"]').fill("EF-OTA-160");
     await formalCard.getByRole("button", { name: "提交转正电子流并发布" }).click();
-    await expectFlash(page, "正式版本已发布");
+    await expectFlash(page, "同步发布正式版本");
 
     await page.goto("/packages?project=1");
     const otaRow = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).first();
     await expect(otaRow).toContainText("1.6.0");
-    await expect(otaRow).not.toContainText("待发试制");
 
     await login(page, "VALID001");
     await expect(page.locator(".side-list-item").filter({ hasText: "1001OTA" }).first()).toBeVisible();
@@ -404,7 +426,7 @@ test.describe("工程协同台项目维度流程", () => {
     await keyRow.getByRole("link", { name: /处理/ }).click();
     await page.getByText("填写原因并作废").click();
     await page.locator('textarea[name="reason"]').fill("自动化验证：绑定验证不通过，作废本项目试制版本。");
-    await page.getByRole("button", { name: "确认作废本项目试制版本" }).click();
+    await page.getByRole("button", { name: "确认作废共享试制版本" }).click();
     await expectFlash(page, "试制版本已作废");
 
     await page.goto("/submissions");
@@ -425,7 +447,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.locator(".personal-alert").filter({ hasText: "试制版本已作废" })).toHaveCount(0);
   });
 
-  test("软件包总览按项目查看并排除存档项目使用范围", async ({ page }) => {
+  test("软件包使用范围跨项目展示，部门总览进入项目工作区", async ({ page }) => {
     await login(page, "OWNER001");
     await page.goto("/packages");
     await expect(page.locator(".data-table")).not.toContainText("远山 X0");
@@ -434,22 +456,35 @@ test.describe("工程协同台项目维度流程", () => {
     const table = page.locator(".data-table");
     await expect(table).toContainText("1001OTA");
     await expect(table).not.toContainText("远山 X0");
-    await expect(table).not.toContainText("极光 M2");
+    await expect(table).toContainText("极光 M2");
 
     await page.getByRole("link", { name: "1001OTA", exact: true }).click();
     await expect(page.getByTestId("package-drawer")).toBeVisible();
     await expect(page.getByTestId("package-drawer")).toContainText("1001OTA");
+    const traceLink = page.getByTestId("package-drawer").getByRole("link", { name: "全链路追溯" }).first();
+    await expect(traceLink).toBeVisible();
+    const traceHref = await traceLink.getAttribute("href");
+    expect(traceHref).toBeTruthy();
+    await page.goto(new URL(traceHref!, page.url()).toString());
+    await expect(page).toHaveURL(/\/versions\/\d+$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("1001OTA");
+    await expect(page.getByText("项目版本与验收联动").first()).toBeVisible();
+    await expect(page.getByText("绑定验证证据链").first()).toBeVisible();
 
-    await page.goto("/projects");
-    await page.getByLabel("选择项目").selectOption({ label: "极光 M2" });
-    await page.getByRole("button", { name: "打开项目" }).click();
-    await expect(page.getByRole("heading", { name: "极光 M2" })).toBeVisible();
+    await page.goto("/overview");
+    await page.locator(".project-overview-row").filter({ hasText: "极光 M2" }).getByRole("link", { name: "极光 M2", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/2$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("极光 M2");
+    await expect(page.locator(".card").filter({ hasText: "软件包与全局使用范围" })).toContainText("星云 N1");
+    await expect(page.getByText("项目版本流程记录").first()).toBeVisible();
 
-    await page.getByRole("link", { name: "存档项目" }).click();
-    await expect(page.getByRole("heading", { name: "远山 X0" })).toBeVisible();
-    await expect(page.locator(".data-table")).toContainText("1001OTA");
-    await expect(page.locator(".data-table")).toContainText("1008MED");
+    await page.goto("/overview");
+    await page.locator(".project-overview-row").filter({ hasText: "远山 X0" }).getByRole("link", { name: "远山 X0", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/4$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("远山 X0");
   });
+
+
   test("责任田主管可以新建软件包并进入配置页", async ({ page }) => {
     test.setTimeout(60_000);
     await login(page, "OWNER001");
@@ -467,29 +502,27 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("9901TST");
     await expect(page.getByText("软件包已创建，请继续配置使用范围。")).toBeVisible();
   });
-  test("风险发布展示转测批次联动并可登记发布", async ({ page }) => {
+  test("风险发布可基于全项目共享试制发布", async ({ page }) => {
     test.setTimeout(90_000);
     acceptDialogs(page);
     await login(page, "MGR002");
     await page.goto("/trial");
-    const integrated = page.locator("article.card-muted").filter({ hasText: "1001OTA" }).filter({ hasText: "极光 M2" }).first();
-    await expect(integrated).toContainText("转测批次 B122");
-    await expect(integrated).toContainText("验收结论：测试通过");
-    const risk = page.locator("article.card-muted").filter({ hasText: "1004NET" }).filter({ hasText: "极光 M2" }).first();
+    const risk = page.locator("article.card-muted").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).first();
     await expect(risk).toContainText("风险发布");
     await expect(risk).toContainText("未关联转测批次");
     await expect(risk).toContainText("风险结论：");
-    await risk.getByText("发布试制", { exact: true }).click();
+    await risk.getByText("发布全项目共享试制", { exact: true }).click();
     await expect(risk.locator('textarea[name="riskConclusion"]')).toBeVisible();
-    await risk.locator('input[name="trialFormNo"]').fill("EF-TRIAL-M2-NET-200");
-    await risk.locator('textarea[name="riskConclusion"]').fill("集成测试资源不足，按历史回归结论和风险评估结果发布试制。");
-    await risk.getByRole("button", { name: "发布本项目试制版本" }).click();
+    await risk.locator('input[name="trialFormNo"]').fill("EF-TRIAL-M2-OTA-161");
+    await risk.locator('textarea[name="riskConclusion"]').fill("集成测试资源不足，按历史回归结论和风险评估结果发布共享试制。");
+    await risk.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await expectFlash(page, "试制版本已发布");
     await page.goto("/trial");
-    const trialRow = page.locator(".data-table tbody tr").filter({ hasText: "1004NET" }).filter({ hasText: "极光 M2" }).first();
+    const trialRow = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).filter({ hasText: "极光 M2" }).first();
     await expect(trialRow).toContainText("风险发布");
-    await expect(trialRow).toContainText("EF-TRIAL-M2-NET-200");
+    await expect(trialRow).toContainText("EF-TRIAL-M2-OTA-161");
   });
+
 
   test("项目配置多个软件经理均能获得项目流程权限", async ({ page }) => {
     test.setTimeout(90_000);

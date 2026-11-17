@@ -42,10 +42,10 @@ export default async function PackagesPage({
       <PageHeader
         eyebrow="Software packages / Version overview"
         title="软件版本总览"
-        description="可按项目查看软件包版本。使用范围只展示在行项目，已归档项目只在项目视图的存档项目中查看。"
+        description="可按项目筛选软件包，但使用范围始终展示该软件包在全部在行项目中的节点覆盖，便于判断转测和绑定是否完整。"
         actions={
           <>
-            <Link href="/projects" className="button button-secondary">
+            <Link href="/overview" className="button button-secondary">
               <LayoutGrid size={14} /> 按项目查看
             </Link>
             <Link href="/submissions" className="button button-primary">
@@ -69,7 +69,7 @@ export default async function PackagesPage({
               </label>
               <button type="submit" className="button button-secondary button-sm">切换</button>
             </div>
-            <span className="small muted">按项目查看时，版本状态、试制版本与在途版本均以该项目为准；已结束项目不在本页展示。</span>
+            <span className="small muted">按项目筛选只限制软件包列表；使用范围列始终展示全部在行项目，已结束项目不在本页展示。</span>
           </form>
         </div>
       </section>

@@ -157,12 +157,13 @@ export function getPackageOverviewRows(projectId?: number): PackageOverviewRow[]
      FROM package_usages u
      JOIN projects pr ON pr.id = u.project_id
      JOIN project_nodes n ON n.id = u.node_id
-     WHERE pr.status != 'ARCHIVED' ${projectId ? "AND pr.id = ?" : ""}
+     WHERE pr.status != 'ARCHIVED'
      ORDER BY pr.sort_order, n.sort_order`,
-    ...(projectId ? [projectId] : []),
   );
   if (projectId) {
-    const allowed = new Set(usageRows.map((row) => row.packageId));
+    const allowed = new Set(
+      usageRows.filter((row) => row.projectId === projectId).map((row) => row.packageId),
+    );
     packages = packages.filter((pkg) => allowed.has(pkg.id));
   }
   const usageMap = new Map<number, PackageUsageScope[]>();

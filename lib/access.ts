@@ -162,3 +162,21 @@ export function getLedAreaIds(userId: number): number[] {
     userId,
   ).map((row) => row.areaId);
 }
+
+export function canAccessProjectPage(user: SessionUser | null, projectId: number): boolean {
+  if (!user) return false;
+  if (user.role === "ADMIN") return true;
+  if (user.role === "SOFTWARE_MANAGER") {
+    return Boolean(
+      one<{ id: number }>(
+        "SELECT 1 AS id FROM project_software_managers WHERE project_id = ? AND user_id = ? LIMIT 1",
+        projectId,
+        user.id,
+      ),
+    );
+  }
+  if (user.role === "INTEGRATION_TESTER") {
+    return getIntegrationManagedProjectIds(user.id).includes(projectId);
+  }
+  return true;
+}

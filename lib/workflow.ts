@@ -530,107 +530,171 @@ export async function completeBatchTest(
 }
 
 export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, riskConclusion = "") {
-  assert(trialFormNo.trim().length >= 3, "请填写发布试制电子流编号。");
-  const request = one<{
+  assert(trialFormNo.trim().length >= 3, "请填写发布试制电子流。");
+  const anchor = one<{
     id: number;
-    project_id: number;
-    project_name: string;
+    package_version_id: number;
     package_id: number;
     package_name: string;
     version: string;
-    status: string;
-    software_manager_id: number | null;
-    release_mode: "INTEGRATION" | "RISK";
-    risk_conclusion: string | null;
   }>(
-    `SELECT r.id, r.project_id, pr.name AS project_name, p.id AS package_id, p.name AS package_name,
-            pv.version, r.status, pr.software_manager_id, r.release_mode, r.risk_conclusion
+    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = r.project_id
      WHERE r.id = ?`,
     requestId,
   );
-  assert(request, "项目版本记录不存在。", "NOT_FOUND");
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+
+  const requests = all<{
+    id: number;
+    project_id: number;
+    project_name: string;
+    status: string;
+    batch_id: number | null;
+    batch_conclusion: string | null;
+  }>(
+    `SELECT r.id, r.project_id, pr.name AS project_name, r.status,
+            b.id AS batch_id, b.conclusion AS batch_conclusion
+     FROM version_transfer_requests r
+     JOIN projects pr ON pr.id = r.project_id
+     LEFT JOIN integration_batches b ON b.id = (
+       SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
+     )
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+     ORDER BY pr.sort_order`,
+    anchor.package_version_id,
+  );
+  assert(requests.length > 0, "该版本没有可发布试制的项目记录。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflowForProject(actor, request.project_id),
-    "只有本项目软件经理或系统管理员可以发布试制。",
+    requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
+    "只有使用该软件包的项目软件经理或系统管理员可以发布试制。",
     "FORBIDDEN",
   );
-  assert(
-    ["PASSED", "FAILED", "BLOCKED"].includes(request.status),
-    "只有本项目集成测试结束的版本可以发布试制。",
+  const usageProjects = all<{ id: number; name: string }>(
+    `SELECT DISTINCT pr.id, pr.name
+     FROM package_usages u JOIN projects pr ON pr.id = u.project_id
+     WHERE u.package_id = ? AND pr.status != 'ARCHIVED'
+     ORDER BY pr.sort_order`,
+    anchor.package_id,
   );
-  const batch = one<{ id: number; conclusion: string | null }>(
-    `SELECT b.id, b.conclusion FROM integration_batches b
-     JOIN batch_items bi ON bi.batch_id = b.id
-     WHERE bi.transfer_request_id = ? ORDER BY bi.id DESC LIMIT 1`,
-    requestId,
+  assert(usageProjects.length > 0, "该软件包没有在行项目使用范围，无法发布试制。");
+  const requestByProject = new Map(requests.map((request) => [request.project_id, request]));
+  for (const project of usageProjects) {
+    assert(
+      requestByProject.has(project.id),
+      `${project.name} 尚未转测该版本，不能发布试制。所有使用项目都需先完成集成测试验收。`,
+    );
+  }
+  for (const request of requests) {
+    assert(
+      ["PASSED", "FAILED", "BLOCKED"].includes(request.status),
+      `${request.project_name} 的集成测试尚未完成，不能发布试制。`,
+    );
+  }
+  const riskRequired = requests.some(
+    (request) => request.status !== "PASSED" || request.batch_id === null,
   );
-  const riskRequired = request.status !== "PASSED" || !batch;
   if (riskRequired) {
-    assert(riskConclusion.trim().length >= 5, "该版本未通过集成测试或未关联转测批次，请填写风险发布结论。");
+    assert(riskConclusion.trim().length >= 5, "存在未通过集成测试或未关联转测批次的项目，请填写全版本风险发布结论。");
   }
-  const usages = all<{
-    node_id: number;
-    node_name: string;
-    required_count: number;
-    binding_owner_id: number | null;
-    binding_approver_id: number | null;
-  }>(
-    `SELECT u.node_id, n.name AS node_name, n.required_binding_count AS required_count,
-            n.binding_owner_id, n.binding_approver_id
-     FROM package_usages u JOIN project_nodes n ON n.id = u.node_id
-     WHERE u.package_id = ? AND u.project_id = ?
-     ORDER BY n.sort_order`,
-    request.package_id,
-    request.project_id,
-  );
-  assert(usages.length > 0, "该软件包在本项目没有测试节点，无法发布试制。");
-  for (const usage of usages) {
-    assert(usage.binding_owner_id, `${request.project_name} / ${usage.node_name} 未配置绑定验证责任人。`);
-    assert(usage.binding_approver_id, `${request.project_name} / ${usage.node_name} 未配置绑定电子流审批人。`);
+
+  const requirementsToCreate: Array<{
+    requestId: number;
+    projectId: number;
+    projectName: string;
+    nodeId: number;
+    nodeName: string;
+    requiredCount: number;
+    bindingOwnerId: number;
+    bindingApproverId: number;
+    approverPool: number[];
+  }> = [];
+  for (const request of requests) {
+    const usages = all<{
+      node_id: number;
+      node_name: string;
+      required_count: number;
+      binding_owner_id: number | null;
+      binding_approver_id: number | null;
+    }>(
+      `SELECT u.node_id, n.name AS node_name, n.required_binding_count AS required_count,
+              n.binding_owner_id, n.binding_approver_id
+       FROM package_usages u JOIN project_nodes n ON n.id = u.node_id
+       WHERE u.package_id = ? AND u.project_id = ?
+       ORDER BY n.sort_order`,
+      anchor.package_id,
+      request.project_id,
+    );
+    assert(usages.length > 0, `${request.project_name} 没有该软件包的测试节点，无法发布试制。`);
+    for (const usage of usages) {
+      assert(usage.binding_owner_id, `${request.project_name} / ${usage.node_name} 未配置绑定验证责任人。`);
+      assert(usage.binding_approver_id, `${request.project_name} / ${usage.node_name} 未配置绑定电子流审批人。`);
+      const pool = all<{ userId: number }>(
+        "SELECT user_id AS userId FROM project_node_approvers WHERE node_id = ? ORDER BY id",
+        usage.node_id,
+      ).map((row) => row.userId);
+      requirementsToCreate.push({
+        requestId: request.id,
+        projectId: request.project_id,
+        projectName: request.project_name,
+        nodeId: usage.node_id,
+        nodeName: usage.node_name,
+        requiredCount: Math.max(1, usage.required_count),
+        bindingOwnerId: usage.binding_owner_id!,
+        bindingApproverId: usage.binding_approver_id!,
+        approverPool: pool.length > 0 ? pool : [usage.binding_approver_id!],
+      });
+    }
   }
+
   return transaction(() => {
     const timestamp = now();
     run(
-      `UPDATE version_transfer_requests
-       SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?,
-           release_mode = ?, risk_conclusion = ?, updated_at = ?
+      `UPDATE package_versions
+       SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, release_mode = ?,
+           risk_conclusion = ?, updated_at = ?
        WHERE id = ?`,
       trialFormNo.trim(),
       timestamp,
-      actor.id,
       riskRequired ? "RISK" : "INTEGRATION",
       riskRequired ? riskConclusion.trim() : null,
       timestamp,
-      requestId,
+      anchor.package_version_id,
     );
-    for (const usage of usages) {
+    for (const request of requests) {
+      run(
+        `UPDATE version_transfer_requests
+         SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?,
+             release_mode = ?, risk_conclusion = ?, updated_at = ?
+         WHERE id = ?`,
+        trialFormNo.trim(),
+        timestamp,
+        actor.id,
+        riskRequired ? "RISK" : "INTEGRATION",
+        riskRequired ? riskConclusion.trim() : null,
+        timestamp,
+        request.id,
+      );
+    }
+    for (const item of requirementsToCreate) {
       const insertResult = run(
         `INSERT INTO binding_requirements
           (request_id, package_version_id, project_id, node_id, required_count, binding_owner_id, approver_id, status, created_at, updated_at)
-         VALUES (?, (SELECT package_version_id FROM version_transfer_requests WHERE id = ?), ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
-        requestId,
-        requestId,
-        request.project_id,
-        usage.node_id,
-        Math.max(1, usage.required_count),
-        usage.binding_owner_id,
-        usage.binding_approver_id,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
+        item.requestId,
+        anchor.package_version_id,
+        item.projectId,
+        item.nodeId,
+        item.requiredCount,
+        item.bindingOwnerId,
+        item.bindingApproverId,
         timestamp,
         timestamp,
       );
       const requirementId = Number(insertResult.lastInsertRowid);
-      const approvers = all<{ user_id: number }>(
-        "SELECT user_id FROM project_node_approvers WHERE node_id = ? ORDER BY id",
-        usage.node_id,
-      );
-      const pool = approvers.length > 0
-        ? approvers.map((row) => row.user_id)
-        : usage.binding_approver_id ? [usage.binding_approver_id] : [];
-      for (const approverId of pool) {
+      for (const approverId of item.approverPool) {
         run(
           "INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at) VALUES (?, ?, ?)",
           requirementId,
@@ -639,62 +703,74 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         );
       }
     }
-    const versionRow = one<{ package_version_id: number }>(
-      "SELECT package_version_id FROM version_transfer_requests WHERE id = ?",
-      requestId,
-    );
-    if (versionRow) refreshVersionAggregate(versionRow.package_version_id);
+    refreshVersionAggregate(anchor.package_version_id);
     audit(
       actor.id,
       "RELEASE_TRIAL",
       "PACKAGE",
-      request.package_id,
-      `提交 ${request.project_name} 的发布试制电子流 ${trialFormNo.trim()}，发布 ${request.package_name} ${request.version} 试制版本，生成 ${usages.length} 个节点绑定任务`,
+      anchor.package_id,
+      `按全项目共享发布 ${anchor.package_name} ${anchor.version} 试制版本，覆盖 ${requests.length} 个项目、${requirementsToCreate.length} 个节点绑定任务，电子流 ${trialFormNo.trim()}${riskRequired ? "（风险发布）" : ""}`,
     );
-    return usages.length;
+    return requirementsToCreate.length;
   });
 }
 
 export function voidTrial(actor: SessionUser, requestId: number, reason: string) {
   assert(reason.trim().length >= 5, "请填写作废原因。");
-  const request = one<{
+  const anchor = one<{
     id: number;
-    project_id: number;
-    project_name: string;
+    package_version_id: number;
     package_id: number;
     package_name: string;
     version: string;
-    status: string;
-    software_manager_id: number | null;
-    package_version_id: number;
   }>(
-    `SELECT r.id, r.project_id, pr.name AS project_name, p.id AS package_id, p.name AS package_name,
-            pv.version, r.status, pr.software_manager_id, r.package_version_id
+    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = r.project_id
      WHERE r.id = ?`,
     requestId,
   );
-  assert(request, "项目版本记录不存在。", "NOT_FOUND");
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+  const requests = all<{ id: number; project_id: number; project_name: string; status: string }>(
+    `SELECT r.id, r.project_id, pr.name AS project_name, r.status
+     FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+     ORDER BY pr.sort_order`,
+    anchor.package_version_id,
+  );
+  assert(requests.length > 0, "该版本没有可作废的项目记录。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflowForProject(actor, request.project_id),
-    "只有本项目软件经理或系统管理员可以作废试制版本。",
+    requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
+    "只有使用该软件包的项目软件经理或系统管理员可以作废试制版本。",
     "FORBIDDEN",
   );
-  assert(request.status === "TRIAL", "只有试制验证中的项目版本可以作废。");
+  assert(requests.some((request) => request.status === "TRIAL"), "只有试制验证中的版本可以作废。");
   transaction(() => {
     const timestamp = now();
     run(
-      "UPDATE version_transfer_requests SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE id = ?",
+      "UPDATE package_versions SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE id = ?",
       reason.trim(),
       timestamp,
       timestamp,
-      requestId,
+      anchor.package_version_id,
     );
-    refreshVersionAggregate(request.package_version_id);
-    audit(actor.id, "VOID_TRIAL", "PACKAGE", request.package_id, `作废 ${request.project_name} 的 ${request.package_name} ${request.version} 试制版本：${reason.trim()}。待处理的绑定电子流提交人将收到撤回提醒`);
+    for (const request of requests) {
+      run(
+        "UPDATE version_transfer_requests SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE id = ?",
+        reason.trim(),
+        timestamp,
+        timestamp,
+        request.id,
+      );
+    }
+    audit(
+      actor.id,
+      "VOID_TRIAL",
+      "PACKAGE",
+      anchor.package_id,
+      `作废 ${anchor.package_name} ${anchor.version} 共享试制版本，覆盖 ${requests.length} 个项目：${reason.trim()}。待处理绑定电子流提交人将收到撤回提醒`,
+    );
   });
 }
 
@@ -893,8 +969,7 @@ export function decideBindingFlow(
         flow.request_id,
       );
       if (requirements.length > 0 && requirements.every((item) => item.status === "PASSED")) {
-        run("UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', updated_at = ? WHERE id = ?", timestamp, flow.request_id);
-        enteredFormal = true;
+        // 本项目绑定已满足，先关闭本项目剩余待审批电子流。
         const pendingFlows = all<{ id: number }>(
           "SELECT id FROM binding_flows WHERE requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = ?) AND status = 'PENDING'",
           flow.request_id,
@@ -906,6 +981,38 @@ export function decideBindingFlow(
             pending.id,
           );
         }
+        // 试制按软件包版本共享：必须全部使用项目都完成绑定，才整体进入待转正。
+        const versionRequirementSummary = one<{ total: number; passed: number }>(
+          `SELECT COUNT(*) AS total,
+                  SUM(CASE WHEN br.status = 'PASSED' THEN 1 ELSE 0 END) AS passed
+           FROM binding_requirements br
+           JOIN version_transfer_requests r ON r.id = br.request_id
+           WHERE r.package_version_id = ?`,
+          flow.version_id,
+        );
+        const versionReady =
+          Number(versionRequirementSummary?.total ?? 0) > 0 &&
+          Number(versionRequirementSummary?.passed ?? 0) === Number(versionRequirementSummary?.total ?? 0);
+        if (versionReady) {
+          run("UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', updated_at = ? WHERE package_version_id = ?", timestamp, flow.version_id);
+          const allPendingFlows = all<{ id: number }>(
+            `SELECT id FROM binding_flows WHERE requirement_id IN (
+               SELECT br.id FROM binding_requirements br
+               JOIN version_transfer_requests r ON r.id = br.request_id
+               WHERE r.package_version_id = ?
+             ) AND status = 'PENDING'`,
+            flow.version_id,
+          );
+          for (const pending of allPendingFlows) {
+            run(
+              "UPDATE binding_flows SET status = 'CANCELLED', cancelled_at = ?, cancel_reason = '该软件包全部项目绑定已满足，系统关闭剩余电子流' WHERE id = ?",
+              timestamp,
+              pending.id,
+            );
+          }
+          enteredFormal = true;
+          refreshVersionAggregate(flow.version_id);
+        }
       }
     }
     audit(
@@ -913,7 +1020,7 @@ export function decideBindingFlow(
       decision === "APPROVED" ? "APPROVE_BINDING_FLOW" : "REJECT_BINDING_FLOW",
       "BINDING_FLOW",
       flowId,
-      `${decision === "APPROVED" ? "通过" : "驳回"} ${flow.package_name} ${flow.version} 在 ${flow.project_name}/${flow.node_name} 的绑定电子流：${comment.trim()}${enteredFormal ? "。该版本已进入本项目待转正" : ""}`,
+      `${decision === "APPROVED" ? "通过" : "驳回"} ${flow.package_name} ${flow.version} 在 ${flow.project_name}/${flow.node_name} 的绑定电子流：${comment.trim()}${enteredFormal ? "。该版本全部项目绑定完成，已进入待转正" : ""}`,
     );
     return { enteredFormal };
   });
@@ -921,51 +1028,77 @@ export function decideBindingFlow(
 
 export function releaseFormal(actor: SessionUser, requestId: number, flowNo: string) {
   assert(flowNo.trim().length >= 3, "请填写转正电子流。");
-  const request = one<{
+  const anchor = one<{
     id: number;
-    project_id: number;
-    project_name: string;
+    package_version_id: number;
     package_id: number;
     package_name: string;
     version: string;
-    status: string;
-    software_manager_id: number | null;
-    package_version_id: number;
   }>(
-    `SELECT r.id, r.project_id, pr.name AS project_name, p.id AS package_id, p.name AS package_name,
-            pv.version, r.status, pr.software_manager_id, r.package_version_id
+    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = r.project_id
      WHERE r.id = ?`,
     requestId,
   );
-  assert(request, "项目版本记录不存在。", "NOT_FOUND");
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+  const requests = all<{ id: number; project_id: number; project_name: string; status: string }>(
+    `SELECT r.id, r.project_id, pr.name AS project_name, r.status
+     FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+     ORDER BY pr.sort_order`,
+    anchor.package_version_id,
+  );
+  assert(requests.length > 0, "该版本没有可转正的项目记录。", "NOT_FOUND");
   assert(
-    canManageProjectWorkflowForProject(actor, request.project_id),
-    "只有本项目软件经理或系统管理员可以发布正式版本。",
+    requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
+    "只有使用该软件包的项目软件经理或系统管理员可以发布转正。",
     "FORBIDDEN",
   );
-  assert(request.status === "PENDING_FORMAL", "只有本项目待转正的版本可以发布正式版本。");
-  const requirements = all<{ status: string }>(
-    "SELECT status FROM binding_requirements WHERE request_id = ?",
-    requestId,
+  for (const request of requests) {
+    assert(request.status === "PENDING_FORMAL", `${request.project_name} 尚未完成全部项目绑定验证，不能转正。`);
+  }
+  const summary = one<{ total: number; passed: number }>(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN br.status = 'PASSED' THEN 1 ELSE 0 END) AS passed
+     FROM binding_requirements br
+     JOIN version_transfer_requests r ON r.id = br.request_id
+     WHERE r.package_version_id = ?`,
+    anchor.package_version_id,
   );
-  assert(requirements.length > 0 && requirements.every((item) => item.status === "PASSED"), "本项目绑定验证尚未全部通过，不能转正。");
-  transaction(() => {
+  assert(
+    Number(summary?.total ?? 0) > 0 && Number(summary?.passed ?? 0) === Number(summary?.total ?? 0),
+    "该软件包仍有项目绑定验证未全部通过，不能转正。",
+  );
+  return transaction(() => {
     const timestamp = now();
     run(
-      `UPDATE version_transfer_requests
-       SET status = 'FORMAL', formal_released_at = ?, formal_released_by = ?, form_flow_no = ?, updated_at = ?
-       WHERE id = ?`,
+      `UPDATE package_versions SET status = 'FORMAL', formal_released_at = ?, form_flow_no = ?, updated_at = ? WHERE id = ?`,
       timestamp,
-      actor.id,
       flowNo.trim(),
       timestamp,
-      requestId,
+      anchor.package_version_id,
     );
-    refreshVersionAggregate(request.package_version_id);
-    audit(actor.id, "RELEASE_FORMAL", "PACKAGE", request.package_id, `${request.project_name} 发布 ${request.package_name} ${request.version} 正式版本，电子流：${flowNo.trim()}`);
+    for (const request of requests) {
+      run(
+        `UPDATE version_transfer_requests
+         SET status = 'FORMAL', formal_released_at = ?, formal_released_by = ?, form_flow_no = ?, updated_at = ?
+         WHERE id = ?`,
+        timestamp,
+        actor.id,
+        flowNo.trim(),
+        timestamp,
+        request.id,
+      );
+    }
+    refreshVersionAggregate(anchor.package_version_id);
+    audit(
+      actor.id,
+      "RELEASE_FORMAL",
+      "PACKAGE",
+      anchor.package_id,
+      `${anchor.package_name} ${anchor.version} 全项目绑定完成，按共享版本发布正式版本，覆盖 ${requests.length} 个项目，转正电子流：${flowNo.trim()}`,
+    );
   });
 }

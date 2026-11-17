@@ -319,6 +319,7 @@ export function PackageDrawer({
                             </Link>
                           )}
                           {version.formFlowNo && <span className="chip">电子流 {version.formFlowNo}</span>}
+                          <Link href={`/versions/${version.id}`} className="archive-link" style={{ marginLeft: "auto" }}>全链路追溯</Link>
                         </div>
                         <p className="change-copy">{version.changeSummary}</p>
                         <div className="toolbar" style={{ gap: 13, marginTop: 7, fontSize: 11, color: "var(--muted)" }}>

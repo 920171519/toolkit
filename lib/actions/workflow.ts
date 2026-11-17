@@ -185,7 +185,7 @@ export async function releaseTrialAction(_prev: ActionState, formData: FormData)
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, `试制版本已发布，已为本项目生成 ${taskCount} 个节点绑定任务。`);
+  successRedirect(`/trial/${requestId}`, `试制版本已发布，已为本版本全部使用项目生成 ${taskCount} 个节点绑定任务。`);
 }
 
 export async function voidTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -198,7 +198,7 @@ export async function voidTrialAction(_prev: ActionState, formData: FormData): P
     return failure(error);
   }
   refreshAll();
-  successRedirect("/trial", "试制版本已作废，相关绑定电子流提交人已收到撤回提醒。");
+  successRedirect("/trial", "共享试制版本已作废，全部项目相关绑定电子流提交人已收到撤回提醒。");
 }
 
 export async function submitBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -255,7 +255,7 @@ export async function decideBindingFlowAction(_prev: ActionState, formData: Form
   successRedirect(
     enteredFormal ? "/formal" : `/trial/${requestId}`,
     enteredFormal
-      ? "绑定电子流已通过，本项目全部节点绑定数量已满足，版本进入本项目待转正。"
+      ? "绑定电子流已通过，该软件包全部项目节点绑定数量已满足，版本进入待转正。"
       : decision === "APPROVED"
         ? "绑定电子流审批通过。"
         : "绑定电子流已驳回，提交人将收到通知。",
@@ -272,5 +272,5 @@ export async function releaseFormalAction(_prev: ActionState, formData: FormData
     return failure(error);
   }
   refreshAll();
-  successRedirect("/formal", "本项目正式版本已发布。");
+  successRedirect("/formal", "该软件包全部使用项目已同步发布正式版本。");
 }

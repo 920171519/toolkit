@@ -1,117 +1,110 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Boxes, FlaskConical, Layers3 } from "lucide-react";
+import { ArrowRight, Building2, Layers3, Package, UsersRound } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getAuditLogs, getPackagesOverview, getPublicProjects } from "@/lib/queries";
+import { getProjectConfigs } from "@/lib/queries";
 import {
   getBatches,
   getPendingFormalVersions,
   getPendingTransferGroups,
-  getProjectOptions,
   getTrialReadyVersions,
   getTrialVersions,
+  getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
-import { formatDateTime, formatRelative } from "@/lib/format";
-import { Badge, BatchStatusPill, EmptyState, PageHeader } from "@/components/ui";
+import { PROJECT_STATUS_META } from "@/lib/constants";
+import { formatDateTime } from "@/lib/format";
+import { Badge, EmptyState, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "部门总览" };
 
 export default async function OverviewPage() {
-  await requireUser();
-  const packages = getPackagesOverview();
-  const projects = getProjectOptions();
-  const pendingGroups = getPendingTransferGroups();
-  const pendingCount = pendingGroups.reduce((total, group) => total + group.items.length, 0);
-  const batches = getBatches(100);
-  const activeBatches = batches.filter((batch) => batch.status === "IN_TEST");
-  const pendingTrial = getTrialReadyVersions();
-  const trialVersions = getTrialVersions();
-  const pendingFormal = getPendingFormalVersions();
-  const contacts = getPublicProjects();
-  const activities = getAuditLogs(8);
-  const stages = [
-    { label: "待组织转测", value: pendingCount, href: "/submissions", tone: "amber" as const },
-    { label: "集成测试中", value: activeBatches.length, href: "/integration", tone: "sky" as const },
-    { label: "待发布试制", value: pendingTrial.length, href: "/trial", tone: "violet" as const },
-    { label: "绑定验证中", value: trialVersions.length, href: "/trial", tone: "teal" as const },
-    { label: "待转正", value: pendingFormal.length, href: "/formal", tone: "orange" as const },
-    { label: "已全量转正", value: packages.filter((pkg) => pkg.formalVersion).length, href: "/packages", tone: "emerald" as const },
-  ];
+  const user = await requireUser();
+  const scope = getWorkflowProjectScope(user);
+  const scopeSet = scope ? new Set(scope) : null;
+  const projects = getProjectConfigs().filter(
+    (project) => !scopeSet || scopeSet.has(project.id),
+  );
+  const pendingGroups = getPendingTransferGroups(scope);
+  const batches = getBatches(200, scope);
+  const trialReady = getTrialReadyVersions(scope);
+  const trials = getTrialVersions(scope);
+  const pendingFormal = getPendingFormalVersions(scope);
+  const pendingByProject = new Map(pendingGroups.map((group) => [group.projectId, group.items.length]));
+  const activeBatchByProject = new Map<number, number>();
+  for (const batch of batches.filter((item) => item.status === "IN_TEST")) {
+    activeBatchByProject.set(batch.projectId, (activeBatchByProject.get(batch.projectId) ?? 0) + 1);
+  }
+  const readyByProject = new Map<number, number>();
+  for (const item of trialReady) readyByProject.set(item.projectId, (readyByProject.get(item.projectId) ?? 0) + 1);
+  const trialByProject = new Map<number, number>();
+  for (const item of trials) trialByProject.set(item.projectId, (trialByProject.get(item.projectId) ?? 0) + 1);
+  const formalByProject = new Map<number, number>();
+  for (const item of pendingFormal) formalByProject.set(item.projectId, (formalByProject.get(item.projectId) ?? 0) + 1);
 
   return (
     <>
       <PageHeader
         eyebrow="Department overview"
         title="部门总览"
-        description="查看项目、软件包与项目维度集成测试的整体运行情况。个人待办与异常提醒请回到“我的工作台”。"
-        actions={<><Link href="/dashboard" className="button button-secondary">返回我的工作台</Link><Link href="/packages" className="button button-primary">软件版本总览 <ArrowRight size={14} /></Link></>}
+        description="按行查看各项目当前状态；点击项目进入项目页面，查看该项目的软件包、转测、集成测试、试制绑定和转正全部信息。"
+        actions={<Link href="/packages" className="button button-primary">软件版本总览 <ArrowRight size={14} /></Link>}
       />
-      <div className="metric-row">
-        <div className="metric"><div className="metric-label">在行项目</div><div className="metric-value">{projects.length}</div><div className="metric-note">按项目独立组织配套</div></div>
-        <div className="metric"><div className="metric-label">软件包</div><div className="metric-value">{packages.length}</div><div className="metric-note">含已停用软件包</div></div>
-        <div className="metric"><div className="metric-label">待组织转测</div><div className="metric-value">{pendingCount}</div><div className="metric-note">分布在 {pendingGroups.length} 个项目</div></div>
-        <div className="metric"><div className="metric-label">集成测试批次</div><div className="metric-value">{activeBatches.length}</div><div className="metric-note">支持多项目并行测试</div></div>
+      <div className="info-strip" style={{ marginBottom: 16 }}>
+        <span><strong>{projects.length}</strong> 个项目</span>
+        <span><strong>{pendingGroups.reduce((sum, group) => sum + group.items.length, 0)}</strong> 个待转测申请</span>
+        <span><strong>{batches.filter((batch) => batch.status === "IN_TEST").length}</strong> 个在测批次</span>
+        <span><strong>{trialReady.length}</strong> 个待发试制</span>
+        <span><strong>{pendingFormal.length}</strong> 个待转正</span>
       </div>
 
-      <section className="card" style={{ marginTop: 18 }}>
-        <div className="card-header"><div><h2 style={{ fontSize: 16 }}>版本流水线</h2><p className="small muted" style={{ marginTop: 3 }}>转测申请按项目分发，试制绑定覆盖全部在行项目节点。</p></div><Badge tone="slate">按项目 / 按配套</Badge></div>
-        <div className="card-body"><div className="stage-strip">
-          {stages.map((stage, index) => (
-            <Link className="stage-cell" href={stage.href} key={stage.label}>
-              <div className="stage-cell-index">0{index + 1}</div>
-              <div className="stage-cell-name">{stage.label}</div>
-              <div className="stage-cell-count">{stage.value}</div>
-            </Link>
-          ))}
-        </div></div>
+      <section className="card">
+        <div className="card-header"><div><h2 style={{ fontSize: 18 }}>项目列表</h2><p className="small muted" style={{ marginTop: 3 }}>点击项目行进入项目工作区；所有项目级流程都在项目页面内查看。</p></div><Badge tone="slate">{projects.length} 个</Badge></div>
+        <div className="card-body" style={{ padding: 0, marginTop: 12 }}>
+          {projects.length === 0 ? (
+            <EmptyState title="暂无可查看项目" description="管理员创建项目后，会按行显示在这里。" />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table project-overview-table">
+                <thead><tr><th>项目</th><th>状态</th><th>项目联系人</th><th>软件包 / 节点</th><th>待转测</th><th>在测批次</th><th>待发试制</th><th>绑定中</th><th>待转正</th><th>最近活动</th><th aria-label="操作" /></tr></thead>
+                <tbody>
+                  {projects.map((project) => {
+                    const latestBatch = batches.filter((batch) => batch.projectId === project.id)
+                      .sort((a, b) => new Date(b.sentAt ?? b.createdAt).getTime() - new Date(a.sentAt ?? a.createdAt).getTime())[0];
+                    return (
+                      <tr key={project.id} className="project-overview-row">
+                        <td>
+                          <Link href={`/projects/${project.id}`} className="project-overview-name">{project.name}</Link>
+                          <div className="small muted">{project.code} · {project.description}</div>
+                        </td>
+                        <td><Badge tone={PROJECT_STATUS_META[project.status].tone} dot>{PROJECT_STATUS_META[project.status].label}</Badge></td>
+                        <td>
+                          <div className="small">PM {project.pmName ?? "待指定"}</div>
+                          <div className="small muted">经理 {project.softwareManagerName ?? "待指定"}</div>
+                        </td>
+                        <td><span className="mono small">{project.packageCount}</span><span className="small muted"> / {project.nodes.length} 节点</span></td>
+                        <td><span className="mono small">{pendingByProject.get(project.id) ?? 0}</span></td>
+                        <td><span className="mono small">{activeBatchByProject.get(project.id) ?? 0}</span></td>
+                        <td><span className="mono small">{readyByProject.get(project.id) ?? 0}</span></td>
+                        <td><span className="mono small">{trialByProject.get(project.id) ?? 0}</span></td>
+                        <td><span className="mono small">{formalByProject.get(project.id) ?? 0}</span></td>
+                        <td className="small muted">{latestBatch ? `${latestBatch.code} · ${formatDateTime(latestBatch.sentAt ?? latestBatch.createdAt)}` : "—"}</td>
+                        <td className="cell-actions"><Link href={`/projects/${project.id}`} className="archive-link">进入项目 <ArrowRight size={11} /></Link></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
-      <div className="two-col" style={{ marginTop: 18 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <section className="card">
-            <div className="card-header"><div><h2 style={{ fontSize: 18 }}>测试中的项目批次</h2><p className="small muted" style={{ marginTop: 3 }}>不同项目独立排期，多台设备可并行验证。</p></div><FlaskConical size={17} style={{ color: "var(--brand)" }} /></div>
-            <div className="card-body" style={{ paddingTop: 12 }}>
-              {activeBatches.length === 0 ? <EmptyState title="当前没有测试中的批次" description="软件经理可以从待转测申请中组织项目配套。" /> : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {activeBatches.map((batch) => (
-                    <Link href={`/integration/${batch.id}`} className="project-batch-row" key={batch.id}>
-                      <div>
-                        <div className="toolbar" style={{ gap: 7 }}><span className="mono" style={{ fontWeight: 700 }}>{batch.code}</span><BatchStatusPill status="IN_TEST" /><span className="chip">{batch.projectName}</span></div>
-                        <div className="small muted" style={{ marginTop: 3 }}>{batch.title} · {batch.changedCount} 个变更包 · {formatDateTime(batch.sentAt)}</div>
-                      </div>
-                      <ArrowRight size={14} style={{ color: "var(--muted-light)" }} />
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="card-header"><div><h2 style={{ fontSize: 17 }}>最近流程动态</h2><Link href="/dashboard" className="archive-link">我的待办 <ArrowRight size={11} /></Link></div></div>
-            <div className="card-body" style={{ paddingTop: 8 }}>
-              <div className="timeline">
-                {activities.map((activity) => (
-                  <div className="timeline-item" key={activity.id}><span className="timeline-line" /><span className="timeline-dot" /><div><div className="timeline-title">{activity.detail}</div><div className="timeline-meta">{activity.actorName ?? "系统"} · {formatRelative(activity.createdAt)}</div></div></div>
-                ))}
-                {activities.length === 0 && <p className="muted small">暂无动态。</p>}
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <aside style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <section className="card">
-            <div className="card-header"><div><h2 style={{ fontSize: 16 }}>项目联系人</h2></div><Layers3 size={16} style={{ color: "var(--muted-light)" }} /></div>
-            <div className="card-body" style={{ paddingTop: 10 }}><div className="contact-grid" style={{ gridTemplateColumns: "1fr" }}>
-              {contacts.map((project) => (
-                <div className="contact-tile" key={project.id}><Boxes size={15} style={{ color: "var(--brand)" }} /><div className="person-inline-copy" style={{ flex: 1 }}><span className="person-inline-name">{project.name}</span><span className="person-inline-meta">PM {project.pmName ?? "—"} · 软件经理 {project.softwareManagerName ?? "—"}</span></div></div>
-              ))}
-            </div></div>
-          </section>
-          <section className="card card-muted"><div className="card-body"><h3 style={{ fontSize: 13 }}>项目节点绑定配置</h3><p className="note" style={{ marginTop: 6 }}>每个项目节点都需要指定设备条码绑定验证责任人和绑定电子流审批人，并设置绑定通过数量要求。</p><Link href="/settings/projects" className="archive-link" style={{ marginTop: 10 }}>前往项目配置 <ArrowRight size={11} /></Link></div></section>
-        </aside>
+      <div className="overview-legend muted-panel" style={{ marginTop: 14 }}>
+        <span><Building2 size={13} /> 项目行按项目维度汇总</span>
+        <span><Package size={13} /> 软件包数量来自项目使用范围</span>
+        <span><Layers3 size={13} /> 在测批次只显示当前进行中的批次</span>
+        <span><UsersRound size={13} /> 项目联系人支持多 PM、多软件经理</span>
       </div>
     </>
   );

@@ -353,6 +353,7 @@ function seedAll(db: DatabaseSync) {
   }
 
   const otaTrial = addVersion("OTA", "1.6.0", "新增断点续传与灰度批次控制，修复弱网下升级包校验失败问题。", "PENDING_TRIAL", "2026-11-05T09:30:00+08:00", wangLei);
+  const otaRiskTrial = addVersion("OTA", "1.6.1", "修复灰度发布边界问题，作为无集成测试批次的风险发布示例版本。", "PENDING_TRIAL", "2026-11-12T09:30:00+08:00", wangLei);
   const commPending = addVersion("COM", "2.1.0", "新增可靠广播通道，修复跨进程大消息分片乱序问题。", "PENDING_TRANSFER", "2026-11-12T10:20:00+08:00", chenXi);
   const netsyncFormal = addVersion("NET", "2.0.0", "重构多设备网络协同状态机，新增链路质量自适应策略。", "PENDING_FORMAL", "2026-11-03T09:10:00+08:00", chenXi, {
     trialFormNo: "EF-TRIAL-NET-200",
@@ -427,6 +428,8 @@ function seedAll(db: DatabaseSync) {
 
   addRequest(otaTrial, projectIds[0], "PASSED", { updatedAt: "2026-11-10T18:10:00+08:00" });
   addRequest(otaTrial, projectIds[1], "PASSED", { updatedAt: "2026-11-11T15:00:00+08:00" });
+  addRequest(otaRiskTrial, projectIds[0], "PASSED");
+  addRequest(otaRiskTrial, projectIds[1], "PASSED");
   addRequest(netsyncFormal, projectIds[0], "PENDING_FORMAL", {
     trialFormNo: "EF-TRIAL-NET-200",
     trialReleasedAt: "2026-11-09T17:00:00+08:00",
@@ -477,7 +480,7 @@ function seedAll(db: DatabaseSync) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const lastTestVersion = new Map<string, string>();
-  const activeTrials = allActiveTrials([otaTrial, netsyncFormal, keystoreTrial, mediaInTest, diagInTest]);
+  const activeTrials = allActiveTrials([otaTrial, otaRiskTrial, netsyncFormal, keystoreTrial, mediaInTest, diagInTest]);
   function allActiveTrials(versions: VersionSeed[]) {
     return versions.filter((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
   }
@@ -699,6 +702,67 @@ function seedAll(db: DatabaseSync) {
     }
   }
 
+  // 共享试制/共享转正：NET 2.0.0 全部项目待转正，并为 M2/T3 补齐已通过的绑定证据。
+  for (const projectIndex of [1, 2]) {
+    const netReq = requests.get(`${netsyncFormal.id}:${projectIds[projectIndex]}`);
+    if (!netReq) continue;
+    const requirements = createRequirements(netsyncFormal, netReq.id, projectIndex, "NET");
+    for (const requirement of requirements) {
+      addFlow(
+        requirement.id,
+        netsyncFormal,
+        projectIds[projectIndex],
+        requirement.nodeId,
+        [`SN-${projectIndex === 1 ? "M2" : "T3"}-${requirement.nodeName}-${netsyncFormal.version.replaceAll(".", "")}`],
+        "APPROVED",
+        "2026-11-12T09:00:00+08:00",
+        "2026-11-13T11:00:00+08:00",
+        "硬件绑定验证通过，条码与软件包版本匹配。",
+      );
+      db.prepare("UPDATE binding_requirements SET status = 'PASSED' WHERE id = ?").run(requirement.id);
+    }
+    db.prepare(
+      "UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', trial_form_no = ?, trial_released_at = ?, updated_at = ? WHERE id = ?",
+    ).run("EF-TRIAL-NET-200", iso("2026-11-09T17:00:00+08:00"), iso("2026-11-14T10:00:00+08:00"), netReq.id);
+  }
+
+  // 共享试制：KEY 1.3.0 全部项目均已发布同一试制电子流；M2/T3 绑定待处理。
+  for (const projectIndex of [1, 2]) {
+    const keyReq = requests.get(`${keystoreTrial.id}:${projectIds[projectIndex]}`);
+    if (!keyReq) continue;
+    createRequirements(keystoreTrial, keyReq.id, projectIndex, "KEY");
+    db.prepare(
+      "UPDATE version_transfer_requests SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?, release_mode = 'RISK', risk_conclusion = ?, updated_at = ? WHERE id = ?",
+    ).run(
+      "EF-TRIAL-KEY-130",
+      iso("2026-11-11T18:00:00+08:00"),
+      projectIndex === 1 ? manager2 : manager3,
+      "试制前无可用集成测试环境，按风险评审结论直接发布试制。",
+      iso("2026-11-14T10:00:00+08:00"),
+      keyReq.id,
+    );
+  }
+  db.prepare(
+    "UPDATE version_transfer_requests SET release_mode = 'RISK', risk_conclusion = ?, trial_form_no = ?, trial_released_at = ? WHERE package_version_id = ?",
+  ).run(
+    "试制前无可用集成测试环境，按风险评审结论直接发布试制。",
+    "EF-TRIAL-KEY-130",
+    iso("2026-11-11T18:00:00+08:00"),
+    keystoreTrial.id,
+  );
+  db.prepare(
+    "UPDATE package_versions SET release_mode = 'RISK', risk_conclusion = ?, trial_form_no = ?, trial_released_at = ?, status = 'TRIAL' WHERE id = ?",
+  ).run("试制前无可用集成测试环境，按风险评审结论直接发布试制。", "EF-TRIAL-KEY-130", iso("2026-11-11T18:00:00+08:00"), keystoreTrial.id);
+  db.prepare(
+    "UPDATE package_versions SET release_mode = 'RISK', risk_conclusion = ? WHERE id = ?",
+  ).run("集成测试资源不足，按历史回归结论和风险评估发布试制。", otaRiskTrial.id);
+  db.prepare(
+    "UPDATE version_transfer_requests SET release_mode = 'RISK', risk_conclusion = ? WHERE package_version_id = ?",
+  ).run("集成测试资源不足，按历史回归结论和风险评估发布试制。", otaRiskTrial.id);
+  db.prepare(
+    "UPDATE package_versions SET status = 'PENDING_FORMAL' WHERE id = ?",
+  ).run(netsyncFormal.id);
+
   db.exec(`
     INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at)
     SELECT br.id, pna.user_id, '${iso("2026-11-14T10:00:00+08:00")}'
@@ -711,31 +775,6 @@ function seedAll(db: DatabaseSync) {
   );
   insertProgress.run(4, tester, "N1 DVT 配套已完成第一轮冒烟，配置下发与回读通过，继续覆盖异常断电场景。", iso("2026-11-13T11:00:00+08:00"));
   insertProgress.run(5, tester2, "M2 媒体专项已开始，4K 解码基础场景通过，等待高码率片源完成。", iso("2026-11-14T10:30:00+08:00"));
-
-  // 历史风险发布示例：NET M2/T3 没有关联集成测试批次，直接按风险结论进入待发布试制。
-  db.prepare(
-    `UPDATE version_transfer_requests
-     SET release_mode = 'RISK', risk_conclusion = '集成测试资源不足，结合历史版本回归结论按风险发布。'
-     WHERE id IN (
-       SELECT r.id FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
-       JOIN packages p ON p.id = pv.package_id
-       JOIN projects pr ON pr.id = r.project_id
-       WHERE p.code = 'NET' AND pv.version = '2.0.0' AND pr.code IN ('M2','T3')
-     )`,
-  ).run();
-  // 历史风险发布示例：KEY N1 试制版本没有关联集成测试批次。
-  db.prepare(
-    `UPDATE version_transfer_requests
-     SET release_mode = 'RISK', risk_conclusion = '试制前无可用集成测试环境，按风险评审结论直接发布试制。'
-     WHERE id IN (
-       SELECT r.id FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
-       JOIN packages p ON p.id = pv.package_id
-       JOIN projects pr ON pr.id = r.project_id
-       WHERE p.code = 'KEY' AND pv.version = '1.3.0' AND pr.code = 'N1' AND r.status = 'TRIAL'
-     )`,
-  ).run();
 
   const audit = db.prepare(
     "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",

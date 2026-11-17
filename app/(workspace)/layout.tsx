@@ -21,7 +21,6 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const departmentItems: SidebarItem[] = [
     { href: "/dashboard", label: "我的工作台", icon: "dashboard" },
     { href: "/overview", label: "部门总览", icon: "overview" },
-    { href: "/projects", label: "项目视图", icon: "projects" },
   ];
 
   const workflowItems: SidebarItem[] = [

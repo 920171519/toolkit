@@ -580,3 +580,22 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
   .binding-table { overflow-x: auto; }
   .binding-table-head, .binding-table-row { min-width: 720px; }
 }
+
+/* Department project rows and project workspace */
+.project-overview-table .project-overview-name { font-size: 13px; font-weight: 650; }
+.project-overview-row:hover { background: var(--surface-muted); }
+.project-head .chip { white-space: nowrap; }
+.usage-scope-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 460px; }
+.usage-scope { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-muted); font-size: 10.5px; }
+.usage-scope strong { color: var(--brand); font-weight: 650; }
+.project-flow-list, .project-flow-stack { display: flex; flex-direction: column; gap: 6px; }
+.project-flow-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-muted); flex-wrap: wrap; }
+.project-flow-row .small.muted { min-width: 0; }
+.overview-legend { display: flex; flex-wrap: wrap; gap: 18px; }
+.overview-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+
+/* Version trace */
+.version-trace-projects { display: flex; flex-direction: column; gap: 12px; }
+.version-trace-project { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; background: var(--surface-muted); }
+.version-trace-requirement { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.version-trace-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; padding-left: 4px; font-size: 11px; }
