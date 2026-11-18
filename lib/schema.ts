@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS packages (
   area_id INTEGER REFERENCES areas(id) ON DELETE SET NULL,
   owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
+  trial_overdue_days INTEGER NOT NULL DEFAULT 7,
   created_at TEXT NOT NULL
 );
 
@@ -127,6 +128,12 @@ CREATE TABLE IF NOT EXISTS package_versions (
   form_flow_no TEXT,
   release_mode TEXT NOT NULL DEFAULT 'INTEGRATION',
   risk_conclusion TEXT,
+  binding_mode TEXT NOT NULL DEFAULT 'PENDING',
+  binding_reason TEXT,
+  binding_decided_at TEXT,
+  binding_decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  void_kind TEXT,
+  voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   void_reason TEXT,
   voided_at TEXT,
   updated_at TEXT NOT NULL,
@@ -262,6 +269,9 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   binding_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','PASSED','CANCELLED')),
+  pushed_at TEXT,
+  pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decision_reason TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(package_version_id, project_id, node_id)

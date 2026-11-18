@@ -66,9 +66,10 @@ export default async function SubmissionsPage({
     <FormDialog
       label={<><ClipboardList size={14} /> 提交转测申请</>}
       title="提交转测申请"
-      description="提交后会同步发送到该软件包涉及的全部在行项目。四项信息均为必填。"
+      description="提交后会同步发送到该软件包涉及的全部在行项目。五项信息均为必填。"
       triggerClassName="button button-primary"
       testId="submit-transfer-trigger"
+      fallbackHref="/submissions/transfer"
     >
       <TransferRequestForm packages={availablePackages} />
     </FormDialog>

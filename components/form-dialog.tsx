@@ -11,6 +11,7 @@ export function FormDialog({
   triggerClassName = "button button-primary",
   testId,
   wide = false,
+  fallbackHref,
 }: {
   label: ReactNode;
   title: string;
@@ -19,6 +20,7 @@ export function FormDialog({
   triggerClassName?: string;
   testId?: string;
   wide?: boolean;
+  fallbackHref?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -38,11 +40,17 @@ export function FormDialog({
 
   return (
     <>
-      <button type="button" className={triggerClassName} onClick={() => setOpen(true)} data-testid={testId}>
-        {label}
-      </button>
+      {fallbackHref ? (
+        <a href={fallbackHref} className={triggerClassName} onClick={(event) => { event.preventDefault(); setOpen(true); }} data-testid={testId}>
+          {label}
+        </a>
+      ) : (
+        <button type="button" className={triggerClassName} onClick={() => setOpen(true)} data-testid={testId}>
+          {label}
+        </button>
+      )}
       {open && (
-        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
+        <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <div className={`modal-panel ${wide ? "modal-panel-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
             <header className="modal-header">
               <div>

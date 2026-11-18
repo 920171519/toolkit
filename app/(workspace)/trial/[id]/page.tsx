@@ -18,6 +18,8 @@ import {
 import {
   cancelBindingFlowAction,
   decideBindingFlowAction,
+  pushBindingTasksAction,
+  skipBindingAction,
   voidTrialAction,
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
@@ -69,6 +71,9 @@ export default async function TrialDetailPage({
         </div>
       )}
 
+      {request.isOverdue > 0 && request.status !== "VOID" && request.status !== "FORMAL" && (
+        <div className="risk-callout" data-tone="danger" style={{ marginBottom: 12 }}>该试制版本发布超过 {request.trialOverdueDays} 天仍未转正，已超期，请尽快推进绑定和转正，或在软件版本总览中作废该版本。</div>
+      )}
       {riskRelease && request.status !== "VOID" && (
         <div className="risk-callout" style={{ marginBottom: 16 }}>
           <strong>风险发布版本。</strong>{request.riskConclusion ? `风险结论：${request.riskConclusion}` : "该版本没有关联集成测试批次，按风险发布处理。"}
@@ -86,7 +91,7 @@ export default async function TrialDetailPage({
                   <span>节点</span><span>绑定责任人</span><span>审批人范围</span><span>通过条码</span><span>状态</span><span>操作</span>
                 </div>
                 {requirements.map((requirement) => {
-                  const pendingOpen = requirement.status === "PENDING" && (request.status === "TRIAL" || request.status === "VOID");
+                  const pendingOpen = requirement.status === "PENDING" && requirement.pushedAt !== null && (request.status === "TRIAL" || request.status === "VOID");
                   return (
                     <details className="binding-table-item binding-requirement" key={requirement.id} open={pendingOpen}>
                       <summary className="binding-table-row">
@@ -94,11 +99,11 @@ export default async function TrialDetailPage({
                         <span className="small">{requirement.bindingOwnerName ?? "未配置"}</span>
                         <span className="small muted binding-approver-range">{requirement.approverOptions.map((approver) => approver.userName).join(" / ") || "未配置"}</span>
                         <span className="toolbar" style={{ gap: 6 }}><span className="mono small">{requirement.approvedCount}/{requirement.requiredCount}</span></span>
-                        <span>{requirement.status === "PASSED" ? <Badge tone="emerald" dot>绑定通过</Badge> : <Badge tone="amber" dot>待绑定</Badge>}</span>
+                        <span>{requirement.status === "PASSED" ? <Badge tone="emerald" dot>绑定通过</Badge> : requirement.status === "CANCELLED" ? <Badge tone="slate" dot>已跳过</Badge> : requirement.pushedAt ? <Badge tone="amber" dot>待绑定</Badge> : <Badge tone="slate" dot>未推送</Badge>}</span>
                         <span className="binding-row-action">展开 / 收起</span>
                       </summary>
                       <div className="binding-table-body">
-                        {request.status === "TRIAL" && requirement.status === "PENDING" && canSubmitBindingFlow(user, requirement.bindingOwnerId) && (
+                        {request.status === "TRIAL" && requirement.status === "PENDING" && requirement.pushedAt !== null && canSubmitBindingFlow(user, requirement.bindingOwnerId) && (
                           <div style={{ marginBottom: 10 }}>
                             <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} />
                           </div>
@@ -183,6 +188,28 @@ export default async function TrialDetailPage({
 
           {request.status === "PENDING_FORMAL" && (
             <section className="card"><div className="card-body"><div className="toolbar" style={{ gap: 7 }}><CheckCircle2 size={17} style={{ color: "var(--brand)" }} /><h3 style={{ fontSize: 13 }}>本项目绑定验证已完成</h3></div><p className="note" style={{ marginTop: 6 }}>本项目全部节点绑定条码数量已达到要求，可以提交本项目的转正电子流。</p><Link href="/formal" className="button button-primary button-sm" style={{ marginTop: 12 }}>前往转正发布 <ArrowRight size={12} /></Link></div></section>
+          )}
+
+          {manager && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0 && (
+            <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 16 }}>绑定推送决策</h2><p className="small muted" style={{ marginTop: 3 }}>共享试制已发布，但尚未向绑定责任人推送待办。请确认这个版本是否需要绑定验证。</p></div><Badge tone="amber">待决定</Badge></div><div className="card-body" style={{ paddingTop: 12 }}>
+              <div className="notice-panel" style={{ marginBottom: 12 }}>需要绑定：点击推送后，全部使用项目节点的绑定责任人会收到待办。若确认不需要绑定，可填写理由后直接进入待转正。</div>
+              <div className="toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
+                <ActionForm action={pushBindingTasksAction} hidden={{ requestId }} submitText="推送绑定任务" submitClassName="button-sm" />
+              </div>
+              <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", color: "var(--brand)", fontSize: 12, fontWeight: 600 }}>无需绑定，直接进入待转正</summary><div style={{ marginTop: 10 }}>
+                <ActionForm action={skipBindingAction} hidden={{ requestId }} submitText="确认无需绑定" submitVariant="secondary" submitClassName="button-sm" confirmMessage="确认该版本无需绑定验证？全部使用项目将直接进入待转正。">
+                  <label className="field"><span className="label">不绑定原因 <span className="required-mark">*</span></span><textarea className="textarea" name="reason" required minLength={5} placeholder="例如：该版本仅修复配置项，已在集成测试中完成整机验证，无需重复绑定。" /></label>
+                </ActionForm>
+              </div></details>
+            </div></section>
+          )}
+
+          {request.status === "TRIAL" && request.bindingMode === "PUSHED" && (
+            <section className="card"><div className="card-body"><div className="toolbar" style={{ gap: 7 }}><CheckCircle2 size={17} style={{ color: "var(--brand)" }} /><h3 style={{ fontSize: 13 }}>绑定任务已推送</h3></div><p className="note" style={{ marginTop: 6 }}>全部使用项目节点的绑定责任人已收到待办，等待提交电子流。</p></div></section>
+          )}
+
+          {request.status !== "TRIAL" && request.status !== "VOID" && request.bindingMode === "SKIPPED" && (
+            <section className="card"><div className="card-body"><div className="toolbar" style={{ gap: 7 }}><CheckCircle2 size={17} style={{ color: "var(--brand)" }} /><h3 style={{ fontSize: 13 }}>本版本无需绑定验证</h3></div><p className="note" style={{ marginTop: 6 }}>软件经理已填写跳过原因：{request.bindingReason ?? "—"}。全部使用项目已进入待转正。</p></div></section>
           )}
 
           {manager && request.status === "TRIAL" && (

@@ -599,6 +599,7 @@ export type SavePackageInput = {
   areaId: number | null;
   ownerId: number | null;
   isActive: boolean;
+  trialOverdueDays: number;
 };
 
 export function savePackage(actor: SessionUser, input: SavePackageInput): number {
@@ -627,6 +628,10 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
   assert(input.name.trim().length >= 2, "软件包名称至少需要 2 个字符。");
   assert(/^[A-Za-z0-9_-]{2,24}$/.test(input.code.trim()), "软件包编码需为 2-24 位字母、数字、下划线或中划线。");
   assert(input.ownerId, "请为软件包指定责任人。");
+  assert(
+    Number.isInteger(input.trialOverdueDays) && input.trialOverdueDays >= 1 && input.trialOverdueDays <= 365,
+    "试制超期天数需为 1-365 的整数。",
+  );
   const duplicate = one<{ id: number }>(
     "SELECT id FROM packages WHERE UPPER(code) = UPPER(?) AND id != ?",
     input.code.trim(),
@@ -652,25 +657,27 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
       const existing = one<{ id: number }>("SELECT id FROM packages WHERE id = ?", packageId);
       assert(existing, "软件包不存在。", "NOT_FOUND");
       run(
-        "UPDATE packages SET name = ?, code = ?, description = ?, area_id = ?, owner_id = ?, is_active = ? WHERE id = ?",
+        "UPDATE packages SET name = ?, code = ?, description = ?, area_id = ?, owner_id = ?, is_active = ?, trial_overdue_days = ? WHERE id = ?",
         input.name.trim(),
         input.code.trim().toUpperCase(),
         input.description.trim(),
         input.areaId,
         input.ownerId,
         input.isActive ? 1 : 0,
+        input.trialOverdueDays,
         packageId,
       );
     } else {
       const result = run(
-        `INSERT INTO packages (name, code, description, area_id, owner_id, is_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO packages (name, code, description, area_id, owner_id, is_active, trial_overdue_days, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         input.name.trim(),
         input.code.trim().toUpperCase(),
         input.description.trim(),
         input.areaId,
         input.ownerId,
         input.isActive ? 1 : 0,
+        input.trialOverdueDays,
         new Date().toISOString(),
       );
       packageId = Number(result.lastInsertRowid);
@@ -686,6 +693,90 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
   });
 }
 
+
+export type ImportLegacyVersionInput = {
+  packageId: number;
+  version: string;
+  changeSummary: string;
+  archiveUrl: string;
+  buildUrl: string;
+  status: "TRIAL" | "FORMAL";
+  trialFormNo: string;
+  trialReleasedAt: string;
+  formFlowNo: string;
+  formalReleasedAt: string;
+};
+
+export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersionInput): number {
+  const pkg = one<{ id: number; name: string; code: string; area_id: number | null }>(
+    "SELECT id, name, code, area_id FROM packages WHERE id = ?",
+    input.packageId,
+  );
+  assert(pkg, "软件包不存在。", "NOT_FOUND");
+  assert(
+    canManagePackageArea(actor, pkg.area_id),
+    "只有责任田主管或系统管理员可以导入历史版本。",
+    "FORBIDDEN",
+  );
+  const version = input.version.trim();
+  assert(version.length >= 1 && version.length <= 40, "版本号需为 1-40 个字符。");
+  const duplicate = one<{ id: number }>(
+    "SELECT id FROM package_versions WHERE package_id = ? AND UPPER(version) = UPPER(?)",
+    input.packageId,
+    version,
+  );
+  assert(!duplicate, "该软件包已存在相同版本号。");
+  assert(input.changeSummary.trim().length >= 2, "请填写版本说明/修复内容。");
+  assert(/^https?:\/\//i.test(input.archiveUrl.trim()), "归档链接必须以 http:// 或 https:// 开头。");
+  assert(/^https?:\/\//i.test(input.buildUrl.trim()), "构建地址必须以 http:// 或 https:// 开头。");
+  const toIso = (value: string, label: string) => {
+    const parsed = value ? new Date(value) : null;
+    assert(parsed && !Number.isNaN(parsed.getTime()), `请填写有效的${label}。`);
+    return parsed.toISOString();
+  };
+  let trialReleasedAt: string | null = null;
+  let formalReleasedAt: string | null = null;
+  if (input.status === "FORMAL") {
+    assert(input.formFlowNo.trim().length >= 3, "请填写转正电子流。");
+    formalReleasedAt = toIso(input.formalReleasedAt, "转正日期");
+    if (input.trialFormNo.trim()) trialReleasedAt = toIso(input.trialReleasedAt, "试制发布日期");
+  } else {
+    assert(input.trialFormNo.trim().length >= 3, "请填写试制电子流。");
+    trialReleasedAt = toIso(input.trialReleasedAt, "试制发布日期");
+  }
+  const timestamp = new Date().toISOString();
+  return transaction(() => {
+    const result = run(
+      `INSERT INTO package_versions
+        (package_id, version, change_summary, archive_url, build_url, status, submitted_by, submitted_at,
+         trial_form_no, trial_released_at, formal_released_at, form_flow_no, release_mode,
+         binding_mode, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INTEGRATION', 'SKIPPED', ?)`,
+      input.packageId,
+      version,
+      input.changeSummary.trim(),
+      input.archiveUrl.trim(),
+      input.buildUrl.trim(),
+      input.status,
+      actor.id,
+      timestamp,
+      input.trialFormNo.trim() || null,
+      trialReleasedAt,
+      formalReleasedAt,
+      input.formFlowNo.trim() || null,
+      timestamp,
+    );
+    const versionId = Number(result.lastInsertRowid);
+    audit(
+      actor.id,
+      "IMPORT_LEGACY_VERSION",
+      "PACKAGE_VERSION",
+      versionId,
+      `导入历史版本：${pkg.name} ${version}（${input.status === "FORMAL" ? "已转正" : "试制中"}）`,
+    );
+    return versionId;
+  });
+}
 
 export type UpdatePackageResponsibilityInput = {
   ownerId: number | null;

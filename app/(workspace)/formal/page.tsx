@@ -45,7 +45,8 @@ export default async function FormalPage({
       0,
     );
     const risk = details.some((detail) => detail.request.releaseMode === "RISK" || !detail.request.batchId);
-    return { ...first, group, details, requirements, passed, approvedBarcodes, risk };
+    const skipped = details.some((detail) => detail.request.bindingMode === "SKIPPED");
+    return { ...first, group, details, requirements, passed, approvedBarcodes, risk, skipped };
   });
 
   return (
@@ -53,21 +54,21 @@ export default async function FormalPage({
       <PageHeader
         eyebrow="Formal release"
         title="转正发布"
-        description="试制按软件包版本全项目共享；全部使用项目的绑定验证通过后，任意项目软件经理即可提交一次转正电子流，所有项目同步转正。"
+        description="试制按软件包版本全项目共享；全部使用项目完成绑定验证，或软件经理确认无需绑定后，任意项目软件经理即可提交一次转正电子流，所有项目同步转正。"
         actions={<Link href="/trial" className="button button-secondary">查看绑定验证 <ArrowRight size={14} /></Link>}
       />
       <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 18 }}>
         <span><strong>{versions.length}</strong> 个软件包版本待转正</span>
-        <span>全部使用项目绑定通过后才进入转正</span>
+        <span>全部使用项目完成绑定或确认无需绑定后进入转正</span>
         <span>一次转正，全项目同步为正式版本</span>
       </div>
 
       <section className="card">
-        <div className="card-header"><div><div className="eyebrow">Ready for formal release</div><h2 style={{ marginTop: 5, fontSize: 19 }}>待提交转正电子流</h2><p className="small muted" style={{ marginTop: 3 }}>展示所有使用项目的绑定条码、绑定电子流和验收证据。</p></div><Badge tone="emerald">{versions.length} 待处理</Badge></div>
+        <div className="card-header"><div><div className="eyebrow">Ready for formal release</div><h2 style={{ marginTop: 5, fontSize: 19 }}>待提交转正电子流</h2><p className="small muted" style={{ marginTop: 3 }}>展示所有使用项目的绑定条码、绑定电子流、跳过绑定理由和验收证据。</p></div><Badge tone="emerald">{versions.length} 待处理</Badge></div>
         <div className="card-body" style={{ paddingTop: 14 }}>
           {versions.length === 0 ? (
-            <EmptyState title="没有待转正的版本" description="试制版本完成全部使用项目节点绑定后会自动进入这里。" />
+            <EmptyState title="没有待转正的版本" description="试制版本完成全部使用项目节点绑定，或软件经理确认无需绑定后会自动进入这里。" />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {versions.map((version) => (
@@ -79,12 +80,14 @@ export default async function FormalPage({
                         <span className="version-badge">{version.version}</span>
                         <Badge tone="emerald" dot>待转正</Badge>
                         {version.risk && <Badge tone="rose">风险发布</Badge>}
+                        {version.skipped && <Badge tone="slate">无需绑定</Badge>}
+                        {version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}
                         {version.details.map((detail) => <span className="chip" key={detail.request.id}>{detail.request.projectName}</span>)}
                       </div>
                       <p className="change-copy" style={{ marginTop: 7 }}>{version.changeSummary}</p>
                       {version.details.length > 0 && (
                         <details className="formal-binding-details">
-                          <summary>查看全部项目实际绑定条码与电子流（{version.approvedBarcodes} 个通过条码，{version.passed}/{version.requirements.length} 个节点）</summary>
+                          <summary>{version.skipped ? "查看无需绑定的理由与项目记录" : "查看全部项目实际绑定条码与电子流"}（{version.approvedBarcodes} 个通过条码，{version.passed}/{version.requirements.length} 个节点）</summary>
                           <div className="formal-requirement-list">
                             {version.details.map((detail) => {
                               const batchConclusion = detail.request.batchConclusion
@@ -96,6 +99,7 @@ export default async function FormalPage({
                                     <span className="chip">{detail.request.projectName}</span>
                                     <span className="small muted">试制电子流 {detail.request.trialFormNo ?? "—"}</span>
                                     {detail.request.riskConclusion && <span className="small muted">风险结论：{detail.request.riskConclusion}</span>}
+                                    {detail.request.bindingMode === "SKIPPED" && <span className="small muted">无需绑定原因：{detail.request.bindingReason ?? "—"}</span>}
                                     {detail.request.batchId && (
                                       <Link href={`/integration/${detail.request.batchId}`} className="archive-link">
                                         转测批次 {detail.request.batchCode} · {batchConclusion?.label ?? "已提交"}
@@ -106,7 +110,7 @@ export default async function FormalPage({
                                     <div className="formal-requirement" key={requirement.id}>
                                       <div className="toolbar" style={{ gap: 7 }}>
                                         <span className="chip">{requirement.nodeName}</span>
-                                        <Badge tone={requirement.status === "PASSED" ? "emerald" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : "待通过"}</Badge>
+                                        <Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.status === "CANCELLED" ? "无需绑定" : "待通过"}</Badge>
                                         <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
                                       </div>
                                       {requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => (
@@ -133,7 +137,8 @@ export default async function FormalPage({
                       <div className="toolbar" style={{ gap: 14, marginTop: 8, fontSize: 11, color: "var(--muted)", flexWrap: "wrap" }}>
                         <span>试制电子流 {version.trialFormNo ?? "—"}</span>
                         <span>发布 {formatDateTime(version.trialReleasedAt)}</span>
-                        <span>全项目节点 {version.passed}/{version.requirements.length} 通过</span>
+                        {version.isOverdue ? <span style={{ color: "var(--danger)" }}>已超期，超过 {version.trialOverdueDays} 天未转正</span> : null}
+                        <span>{version.skipped ? "全项目无需绑定验证" : `全项目节点 ${version.passed}/${version.requirements.length} 通过`}</span>
                         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
                       </div>
                     </div>

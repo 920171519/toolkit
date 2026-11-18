@@ -88,7 +88,7 @@ function refreshVersionAggregate(versionId: number) {
 
 export function submitTransfer(
   actor: SessionUser,
-  input: { packageId: number; version: string; changeSummary: string; archiveUrl: string },
+  input: { packageId: number; version: string; changeSummary: string; archiveUrl: string; buildUrl: string },
 ) {
   const pkg = one<{ id: number; name: string; owner_id: number | null; is_active: number }>(
     "SELECT id, name, owner_id, is_active FROM packages WHERE id = ?",
@@ -100,6 +100,7 @@ export function submitTransfer(
   assert(input.version.trim().length > 0, "请填写版本号。");
   assert(input.changeSummary.trim().length >= 5, "请填写版本变更说明（至少 5 个字符）。");
   assert(/^https?:\/\//i.test(input.archiveUrl.trim()), "归档链接必须以 http:// 或 https:// 开头。");
+  assert(/^https?:\/\//i.test(input.buildUrl.trim()), "构建地址必须以 http:// 或 https:// 开头。");
   const duplicate = one<{ id: number }>(
     "SELECT id FROM package_versions WHERE package_id = ? AND LOWER(version) = LOWER(?)",
     input.packageId,
@@ -113,12 +114,13 @@ export function submitTransfer(
     const timestamp = now();
     const result = run(
       `INSERT INTO package_versions
-        (package_id, version, change_summary, archive_url, status, submitted_by, submitted_at, updated_at)
-       VALUES (?, ?, ?, ?, 'PENDING_TRANSFER', ?, ?, ?)`,
+        (package_id, version, change_summary, archive_url, build_url, status, submitted_by, submitted_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'PENDING_TRANSFER', ?, ?, ?)`,
       input.packageId,
       input.version.trim(),
       input.changeSummary.trim(),
       input.archiveUrl.trim(),
+      input.buildUrl.trim(),
       actor.id,
       timestamp,
       timestamp,
@@ -654,7 +656,8 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
     run(
       `UPDATE package_versions
        SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, release_mode = ?,
-           risk_conclusion = ?, updated_at = ?
+           risk_conclusion = ?, binding_mode = 'PENDING', binding_reason = NULL,
+           binding_decided_at = NULL, binding_decided_by = NULL, updated_at = ?
        WHERE id = ?`,
       trialFormNo.trim(),
       timestamp,
@@ -715,6 +718,173 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
   });
 }
 
+function assertVersionProjectManager(actor: SessionUser, versionId: number) {
+  const requests = all<{ project_id: number }>(
+    `SELECT r.project_id FROM version_transfer_requests r
+     JOIN projects pr ON pr.id = r.project_id
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'`,
+    versionId,
+  );
+  if (requests.length === 0) {
+    assert(actor.role === "ADMIN", "该版本没有可操作的项目记录。", "NOT_FOUND");
+    return;
+  }
+  assert(
+    requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
+    "只有使用该软件包的项目软件经理或系统管理员可以执行该操作。",
+    "FORBIDDEN",
+  );
+}
+
+export function pushBindingTasks(actor: SessionUser, requestId: number) {
+  const anchor = one<{ package_version_id: number; status: string; binding_mode: string; package_name: string; version: string }>(
+    `SELECT r.package_version_id, pv.status, pv.binding_mode, p.name AS package_name, pv.version
+     FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN packages p ON p.id = pv.package_id
+     WHERE r.id = ?`,
+    requestId,
+  );
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+  assertVersionProjectManager(actor, anchor.package_version_id);
+  assert(anchor.status === "TRIAL", "只有试制验证中的版本可以推送绑定任务。");
+  assert(anchor.binding_mode === "PENDING", "当前版本已完成绑定决策，不能重复推送。");
+  const requirements = all<{ id: number }>(
+    "SELECT id FROM binding_requirements WHERE package_version_id = ?",
+    anchor.package_version_id,
+  );
+  assert(requirements.length > 0, "该版本没有可推送的绑定任务。");
+  return transaction(() => {
+    const timestamp = now();
+    run(
+      "UPDATE binding_requirements SET pushed_at = ?, pushed_by = ?, updated_at = ? WHERE package_version_id = ? AND pushed_at IS NULL",
+      timestamp,
+      actor.id,
+      timestamp,
+      anchor.package_version_id,
+    );
+    run(
+      "UPDATE package_versions SET binding_mode = 'PUSHED', binding_reason = NULL, binding_decided_at = ?, binding_decided_by = ?, updated_at = ? WHERE id = ?",
+      timestamp,
+      actor.id,
+      timestamp,
+      anchor.package_version_id,
+    );
+    audit(actor.id, "PUSH_BINDING", "PACKAGE_VERSION", anchor.package_version_id, `推送 ${anchor.package_name} ${anchor.version} 绑定任务，共 ${requirements.length} 个节点`);
+    return requirements.length;
+  });
+}
+
+export function skipBindingAndEnterFormal(actor: SessionUser, requestId: number, reason: string) {
+  assert(reason.trim().length >= 5, "请填写不进行绑定验证的原因。");
+  const anchor = one<{ package_version_id: number; status: string; binding_mode: string; package_name: string; version: string }>(
+    `SELECT r.package_version_id, pv.status, pv.binding_mode, p.name AS package_name, pv.version
+     FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN packages p ON p.id = pv.package_id
+     WHERE r.id = ?`,
+    requestId,
+  );
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+  assertVersionProjectManager(actor, anchor.package_version_id);
+  assert(anchor.status === "TRIAL", "只有试制验证中的版本可以跳过绑定。");
+  assert(anchor.binding_mode === "PENDING", "当前版本已完成绑定决策，不能重复操作。");
+  return transaction(() => {
+    const timestamp = now();
+    run(
+      "UPDATE binding_requirements SET status = 'CANCELLED', decision_reason = ?, updated_at = ? WHERE package_version_id = ? AND status = 'PENDING'",
+      reason.trim(),
+      timestamp,
+      anchor.package_version_id,
+    );
+    run(
+      "UPDATE package_versions SET binding_mode = 'SKIPPED', binding_reason = ?, binding_decided_at = ?, binding_decided_by = ?, status = 'PENDING_FORMAL', updated_at = ? WHERE id = ?",
+      reason.trim(),
+      timestamp,
+      actor.id,
+      timestamp,
+      anchor.package_version_id,
+    );
+    run(
+      "UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', updated_at = ? WHERE package_version_id = ?",
+      timestamp,
+      anchor.package_version_id,
+    );
+    refreshVersionAggregate(anchor.package_version_id);
+    audit(actor.id, "SKIP_BINDING", "PACKAGE_VERSION", anchor.package_version_id, `跳过 ${anchor.package_name} ${anchor.version} 绑定验证，直接进入待转正：${reason.trim()}`);
+  });
+}
+
+export function abandonTrialRelease(actor: SessionUser, requestId: number, conclusion: string) {
+  assert(conclusion.trim().length >= 5, "请填写放弃发布试制的结论。");
+  const anchor = one<{ package_version_id: number; status: string; package_name: string; version: string }>(
+    `SELECT r.package_version_id, pv.status, p.name AS package_name, pv.version
+     FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN packages p ON p.id = pv.package_id
+     WHERE r.id = ?`,
+    requestId,
+  );
+  assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
+  assertVersionProjectManager(actor, anchor.package_version_id);
+  assert(anchor.status === "PENDING_TRIAL", "只有待发布试制的版本可以放弃发布试制。");
+  return transaction(() => {
+    const timestamp = now();
+    run(
+      `UPDATE package_versions SET status = 'VOID', void_kind = 'ABANDON', void_reason = ?, voided_at = ?, voided_by = ?, updated_at = ? WHERE id = ?`,
+      `放弃发布试制：${conclusion.trim()}`,
+      timestamp,
+      actor.id,
+      timestamp,
+      anchor.package_version_id,
+    );
+    run(
+      "UPDATE version_transfer_requests SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE package_version_id = ?",
+      `放弃发布试制：${conclusion.trim()}`,
+      timestamp,
+      timestamp,
+      anchor.package_version_id,
+    );
+    audit(actor.id, "ABANDON_TRIAL_RELEASE", "PACKAGE_VERSION", anchor.package_version_id, `放弃发布 ${anchor.package_name} ${anchor.version} 试制：${conclusion.trim()}`);
+  });
+}
+
+export function voidPackageVersion(actor: SessionUser, versionId: number, reason: string) {
+  assert(reason.trim().length >= 5, "请填写作废原因。");
+  const version = one<{ id: number; status: string; package_id: number; package_name: string; version: string }>(
+    `SELECT pv.id, pv.status, p.id AS package_id, p.name AS package_name, pv.version
+     FROM package_versions pv JOIN packages p ON p.id = pv.package_id WHERE pv.id = ?`,
+    versionId,
+  );
+  assert(version, "软件包版本不存在。", "NOT_FOUND");
+  assertVersionProjectManager(actor, versionId);
+  assert(
+    ["TRIAL", "PENDING_FORMAL", "FORMAL", "PENDING_TRIAL"].includes(version.status),
+    "当前版本状态不支持作废。",
+  );
+  const voidKind = version.status === "FORMAL" ? "FORMAL" : version.status === "PENDING_TRIAL" ? "ABANDON" : "TRIAL";
+  return transaction(() => {
+    const timestamp = now();
+    run(
+      `UPDATE package_versions SET status = 'VOID', void_kind = ?, void_reason = ?, voided_at = ?, voided_by = ?, updated_at = ? WHERE id = ?`,
+      voidKind,
+      reason.trim(),
+      timestamp,
+      actor.id,
+      timestamp,
+      versionId,
+    );
+    run(
+      "UPDATE version_transfer_requests SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE package_version_id = ?",
+      reason.trim(),
+      timestamp,
+      timestamp,
+      versionId,
+    );
+    audit(actor.id, "VOID_VERSION", "PACKAGE_VERSION", versionId, `作废 ${version.package_name} ${version.version} 版本：${reason.trim()}`);
+  });
+}
+
 export function voidTrial(actor: SessionUser, requestId: number, reason: string) {
   assert(reason.trim().length >= 5, "请填写作废原因。");
   const anchor = one<{
@@ -723,8 +893,9 @@ export function voidTrial(actor: SessionUser, requestId: number, reason: string)
     package_id: number;
     package_name: string;
     version: string;
+    binding_mode: string;
   }>(
-    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version
+    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version, pv.binding_mode
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
@@ -749,9 +920,10 @@ export function voidTrial(actor: SessionUser, requestId: number, reason: string)
   transaction(() => {
     const timestamp = now();
     run(
-      "UPDATE package_versions SET status = 'VOID', void_reason = ?, voided_at = ?, updated_at = ? WHERE id = ?",
+      "UPDATE package_versions SET status = 'VOID', void_kind = 'TRIAL', void_reason = ?, voided_at = ?, voided_by = ?, updated_at = ? WHERE id = ?",
       reason.trim(),
       timestamp,
+      actor.id,
       timestamp,
       anchor.package_version_id,
     );
@@ -795,10 +967,11 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     project_name: string;
     node_id: number;
     node_name: string;
+    pushed_at: string | null;
   }>(
     `SELECT br.id, br.request_id, r.status AS request_status, br.package_version_id, p.id AS package_id,
             p.name AS package_name, pv.version, br.binding_owner_id, br.approver_id, br.project_id,
-            pr.name AS project_name, br.node_id, n.name AS node_name
+            pr.name AS project_name, br.node_id, n.name AS node_name, br.pushed_at
      FROM binding_requirements br
      JOIN version_transfer_requests r ON r.id = br.request_id
      JOIN package_versions pv ON pv.id = br.package_version_id
@@ -810,6 +983,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
   );
   assert(requirement, "绑定任务不存在。", "NOT_FOUND");
   assert(requirement.request_status === "TRIAL", "该试制版本已结束绑定验证，不能提交绑定电子流。");
+  assert(requirement.pushed_at, "软件经理尚未推送绑定任务，暂不能提交绑定电子流。");
   assert(
     canSubmitBindingFlow(actor, requirement.binding_owner_id),
     "只有该节点的绑定验证责任人、硬件验证角色或管理人员可以提交绑定电子流。",
@@ -1034,8 +1208,9 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
     package_id: number;
     package_name: string;
     version: string;
+    binding_mode: string;
   }>(
-    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version
+    `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version, pv.binding_mode
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
@@ -1059,18 +1234,23 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
   for (const request of requests) {
     assert(request.status === "PENDING_FORMAL", `${request.project_name} 尚未完成全部项目绑定验证，不能转正。`);
   }
-  const summary = one<{ total: number; passed: number }>(
+  const summary = one<{ total: number; passed: number; cancelled: number }>(
     `SELECT COUNT(*) AS total,
-            SUM(CASE WHEN br.status = 'PASSED' THEN 1 ELSE 0 END) AS passed
+            SUM(CASE WHEN br.status = 'PASSED' THEN 1 ELSE 0 END) AS passed,
+            SUM(CASE WHEN br.status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled
      FROM binding_requirements br
      JOIN version_transfer_requests r ON r.id = br.request_id
      WHERE r.package_version_id = ?`,
     anchor.package_version_id,
   );
-  assert(
-    Number(summary?.total ?? 0) > 0 && Number(summary?.passed ?? 0) === Number(summary?.total ?? 0),
-    "该软件包仍有项目绑定验证未全部通过，不能转正。",
-  );
+  const total = Number(summary?.total ?? 0);
+  const passed = Number(summary?.passed ?? 0);
+  const cancelled = Number(summary?.cancelled ?? 0);
+  if (anchor.binding_mode === "SKIPPED") {
+    assert(cancelled === total, "该版本已标记无需绑定，但仍存在未关闭的绑定要求。");
+  } else {
+    assert(total > 0 && passed === total, "该软件包仍有项目绑定验证未全部通过，不能转正。");
+  }
   return transaction(() => {
     const timestamp = now();
     run(

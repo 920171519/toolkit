@@ -102,6 +102,10 @@ export default async function PackageSettingsDetailPage({
                     <span className="label">说明</span>
                     <textarea className="textarea" name="description" defaultValue={pkg.description} />
                   </label>
+                  <label className="field">
+                    <span className="label">试制超期天数 <span className="required-mark">*</span></span>
+                    <input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={pkg.trialOverdueDays} required />
+                  </label>
                   <label className="check-item span-2" style={{ maxWidth: 280 }}>
                     <input type="checkbox" name="isActive" defaultChecked={pkg.isActive} />
                     <span>

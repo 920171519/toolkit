@@ -115,13 +115,14 @@ export function PackageDrawer({
   }
 
   return (
-    <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="drawer-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="package-drawer" role="dialog" aria-modal="true" aria-label="软件包详情" data-testid="package-drawer">
         <header className="drawer-header">
           <div>
             <div className="eyebrow">Package detail</div>
             <h2>{detail?.package.name ?? "加载中…"}</h2>
             {detail && (
+              <>
               <div className="toolbar" style={{ gap: 7, marginTop: 6 }}>
                 <span className="chip">{detail.package.code}</span>
                 <span className="chip">{detail.package.areaName ?? "未归属责任田"}</span>
@@ -129,6 +130,8 @@ export function PackageDrawer({
                   {detail.package.isActive ? "启用中" : "已停用"}
                 </Badge>
               </div>
+              <p className="small muted" style={{ marginTop: 8, maxWidth: 620, lineHeight: 1.55 }}>{detail.package.description || "暂无软件包说明。"}</p>
+              </>
             )}
           </div>
           <button type="button" className="drawer-close" onClick={onClose} aria-label="关闭详情">
@@ -312,7 +315,9 @@ export function PackageDrawer({
                       <article className="drawer-version" key={version.id}>
                         <div className="toolbar" style={{ gap: 7 }}>
                           <span className="version-badge" style={{ fontSize: 13 }}>{version.version}</span>
-                          <StatusPill status={version.status} />
+                          {version.status === "VOID" && version.voidKind ? (
+                            <Badge tone="slate">{version.voidKind === "ABANDON" ? "放弃试制" : version.voidKind === "FORMAL" ? "正式版作废" : "试制作废"}</Badge>
+                          ) : <StatusPill status={version.status} />}
                           {version.batchCode && (
                             <Link href={`/integration/${version.batchId}`} className="chip">
                               {version.batchCode}
@@ -329,6 +334,7 @@ export function PackageDrawer({
                           <a href={version.archiveUrl} target="_blank" rel="noreferrer" className="archive-link">
                             归档包 <ExternalLinkIcon size={11} />
                           </a>
+                          {version.buildUrl && <a href={version.buildUrl} target="_blank" rel="noreferrer" className="archive-link">构建地址 <ExternalLinkIcon size={11} /></a>}
                         </div>
                         {version.bindingTotal > 0 && (
                           <div style={{ marginTop: 7 }}>

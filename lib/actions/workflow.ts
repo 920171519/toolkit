@@ -20,6 +20,10 @@ import {
   submitBindingFlow,
   submitTransfer,
   terminateBatch,
+  abandonTrialRelease,
+  pushBindingTasks,
+  skipBindingAndEnterFormal,
+  voidPackageVersion,
   voidTrial,
 } from "@/lib/workflow";
 
@@ -44,6 +48,7 @@ export async function submitTransferAction(_prev: ActionState, formData: FormDat
       version: text(formData, "version"),
       changeSummary: text(formData, "changeSummary"),
       archiveUrl: text(formData, "archiveUrl"),
+      buildUrl: text(formData, "buildUrl"),
     });
     projectCount = result.projectCount;
   } catch (error) {
@@ -185,7 +190,60 @@ export async function releaseTrialAction(_prev: ActionState, formData: FormData)
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, `试制版本已发布，已为本版本全部使用项目生成 ${taskCount} 个节点绑定任务。`);
+  successRedirect(`/trial/${requestId}`, `试制版本已发布，已生成 ${taskCount} 个节点绑定任务。请先决定是否推送绑定任务。`);
+}
+
+export async function pushBindingTasksAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requestId = numberValue(formData, "requestId");
+  if (!requestId) return { error: "项目版本参数无效。" };
+  let count = 0;
+  try {
+    count = pushBindingTasks(user, requestId);
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(`/trial/${requestId}`, `已向全部使用项目的绑定责任人推送 ${count} 个节点绑定任务。`);
+}
+
+export async function skipBindingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requestId = numberValue(formData, "requestId");
+  if (!requestId) return { error: "项目版本参数无效。" };
+  try {
+    skipBindingAndEnterFormal(user, requestId, text(formData, "reason"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect("/formal", "已记录不进行绑定验证的原因，全部使用项目进入待转正。");
+}
+
+export async function abandonTrialReleaseAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requestId = numberValue(formData, "requestId");
+  if (!requestId) return { error: "项目版本参数无效。" };
+  try {
+    abandonTrialRelease(user, requestId, text(formData, "conclusion"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect("/trial", "已提交放弃发布试制结论，该版本将不再发布试制。");
+}
+
+export async function voidPackageVersionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const versionId = numberValue(formData, "versionId");
+  if (!versionId) return { error: "版本参数无效。" };
+  try {
+    voidPackageVersion(user, versionId, text(formData, "reason"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(`/versions/${versionId}`, "该软件包版本已作废，不再作为可用版本。");
 }
 
 export async function voidTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

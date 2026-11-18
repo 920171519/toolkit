@@ -611,3 +611,10 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
   .split-row > * { min-width: 0 !important; max-width: 100%; }
   .card-header { flex-wrap: wrap; }
 }
+
+.overdue-text, .overdue-text strong { color: var(--danger); }
+
+.package-filter-row th { padding: 7px 8px; background: #f5f2e9; }
+.input-sm, .select-sm { min-height: 30px; padding: 5px 8px; font-size: 11px; }
+.package-filter-row .select-sm { min-width: 86px; max-width: 140px; }
+.package-filter-row .input-sm { min-width: 72px; width: 100%; }

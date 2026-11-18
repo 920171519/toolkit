@@ -396,6 +396,10 @@ export type TrialVersionRow = {
   softwareManagerId: number | null;
   releaseMode: "INTEGRATION" | "RISK";
   riskConclusion: string | null;
+  bindingMode: "PENDING" | "PUSHED" | "SKIPPED";
+  bindingReason: string | null;
+  trialOverdueDays: number;
+  isOverdue: number;
   batchId: number | null;
   batchCode: string | null;
   batchConclusion: string | null;
@@ -413,6 +417,11 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
               pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
               sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
               r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+              pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
+              p.trial_overdue_days AS trialOverdueDays,
+              CASE WHEN r.trial_released_at IS NOT NULL
+                   AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
+                   THEN 1 ELSE 0 END AS isOverdue,
               b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
@@ -470,6 +479,9 @@ export type BindingRequirementRow = {
   bindingOwnerName: string | null;
   approverId: number | null;
   approverName: string | null;
+  pushedAt: string | null;
+  pushedByName: string | null;
+  decisionReason: string | null;
   approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string }>;
   flows: BindingFlowRow[];
 };
@@ -492,6 +504,10 @@ export type TrialDetail = {
     trialReleasedAt: string | null;
     releaseMode: "INTEGRATION" | "RISK";
     riskConclusion: string | null;
+    bindingMode: "PENDING" | "PUSHED" | "SKIPPED";
+    bindingReason: string | null;
+    trialOverdueDays: number;
+    isOverdue: number;
     batchId: number | null;
     batchCode: string | null;
     batchConclusion: string | null;
@@ -511,6 +527,11 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             pv.version, r.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+            pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
+            p.trial_overdue_days AS trialOverdueDays,
+            CASE WHEN r.trial_released_at IS NOT NULL
+                 AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
+                 THEN 1 ELSE 0 END AS isOverdue,
             b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
             r.void_reason AS voidReason, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
@@ -531,12 +552,14 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     `SELECT br.id, br.project_id AS projectId, pr.name AS projectName, br.node_id AS nodeId,
             n.name AS nodeName, br.required_count AS requiredCount, br.status,
             br.binding_owner_id AS bindingOwnerId, bo.name AS bindingOwnerName,
-            br.approver_id AS approverId, ba.name AS approverName
+            br.approver_id AS approverId, ba.name AS approverName,
+            br.pushed_at AS pushedAt, pu.name AS pushedByName, br.decision_reason AS decisionReason
      FROM binding_requirements br
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
      LEFT JOIN users bo ON bo.id = br.binding_owner_id
      LEFT JOIN users ba ON ba.id = br.approver_id
+     LEFT JOIN users pu ON pu.id = br.pushed_by
      WHERE br.request_id = ? ORDER BY n.sort_order`,
     requestId,
   ).map((requirement) => {
@@ -603,6 +626,8 @@ export type PendingFormalVersion = {
   softwareManagerId: number | null;
   requirementTotal: number;
   requirementPassed: number;
+  trialOverdueDays: number;
+  isOverdue: number;
 };
 
 export function getPendingFormalVersions(projectIds: number[] | null = null): PendingFormalVersion[] {
@@ -613,12 +638,17 @@ export function getPendingFormalVersions(projectIds: number[] | null = null): Pe
               pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
               r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
               o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
+              pg.trial_overdue_days AS trialOverdueDays,
+              CASE WHEN r.trial_released_at IS NOT NULL
+                   AND datetime(r.trial_released_at, '+' || pg.trial_overdue_days || ' days') < datetime('now')
+                   THEN 1 ELSE 0 END AS isOverdue,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
        JOIN projects pr ON pr.id = r.project_id
+       JOIN packages pg ON pg.id = p.id
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
        WHERE r.status = 'PENDING_FORMAL'
@@ -814,6 +844,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
      WHERE br.binding_owner_id = ? AND r.status = 'TRIAL' AND br.status = 'PENDING'
+       AND br.pushed_at IS NOT NULL
      ORDER BY pr.sort_order, n.sort_order`,
     user.id,
   );
@@ -1050,6 +1081,7 @@ export type VersionTrace = {
     status: string;
     changeSummary: string;
     archiveUrl: string;
+    buildUrl: string | null;
     submittedByName: string | null;
     submittedAt: string;
     trialFormNo: string | null;
@@ -1100,7 +1132,7 @@ export function getVersionTrace(versionId: number): VersionTrace | null {
   const version = one<VersionTrace["version"]>(
     `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version,
             pv.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
-            su.name AS submittedByName, pv.submitted_at AS submittedAt,
+            pv.build_url AS buildUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
             pv.trial_form_no AS trialFormNo, pv.trial_released_at AS trialReleasedAt,
             pv.formal_released_at AS formalReleasedAt, pv.form_flow_no AS formFlowNo,
             pv.release_mode AS releaseMode, pv.risk_conclusion AS riskConclusion,
@@ -1163,6 +1195,8 @@ export type ProjectVersionRow = {
   batchId: number | null;
   batchCode: string | null;
   batchConclusion: string | null;
+  bindingMode: "PENDING" | "PUSHED" | "SKIPPED" | null;
+  isOverdue: number;
 };
 
 export function getProjectVersionRows(projectId: number): ProjectVersionRow[] {
@@ -1171,7 +1205,11 @@ export function getProjectVersionRows(projectId: number): ProjectVersionRow[] {
             p.code AS packageCode, pv.version, r.status, r.trial_form_no AS trialFormNo,
             r.trial_released_at AS trialReleasedAt, r.form_flow_no AS formFlowNo,
             r.formal_released_at AS formalReleasedAt, r.release_mode AS releaseMode,
-            r.risk_conclusion AS riskConclusion, b.id AS batchId, b.code AS batchCode,
+            r.risk_conclusion AS riskConclusion, pv.binding_mode AS bindingMode,
+            CASE WHEN r.trial_released_at IS NOT NULL AND pv.status NOT IN ('FORMAL','VOID')
+                 AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
+                 THEN 1 ELSE 0 END AS isOverdue,
+            b.id AS batchId, b.code AS batchCode,
             b.conclusion AS batchConclusion
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id

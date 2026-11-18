@@ -28,7 +28,8 @@ export function TopbarBreadcrumb() {
   if (pathname.includes("/integration/") && pathname !== "/integration" && pathname !== "/integration/new") label = "转测批次详情";
   if (pathname.includes("/trial/") && pathname !== "/trial") label = "绑定验证详情";
   if (pathname.includes("/packages/") && pathname !== "/packages") label = "软件包详情";
-  if (pathname.includes("/settings/packages/") && pathname !== "/settings/packages") label = "软件包配置详情";
+  if (pathname === "/settings/packages/import") label = "导入历史版本";
+  else if (pathname.includes("/settings/packages/") && pathname !== "/settings/packages") label = "软件包配置详情";
   return (
     <div className="breadcrumb">
       <span>部门工作台</span>

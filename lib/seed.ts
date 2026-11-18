@@ -271,9 +271,9 @@ function seedAll(db: DatabaseSync) {
 
   const insertVersion = db.prepare(
     `INSERT INTO package_versions
-      (package_id, version, change_summary, archive_url, status, submitted_by, submitted_at,
+      (package_id, version, change_summary, archive_url, build_url, status, submitted_by, submitted_at,
        trial_form_no, trial_released_at, formal_released_at, form_flow_no, void_reason, voided_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const addVersion = (
     code: string,
@@ -299,6 +299,7 @@ function seedAll(db: DatabaseSync) {
       version,
       summary,
       archiveUrl,
+      archiveUrl.replace("/releases/", "/builds/"),
       status,
       submittedBy,
       iso(submittedAt),
@@ -354,6 +355,7 @@ function seedAll(db: DatabaseSync) {
 
   const otaTrial = addVersion("OTA", "1.6.0", "新增断点续传与灰度批次控制，修复弱网下升级包校验失败问题。", "PENDING_TRIAL", "2026-11-05T09:30:00+08:00", wangLei);
   const otaRiskTrial = addVersion("OTA", "1.6.1", "修复灰度发布边界问题，作为无集成测试批次的风险发布示例版本。", "PENDING_TRIAL", "2026-11-12T09:30:00+08:00", wangLei);
+  const otaAbandonTrial = addVersion("OTA", "1.6.2", "仅用于验证临时问题，集成测试完成后评估决定不发布试制。", "PENDING_TRIAL", "2026-11-14T09:30:00+08:00", wangLei);
   const commPending = addVersion("COM", "2.1.0", "新增可靠广播通道，修复跨进程大消息分片乱序问题。", "PENDING_TRANSFER", "2026-11-12T10:20:00+08:00", chenXi);
   const netsyncFormal = addVersion("NET", "2.0.0", "重构多设备网络协同状态机，新增链路质量自适应策略。", "PENDING_FORMAL", "2026-11-03T09:10:00+08:00", chenXi, {
     trialFormNo: "EF-TRIAL-NET-200",
@@ -430,6 +432,8 @@ function seedAll(db: DatabaseSync) {
   addRequest(otaTrial, projectIds[1], "PASSED", { updatedAt: "2026-11-11T15:00:00+08:00" });
   addRequest(otaRiskTrial, projectIds[0], "PASSED");
   addRequest(otaRiskTrial, projectIds[1], "PASSED");
+  addRequest(otaAbandonTrial, projectIds[0], "PASSED");
+  addRequest(otaAbandonTrial, projectIds[1], "PASSED");
   addRequest(netsyncFormal, projectIds[0], "PENDING_FORMAL", {
     trialFormNo: "EF-TRIAL-NET-200",
     trialReleasedAt: "2026-11-09T17:00:00+08:00",
@@ -787,4 +791,10 @@ function seedAll(db: DatabaseSync) {
   audit.run(tester, "COMPLETE_BATCH", "BATCH", 1, "提交 B118 集成测试结论：测试不通过", iso("2026-11-06T17:40:00+08:00"));
   audit.run(admin, "CREATE_AREA", "AREA", areaIds[0], "创建责任田：系统底座", iso("2026-09-01T09:10:00+08:00"));
   audit.run(xuYan, "ARCHIVE_PROJECT", "PROJECT", projectIds[3], "远山 X0 项目结束并归档", iso("2026-10-30T17:00:00+08:00"));
+
+  // 历史数据默认视为软件经理已评估过绑定推送；新流程发布试制后需由软件经理明确推送。
+  db.exec("UPDATE binding_requirements SET pushed_at = created_at, pushed_by = (SELECT trial_released_by FROM version_transfer_requests WHERE id = binding_requirements.request_id) WHERE pushed_at IS NULL");
+  db.exec("UPDATE package_versions SET binding_mode = 'PUSHED' WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL') AND EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = package_versions.id)");
+  db.prepare("UPDATE packages SET trial_overdue_days = 3 WHERE code = 'KEY'").run();
+  db.prepare("UPDATE packages SET trial_overdue_days = 5 WHERE code = 'NET'").run();
 }

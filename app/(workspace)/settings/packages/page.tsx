@@ -39,6 +39,7 @@ export default async function PackagesSettingsPage({
         title="软件包配置"
         description="软件包由所属责任田主管维护；软件经理不负责软件包基础配置。进入配置后可维护责任信息与项目节点使用范围。"
         actions={
+          <><Link href="/settings/packages/import" className="button button-secondary">导入历史版本</Link>
           <FormDialog label={<><Plus size={14} /> 新建软件包</>} title="新建软件包" description="创建后继续配置该项目节点使用范围。" triggerClassName="button button-primary" testId="new-package-trigger">
             <ActionForm action={savePackageAction} submitText="创建并配置使用范围" testId="new-package-form">
               <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
@@ -49,10 +50,11 @@ export default async function PackagesSettingsPage({
                 </div>
                 <label className="field"><span className="label">责任田 <span className="required-mark">*</span></span><select className="select" name="areaId" required defaultValue={areas[0]?.id ?? ""}><option value="" disabled>选择责任田</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label>
                 <label className="field"><span className="label">说明</span><textarea className="textarea" name="description" placeholder="说明软件包提供的能力。" /></label>
+                <label className="field"><span className="label">试制超期天数 <span className="required-mark">*</span><span className="hint">超过后提示已超期</span></span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
                 <input type="hidden" name="isActive" value="on" />
               </div>
             </ActionForm>
-          </FormDialog>
+          </FormDialog></>
         }
       />
       <FlashMessage notice={notice} />

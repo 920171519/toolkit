@@ -78,6 +78,7 @@ const PACKAGE_SUMMARY_SQL = `
   SELECT p.id, p.name, p.code, p.description, p.is_active AS isActive,
          p.area_id AS areaId, a.name AS areaName, a.color AS areaColor,
          p.owner_id AS ownerId, o.name AS ownerName, o.employee_id AS ownerEmployeeId, o.title AS ownerTitle,
+         p.trial_overdue_days AS trialOverdueDays,
          (SELECT v.version FROM package_versions v
           WHERE v.package_id = p.id AND v.status = 'FORMAL'
           ORDER BY COALESCE(v.formal_released_at, v.updated_at) DESC, v.id DESC LIMIT 1) AS formalVersion,
@@ -948,6 +949,7 @@ export type PackageVersionOption = {
   status: PackageStatus;
   changeSummary: string;
   archiveUrl: string;
+  buildUrl: string | null;
   submittedAt: string;
 };
 
@@ -981,7 +983,7 @@ export function getBatchCandidates(): BatchCandidatePackage[] {
   return packages.map((pkg) => {
     const versions = all<PackageVersionOption>(
       `SELECT id, version, status, change_summary AS changeSummary, archive_url AS archiveUrl,
-              submitted_at AS submittedAt
+              build_url AS buildUrl, submitted_at AS submittedAt
        FROM package_versions WHERE package_id = ?
        ORDER BY CASE status
          WHEN 'PENDING_TRANSFER' THEN 0 WHEN 'IN_TEST' THEN 1 WHEN 'PENDING_TRIAL' THEN 2
@@ -1053,7 +1055,8 @@ export function getPackageDetail(packageId: number, includeInactive = false): Pa
   }
   const versions = all<PackageVersionSummary>(
     `SELECT pv.id, pv.package_id AS packageId, p.name AS packageName, p.code AS packageCode,
-            pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl, pv.status,
+            pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl, pv.build_url AS buildUrl,
+            pv.void_kind AS voidKind, pv.status,
             pv.submitted_at AS submittedAt, pv.submitted_by AS submittedById, su.name AS submittedByName,
             pv.trial_released_at AS trialReleasedAt, pv.formal_released_at AS formalReleasedAt,
             pv.form_flow_no AS formFlowNo,

@@ -36,6 +36,7 @@ export type PackageSummary = {
   ownerName: string | null;
   ownerEmployeeId: string | null;
   ownerTitle: string | null;
+  trialOverdueDays: number;
   formalVersion: string | null;
   trialVersion: string | null;
   trialVersions: string[];
@@ -54,6 +55,8 @@ export type PackageVersionSummary = {
   version: string;
   changeSummary: string;
   archiveUrl: string;
+  buildUrl: string | null;
+  voidKind: string | null;
   status: PackageStatus;
   submittedAt: string;
   submittedById: number | null;

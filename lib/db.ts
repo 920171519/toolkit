@@ -68,6 +68,48 @@ function migrateSchema(database: DatabaseSync) {
   if (!requestColumns.some((column) => column.name === "risk_conclusion")) {
     database.exec("ALTER TABLE version_transfer_requests ADD COLUMN risk_conclusion TEXT");
   }
+  const packageColumns = database
+    .prepare("PRAGMA table_info(packages)")
+    .all() as Array<{ name: string }>;
+  if (!packageColumns.some((column) => column.name === "trial_overdue_days")) {
+    database.exec("ALTER TABLE packages ADD COLUMN trial_overdue_days INTEGER NOT NULL DEFAULT 7");
+  }
+  const versionColumns = database
+    .prepare("PRAGMA table_info(package_versions)")
+    .all() as Array<{ name: string }>;
+  for (const [name, sql] of [
+    ["build_url", "ALTER TABLE package_versions ADD COLUMN build_url TEXT"],
+    ["binding_mode", "ALTER TABLE package_versions ADD COLUMN binding_mode TEXT NOT NULL DEFAULT 'PENDING'"],
+    ["binding_reason", "ALTER TABLE package_versions ADD COLUMN binding_reason TEXT"],
+    ["binding_decided_at", "ALTER TABLE package_versions ADD COLUMN binding_decided_at TEXT"],
+    ["binding_decided_by", "ALTER TABLE package_versions ADD COLUMN binding_decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["void_kind", "ALTER TABLE package_versions ADD COLUMN void_kind TEXT"],
+    ["voided_by", "ALTER TABLE package_versions ADD COLUMN voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+  ]) {
+    if (!versionColumns.some((column) => column.name === name)) database.exec(sql);
+  }
+  const requirementColumns = database
+    .prepare("PRAGMA table_info(binding_requirements)")
+    .all() as Array<{ name: string }>;
+  for (const [name, sql] of [
+    ["pushed_at", "ALTER TABLE binding_requirements ADD COLUMN pushed_at TEXT"],
+    ["pushed_by", "ALTER TABLE binding_requirements ADD COLUMN pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["decision_reason", "ALTER TABLE binding_requirements ADD COLUMN decision_reason TEXT"],
+  ]) {
+    if (!requirementColumns.some((column) => column.name === name)) database.exec(sql);
+  }
+  database.exec("UPDATE package_versions SET build_url = archive_url WHERE build_url IS NULL");
+  database.exec(
+    `UPDATE binding_requirements SET pushed_at = created_at
+     WHERE pushed_at IS NULL AND request_id IN (
+       SELECT id FROM version_transfer_requests WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL','VOID')
+     )`,
+  );
+  database.exec(
+    `UPDATE package_versions SET binding_mode = 'PUSHED'
+     WHERE binding_mode = 'PENDING' AND status IN ('TRIAL','PENDING_FORMAL','FORMAL')
+       AND EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = package_versions.id)`,
+  );
   database.exec(
     `INSERT OR IGNORE INTO project_pms (project_id, user_id, created_at)
      SELECT id, pm_user_id, datetime('now') FROM projects WHERE pm_user_id IS NOT NULL`,

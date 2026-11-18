@@ -45,6 +45,9 @@ export default async function OverviewPage({
   for (const item of trialReady) readyByProject.set(item.projectId, (readyByProject.get(item.projectId) ?? 0) + 1);
   const trialByProject = new Map<number, number>();
   for (const item of trials) trialByProject.set(item.projectId, (trialByProject.get(item.projectId) ?? 0) + 1);
+  const overdueByProject = new Map<number, number>();
+  for (const item of trials.filter((trial) => trial.isOverdue)) overdueByProject.set(item.projectId, (overdueByProject.get(item.projectId) ?? 0) + 1);
+  for (const item of pendingFormal.filter((version) => version.isOverdue)) overdueByProject.set(item.projectId, (overdueByProject.get(item.projectId) ?? 0) + 1);
   const formalByProject = new Map<number, number>();
   for (const item of pendingFormal) formalByProject.set(item.projectId, (formalByProject.get(item.projectId) ?? 0) + 1);
 
@@ -63,6 +66,7 @@ export default async function OverviewPage({
         <span><strong>{batches.filter((batch) => batch.status === "IN_TEST").length}</strong> 个在测批次</span>
         <span><strong>{trialReady.length}</strong> 个待发试制</span>
         <span><strong>{pendingFormal.length}</strong> 个待转正</span>
+        <span className={[...trials, ...pendingFormal].some((item) => item.isOverdue) ? "overdue-text" : undefined}><strong>{[...trials, ...pendingFormal].filter((item) => item.isOverdue).length}</strong> 个试制超期</span>
       </div>
 
       <section className="card">
@@ -73,7 +77,7 @@ export default async function OverviewPage({
           ) : (
             <div className="table-wrap">
               <table className="data-table project-overview-table">
-                <thead><tr><th>项目</th><th>状态</th><th>项目联系人</th><th>软件包 / 节点</th><th>待转测</th><th>在测批次</th><th>待发试制</th><th>绑定中</th><th>待转正</th><th>最近活动</th><th aria-label="操作" /></tr></thead>
+                <thead><tr><th>项目</th><th>状态</th><th>项目联系人</th><th>软件包 / 节点</th><th>待转测</th><th>在测批次</th><th>待发试制</th><th>绑定中</th><th>超期</th><th>待转正</th><th>最近活动</th><th aria-label="操作" /></tr></thead>
                 <tbody>
                   {projects.map((project) => {
                     const latestBatch = batches.filter((batch) => batch.projectId === project.id)
@@ -94,6 +98,7 @@ export default async function OverviewPage({
                         <td><span className="mono small">{activeBatchByProject.get(project.id) ?? 0}</span></td>
                         <td><span className="mono small">{readyByProject.get(project.id) ?? 0}</span></td>
                         <td><span className="mono small">{trialByProject.get(project.id) ?? 0}</span></td>
+                        <td>{(overdueByProject.get(project.id) ?? 0) > 0 ? <Badge tone="rose">{overdueByProject.get(project.id)} 已超期</Badge> : <span className="small muted">—</span>}</td>
                         <td><span className="mono small">{formalByProject.get(project.id) ?? 0}</span></td>
                         <td className="small muted">{latestBatch ? `${latestBatch.code} · ${formatDateTime(latestBatch.sentAt ?? latestBatch.createdAt)}` : "—"}</td>
                         <td className="cell-actions"><Link href={`/projects/${project.id}`} className="archive-link">进入项目 <ArrowRight size={11} /></Link></td>

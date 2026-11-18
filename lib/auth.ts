@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role } from "./constants";
 import { one, run } from "./db";
@@ -49,9 +49,11 @@ export async function createSession(userId: number): Promise<void> {
   );
   run("DELETE FROM sessions WHERE expires_at < ?", new Date().toISOString());
   const cookieStore = await cookies();
+  const requestHeaders = await headers();
+  const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
   const secureCookie = process.env.SESSION_COOKIE_SECURE
     ? process.env.SESSION_COOKIE_SECURE === "true"
-    : process.env.NODE_ENV === "production";
+    : forwardedProto === "https";
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

@@ -28,6 +28,7 @@ import {
   saveArea,
   assignAreaProjectMember,
   savePackage,
+  importLegacyVersion,
   savePackageUsages,
   saveProject,
   saveUserProfile,
@@ -341,6 +342,7 @@ export async function savePackageAction(
       areaId: numberValue(formData, "areaId"),
       ownerId: numberValue(formData, "ownerId"),
       isActive: checkbox(formData, "isActive"),
+      trialOverdueDays: numberValue(formData, "trialOverdueDays") ?? 7,
     });
   } catch (error) {
     return failure(error);
@@ -352,6 +354,34 @@ export async function savePackageAction(
   );
 }
 
+
+export async function importLegacyVersionAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await actionUser();
+  const packageId = numberValue(formData, "packageId");
+  if (!packageId) return { error: "请选择软件包。" };
+  const status = text(formData, "status") === "TRIAL" ? "TRIAL" : "FORMAL";
+  try {
+    importLegacyVersion(user, {
+      packageId,
+      version: text(formData, "version"),
+      changeSummary: text(formData, "changeSummary"),
+      archiveUrl: text(formData, "archiveUrl"),
+      buildUrl: text(formData, "buildUrl"),
+      status,
+      trialFormNo: text(formData, "trialFormNo"),
+      trialReleasedAt: text(formData, "trialReleasedAt"),
+      formFlowNo: text(formData, "formFlowNo"),
+      formalReleasedAt: text(formData, "formalReleasedAt"),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(`/settings/packages/${packageId}`, "历史版本已导入，可在软件包详情中查看。");
+}
 
 export async function updatePackageResponsibilityAction(
   _prev: ActionState,

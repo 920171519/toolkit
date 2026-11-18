@@ -19,6 +19,7 @@ export function TransferRequestForm({ packages }: { packages: PackageOption[] })
   const [version, setVersion] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
   const [archiveUrl, setArchiveUrl] = useState("");
+  const [buildUrl, setBuildUrl] = useState("");
 
   const selected = packages.find((pkg) => pkg.id === packageId) ?? null;
   const filtered = useMemo(() => {
@@ -32,7 +33,8 @@ export function TransferRequestForm({ packages }: { packages: PackageOption[] })
     selected !== null &&
     version.trim().length > 0 &&
     changeSummary.trim().length >= 5 &&
-    /^https?:\/\//i.test(archiveUrl.trim());
+    /^https?:\/\//i.test(archiveUrl.trim()) &&
+    /^https?:\/\//i.test(buildUrl.trim());
 
   return (
     <form action={formAction} data-testid="transfer-form">
@@ -71,10 +73,11 @@ export function TransferRequestForm({ packages }: { packages: PackageOption[] })
         <label className="field"><span className="label">版本号 <span className="required-mark">*</span><span className="hint">例如 2.1.0</span></span><input className="input" name="version" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="填写本次提交的新版本号" required maxLength={40} /></label>
         <label className="field"><span className="label">修复问题 / 完成需求 <span className="required-mark">*</span></span><textarea className="textarea" name="changeSummary" value={changeSummary} onChange={(event) => setChangeSummary(event.target.value)} placeholder="说明本次版本解决了哪些问题、完成了哪些需求。" required minLength={5} /></label>
         <label className="field"><span className="label">包归档链接 <span className="required-mark">*</span><span className="hint">http(s) 地址</span></span><input className="input" name="archiveUrl" type="url" value={archiveUrl} onChange={(event) => setArchiveUrl(event.target.value)} placeholder="https://packages.example.com/..." required /></label>
+        <label className="field"><span className="label">构建地址 <span className="required-mark">*</span><span className="hint">http(s) 地址</span></span><input className="input" name="buildUrl" type="url" value={buildUrl} onChange={(event) => setBuildUrl(event.target.value)} placeholder="https://ci.example.com/build/..." required /></label>
       </div>
       {state?.error && <div className="form-error" role="alert">{state.error}</div>}
       <div className="form-footer">
-        <span className="form-note">四项信息全部填写后即可提交。</span>
+        <span className="form-note">五项信息全部填写后即可提交。</span>
         <button type="submit" className="button button-primary" disabled={!canSubmit || pending}>
           {pending ? "发送中…" : selected ? <><Check size={14} /> 提交申请</> : "提交申请"}
         </button>

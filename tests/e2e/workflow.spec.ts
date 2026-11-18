@@ -232,6 +232,18 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByRole("heading", { name: "待发布试制" })).toBeVisible();
   });
 
+  test("试制超期在部门总览、项目工作区和试制页提示", async ({ page }) => {
+    await login(page, "MGR001");
+    await page.goto("/overview");
+    const n1Row = page.locator(".project-overview-row").filter({ hasText: "星云 N1" }).first();
+    await expect(n1Row).toContainText("已超期");
+    await page.goto("/projects/1");
+    await expect(page.locator("#trials")).toContainText("已超期");
+    await page.goto("/trial");
+    const keyRow = page.locator(".data-table tbody tr").filter({ hasText: "1006KEY" }).filter({ hasText: "星云 N1" }).first();
+    await expect(keyRow).toContainText("已超期");
+  });
+
   test("通知点击后标记已读并从工作台消失", async ({ page }) => {
     await login(page, "VALID001");
     const alert = page.locator(".personal-alert").filter({ hasText: "被驳回" }).first();
@@ -256,6 +268,7 @@ test.describe("工程协同台项目维度流程", () => {
     await form.locator('input[name="version"]').fill("2.3.0");
     await form.locator('textarea[name="changeSummary"]').fill("自动化验证：通过待转测申请弹窗提交新版本。");
     await form.locator('input[name="archiveUrl"]').fill("https://packages.example.com/e2e/1002cfg-2.3.0.tar.gz");
+    await form.locator('input[name="buildUrl"]').fill("https://ci.example.com/e2e/1002cfg-2.3.0");
     await expect(form.getByRole("button", { name: "提交申请" })).toBeEnabled();
     await form.getByRole("button", { name: "提交申请" }).click();
     await expectFlash(page, "转测申请已提交，并发送至 2 个项目");
@@ -348,6 +361,9 @@ test.describe("工程协同台项目维度流程", () => {
     otaTrialUrl = page.url().split("?")[0];
     expect(otaTrialUrl).toMatch(/\/trial\/\d+$/);
     await expect(page.locator(".binding-requirement")).toHaveCount(3);
+    await page.getByRole("button", { name: "推送绑定任务" }).click();
+    await expectFlash(page, "已向全部使用项目的绑定责任人推送");
+    await expect(page.locator(".binding-requirement").filter({ hasText: "未推送" })).toHaveCount(0);
 
     await login(page, "VALID001");
     await page.goto(otaTrialUrl);
@@ -401,6 +417,7 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto("/formal");
     const formalCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "星云 N1" }).first();
     await expect(formalCard).toContainText("待转正");
+    await expect(formalCard).toContainText("极光 M2");
     const bindingDetails = formalCard.locator("details.formal-binding-details");
     await bindingDetails.locator("summary").click();
     await expect(bindingDetails).toContainText("N1-OTA");
@@ -551,4 +568,85 @@ test.describe("工程协同台项目维度流程", () => {
     await revertForm.getByRole("button", { name: "保存项目配置" }).click();
     await expectFlash(page, "项目配置已更新");
   });
+  test("集成测试结束后可以提交结论放弃发布试制", async ({ page }) => {
+    test.setTimeout(90_000);
+    acceptDialogs(page);
+    await login(page, "MGR001");
+    await page.goto("/trial");
+    const card = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" }).filter({ hasText: "星云 N1" }).first();
+    await expect(card).toContainText("放弃发布试制");
+    await card.getByText("放弃发布试制", { exact: true }).click();
+    await card.locator('textarea[name="conclusion"]').fill("集成测试已完成，评估该临时版本不需要发布试制，计划直接废弃。");
+    await card.getByRole("button", { name: "提交结论并放弃试制" }).click();
+    await expectFlash(page, "已提交放弃发布试制结论");
+    await expect(page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" })).toHaveCount(0);
+    await page.goto("/packages?project=1&open=1");
+    const drawer = page.getByTestId("package-drawer");
+    await expect(drawer).toContainText("1.6.2");
+    await expect(drawer).toContainText("放弃试制");
+  });
+
+  test("试制可确认无需绑定直接转正，正式版本仍可作废", async ({ page }) => {
+    test.setTimeout(120_000);
+    acceptDialogs(page);
+    await login(page, "MGR001");
+    await page.goto("/trial");
+    const trialRow = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).filter({ hasText: "星云 N1" }).first();
+    await expect(trialRow).toBeVisible();
+    const href = await trialRow.getByRole("link", { name: /处理/ }).getAttribute("href");
+    expect(href).toBeTruthy();
+    await page.goto(new URL(href!, page.url()).toString());
+    const versionHref = await page.getByRole("link", { name: "版本全链路" }).getAttribute("href");
+    expect(versionHref).toBeTruthy();
+    await expect(page.getByRole("heading", { name: "绑定推送决策" })).toBeVisible();
+    await page.getByText("无需绑定，直接进入待转正", { exact: true }).click();
+    await page.getByPlaceholder(/该版本仅修复配置项/).fill("该版本只修复配置项，已完成整机集成验证，无需重复绑定设备条码。");
+    await page.getByRole("button", { name: "确认无需绑定" }).click();
+    await expectFlash(page, "全部使用项目进入待转正");
+    await expect(page).toHaveURL(/\/formal/);
+    const formalCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).first();
+    await expect(formalCard).toContainText("无需绑定");
+    await formalCard.locator('input[name="flowNo"]').fill("EF-OTA-161");
+    await formalCard.getByRole("button", { name: "提交转正电子流并发布" }).click();
+    await expectFlash(page, "同步发布正式版本");
+
+    await page.goto(new URL(versionHref!, page.url()).toString());
+    await page.getByText("填写作废原因", { exact: true }).click();
+    await page.locator('textarea[name="reason"]').fill("正式发布后发现该版本不再适用，按流程作废并停止使用。");
+    await page.getByRole("button", { name: "确认作废该版本" }).click();
+    await expectFlash(page, "该软件包版本已作废");
+  });
+
+  test("软件包总览支持按列筛选，详情展示说明与构建地址", async ({ page }) => {
+    await login(page, "OWNER001");
+    await page.goto("/packages?project=1");
+    await expect(page.locator(".package-filter-row")).toBeVisible();
+    await page.locator('select[aria-label="筛选使用项目"]').selectOption({ label: "极光 M2" });
+    await page.locator('select[aria-label="筛选使用节点"]').selectOption({ label: "EVT" });
+    const rows = page.locator(".data-table tbody tr");
+    await expect(rows.first()).toBeVisible();
+    await expect(rows.first()).toContainText("EVT");
+    await page.goto("/packages?project=1&open=1");
+    const drawer = page.getByTestId("package-drawer");
+    await expect(drawer).toContainText("OTA 升级服务");
+    await expect(drawer.getByRole("link", { name: /构建地址/ }).first()).toBeVisible();
+  });
+
+  test("管理员可以导入已有转正历史版本", async ({ page }) => {
+    test.setTimeout(90_000);
+    await login(page, "ADMIN001");
+    await page.goto("/settings/packages/import");
+    await page.locator('select[name="packageId"]').selectOption("2");
+    await page.locator('input[name="version"]').fill("9.9.1");
+    await page.locator('textarea[name="changeSummary"]').fill("系统切换前已发布的历史版本，补录用于全链路追溯。");
+    await page.locator('input[name="archiveUrl"]').fill("https://packages.example.com/legacy/cfg-9.9.1.tar.gz");
+    await page.locator('input[name="buildUrl"]').fill("https://ci.example.com/legacy/cfg-9.9.1");
+    await page.locator('select[name="status"]').selectOption("FORMAL");
+    await page.locator('input[name="formFlowNo"]').fill("EF-LEGACY-CFG-991");
+    await page.locator('input[name="formalReleasedAt"]').fill("2026-11-01");
+    await page.getByRole("button", { name: "导入历史版本" }).click();
+    await expectFlash(page, "历史版本已导入");
+    await expect(page.locator("body")).toContainText("9.9.1");
+  });
+
 });

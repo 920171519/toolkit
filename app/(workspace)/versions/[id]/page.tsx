@@ -3,10 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, Link2 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { parseFlash } from "@/lib/queries";
+import { voidPackageVersionAction } from "@/lib/actions/workflow";
+import { ActionForm } from "@/components/action-form";
 import { getVersionTrace } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { BAD_CONCLUSION_LABEL, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
-import { Badge, ExternalLink, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
+import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "版本全链路" };
@@ -24,15 +28,25 @@ const transferStatusFallback: Record<string, { label: string; tone: string }> = 
   CANCELLED: { label: "已取消", tone: "slate" },
 };
 
-export default async function VersionTracePage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+export default async function VersionTracePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const user = await requireUser();
   const { id } = await params;
+  const search = await searchParams;
+  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const versionId = Number(id);
   if (!Number.isInteger(versionId)) notFound();
   const trace = getVersionTrace(versionId);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
   const detailByRequest = new Map(details.map((detail) => [detail.request.id, detail]));
+  const canManage = requests.some((request) => canManageProjectWorkflowForProject(user, request.projectId));
+  const canVoid = canManage && ["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status);
 
   return (
     <>
@@ -43,6 +57,7 @@ export default async function VersionTracePage({ params }: { params: Promise<{ i
         actions={<><Link href={`/packages?open=${version.packageId}`} className="button button-secondary"><ArrowLeft size={14} />返回软件包</Link><Link href="/overview" className="button button-secondary">部门总览</Link></>}
       />
 
+      <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 16 }}>
         <span><StatusPill status={version.status as "PENDING_TRANSFER" | "IN_TEST" | "PENDING_TRIAL" | "TRIAL" | "PENDING_FORMAL" | "FORMAL" | "VOID"} /></span>
         <span><strong>{requests.length}</strong> 个项目版本</span>
@@ -51,6 +66,7 @@ export default async function VersionTracePage({ params }: { params: Promise<{ i
         {version.releaseMode === "RISK" && <Badge tone="rose">风险发布</Badge>}
         {version.riskConclusion && <span>风险结论：{version.riskConclusion}</span>}
         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
+        {version.buildUrl && <ExternalLink href={version.buildUrl}>构建地址</ExternalLink>}
       </div>
 
       <section className="card" style={{ marginBottom: 16 }}>
@@ -95,6 +111,23 @@ export default async function VersionTracePage({ params }: { params: Promise<{ i
           </table></div>}
         </div>
       </section>
+
+      {version.status === "VOID" && (
+        <div className="risk-callout" data-tone="danger" style={{ marginBottom: 14 }}>该版本已作废：{version.voidReason ?? "未填写原因"}。版本不再作为可用版本，历史转测、绑定和发布记录仍保留供追溯。</div>
+      )}
+      {canVoid && (
+        <section className="card" style={{ marginBottom: 16 }}><div className="card-body">
+          <div className="split-row" style={{ alignItems: "flex-start", gap: 12 }}>
+            <div><h3 style={{ fontSize: 15 }}>作废该软件包版本</h3><p className="note" style={{ marginTop: 5 }}>作废表示该版本不再使用；全部项目记录会同步失效，历史证据保留。适用于已发试制、待转正或已转正的版本。</p></div>
+            <Badge tone="rose">高风险操作</Badge>
+          </div>
+          <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写作废原因</summary><div style={{ marginTop: 12, maxWidth: 620 }}>
+            <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id }} submitText="确认作废该版本" submitVariant="danger" confirmMessage="确认作废该软件包版本？全部使用项目将同步失效，且不再参与任何流程。">
+              <label className="field"><span className="label">作废原因 <span className="required-mark">*</span></span><textarea className="textarea" name="reason" required minLength={5} placeholder="说明不再使用该版本的原因。" /></label>
+            </ActionForm>
+          </div></details>
+        </div></section>
+      )}
 
       <section className="card">
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>绑定验证证据链</h2><p className="small muted" style={{ marginTop: 3 }}>按项目展开节点、设备条码、网页电子流和审批结果。</p></div><Badge tone="teal">{details.length} 个项目</Badge></div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Search } from "lucide-react";
 import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
+import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { Badge, EmptyState, StatusPill } from "@/components/ui";
 import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
 
@@ -35,25 +36,47 @@ export function PackageOverviewTable({
   selectedProjectId?: number;
 }) {
   const [query, setQuery] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [nodeFilter, setNodeFilter] = useState("");
+  const [formalFilter, setFormalFilter] = useState("");
+  const [trialFilter, setTrialFilter] = useState("");
+  const [currentFilter, setCurrentFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
+
+  const areas = useMemo(() => [...new Set(packages.map((pkg) => pkg.areaName).filter((item): item is string => Boolean(item)))].sort(), [packages]);
+  const projects = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const pkg of packages) for (const usage of pkg.usages) map.set(usage.projectId, usage.projectName);
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "zh-CN"));
+  }, [packages]);
+  const nodes = useMemo(() => [...new Set(packages.flatMap((pkg) => pkg.usages.flatMap((usage) => usage.nodeNames)))].sort(), [packages]);
+  const statuses = useMemo(() => [...new Set(packages.map((pkg) => pkg.currentStatus).filter((item): item is NonNullable<typeof item> => Boolean(item)))], [packages]);
+
+  const hasColumnFilter = Boolean(nameFilter || areaFilter || projectFilter || nodeFilter || formalFilter || trialFilter || currentFilter || statusFilter);
+  function resetFilters() {
+    setNameFilter(""); setAreaFilter(""); setProjectFilter(""); setNodeFilter("");
+    setFormalFilter(""); setTrialFilter(""); setCurrentFilter(""); setStatusFilter("");
+  }
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return packages;
-    return packages.filter((pkg) =>
-      [
-        pkg.name,
-        pkg.code,
-        pkg.ownerName ?? "",
-        pkg.areaName ?? "",
-        pkg.formalVersion ?? "",
-        ...pkg.usages.flatMap((usage) => [usage.projectName, ...usage.nodeNames]),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
-    );
-  }, [packages, query]);
+    return packages.filter((pkg) => {
+      const globalText = [pkg.name, pkg.code, pkg.ownerName ?? "", pkg.areaName ?? "", pkg.formalVersion ?? "", ...pkg.usages.flatMap((usage) => [usage.projectName, ...usage.nodeNames])].join(" ").toLowerCase();
+      if (normalized && !globalText.includes(normalized)) return false;
+      if (nameFilter && !`${pkg.name} ${pkg.code}`.toLowerCase().includes(nameFilter.toLowerCase())) return false;
+      if (areaFilter && pkg.areaName !== areaFilter) return false;
+      if (projectFilter && !pkg.usages.some((usage) => String(usage.projectId) === projectFilter)) return false;
+      if (nodeFilter && !pkg.usages.some((usage) => usage.nodeNames.includes(nodeFilter))) return false;
+      if (formalFilter && !(pkg.formalVersion ?? "").toLowerCase().includes(formalFilter.toLowerCase())) return false;
+      if (trialFilter && !pkg.trialVersions.some((version) => version.toLowerCase().includes(trialFilter.toLowerCase()))) return false;
+      if (currentFilter && !(pkg.currentVersion ?? "").toLowerCase().includes(currentFilter.toLowerCase())) return false;
+      if (statusFilter && pkg.currentStatus !== statusFilter) return false;
+      return true;
+    });
+  }, [packages, query, nameFilter, areaFilter, projectFilter, nodeFilter, formalFilter, trialFilter, currentFilter, statusFilter]);
 
   function closePackage() {
     setOpenId(null);
@@ -96,6 +119,16 @@ export function PackageOverviewTable({
                   <th>在途版本</th>
                   <th>状态</th>
                   <th aria-label="操作" />
+                </tr>
+                <tr className="package-filter-row">
+                  <th><input className="input input-sm" value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="筛选包/编码" aria-label="筛选软件包" /></th>
+                  <th><select className="select select-sm" value={areaFilter} onChange={(event) => setAreaFilter(event.target.value)} aria-label="筛选责任田"><option value="">全部责任田</option>{areas.map((area) => <option key={area} value={area}>{area}</option>)}</select></th>
+                  <th><div style={{ display: "flex", gap: 4 }}><select className="select select-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="筛选使用项目"><option value="">全部项目</option>{projects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select className="select select-sm" value={nodeFilter} onChange={(event) => setNodeFilter(event.target.value)} aria-label="筛选使用节点"><option value="">全部节点</option>{nodes.map((node) => <option key={node} value={node}>{node}</option>)}</select></div></th>
+                  <th><input className="input input-sm" value={formalFilter} onChange={(event) => setFormalFilter(event.target.value)} placeholder="筛选正式版" aria-label="筛选正式版本" /></th>
+                  <th><input className="input input-sm" value={trialFilter} onChange={(event) => setTrialFilter(event.target.value)} placeholder="筛选试制版" aria-label="筛选试制版本" /></th>
+                  <th><input className="input input-sm" value={currentFilter} onChange={(event) => setCurrentFilter(event.target.value)} placeholder="筛选在途版本" aria-label="筛选在途版本" /></th>
+                  <th><select className="select select-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="筛选状态"><option value="">全部状态</option>{statuses.map((status) => <option key={status} value={status}>{PACKAGE_STATUS_META[status]?.label ?? status}</option>)}</select></th>
+                  <th>{hasColumnFilter ? <button type="button" className="button button-ghost button-sm" onClick={resetFilters}>重置</button> : null}</th>
                 </tr>
               </thead>
               <tbody>

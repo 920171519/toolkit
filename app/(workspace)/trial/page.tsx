@@ -10,7 +10,7 @@ import {
   getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
 import { BAD_CONCLUSION_LABEL, CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
-import { releaseTrialAction } from "@/lib/actions/workflow";
+import { abandonTrialReleaseAction, releaseTrialAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 
@@ -45,11 +45,11 @@ export default async function TrialPage({
         {canViewReleaseQueue && <span><strong>{ready.length}</strong> 个版本待发布试制</span>}
         {canViewReleaseQueue && <span><strong>{riskCount}</strong> 个风险发布</span>}
         <span><strong>{trials.length}</strong> 个项目试制版本绑定中</span>
-        <span style={{ marginLeft: "auto" }}>试制、绑定、转正均按项目独立运作</span>
+        <span style={{ marginLeft: "auto" }}>试制/转正按软件包版本全项目共享，绑定任务由软件经理决定是否推送</span>
       </div>
 
       {canViewReleaseQueue && <section className="card">
-        <div className="card-header"><div><div className="eyebrow">Release gate</div><h2 style={{ marginTop: 5, fontSize: 19 }}>待发布试制</h2><p className="small muted" style={{ marginTop: 3 }}>显示集成测试已结束的版本和风险发布版本；集成测试版本可直接查看批次与验收结论，未关联批次的版本按风险发布登记结论。</p></div><Badge tone={riskCount > 0 ? "rose" : "violet"}>{ready.length} 待处理</Badge></div>
+        <div className="card-header"><div><div className="eyebrow">Release gate</div><h2 style={{ marginTop: 5, fontSize: 19 }}>待发布试制</h2><p className="small muted" style={{ marginTop: 3 }}>显示集成测试已结束的版本和风险发布版本；可以选择发布共享试制，也可以提交结论后放弃发布试制。</p></div><Badge tone={riskCount > 0 ? "rose" : "violet"}>{ready.length} 待处理</Badge></div>
         <div className="card-body" style={{ paddingTop: 12 }}>
           {ready.length === 0 ? (
             <EmptyState title="没有待发试制的项目版本" description="本项目集成测试结束后，版本会进入这里；无转测批次的风险发布也会显示在这里。" />
@@ -99,15 +99,25 @@ export default async function TrialPage({
                     </div>
                     <div className="toolbar" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", justifyContent: "flex-end" }}>
                       {canRelease(version.projectId) ? (
-                        <details>
-                          <summary className="button button-primary button-sm" style={{ listStyle: "none" }}>发布全项目共享试制</summary>
-                          <div style={{ marginTop: 10, minWidth: 380 }}>
-                            <ActionForm action={releaseTrialAction} hidden={{ requestId: version.requestId }} submitText="发布全项目共享试制版本" submitClassName="button-sm" confirmMessage={`确认发布 ${version.packageName} ${version.version} 共享试制版本？将同步覆盖该软件包全部 ${version.versionProjectCount} 个使用项目。`}>
-                              <label className="field"><span className="label">发布试制电子流 <span className="required-mark">*</span></span><input className="input" name="trialFormNo" required minLength={3} placeholder="例如 EF-TRIAL-N1-OTA-160" /></label>
-                              {risk && <label className="field" style={{ marginTop: 9 }}><span className="label">风险发布结论 <span className="required-mark">*</span></span><textarea className="textarea" name="riskConclusion" required minLength={5} defaultValue={version.riskConclusion ?? ""} placeholder="说明未通过集成测试或无转测批次的项目原因及全版本风险评估结论。" /></label>}
-                            </ActionForm>
-                          </div>
-                        </details>
+                        <div className="toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
+                          <details>
+                            <summary className="button button-primary button-sm" style={{ listStyle: "none" }}>发布全项目共享试制</summary>
+                            <div style={{ marginTop: 10, minWidth: 380 }}>
+                              <ActionForm action={releaseTrialAction} hidden={{ requestId: version.requestId }} submitText="发布全项目共享试制版本" submitClassName="button-sm" confirmMessage={`确认发布 ${version.packageName} ${version.version} 共享试制版本？将同步覆盖该软件包全部 ${version.versionProjectCount} 个使用项目。`}>
+                                <label className="field"><span className="label">发布试制电子流 <span className="required-mark">*</span></span><input className="input" name="trialFormNo" required minLength={3} placeholder="例如 EF-TRIAL-N1-OTA-160" /></label>
+                                {risk && <label className="field" style={{ marginTop: 9 }}><span className="label">风险发布结论 <span className="required-mark">*</span></span><textarea className="textarea" name="riskConclusion" required minLength={5} defaultValue={version.riskConclusion ?? ""} placeholder="说明未通过集成测试或无转测批次的项目原因及全版本风险评估结论。" /></label>}
+                              </ActionForm>
+                            </div>
+                          </details>
+                          <details>
+                            <summary className="button button-ghost button-sm" style={{ listStyle: "none" }}>放弃发布试制</summary>
+                            <div style={{ marginTop: 10, minWidth: 380 }}>
+                              <ActionForm action={abandonTrialReleaseAction} hidden={{ requestId: version.requestId }} submitText="提交结论并放弃试制" submitVariant="danger" submitClassName="button-sm" confirmMessage={`确认不发布 ${version.packageName} ${version.version} 试制？该版本将作废，不再用于项目。`}>
+                                <label className="field"><span className="label">放弃发布试制结论 <span className="required-mark">*</span></span><textarea className="textarea" name="conclusion" required minLength={5} placeholder="例如：该版本仅用于验证临时问题，不计划发布正式版本，因此不进入试制。" /></label>
+                              </ActionForm>
+                            </div>
+                          </details>
+                        </div>
                       ) : <span className="small muted">等待使用该软件包的项目软件经理发布试制</span>}
                     </div>
                   </article>
@@ -134,7 +144,7 @@ export default async function TrialPage({
                       <tr key={version.requestId}>
                         <td><Link href={`/packages?open=${version.packageId}`} style={{ fontWeight: 600 }}>{version.packageName}</Link><div className="small muted">{version.version}</div></td>
                         <td><span className="chip">{version.projectName}</span></td>
-                        <td>{risk ? <Badge tone="rose">风险发布</Badge> : <span className="small">{version.batchCode ? "集成测试通过" : "集成测试"}</span>}{version.riskConclusion && <div className="small muted" title={version.riskConclusion}>风险结论：{version.riskConclusion.slice(0, 26)}{version.riskConclusion.length > 26 ? "…" : ""}</div>}</td>
+                        <td>{risk ? <Badge tone="rose">风险发布</Badge> : <span className="small">{version.batchCode ? "集成测试通过" : "集成测试"}</span>}{version.isOverdue ? <div style={{ marginTop: 4 }}><Badge tone="rose">已超期</Badge></div> : null}{version.bindingMode === "SKIPPED" ? <div style={{ marginTop: 4 }}><Badge tone="slate">跳过绑定</Badge></div> : version.bindingMode === "PENDING" ? <div style={{ marginTop: 4 }}><Badge tone="amber">待推送绑定</Badge></div> : null}{version.riskConclusion && <div className="small muted" title={version.riskConclusion}>风险结论：{version.riskConclusion.slice(0, 26)}{version.riskConclusion.length > 26 ? "…" : ""}</div>}</td>
                         <td className="small mono">{version.trialFormNo ?? "—"}</td>
                         <td><div className="toolbar" style={{ gap: 8 }}><ProgressBar value={version.requirementPassed} max={version.requirementTotal} /><span className="small muted">{version.requirementPassed}/{version.requirementTotal}</span></div></td>
                         <td><span className="small muted">{version.pendingFlowCount}</span></td>
