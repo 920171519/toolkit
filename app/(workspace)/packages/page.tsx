@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Boxes, LayoutGrid } from "lucide-react";
+import { ArrowRight, Boxes, LayoutGrid, ListTree } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import {
   getPackageDetail,
@@ -10,7 +10,8 @@ import {
 } from "@/lib/queries";
 import { canEditPackageById } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
-import { getProjectOptions } from "@/lib/workflow-queries";
+import { getWorkflowProjectOptions, requireWorkflowProject } from "@/lib/project-scope";
+import { workflowHref } from "@/lib/workflow-links";
 import { FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -24,14 +25,13 @@ export default async function PackagesPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const projects = getProjectOptions();
-  const projectParam = Array.isArray(params.project) ? params.project[0] : params.project;
-  const selectedProject = projects.find((project) => project.id === Number(projectParam));
+  const selectedProject = requireWorkflowProject(user, params.project);
+  const projects = getWorkflowProjectOptions(user);
   const packages = getPackageOverviewRows(selectedProject?.id);
   const people = getPeople();
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
-  const initialDetail = initialOpenId ? getPackageDetail(initialOpenId, true) : null;
+  const initialDetail = initialOpenId ? getPackageDetail(initialOpenId, true, selectedProject?.id) : null;
   const initialCanEdit = initialOpenId ? canEditPackageById(user, initialOpenId) : false;
   const withFormal = packages.filter((pkg) => pkg.formalVersion).length;
   const inFlight = packages.filter((pkg) => pkg.currentVersion).length;
@@ -42,13 +42,18 @@ export default async function PackagesPage({
       <PageHeader
         eyebrow="Software packages / Version overview"
         title="软件版本总览"
-        description="可按项目筛选软件包，但使用范围始终展示该软件包在全部在行项目中的节点覆盖，便于判断转测和绑定是否完整。"
+        description={selectedProject
+          ? `${selectedProject.name} · 查看本项目软件包的正式、试制和在途版本，以及各软件包在全部在行项目中的使用范围。`
+          : "按项目查看软件包及其版本，使用范围展示该软件包在全部在行项目中的节点覆盖。"}
         actions={
           <>
-            <Link href="/overview" className="button button-secondary">
-              <LayoutGrid size={14} /> 按项目查看
+            <Link href={selectedProject ? `/projects/${selectedProject.id}` : "/overview"} className="button button-secondary">
+              <LayoutGrid size={14} /> {selectedProject ? "项目工作区" : "按项目查看"}
             </Link>
-            <Link href="/submissions" className="button button-primary">
+            <Link href={workflowHref("/versions", selectedProject?.id)} className="button button-secondary">
+              <ListTree size={14} /> 版本全链路
+            </Link>
+            <Link href={workflowHref("/submissions", selectedProject?.id)} className="button button-primary">
               <Boxes size={14} /> 提交转测申请
             </Link>
           </>
@@ -64,7 +69,9 @@ export default async function PackagesPage({
                 <span className="label">查看范围</span>
                 <select className="select" name="project" defaultValue={selectedProject?.id ?? ""}>
                   <option value="">全部在行项目</option>
-                  {projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}
+                  {(selectedProject?.status === "ARCHIVED" ? [...projects, selectedProject] : projects).map((project) =>
+                    <option value={project.id} key={project.id}>{project.name}</option>,
+                  )}
                 </select>
               </label>
               <button type="submit" className="button button-secondary button-sm">切换</button>
@@ -91,14 +98,14 @@ export default async function PackagesPage({
           存在在途版本 <strong>{inFlight}</strong>
         </span>
         <span style={{ marginLeft: "auto" }}>
-          <Link href="/integration" className="archive-link">
+          <Link href={workflowHref("/integration", selectedProject?.id)} className="archive-link">
             查看在测配套 <ArrowRight size={11} />
           </Link>
         </span>
       </div>
 
       <PackageOverviewTable
-        key={initialOpenId ?? "closed"}
+        key={`${selectedProject?.id ?? "all"}-${initialOpenId ?? "closed"}`}
         packages={packages}
         people={people}
         initialOpenId={initialOpenId}

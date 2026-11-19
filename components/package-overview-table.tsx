@@ -233,7 +233,7 @@ export function PackageOverviewTable({
       </p>
 
       {openId && (
-        <PackageDrawer packageId={openId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
+        <PackageDrawer packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
       )}
     </div>
   );

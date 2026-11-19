@@ -12,6 +12,7 @@ export function FormDialog({
   testId,
   wide = false,
   fallbackHref,
+  cancelLabel,
 }: {
   label: ReactNode;
   title: string;
@@ -21,6 +22,7 @@ export function FormDialog({
   testId?: string;
   wide?: boolean;
   fallbackHref?: string;
+  cancelLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -61,7 +63,14 @@ export function FormDialog({
                 <X size={18} />
               </button>
             </header>
-            <div className="modal-body">{children}</div>
+            <div className="modal-body">
+              {children}
+              {cancelLabel && (
+                <div className="toolbar" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+                  <button type="button" className="button button-secondary button-sm" onClick={() => setOpen(false)}>{cancelLabel}</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

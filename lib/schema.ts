@@ -1,9 +1,6 @@
 export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_SQL = `
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -146,6 +143,7 @@ CREATE TABLE IF NOT EXISTS version_transfer_requests (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'PENDING'
     CHECK (status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED','TRIAL','PENDING_FORMAL','FORMAL','VOID','CANCELLED')),
+  integration_status TEXT CHECK (integration_status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')),
   trial_form_no TEXT,
   trial_released_at TEXT,
   trial_released_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -212,6 +210,7 @@ CREATE TABLE IF NOT EXISTS batch_items (
   trial_versions TEXT,
   previous_test_version TEXT,
   changed_vs_previous INTEGER NOT NULL DEFAULT 0,
+  issue_affected INTEGER NOT NULL DEFAULT 0 CHECK (issue_affected IN (0,1)),
   UNIQUE(batch_id, package_id)
 );
 
@@ -272,6 +271,8 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   pushed_at TEXT,
   pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   decision_reason TEXT,
+  waived_at TEXT,
+  waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(package_version_id, project_id, node_id)

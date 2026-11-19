@@ -1,6 +1,8 @@
 import "server-only";
 
 import { all, one } from "./db";
+import { getTransferAreaIds } from "./access";
+import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageStatus, Role } from "./constants";
 import type {
   BatchItemSummary,
@@ -10,6 +12,7 @@ import type {
   PackageVersionSummary,
   PendingReleaseVersion,
   ReviewSummary,
+  SessionUser,
   TrialVersionSummary,
 } from "./types";
 
@@ -130,6 +133,24 @@ export function getPackagesOverview(includeInactive = false): PackageSummary[] {
   }));
 }
 
+export function getTransferPackageOptions(user: SessionUser, projectId?: number) {
+  const areaIds = getTransferAreaIds(user);
+  if (areaIds?.length === 0) return [];
+  return all<{ id: number; name: string; code: string; ownerName: string | null }>(
+    `SELECT p.id, p.name, p.code, owner.name AS ownerName
+     FROM packages p LEFT JOIN users owner ON owner.id = p.owner_id
+     WHERE p.is_active = 1
+     ${areaIds ? `AND p.area_id IN (${areaIds.map(() => "?").join(",")})` : ""}
+     AND EXISTS (
+       SELECT 1 FROM package_usages usage JOIN projects pr ON pr.id = usage.project_id
+       WHERE usage.package_id = p.id AND pr.status != 'ARCHIVED' ${projectId ? "AND pr.id = ?" : ""}
+     )
+     ORDER BY p.name`,
+    ...(areaIds ?? []),
+    ...(projectId ? [projectId] : []),
+  );
+}
+
 
 export type PackageUsageScope = {
   projectId: number;
@@ -158,8 +179,9 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
      FROM package_usages u
      JOIN projects pr ON pr.id = u.project_id
      JOIN project_nodes n ON n.id = u.node_id
-     WHERE ${includeArchivedUsage ? "1 = 1" : "pr.status != 'ARCHIVED'"}
+     WHERE ${includeArchivedUsage ? "1 = 1" : "(pr.status != 'ARCHIVED' OR pr.id = ?)"}
      ORDER BY pr.sort_order, n.sort_order`,
+    ...(includeArchivedUsage ? [] : [projectId ?? null]),
   );
   if (projectId) {
     const allowed = new Set(
@@ -169,6 +191,7 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
   }
   const usageMap = new Map<number, PackageUsageScope[]>();
   for (const row of usageRows) {
+    if (!includeArchivedUsage && row.projectStatus === "ARCHIVED") continue;
     const scopes = usageMap.get(row.packageId) ?? [];
     let scope = scopes.find((item) => item.projectId === row.projectId);
     if (!scope) {
@@ -192,16 +215,21 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
     formalReleasedAt: string | null;
     trialReleasedAt: string | null;
     updatedAt: string;
+    standalone: number;
   }>(
     `SELECT pv.package_id AS packageId, pv.id AS versionId, pv.version, r.status,
             r.formal_released_at AS formalReleasedAt, r.trial_released_at AS trialReleasedAt,
-            r.updated_at AS updatedAt
+            r.updated_at AS updatedAt, 0 AS standalone
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE pr.status != 'ARCHIVED' ${projectId ? "AND r.project_id = ?" : ""}
-     ORDER BY r.updated_at DESC, pv.id DESC`,
-    ...(projectId ? [projectId] : []),
+     WHERE ${projectId ? "r.project_id = ?" : "pr.status != 'ARCHIVED'"}
+     ${projectId ? `UNION ALL
+       SELECT pv.package_id, pv.id, pv.version, pv.status, pv.formal_released_at,
+              pv.trial_released_at, COALESCE(pv.formal_released_at, pv.trial_released_at, pv.updated_at), 1
+       FROM package_versions pv WHERE ${STANDALONE_VERSION_IN_PROJECT_SQL}` : ""}
+     ORDER BY updatedAt DESC, versionId DESC`,
+    ...(projectId ? [projectId, projectId] : []),
   );
   const byPackage = new Map<number, typeof requestRows>();
   for (const row of requestRows) {
@@ -224,19 +252,25 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
     const requests = byPackage.get(pkg.id) ?? [];
     const formalRequests = requests.filter((request) => request.status === "FORMAL");
     const trialRequests = requests.filter((request) => request.status === "TRIAL" || request.status === "PENDING_FORMAL");
-    const current = requests.find((request) => !["FORMAL", "VOID"].includes(request.status));
+    const current = requests.find((request) => !request.standalone && !["FORMAL", "VOID"].includes(request.status));
     const inTest = requests.find((request) => request.status === "IN_TEST");
     const pendingTransfer = requests.find((request) => request.status === "PENDING");
     const trialVersions = [...new Set(trialRequests.map((request) => request.version))];
-    const formalVersion = formalRequests[0]?.version ?? pkg.formalVersion;
+    const useAggregate = projectId === undefined && requests.length === 0;
+    if (projectId) {
+      formalRequests.sort((first, second) =>
+        (second.formalReleasedAt ?? second.updatedAt).localeCompare(first.formalReleasedAt ?? first.updatedAt),
+      );
+    }
+    const formalVersion = formalRequests[0]?.version ?? (projectId === undefined ? pkg.formalVersion : null);
     return {
       ...pkg,
       formalVersion,
-      trialVersion: trialVersions[0] ?? (requests.length === 0 ? pkg.trialVersion : null),
-      trialVersions: requests.length === 0 ? pkg.trialVersions : trialVersions,
-      currentVersion: current?.version ?? (requests.length === 0 ? pkg.currentVersion : null),
-      currentStatus: current ? projectStatusMap[current.status] ?? null : requests.length === 0 ? pkg.currentStatus : null,
-      currentVersionId: current?.versionId ?? (requests.length === 0 ? pkg.currentVersionId : null),
+      trialVersion: trialVersions[0] ?? (useAggregate ? pkg.trialVersion : null),
+      trialVersions: useAggregate ? pkg.trialVersions : trialVersions,
+      currentVersion: current?.version ?? (useAggregate ? pkg.currentVersion : null),
+      currentStatus: current ? projectStatusMap[current.status] ?? null : useAggregate ? pkg.currentStatus : null,
+      currentVersionId: current?.versionId ?? (useAggregate ? pkg.currentVersionId : null),
       inTestVersion: inTest?.version ?? null,
       pendingTransferVersion: pendingTransfer?.version ?? null,
       usages: usageMap.get(pkg.id) ?? [],
@@ -1018,8 +1052,9 @@ export type PackageDetailData = {
   audits: Array<{ id: number; action: string; detail: string; createdAt: string; actorName: string | null }>;
 };
 
-export function getPackageDetail(packageId: number, includeInactive = false): PackageDetailData | null {
-  const base = getPackagesOverview(includeInactive).find((pkg) => pkg.id === packageId);
+export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
+  const packages = projectId ? getPackageOverviewRows(projectId) : getPackagesOverview(includeInactive);
+  const base = packages.find((pkg) => pkg.id === packageId);
   if (!base) return null;
   const usageRows = all<{
     projectId: number;
@@ -1062,15 +1097,19 @@ export function getPackageDetail(packageId: number, includeInactive = false): Pa
             pv.form_flow_no AS formFlowNo,
             b.id AS batchId, b.code AS batchCode, b.status AS batchStatus, b.conclusion AS batchConclusion,
             rr.status AS riskReviewStatus, fr.status AS formalReviewStatus,
-            (SELECT COUNT(*) FROM binding_requirements br WHERE br.package_version_id = pv.id) AS bindingTotal,
-            (SELECT COUNT(*) FROM binding_requirements br WHERE br.package_version_id = pv.id AND br.status = 'PASSED') AS bindingPassed,
+             (SELECT COUNT(*) FROM binding_requirements br WHERE br.package_version_id = pv.id
+                AND (? IS NULL OR br.project_id = ?)) AS bindingTotal,
+             (SELECT COUNT(*) FROM binding_requirements br WHERE br.package_version_id = pv.id AND br.status = 'PASSED'
+                AND (? IS NULL OR br.project_id = ?)) AS bindingPassed,
             o.name AS ownerName
      FROM package_versions pv
      JOIN packages p ON p.id = pv.package_id
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN batch_items bi ON bi.id = (
-       SELECT bi2.id FROM batch_items bi2 WHERE bi2.package_version_id = pv.id ORDER BY bi2.id DESC LIMIT 1
+        SELECT bi2.id FROM batch_items bi2 JOIN integration_batches b2 ON b2.id = bi2.batch_id
+        WHERE bi2.package_version_id = pv.id AND (? IS NULL OR b2.project_id = ?)
+        ORDER BY bi2.id DESC LIMIT 1
      )
      LEFT JOIN integration_batches b ON b.id = bi.batch_id
      LEFT JOIN risk_reviews rr ON rr.id = (
@@ -1079,9 +1118,16 @@ export function getPackageDetail(packageId: number, includeInactive = false): Pa
      LEFT JOIN formal_reviews fr ON fr.id = (
        SELECT fr2.id FROM formal_reviews fr2 WHERE fr2.package_version_id = pv.id ORDER BY fr2.id DESC LIMIT 1
      )
-     WHERE pv.package_id = ?
+      WHERE pv.package_id = ?
+        AND (? IS NULL OR bi.id IS NOT NULL OR EXISTS (
+          SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
+        ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))
      ORDER BY pv.submitted_at DESC, pv.id DESC`,
+    projectId ?? null, projectId ?? null,
+    projectId ?? null, projectId ?? null,
+    projectId ?? null, projectId ?? null,
     packageId,
+    projectId ?? null, projectId ?? null, projectId ?? null,
   ).map((version) => ({
     ...version,
     bindingTotal: Number(version.bindingTotal),

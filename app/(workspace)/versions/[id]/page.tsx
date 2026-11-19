@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, Link2 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
+import { workflowHref } from "@/lib/workflow-links";
 import { voidPackageVersionAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { getVersionTrace } from "@/lib/workflow-queries";
@@ -41,10 +43,14 @@ export default async function VersionTracePage({
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const versionId = Number(id);
   if (!Number.isInteger(versionId)) notFound();
-  const trace = getVersionTrace(versionId);
+  const project = requireWorkflowProject(user, search.project);
+  const projectId = project?.id;
+  const trace = getVersionTrace(versionId, projectId);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
   const detailByRequest = new Map(details.map((detail) => [detail.request.id, detail]));
+  const projectIds = new Set([...requests.map((request) => request.projectId), ...batches.map((batch) => batch.projectId)]);
+  const linkedProjects = new Set([...projectIds].filter((id) => canAccessProjectPage(user, id)));
   const canManage = requests.some((request) => canManageProjectWorkflowForProject(user, request.projectId));
   const canVoid = canManage && ["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status);
 
@@ -53,8 +59,12 @@ export default async function VersionTracePage({
       <PageHeader
         eyebrow="Version trace / Full evidence"
         title={`${version.packageName} ${version.version}`}
-        description={`${version.packageCode} · 提交人 ${version.submittedByName ?? "系统"} · ${formatDateTime(version.submittedAt)}`}
-        actions={<><Link href={`/packages?open=${version.packageId}`} className="button button-secondary"><ArrowLeft size={14} />返回软件包</Link><Link href="/overview" className="button button-secondary">部门总览</Link></>}
+        description={`${project ? `${project.name} · ` : ""}${version.packageCode} · 提交人 ${version.submittedByName ?? "系统"} · ${formatDateTime(version.submittedAt)}`}
+        actions={<>
+          <Link href={workflowHref("/versions", projectId)} className="button button-secondary"><ArrowLeft size={14} />返回版本列表</Link>
+          <Link href={workflowHref("/packages", projectId, { open: version.packageId })} className="button button-secondary">查看软件包</Link>
+          {project && <Link href={`/versions/${versionId}`} className="button button-secondary">查看跨项目版本证据</Link>}
+        </>}
       />
 
       <FlashMessage notice={notice} />
@@ -65,6 +75,8 @@ export default async function VersionTracePage({
         <span><strong>{details.reduce((total, detail) => total + detail.requirements.filter((requirement) => requirement.status === "PASSED").length, 0)}</strong> 个通过节点</span>
         {version.releaseMode === "RISK" && <Badge tone="rose">风险发布</Badge>}
         {version.riskConclusion && <span>风险结论：{version.riskConclusion}</span>}
+        {requests.length === 0 && version.trialFormNo && <span>试制电子流 {version.trialFormNo}</span>}
+        {requests.length === 0 && version.formFlowNo && <span>转正电子流 {version.formFlowNo}</span>}
         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
         {version.buildUrl && <ExternalLink href={version.buildUrl}>构建地址</ExternalLink>}
       </div>
@@ -72,36 +84,38 @@ export default async function VersionTracePage({
       <section className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>项目版本与验收联动</h2><p className="small muted" style={{ marginTop: 3 }}>从项目转测、集成测试批次/结论到试制、绑定、转正的完整项目视图。</p></div><Badge tone="slate">{requests.length} 个项目</Badge></div>
         <div className="card-body" style={{ padding: 0, marginTop: 12 }}>
-          <div className="table-wrap"><table className="data-table">
+          {requests.length === 0 ? <div className="muted-panel" style={{ margin: 14 }}>暂无项目转测记录。</div> : <div className="table-wrap"><table className="data-table">
             <thead><tr><th>项目</th><th>转测/验收状态</th><th>集成测试批次</th><th>试制电子流</th><th>绑定进度</th><th>转正</th><th aria-label="操作" /></tr></thead>
             <tbody>{requests.map((request) => {
               const meta = transferStatusFallback[request.status] ?? TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META];
+              const testMeta = request.integrationStatus ? transferStatusFallback[request.integrationStatus] : null;
               const detail = detailByRequest.get(request.requestId);
               const passed = detail?.requirements.filter((requirement) => requirement.status === "PASSED").length ?? 0;
               const total = detail?.requirements.length ?? 0;
+              const linked = linkedProjects.has(request.projectId);
               return (
                 <tr key={request.requestId}>
-                  <td><Link href={`/projects/${request.projectId}`} style={{ fontWeight: 600 }}>{request.projectName}</Link><div className="small muted">{request.projectCode}</div></td>
-                  <td><Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? request.status}</Badge>{request.status === "FAILED" || request.status === "BLOCKED" ? <div className="small muted">{BAD_CONCLUSION_LABEL[request.status]}</div> : null}</td>
-                  <td>{request.batchId ? <><Link href={`/integration/${request.batchId}`} className="archive-link">{request.batchCode} <ArrowRight size={11} /></Link><div className="small muted">{request.batchConclusion ?? "进行中"}{request.batchReportUrl ? <> · <a href={request.batchReportUrl} className="archive-link">验证报告</a></> : null}</div></> : <span className="small muted">无批次/风险发布</span>}</td>
+                  <td>{linked ? <Link href={`/projects/${request.projectId}`} style={{ fontWeight: 600 }}>{request.projectName}</Link> : <strong>{request.projectName}</strong>}<div className="small muted">{request.projectCode}</div></td>
+                  <td><Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? request.status}</Badge>{testMeta && <div className="small muted">验收：{testMeta.label}</div>}{request.status === "FAILED" || request.status === "BLOCKED" ? <div className="small muted">{BAD_CONCLUSION_LABEL[request.status]}</div> : null}</td>
+                  <td>{request.batchId ? <>{linked ? <Link href={workflowHref(`/integration/${request.batchId}`, projectId)} className="archive-link">{request.batchCode} <ArrowRight size={11} /></Link> : <span className="mono small">{request.batchCode}</span>}<div className="small muted">{request.batchConclusion ?? "进行中"}{request.batchReportUrl ? <> · <a href={request.batchReportUrl} className="archive-link">验证报告</a></> : null}</div></> : <span className="small muted">无批次/风险发布</span>}</td>
                   <td>{request.trialFormNo ? <span className="mono small">{request.trialFormNo}</span> : <span className="small muted">—</span>}{request.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
                   <td>{total > 0 ? <><ProgressBar value={passed} max={total} /><span className="small muted">{passed}/{total}</span></> : <span className="small muted">—</span>}</td>
                   <td>{request.formFlowNo ? <span className="mono small">{request.formFlowNo}</span> : <span className="small muted">—</span>}</td>
-                  <td className="cell-actions">{detail ? <Link href={`/trial/${request.requestId}`} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
+                  <td className="cell-actions">{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, projectId)} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
                 </tr>
               );
             })}</tbody>
-          </table></div>
+          </table></div>}
         </div>
       </section>
 
       <section className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>集成测试批次与报告</h2><p className="small muted" style={{ marginTop: 3 }}>所有包含该版本的批次、结论和验证报告。</p></div><Badge tone="sky">{batches.length}</Badge></div>
         <div className="card-body" style={{ padding: 0, marginTop: 12 }}>
-          {batches.length === 0 ? <div className="muted-panel" style={{ margin: 14 }}>该版本没有关联集成测试批次，按风险发布处理。</div> : <div className="table-wrap"><table className="data-table">
+          {batches.length === 0 ? <div className="muted-panel" style={{ margin: 14 }}>暂无关联集成测试批次。</div> : <div className="table-wrap"><table className="data-table">
             <thead><tr><th>批次</th><th>项目</th><th>状态 / 结论</th><th>测试总结</th><th>完成时间</th><th aria-label="操作" /></tr></thead>
             <tbody>{batches.map((batch) => <tr key={batch.id}>
-              <td><Link href={`/integration/${batch.id}`} style={{ fontWeight: 600 }}>{batch.code}</Link></td>
+              <td>{linkedProjects.has(batch.projectId) ? <Link href={workflowHref(`/integration/${batch.id}`, projectId)} style={{ fontWeight: 600 }}>{batch.code}</Link> : <strong>{batch.code}</strong>}</td>
               <td>{batch.projectName}</td>
               <td><Badge tone={batch.conclusion === "PASS" ? "emerald" : batch.conclusion === "FAIL" ? "rose" : "amber"}>{batch.conclusion === "PASS" ? "测试通过" : batch.conclusion === "FAIL" ? "测试不通过" : batch.conclusion === "BLOCKED" ? "无法验证" : batch.status}</Badge></td>
               <td className="small muted" style={{ maxWidth: 420 }}>{batch.testSummary ?? "—"}</td>
@@ -122,7 +136,7 @@ export default async function VersionTracePage({
             <Badge tone="rose">高风险操作</Badge>
           </div>
           <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写作废原因</summary><div style={{ marginTop: 12, maxWidth: 620 }}>
-            <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id }} submitText="确认作废该版本" submitVariant="danger" confirmMessage="确认作废该软件包版本？全部使用项目将同步失效，且不再参与任何流程。">
+            <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id, scopeProjectId: projectId }} submitText="确认作废该版本" submitVariant="danger" confirmMessage="确认作废该软件包版本？全部使用项目将同步失效，且不再参与任何流程。">
               <label className="field"><span className="label">作废原因 <span className="required-mark">*</span></span><textarea className="textarea" name="reason" required minLength={5} placeholder="说明不再使用该版本的原因。" /></label>
             </ActionForm>
           </div></details>
@@ -138,11 +152,12 @@ export default async function VersionTracePage({
                 <span className="chip">{detail.request.projectName}</span>
                 <Badge tone={detail.request.releaseMode === "RISK" ? "rose" : "violet"}>{detail.request.releaseMode === "RISK" ? "风险发布" : "集成测试通过"}</Badge>
                 <span className="small muted">试制电子流 {detail.request.trialFormNo ?? "—"}</span>
-                <Link href={`/trial/${detail.request.id}`} className="archive-link" style={{ marginLeft: "auto" }}>处理绑定 <ArrowRight size={11} /></Link>
+                {linkedProjects.has(detail.request.projectId) && <Link href={workflowHref(`/trial/${detail.request.id}`, projectId)} className="archive-link" style={{ marginLeft: "auto" }}>处理绑定 <ArrowRight size={11} /></Link>}
               </div>
               {detail.requirements.map((requirement) => (
                 <div className="version-trace-requirement" key={requirement.id}>
-                  <div className="toolbar" style={{ gap: 7 }}><span className="chip">{requirement.nodeName}</span><Badge tone={requirement.status === "PASSED" ? "emerald" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : "待绑定"}</Badge><span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码</span></div>
+                  <div className="toolbar" style={{ gap: 7 }}><span className="chip">{requirement.nodeName}</span><Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.waivedAt ? "节点免绑定" : requirement.status === "CANCELLED" ? "无需绑定" : "待绑定"}</Badge><span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码</span></div>
+                  {requirement.waivedAt && <p className="small muted">免绑定原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
                   {requirement.flows.map((flow) => (
                     <div className="version-trace-flow" key={flow.id}>
                       <span className="mono small">{flow.flowNo}</span>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { PackageDetailData, PersonOption } from "@/lib/queries";
 import { formatDateTime } from "@/lib/format";
+import { workflowHref } from "@/lib/workflow-links";
 import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import type { ActionState } from "@/lib/action-state";
 import { Avatar, Badge, StatusPill } from "@/components/ui";
@@ -47,11 +48,13 @@ function UsageProject({ usage }: { usage: PackageUsage }) {
 
 export function PackageDrawer({
   packageId,
+  projectId,
   people,
   onClose,
   initialDetail = null,
 }: {
   packageId: number;
+  projectId?: number;
   people: PersonOption[];
   onClose: () => void;
   initialDetail?: DrawerPayload | null;
@@ -68,7 +71,7 @@ export function PackageDrawer({
     setLoading(true);
     setLoadError(null);
     try {
-      const response = await fetch(`/api/packages/${packageId}`, {
+      const response = await fetch(workflowHref(`/api/packages/${packageId}`, projectId), {
         credentials: "same-origin",
         cache: "no-store",
       });
@@ -82,7 +85,7 @@ export function PackageDrawer({
     } finally {
       setLoading(false);
     }
-  }, [packageId]);
+  }, [packageId, projectId]);
 
   useEffect(() => {
     if (initialDetail) return;
@@ -305,7 +308,7 @@ export function PackageDrawer({
                     <h3>版本历史</h3>
                     <p>每个版本都保留变更说明、归档链接与流程结果</p>
                   </div>
-                  <span className="chip">{detail.versions.length} 个版本</span>
+                  <Link href={workflowHref("/versions", projectId, { package: packageId })} className="archive-link">查看全部版本追溯</Link>
                 </div>
                 {detail.versions.length === 0 ? (
                   <div className="muted-panel">暂无版本记录。</div>
@@ -319,12 +322,12 @@ export function PackageDrawer({
                             <Badge tone="slate">{version.voidKind === "ABANDON" ? "放弃试制" : version.voidKind === "FORMAL" ? "正式版作废" : "试制作废"}</Badge>
                           ) : <StatusPill status={version.status} />}
                           {version.batchCode && (
-                            <Link href={`/integration/${version.batchId}`} className="chip">
+                            <Link href={workflowHref(`/integration/${version.batchId}`, projectId)} className="chip">
                               {version.batchCode}
                             </Link>
                           )}
                           {version.formFlowNo && <span className="chip">电子流 {version.formFlowNo}</span>}
-                          <Link href={`/versions/${version.id}`} className="archive-link" style={{ marginLeft: "auto" }}>全链路追溯</Link>
+                          <Link href={workflowHref(`/versions/${version.id}`, projectId)} className="archive-link" style={{ marginLeft: "auto" }}>全链路追溯</Link>
                         </div>
                         <p className="change-copy">{version.changeSummary}</p>
                         <div className="toolbar" style={{ gap: 13, marginTop: 7, fontSize: 11, color: "var(--muted)" }}>

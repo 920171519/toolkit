@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
-import { failure, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
+import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
+import { workflowHref } from "@/lib/workflow-links";
 import {
   addBatchProgress,
   cancelBindingFlow,
@@ -25,12 +26,17 @@ import {
   skipBindingAndEnterFormal,
   voidPackageVersion,
   voidTrial,
+  waiveBindingRequirement,
 } from "@/lib/workflow";
 
 async function actionUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   return user;
+}
+
+function workflowSuccessRedirect(formData: FormData, path: string, message: string): never {
+  return successRedirect(workflowHref(path, numberValue(formData, "scopeProjectId")), message);
 }
 
 function refreshAll() {
@@ -49,13 +55,14 @@ export async function submitTransferAction(_prev: ActionState, formData: FormDat
       changeSummary: text(formData, "changeSummary"),
       archiveUrl: text(formData, "archiveUrl"),
       buildUrl: text(formData, "buildUrl"),
+      scopeProjectId: numberValue(formData, "scopeProjectId") ?? undefined,
     });
     projectCount = result.projectCount;
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/submissions", `转测申请已提交，并发送至 ${projectCount} 个项目。`);
+  workflowSuccessRedirect(formData, "/submissions", `转测申请已提交，并发送至 ${projectCount} 个项目。`);
 }
 
 export async function cancelTransferAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -68,7 +75,7 @@ export async function cancelTransferAction(_prev: ActionState, formData: FormDat
     return failure(error);
   }
   refreshAll();
-  successRedirect("/submissions", "转测申请已撤回。");
+  workflowSuccessRedirect(formData, "/submissions", "转测申请已撤回。");
 }
 
 export async function createBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -99,7 +106,7 @@ export async function createBatchAction(_prev: ActionState, formData: FormData):
     return failure(error);
   }
   refreshAll();
-  successRedirect("/submissions", "整套配套转测草稿已创建，请在待转测申请页确认并发起。");
+  workflowSuccessRedirect(formData, "/submissions", "整套配套转测草稿已创建，请在待转测申请页确认并发起。");
 }
 
 export async function addBatchProgressAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -112,7 +119,7 @@ export async function addBatchProgressAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/integration/${batchId}`, "进展说明已提交。");
+  workflowSuccessRedirect(formData, `/integration/${batchId}`, "进展说明已提交。");
 }
 
 export async function deleteDraftBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -125,7 +132,7 @@ export async function deleteDraftBatchAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  successRedirect("/submissions", "转测草稿已删除。");
+  workflowSuccessRedirect(formData, "/submissions", "转测草稿已删除。");
 }
 
 export async function sendBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -139,7 +146,7 @@ export async function sendBatchAction(_prev: ActionState, formData: FormData): P
   }
   refreshAll();
   const batch = one<{ code: string }>("SELECT code FROM integration_batches WHERE id = ?", batchId);
-  successRedirect("/submissions", `${batch?.code ?? "批次"} 已发起集成测试，等待本项目集成测试负责人提交结论。`);
+  workflowSuccessRedirect(formData, "/submissions", `${batch?.code ?? "批次"} 已发起集成测试，等待本项目集成测试负责人提交结论。`);
 }
 
 export async function terminateBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -152,7 +159,7 @@ export async function terminateBatchAction(_prev: ActionState, formData: FormDat
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/integration/${batchId}`, "本批次已终止，相关项目转测申请已退回待安排。");
+  workflowSuccessRedirect(formData, `/integration/${batchId}`, "本批次已终止，相关项目转测申请已退回待安排。");
 }
 
 export async function completeBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -165,18 +172,23 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
   const uploaded = formData.get("reportFile");
   const reportFile = uploaded instanceof File && uploaded.size > 0 ? uploaded : null;
   if (!reportFile) return { error: "请上传验证报告。" };
+  let voidedCount = 0;
   try {
-    await completeBatchTest(user, batchId, {
+    const result = await completeBatchTest(user, batchId, {
       conclusion: conclusion as "PASS" | "FAIL" | "BLOCKED",
       issueAttribution: issueAttribution as "NONE" | "PACKAGE_RELATED" | "NOT_PACKAGE_RELATED" | "UNKNOWN",
       testSummary: text(formData, "testSummary"),
       reportFile,
+      affectedVersionIds: idList(formData, "affectedVersionId"),
     });
+    voidedCount = result.voidedCount;
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/integration/${batchId}`, "测试结论已提交，验证报告已上传。");
+  workflowSuccessRedirect(formData, `/integration/${batchId}`, voidedCount > 0
+    ? `测试结论已提交，${voidedCount} 个受影响的风险试制版本已作废。`
+    : "测试结论已提交，验证报告已上传。");
 }
 
 export async function releaseTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -190,7 +202,7 @@ export async function releaseTrialAction(_prev: ActionState, formData: FormData)
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, `试制版本已发布，已生成 ${taskCount} 个节点绑定任务。请先决定是否推送绑定任务。`);
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, `试制版本已发布，已生成 ${taskCount} 个节点绑定任务。请先决定是否推送绑定任务。`);
 }
 
 export async function pushBindingTasksAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -204,20 +216,44 @@ export async function pushBindingTasksAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, `已向全部使用项目的绑定责任人推送 ${count} 个节点绑定任务。`);
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, `已向全部使用项目的绑定责任人推送 ${count} 个节点绑定任务。`);
 }
 
 export async function skipBindingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requestId = numberValue(formData, "requestId");
   if (!requestId) return { error: "项目版本参数无效。" };
+  let enteredFormal = false;
   try {
-    skipBindingAndEnterFormal(user, requestId, text(formData, "reason"));
+    const result = skipBindingAndEnterFormal(user, requestId, text(formData, "reason"));
+    enteredFormal = result.enteredFormal;
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/formal", "已记录不进行绑定验证的原因，全部使用项目进入待转正。");
+  workflowSuccessRedirect(
+    formData,
+    enteredFormal ? "/formal" : `/trial/${requestId}`,
+    enteredFormal ? "已记录不进行绑定验证的原因，全部使用项目进入待转正。" : "已记录无需绑定。关联转测批次结束后再进入待转正。",
+  );
+}
+
+export async function waiveBindingRequirementAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requirementId = numberValue(formData, "requirementId");
+  if (!requirementId) return { error: "绑定任务参数无效。" };
+  let result: ReturnType<typeof waiveBindingRequirement>;
+  try {
+    result = waiveBindingRequirement(user, requirementId, text(formData, "reason"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  workflowSuccessRedirect(
+    formData,
+    `/trial/${result.requestId}`,
+    result.enteredFormal ? "已登记此节点无需绑定，版本已进入待转正。" : "已登记此节点无需绑定。",
+  );
 }
 
 export async function abandonTrialReleaseAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -230,7 +266,7 @@ export async function abandonTrialReleaseAction(_prev: ActionState, formData: Fo
     return failure(error);
   }
   refreshAll();
-  successRedirect("/trial", "已提交放弃发布试制结论，该版本将不再发布试制。");
+  workflowSuccessRedirect(formData, "/trial", "已提交放弃发布试制结论，该版本将不再发布试制。");
 }
 
 export async function voidPackageVersionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -243,7 +279,7 @@ export async function voidPackageVersionAction(_prev: ActionState, formData: For
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/versions/${versionId}`, "该软件包版本已作废，不再作为可用版本。");
+  workflowSuccessRedirect(formData, `/versions/${versionId}`, "该软件包版本已作废，不再作为可用版本。");
 }
 
 export async function voidTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -256,7 +292,7 @@ export async function voidTrialAction(_prev: ActionState, formData: FormData): P
     return failure(error);
   }
   refreshAll();
-  successRedirect("/trial", "共享试制版本已作废，全部项目相关绑定电子流提交人已收到撤回提醒。");
+  workflowSuccessRedirect(formData, "/trial", "共享试制版本已作废，全部项目相关绑定电子流提交人已收到撤回提醒。");
 }
 
 export async function submitBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -278,7 +314,7 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, "绑定电子流已提交，等待本项目节点审批人审批。");
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, "绑定电子流已提交，等待本项目节点审批人审批。");
 }
 
 export async function cancelBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -292,7 +328,7 @@ export async function cancelBindingFlowAction(_prev: ActionState, formData: Form
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/trial/${requestId}`, "绑定电子流已撤销。");
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, "绑定电子流已撤销。");
 }
 
 export async function decideBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -310,7 +346,8 @@ export async function decideBindingFlowAction(_prev: ActionState, formData: Form
     return failure(error);
   }
   refreshAll();
-  successRedirect(
+  workflowSuccessRedirect(
+    formData,
     enteredFormal ? "/formal" : `/trial/${requestId}`,
     enteredFormal
       ? "绑定电子流已通过，该软件包全部项目节点绑定数量已满足，版本进入待转正。"
@@ -330,5 +367,5 @@ export async function releaseFormalAction(_prev: ActionState, formData: FormData
     return failure(error);
   }
   refreshAll();
-  successRedirect("/formal", "该软件包全部使用项目已同步发布正式版本。");
+  workflowSuccessRedirect(formData, "/formal", "该软件包全部使用项目已同步发布正式版本。");
 }

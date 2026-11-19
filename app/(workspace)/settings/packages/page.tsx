@@ -43,9 +43,9 @@ export default async function PackagesSettingsPage({
           <FormDialog label={<><Plus size={14} /> 新建软件包</>} title="新建软件包" description="创建后继续配置该项目节点使用范围。" triggerClassName="button button-primary" testId="new-package-trigger">
             <ActionForm action={savePackageAction} submitText="创建并配置使用范围" testId="new-package-form">
               <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-                <label className="field"><span className="label">名称</span><input className="input" name="name" placeholder="例如 电源管理服务" required /></label>
+                <label className="field"><span className="label">软件包名称</span><input className="input" name="name" placeholder="例如 1001OTA" required /></label>
                 <div className="form-grid">
-                  <label className="field"><span className="label">编码</span><input className="input" name="code" placeholder="POWER" required /></label>
+                  <label className="field"><span className="label">软件包编码</span><input className="input" name="code" placeholder="例如 OTA" required /></label>
                   <label className="field"><span className="label">责任人</span><select className="select" name="ownerId" required defaultValue=""><option value="" disabled>选择责任人</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
                 </div>
                 <label className="field"><span className="label">责任田 <span className="required-mark">*</span></span><select className="select" name="areaId" required defaultValue={areas[0]?.id ?? ""}><option value="" disabled>选择责任田</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label>
@@ -68,11 +68,12 @@ export default async function PackagesSettingsPage({
         <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>软件包</th><th>责任田 / 责任人</th><th>版本记录</th><th>使用范围</th><th>当前状态</th><th aria-label="操作" /></tr></thead>
+              <thead><tr><th>软件包名称</th><th>软件包编码</th><th>责任田 / 责任人</th><th>版本记录</th><th>使用范围</th><th>当前状态</th><th aria-label="操作" /></tr></thead>
               <tbody>
                 {packages.map((pkg) => (
                   <tr key={pkg.id}>
-                    <td><div style={{ fontWeight: 600 }}>{pkg.name}</div><div className="small muted">{pkg.code}</div></td>
+                    <td><strong>{pkg.name}</strong></td>
+                    <td><span className="mono small">{pkg.code}</span></td>
                     <td><div className="small">{pkg.areaName ?? "未归属"}</div><div className="small muted">{pkg.ownerName ?? "待指定"}</div></td>
                     <td><span className="mono small">{pkg.versionCount}</span></td>
                     <td><span className="mono small">{pkg.usageCount} 节点</span></td>
@@ -80,13 +81,12 @@ export default async function PackagesSettingsPage({
                     <td className="cell-actions"><Link href={`/settings/packages/${pkg.id}`} className="archive-link">配置 <ArrowUpRight size={12} /></Link></td>
                   </tr>
                 ))}
-                {packages.length === 0 && <tr><td colSpan={6}><div className="muted-panel">当前责任田下暂无软件包。</div></td></tr>}
+                {packages.length === 0 && <tr><td colSpan={7}><div className="muted-panel">当前责任田下暂无软件包。</div></td></tr>}
               </tbody>
             </table>
           </div>
         </div>
       </section>
-      <div className="muted-panel" style={{ marginTop: 14 }}>软件包编码用于归档路径与工单识别，建议与制品库中的包名保持一致。</div>
     </>
   );
 }

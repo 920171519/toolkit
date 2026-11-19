@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
+import { workflowHref } from "@/lib/workflow-links";
 import { getPendingFormalVersions, getTrialDetail, getVersionRequestIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
@@ -22,7 +24,8 @@ export default async function FormalPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const rawVersions = getPendingFormalVersions(getWorkflowProjectScope(user));
+  const project = requireWorkflowProject(user, params.project);
+  const rawVersions = getPendingFormalVersions(project ? [project.id] : getWorkflowProjectScope(user));
   const groups = new Map<number, typeof rawVersions>();
   for (const version of rawVersions) {
     const group = groups.get(version.versionId) ?? [];
@@ -38,6 +41,7 @@ export default async function FormalPage({
       detail.requirements.map((requirement) => ({ ...requirement, projectName: detail.request.projectName })),
     );
     const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
+    const waived = requirements.filter((requirement) => requirement.waivedAt).length;
     const approvedBarcodes = requirements.reduce(
       (total, requirement) => total + requirement.flows
         .filter((flow) => flow.status === "APPROVED")
@@ -46,7 +50,7 @@ export default async function FormalPage({
     );
     const risk = details.some((detail) => detail.request.releaseMode === "RISK" || !detail.request.batchId);
     const skipped = details.some((detail) => detail.request.bindingMode === "SKIPPED");
-    return { ...first, group, details, requirements, passed, approvedBarcodes, risk, skipped };
+    return { ...first, details, requirements, passed, waived, approvedBarcodes, risk, skipped };
   });
 
   return (
@@ -54,8 +58,10 @@ export default async function FormalPage({
       <PageHeader
         eyebrow="Formal release"
         title="转正发布"
-        description="试制按软件包版本全项目共享；全部使用项目完成绑定验证，或软件经理确认无需绑定后，任意项目软件经理即可提交一次转正电子流，所有项目同步转正。"
-        actions={<Link href="/trial" className="button button-secondary">查看绑定验证 <ArrowRight size={14} /></Link>}
+        description={project
+          ? `${project.name} · 处理本项目待转正的版本。发布前可核对共享版本在各使用项目的绑定证据。`
+          : "全部使用项目完成绑定验证后，软件经理提交一次转正电子流，所有项目同步转正。"}
+        actions={<Link href={workflowHref("/trial", project?.id)} className="button button-secondary">查看绑定验证 <ArrowRight size={14} /></Link>}
       />
       <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 18 }}>
@@ -76,18 +82,20 @@ export default async function FormalPage({
                   <div className="split-row">
                     <div style={{ flex: 1 }}>
                       <div className="toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
-                        <Link href={`/packages?open=${version.packageId}`} style={{ fontSize: 15, fontWeight: 600 }}>{version.packageName}</Link>
+                        <Link href={workflowHref("/packages", project?.id, { open: version.packageId })} style={{ fontSize: 15, fontWeight: 600 }}>{version.packageName}</Link>
                         <span className="version-badge">{version.version}</span>
                         <Badge tone="emerald" dot>待转正</Badge>
                         {version.risk && <Badge tone="rose">风险发布</Badge>}
                         {version.skipped && <Badge tone="slate">无需绑定</Badge>}
                         {version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}
-                        {version.details.map((detail) => <span className="chip" key={detail.request.id}>{detail.request.projectName}</span>)}
+                        {project
+                          ? <span className="chip">{project.name}</span>
+                          : version.details.map((detail) => <span className="chip" key={detail.request.id}>{detail.request.projectName}</span>)}
                       </div>
                       <p className="change-copy" style={{ marginTop: 7 }}>{version.changeSummary}</p>
                       {version.details.length > 0 && (
                         <details className="formal-binding-details">
-                          <summary>{version.skipped ? "查看无需绑定的理由与项目记录" : "查看全部项目实际绑定条码与电子流"}（{version.approvedBarcodes} 个通过条码，{version.passed}/{version.requirements.length} 个节点）</summary>
+                          <summary>{version.skipped ? "查看无需绑定的理由与项目记录" : "查看全部项目实际绑定条码与电子流"}（{version.approvedBarcodes} 个通过条码，{version.passed}/{version.requirements.length} 个节点通过{version.waived ? `，${version.waived} 个节点免绑定` : ""}）</summary>
                           <div className="formal-requirement-list">
                             {version.details.map((detail) => {
                               const batchConclusion = detail.request.batchConclusion
@@ -100,19 +108,18 @@ export default async function FormalPage({
                                     <span className="small muted">试制电子流 {detail.request.trialFormNo ?? "—"}</span>
                                     {detail.request.riskConclusion && <span className="small muted">风险结论：{detail.request.riskConclusion}</span>}
                                     {detail.request.bindingMode === "SKIPPED" && <span className="small muted">无需绑定原因：{detail.request.bindingReason ?? "—"}</span>}
-                                    {detail.request.batchId && (
-                                      <Link href={`/integration/${detail.request.batchId}`} className="archive-link">
-                                        转测批次 {detail.request.batchCode} · {batchConclusion?.label ?? "已提交"}
-                                      </Link>
-                                    )}
+                                    {detail.request.batchId && (canAccessProjectPage(user, detail.request.projectId)
+                                      ? <Link href={workflowHref(`/integration/${detail.request.batchId}`, detail.request.projectId === project?.id ? project.id : undefined)} className="archive-link">转测批次 {detail.request.batchCode} · {batchConclusion?.label ?? "已提交"}</Link>
+                                      : <span className="small muted">转测批次 {detail.request.batchCode} · {batchConclusion?.label ?? "已提交"}</span>)}
                                   </div>
                                   {detail.requirements.map((requirement) => (
                                     <div className="formal-requirement" key={requirement.id}>
                                       <div className="toolbar" style={{ gap: 7 }}>
                                         <span className="chip">{requirement.nodeName}</span>
-                                        <Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.status === "CANCELLED" ? "无需绑定" : "待通过"}</Badge>
+                                        <Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.waivedAt ? "节点免绑定" : requirement.status === "CANCELLED" ? "无需绑定" : "待通过"}</Badge>
                                         <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
                                       </div>
+                                      {requirement.waivedAt && <p className="small muted">免绑定原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
                                       {requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => (
                                         <div className="formal-flow-line" key={flow.id}>
                                           <span className="mono small">{flow.flowNo}</span>
@@ -127,10 +134,10 @@ export default async function FormalPage({
                             })}
                           </div>
                           <div className="toolbar" style={{ gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                            {version.details.map((detail) => (
-                              <Link key={detail.request.id} href={`/trial/${detail.request.id}`} className="archive-link">进入 {detail.request.projectName} 绑定验证详情 <ArrowRight size={11} /></Link>
+                            {version.details.filter((detail) => canAccessProjectPage(user, detail.request.projectId)).map((detail) => (
+                              <Link key={detail.request.id} href={workflowHref(`/trial/${detail.request.id}`, detail.request.projectId === project?.id ? project.id : undefined)} className="archive-link">进入 {detail.request.projectName} 绑定验证详情 <ArrowRight size={11} /></Link>
                             ))}
-                            <Link href={`/versions/${version.versionId}`} className="archive-link">查看完整版本链路 <ArrowRight size={11} /></Link>
+                            <Link href={workflowHref(`/versions/${version.versionId}`, project?.id)} className="archive-link">查看版本链路 <ArrowRight size={11} /></Link>
                           </div>
                         </details>
                       )}
@@ -138,13 +145,13 @@ export default async function FormalPage({
                         <span>试制电子流 {version.trialFormNo ?? "—"}</span>
                         <span>发布 {formatDateTime(version.trialReleasedAt)}</span>
                         {version.isOverdue ? <span style={{ color: "var(--danger)" }}>已超期，超过 {version.trialOverdueDays} 天未转正</span> : null}
-                        <span>{version.skipped ? "全项目无需绑定验证" : `全项目节点 ${version.passed}/${version.requirements.length} 通过`}</span>
+                        <span>{version.skipped ? "全项目无需绑定验证" : `全项目节点 ${version.passed}/${version.requirements.length} 通过${version.waived ? `，${version.waived} 个节点免绑定` : ""}`}</span>
                         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
                       </div>
                     </div>
                     <div style={{ minWidth: 280 }}>
                       {canManageProjectWorkflowForProject(user, version.projectId) ? (
-                        <ActionForm action={releaseFormalAction} hidden={{ requestId: version.requestId }} submitText="提交转正电子流并发布" submitClassName="button-sm" confirmMessage={`确认将 ${version.packageName} ${version.version} 在全部使用项目同步转正？`}>
+                        <ActionForm action={releaseFormalAction} hidden={{ requestId: version.requestId, scopeProjectId: project?.id }} submitText="提交转正电子流并发布" submitClassName="button-sm" confirmMessage={`确认将 ${version.packageName} ${version.version} 在全部使用项目同步转正？`}>
                           <label className="field"><span className="label">转正电子流 <span className="required-mark">*</span></span><input className="input" name="flowNo" required minLength={3} placeholder="例如 EF-OTA-152" /></label>
                         </ActionForm>
                       ) : <span className="small muted">等待使用该软件包的项目软件经理发布转正</span>}

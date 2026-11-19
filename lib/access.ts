@@ -163,6 +163,18 @@ export function getLedAreaIds(userId: number): number[] {
   ).map((row) => row.areaId);
 }
 
+export function getTransferAreaIds(user: SessionUser): number[] | null {
+  if (user.role === "ADMIN") return null;
+  return all<{ areaId: number }>(
+    `SELECT area_id AS areaId FROM area_leaders WHERE user_id = ?
+     UNION SELECT area_id FROM area_project_leads WHERE user_id = ?
+     UNION SELECT area_id FROM area_project_members WHERE user_id = ?`,
+    user.id,
+    user.id,
+    user.id,
+  ).map((row) => row.areaId);
+}
+
 export function canAccessProjectPage(user: SessionUser | null, projectId: number): boolean {
   if (!user) return false;
   if (user.role === "ADMIN") return true;

@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Boxes, FlaskConical, GitBranch, ShieldCheck } fr
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage } from "@/lib/access";
 import { getPackageOverviewRows, getProjectConfigs, parseFlash } from "@/lib/queries";
+import { workflowHref } from "@/lib/workflow-links";
 import {
   getBatches,
   getPendingFormalVersions,
@@ -47,12 +48,13 @@ export default async function ProjectWorkspacePage({
   }
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
-  const scope = getWorkflowProjectScope(user);
-  const pendingGroup = getPendingTransferGroups(scope).find((group) => group.projectId === projectId);
-  const batches = getBatches(200, scope).filter((batch) => batch.projectId === projectId);
-  const ready = getTrialReadyVersions(scope).filter((version) => version.projectId === projectId);
-  const trials = getTrialVersions(scope).filter((version) => version.projectId === projectId);
-  const formal = getPendingFormalVersions(scope).filter((version) => version.projectId === projectId);
+  const allowedProjects = getWorkflowProjectScope(user);
+  const scope = allowedProjects === null || allowedProjects.includes(projectId) ? [projectId] : [];
+  const pendingGroup = getPendingTransferGroups(scope)[0];
+  const batches = getBatches(200, scope);
+  const ready = getTrialReadyVersions(scope);
+  const trials = getTrialVersions(scope);
+  const formal = getPendingFormalVersions(scope);
   const packageRows = getPackageOverviewRows(projectId, true);
   const projectVersions = getProjectVersionRows(projectId);
   const activeBatches = batches.filter((batch) => batch.status === "IN_TEST");
@@ -64,7 +66,7 @@ export default async function ProjectWorkspacePage({
         eyebrow="Project workspace"
         title={project.name}
         description={`${project.code} · ${project.description || "项目工作区"}`}
-        actions={<><Link href="/overview" className="button button-secondary"><ArrowLeft size={14} />返回部门总览</Link><Link href={`/packages?project=${projectId}`} className="button button-secondary">软件版本总览</Link></>}
+        actions={<><Link href="/overview" className="button button-secondary"><ArrowLeft size={14} />返回部门总览</Link><Link href={workflowHref("/versions", projectId)} className="button button-secondary">版本全链路</Link></>}
       />
       <FlashMessage notice={notice} />
       <div className="project-head card" style={{ marginBottom: 16 }}>
@@ -106,11 +108,11 @@ export default async function ProjectWorkspacePage({
               <thead><tr><th>软件包</th><th>正式 / 试制 / 在途</th><th>本项目节点</th><th>全部项目使用范围</th><th aria-label="操作" /></tr></thead>
               <tbody>{packageRows.map((pkg) => (
                 <tr key={pkg.id}>
-                  <td><Link href={`/packages?project=${projectId}&open=${pkg.id}`} style={{ fontWeight: 600 }}>{pkg.name}</Link><div className="small muted">{pkg.code} · {pkg.areaName ?? "未归属"}</div></td>
+                  <td><Link href={workflowHref("/packages", projectId, { open: pkg.id })} style={{ fontWeight: 600 }}>{pkg.name}</Link><div className="small muted">{pkg.code} · {pkg.areaName ?? "未归属"}</div></td>
                   <td><div className="small">正式 {pkg.formalVersion ?? "—"}</div><div className="small muted">试制 {pkg.trialVersions.join(" / ") || "—"} · 在途 {pkg.currentVersion ?? "—"}</div>{pkg.currentStatus && <StatusPill status={pkg.currentStatus} />}</td>
                   <td><div className="project-nodes" style={{ marginTop: 0 }}>{(pkg.usages.find((usage) => usage.projectId === projectId)?.nodeNames ?? []).map((node) => <span className="chip" key={node}>{node}</span>)}</div></td>
                   <td><div className="usage-scope-list">{pkg.usages.map((usage) => <span className="usage-scope" key={usage.projectId}><strong>{usage.projectName}</strong> {usage.nodeNames.join(" / ")}{usage.projectStatus === "ARCHIVED" && <span className="small muted">存档</span>}</span>)}</div></td>
-                  <td className="cell-actions"><Link href={`/packages?project=${projectId}&open=${pkg.id}`} className="archive-link">详情 <ArrowRight size={11} /></Link></td>
+                  <td className="cell-actions"><Link href={workflowHref("/packages", projectId, { open: pkg.id })} className="archive-link">详情 <ArrowRight size={11} /></Link></td>
                 </tr>
               ))}</tbody>
             </table></div>
@@ -124,9 +126,9 @@ export default async function ProjectWorkspacePage({
           {!pendingGroup || pendingGroup.items.length === 0 ? <EmptyState title="暂无待转测申请" /> : <div className="project-flow-list">{pendingGroup.items.map((item) => (
             <div className="project-flow-row" key={item.requestId}>
               <span style={{ fontWeight: 600 }}>{item.packageName}</span><span className="version-badge">{item.version}</span><span className="small muted">{item.changeSummary}</span>
-              <Link href="/submissions" className="archive-link" style={{ marginLeft: "auto" }}>去组织整套转测 <ArrowRight size={11} /></Link>
+              <Link href={workflowHref("/submissions", projectId)} className="archive-link" style={{ marginLeft: "auto" }}>去组织整套转测 <ArrowRight size={11} /></Link>
             </div>
-          ))}<Link href="/submissions" className="button button-secondary button-sm" style={{ marginTop: 10 }}>进入待转测申请页</Link></div>}
+          ))}<Link href={workflowHref("/submissions", projectId)} className="button button-secondary button-sm" style={{ marginTop: 10 }}>进入待转测申请页</Link></div>}
         </div>
       </section>
 
@@ -136,7 +138,7 @@ export default async function ProjectWorkspacePage({
           {visibleBatches.length === 0 ? <EmptyState title="暂无集成测试批次" /> : <div className="table-wrap"><table className="data-table">
             <thead><tr><th>批次</th><th>状态</th><th>配套 / 变更</th><th>结论</th><th>发起 / 完成</th><th aria-label="操作" /></tr></thead>
             <tbody>{visibleBatches.map((batch) => (
-              <tr key={batch.id}><td><Link href={`/integration/${batch.id}`} style={{ fontWeight: 600 }}>{batch.code}</Link><div className="small muted">{batch.title}</div></td><td><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></td><td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td><td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : "rose"}>{batch.conclusion === "PASS" ? "测试通过" : batch.conclusion === "FAIL" ? "测试不通过" : "无法验证"}</Badge> : <span className="small muted">—</span>}</td><td className="small muted">{formatDateTime(batch.sentAt ?? batch.createdAt)}</td><td className="cell-actions"><Link href={`/integration/${batch.id}`} className="archive-link">查看 <ArrowRight size={11} /></Link></td></tr>
+              <tr key={batch.id}><td><Link href={workflowHref(`/integration/${batch.id}`, projectId)} style={{ fontWeight: 600 }}>{batch.code}</Link><div className="small muted">{batch.title}</div></td><td><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></td><td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td><td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : "rose"}>{batch.conclusion === "PASS" ? "测试通过" : batch.conclusion === "FAIL" ? "测试不通过" : "无法验证"}</Badge> : <span className="small muted">—</span>}</td><td className="small muted">{formatDateTime(batch.sentAt ?? batch.createdAt)}</td><td className="cell-actions"><Link href={workflowHref(`/integration/${batch.id}`, projectId)} className="archive-link">查看 <ArrowRight size={11} /></Link></td></tr>
             ))}</tbody>
           </table></div>}
         </div>
@@ -146,8 +148,8 @@ export default async function ProjectWorkspacePage({
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>试制与绑定验证</h2><p className="small muted" style={{ marginTop: 3 }}>本项目待发布试制和正在绑定验证的版本；试制按软件包版本全项目共享。</p></div><Badge tone="violet">{ready.length + trials.length}</Badge></div>
         <div className="card-body" style={{ paddingTop: 12 }}>
           {ready.length === 0 && trials.length === 0 ? <EmptyState title="暂无待发试制或绑定中的版本" /> : <div className="project-flow-stack">
-            {ready.map((version) => <div className="project-flow-row" key={`ready-${version.requestId}`}><GitBranch size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><Badge tone={version.riskProjectCount > 0 ? "rose" : "violet"}>{version.riskProjectCount > 0 ? "风险发布" : "待发试制"}</Badge><span className="small muted">覆盖 {version.versionProjectCount} 个项目</span><Link href="/trial" className="archive-link" style={{ marginLeft: "auto" }}>去发布试制 <ArrowRight size={11} /></Link></div>)}
-            {trials.map((version) => <div className="project-flow-row" key={`trial-${version.requestId}`}><FlaskConical size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><Badge tone={version.releaseMode === "RISK" ? "rose" : "teal"}>{version.releaseMode === "RISK" ? "风险发布" : "绑定中"}</Badge><span className="small muted">节点 {version.requirementPassed}/{version.requirementTotal} · 待审批 {version.pendingFlowCount}</span>{version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}{version.bindingMode === "PENDING" ? <Badge tone="amber">待推送绑定</Badge> : version.bindingMode === "SKIPPED" ? <Badge tone="slate">跳过绑定</Badge> : <Badge tone="teal">绑定已推送</Badge>}<Link href={`/trial/${version.requestId}`} className="archive-link" style={{ marginLeft: "auto" }}>处理绑定 <ArrowRight size={11} /></Link></div>)}
+            {ready.map((version) => <div className="project-flow-row" key={`ready-${version.requestId}`}><GitBranch size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><Badge tone={version.riskProjectCount > 0 ? "rose" : "violet"}>{version.riskProjectCount > 0 ? "风险发布" : "待发试制"}</Badge><span className="small muted">覆盖 {version.versionProjectCount} 个项目</span><Link href={workflowHref("/trial", projectId)} className="archive-link" style={{ marginLeft: "auto" }}>去发布试制 <ArrowRight size={11} /></Link></div>)}
+            {trials.map((version) => <div className="project-flow-row" key={`trial-${version.requestId}`}><FlaskConical size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><Badge tone={version.releaseMode === "RISK" ? "rose" : "teal"}>{version.releaseMode === "RISK" ? "风险发布" : "绑定中"}</Badge><span className="small muted">节点 {version.requirementPassed}/{version.requirementTotal} · 待审批 {version.pendingFlowCount}</span>{version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}{version.bindingMode === "PENDING" ? <Badge tone="amber">待推送绑定</Badge> : version.bindingMode === "SKIPPED" ? <Badge tone="slate">跳过绑定</Badge> : <Badge tone="teal">绑定已推送</Badge>}<Link href={workflowHref(`/trial/${version.requestId}`, projectId)} className="archive-link" style={{ marginLeft: "auto" }}>处理绑定 <ArrowRight size={11} /></Link></div>)}
           </div>}
         </div>
       </section>
@@ -160,12 +162,12 @@ export default async function ProjectWorkspacePage({
             <tbody>{projectVersions.map((version) => {
               const meta = versionStatusFallback[version.status] ?? TRANSFER_REQUEST_STATUS_META[version.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? { label: version.status, tone: "slate" };
               return <tr key={version.requestId}>
-                <td><Link href={`/versions/${version.versionId}`} style={{ fontWeight: 600 }}>{version.packageName}</Link><div className="small muted">{version.packageCode} · {version.version}</div></td>
+                <td><Link href={workflowHref(`/versions/${version.versionId}`, projectId)} style={{ fontWeight: 600 }}>{version.packageName}</Link><div className="small muted">{version.packageCode} · {version.version}</div></td>
                 <td><Badge tone={meta.tone as "emerald" | "rose" | "amber" | "slate" | "sky" | "violet" | "orange"}>{meta.label}</Badge>{version.isOverdue ? <div style={{ marginTop: 4 }}><Badge tone="rose">已超期</Badge></div> : null}{version.bindingMode === "PENDING" && version.status === "TRIAL" ? <div style={{ marginTop: 4 }}><Badge tone="amber">待推送绑定</Badge></div> : null}{version.riskConclusion && <div className="small muted">风险结论：{version.riskConclusion.slice(0, 24)}{version.riskConclusion.length > 24 ? "…" : ""}</div>}</td>
-                <td>{version.batchId ? <Link href={`/integration/${version.batchId}`} className="archive-link">{version.batchCode} · {version.batchConclusion ?? "进行中"} <ArrowRight size={11} /></Link> : <span className="small muted">无批次</span>}</td>
+                <td>{version.batchId ? <Link href={workflowHref(`/integration/${version.batchId}`, projectId)} className="archive-link">{version.batchCode} · {version.batchConclusion ?? "进行中"} <ArrowRight size={11} /></Link> : <span className="small muted">无批次</span>}</td>
                 <td className="small mono">{version.trialFormNo ?? "—"}</td>
                 <td className="small mono">{version.formFlowNo ?? "—"}</td>
-                <td className="cell-actions"><div className="toolbar" style={{ justifyContent: "flex-end", gap: 8 }}><Link href={`/versions/${version.versionId}`} className="archive-link">全链路</Link>{["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status) && <Link href={`/trial/${version.requestId}`} className="archive-link">绑定</Link>}</div></td>
+                <td className="cell-actions"><div className="toolbar" style={{ justifyContent: "flex-end", gap: 8 }}><Link href={workflowHref(`/versions/${version.versionId}`, projectId)} className="archive-link">全链路</Link>{["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status) && <Link href={workflowHref(`/trial/${version.requestId}`, projectId)} className="archive-link">绑定</Link>}</div></td>
               </tr>;
             })}</tbody>
           </table></div>}
@@ -176,7 +178,7 @@ export default async function ProjectWorkspacePage({
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>待转正</h2><p className="small muted" style={{ marginTop: 3 }}>本项目版本全部绑定通过后进入待转正；转正按软件包版本全项目共享。</p></div><Badge tone="orange">{formal.length}</Badge></div>
         <div className="card-body" style={{ paddingTop: 12 }}>
           {formal.length === 0 ? <EmptyState title="暂无待转正版本" /> : <div className="project-flow-stack">{formal.map((version) => (
-            <div className="project-flow-row" key={`formal-${version.requestId}`}><ShieldCheck size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><span className="small muted">{version.requirementTotal === 0 ? "无需绑定验证" : `绑定节点 ${version.requirementPassed}/${version.requirementTotal} 通过`}</span>{version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}<Link href="/formal" className="archive-link" style={{ marginLeft: "auto" }}>去转正 <ArrowRight size={11} /></Link></div>
+            <div className="project-flow-row" key={`formal-${version.requestId}`}><ShieldCheck size={13} /><span style={{ fontWeight: 600 }}>{version.packageName}</span><span className="version-badge">{version.version}</span><span className="small muted">{version.requirementTotal === 0 ? "无需绑定验证" : `绑定节点 ${version.requirementPassed}/${version.requirementTotal} 通过`}</span>{version.isOverdue ? <Badge tone="rose">已超期</Badge> : null}<Link href={workflowHref("/formal", projectId)} className="archive-link" style={{ marginLeft: "auto" }}>去转正 <ArrowRight size={11} /></Link></div>
           ))}</div>}
         </div>
       </section>

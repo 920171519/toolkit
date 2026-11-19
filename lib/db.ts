@@ -16,8 +16,15 @@ function createDatabase(): DatabaseSync {
   database.exec("PRAGMA busy_timeout = 5000;");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec("PRAGMA journal_mode = WAL;");
-  database.exec(SCHEMA_SQL);
-  migrateSchema(database);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.exec(SCHEMA_SQL);
+    migrateSchema(database);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.close();
+    throw error;
+  }
   if (process.env.TOOLKIT_SKIP_SEED !== "1") {
     seedDatabase(database);
   }
@@ -68,6 +75,17 @@ function migrateSchema(database: DatabaseSync) {
   if (!requestColumns.some((column) => column.name === "risk_conclusion")) {
     database.exec("ALTER TABLE version_transfer_requests ADD COLUMN risk_conclusion TEXT");
   }
+  if (!requestColumns.some((column) => column.name === "integration_status")) {
+    database.exec(
+      "ALTER TABLE version_transfer_requests ADD COLUMN integration_status TEXT CHECK (integration_status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED'))",
+    );
+  }
+  const batchItemColumns = database
+    .prepare("PRAGMA table_info(batch_items)")
+    .all() as Array<{ name: string }>;
+  if (!batchItemColumns.some((column) => column.name === "issue_affected")) {
+    database.exec("ALTER TABLE batch_items ADD COLUMN issue_affected INTEGER NOT NULL DEFAULT 0 CHECK (issue_affected IN (0,1))");
+  }
   const packageColumns = database
     .prepare("PRAGMA table_info(packages)")
     .all() as Array<{ name: string }>;
@@ -95,21 +113,27 @@ function migrateSchema(database: DatabaseSync) {
     ["pushed_at", "ALTER TABLE binding_requirements ADD COLUMN pushed_at TEXT"],
     ["pushed_by", "ALTER TABLE binding_requirements ADD COLUMN pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
     ["decision_reason", "ALTER TABLE binding_requirements ADD COLUMN decision_reason TEXT"],
+    ["waived_at", "ALTER TABLE binding_requirements ADD COLUMN waived_at TEXT"],
+    ["waived_by", "ALTER TABLE binding_requirements ADD COLUMN waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
   ]) {
     if (!requirementColumns.some((column) => column.name === name)) database.exec(sql);
   }
   database.exec("UPDATE package_versions SET build_url = archive_url WHERE build_url IS NULL");
-  database.exec(
-    `UPDATE binding_requirements SET pushed_at = created_at
-     WHERE pushed_at IS NULL AND request_id IN (
-       SELECT id FROM version_transfer_requests WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL','VOID')
-     )`,
-  );
-  database.exec(
-    `UPDATE package_versions SET binding_mode = 'PUSHED'
-     WHERE binding_mode = 'PENDING' AND status IN ('TRIAL','PENDING_FORMAL','FORMAL')
-       AND EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = package_versions.id)`,
-  );
+  if (!requirementColumns.some((column) => column.name === "pushed_at")) {
+    database.exec(
+      `UPDATE binding_requirements SET pushed_at = created_at
+       WHERE request_id IN (
+         SELECT id FROM version_transfer_requests WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL','VOID')
+       )`,
+    );
+  }
+  if (!versionColumns.some((column) => column.name === "binding_mode")) {
+    database.exec(
+      `UPDATE package_versions SET binding_mode = 'PUSHED'
+       WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL')
+         AND EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = package_versions.id)`,
+    );
+  }
   database.exec(
     `INSERT OR IGNORE INTO project_pms (project_id, user_id, created_at)
      SELECT id, pm_user_id, datetime('now') FROM projects WHERE pm_user_id IS NOT NULL`,

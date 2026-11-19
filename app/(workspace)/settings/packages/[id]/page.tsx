@@ -73,11 +73,11 @@ export default async function PackageSettingsDetailPage({
               <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ id: pkg.id }} submitText="保存责任信息">
                 <div className="form-grid">
                   <label className="field">
-                    <span className="label">名称</span>
+                    <span className="label">软件包名称</span>
                     <input className="input" name="name" defaultValue={pkg.name} required />
                   </label>
                   <label className="field">
-                    <span className="label">编码</span>
+                    <span className="label">软件包编码</span>
                     <input className="input" name="code" defaultValue={pkg.code} required />
                   </label>
                   <label className="field">

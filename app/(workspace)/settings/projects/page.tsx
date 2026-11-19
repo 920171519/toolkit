@@ -15,6 +15,7 @@ import {
 import { ActionForm } from "@/components/action-form";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 import { FormDialog } from "@/components/form-dialog";
+import { ProjectContactPicker } from "@/components/project-contact-picker";
 import { SettingsTabs } from "@/components/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +51,8 @@ export default async function ProjectsSettingsPage({
               <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
                 <label className="field"><span className="label">项目名称</span><input className="input" name="name" placeholder="例如 星云 N2" required /></label>
                 <label className="field"><span className="label">项目编码</span><input className="input" name="code" placeholder="N2" required /></label>
-                <div className="field"><span className="label">PM <span className="required-mark">*</span><span className="hint">可多选</span></span><div className="person-check-grid">{people.map((person) => <label className="person-check" key={person.id}><input type="checkbox" name="pmUserIds" value={person.id} /><span>{person.name} · {person.employeeId}</span></label>)}</div></div>
-                <div className="field"><span className="label">软件经理 <span className="required-mark">*</span><span className="hint">可多选</span></span><div className="person-check-grid">{softwareManagers.map((person) => <label className="person-check" key={person.id}><input type="checkbox" name="softwareManagerIds" value={person.id} /><span>{person.name} · {person.employeeId}</span></label>)}</div></div>
+                <ProjectContactPicker label="PM" name="pmUserIds" options={people} />
+                <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} />
                 <label className="field"><span className="label">项目说明</span><textarea className="textarea" name="description" placeholder="简要说明项目定位与交付目标。" /></label>
                 <input type="hidden" name="status" value="ACTIVE" />
               </div>
@@ -112,28 +113,8 @@ export default async function ProjectsSettingsPage({
                             <span className="label">项目编码</span>
                             <input className="input" name="code" defaultValue={project.code} required />
                           </label>
-                          <div className="field span-2">
-                            <span className="label">PM <span className="required-mark">*</span><span className="hint">可多选</span></span>
-                            <div className="person-check-grid">
-                              {people.map((person) => (
-                                <label className="person-check" key={person.id}>
-                                  <input type="checkbox" name="pmUserIds" value={person.id} defaultChecked={project.pms.some((item) => item.id === person.id)} />
-                                  <span>{person.name} · {person.employeeId}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="field span-2">
-                            <span className="label">软件经理 <span className="required-mark">*</span><span className="hint">可多选</span></span>
-                            <div className="person-check-grid">
-                              {softwareManagers.map((person) => (
-                                <label className="person-check" key={person.id}>
-                                  <input type="checkbox" name="softwareManagerIds" value={person.id} defaultChecked={project.softwareManagers.some((item) => item.id === person.id)} />
-                                  <span>{person.name} · {person.employeeId}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
+                          <ProjectContactPicker label="PM" name="pmUserIds" options={people} defaultSelectedIds={project.pms.map((person) => person.id)} className="span-2" />
+                          <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} defaultSelectedIds={project.softwareManagers.map((person) => person.id)} className="span-2" />
                           <label className="field">
                             <span className="label">状态</span>
                             <select className="select" name="status" defaultValue={project.status}>

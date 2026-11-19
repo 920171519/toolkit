@@ -5,11 +5,14 @@ import { ArrowLeft, ClipboardCheck, FileText, GitBranch, ShieldAlert } from "luc
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
+import { requireWorkflowProject } from "@/lib/project-scope";
+import { workflowHref } from "@/lib/workflow-links";
 import { getBatchDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
 import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
+import { BatchConclusionFields } from "@/components/batch-conclusion-fields";
 import { Badge, BatchStatusPill, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,8 @@ export default async function BatchDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { batch, items, progressNotes } = data;
+  const project = requireWorkflowProject(user, search.project, batch.projectId);
+  const batchFormFields = { batchId: batch.id, scopeProjectId: project?.id };
   const manager = canManageProjectWorkflowForProject(user, batch.projectId);
   const canTest = canSubmitIntegrationConclusionForProject(user, batch.projectId);
   const changedItems = items.filter((item) => item.isChanged);
@@ -41,7 +46,7 @@ export default async function BatchDetailPage({
         eyebrow="Integration / Batch detail"
         title={`${batch.code} · ${batch.projectName ?? "未指定项目"}`}
         description={<>{batch.title} · 发起人 {batch.createdByName ?? "系统"} · {formatDateTime(batch.sentAt ?? batch.createdAt)} · {batch.changedCount} 个变更包 / {batch.itemCount} 个配套包</>}
-        actions={<><Link href="/integration" className="button button-secondary"><ArrowLeft size={14} />返回列表</Link><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></>}
+        actions={<><Link href={workflowHref("/integration", project?.id)} className="button button-secondary"><ArrowLeft size={14} />返回列表</Link><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></>}
       />
       <FlashMessage notice={notice} />
 
@@ -64,13 +69,17 @@ export default async function BatchDetailPage({
                   <tbody>
                     {items.map((item) => (
                       <tr key={item.id}>
-                        <td><Link href={`/packages?open=${item.packageId}`} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className="small muted">{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
+                        <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className="small muted">{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
                         <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
                         <td><span className="mono small">{item.trialVersions || "—"}</span></td>
                         <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
-                        <td><Link href={`/versions/${item.versionId}`} className="version-badge">{item.version}</Link><div><Link href={`/versions/${item.versionId}`} className="archive-link">全链路</Link></div>{item.isChanged && <div><Badge tone="amber">本次变更包</Badge></div>}</td>
+                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="version-badge">{item.version}</Link><div><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="archive-link">全链路</Link></div>{item.isChanged && <div><Badge tone="amber">本次变更包</Badge></div>}</td>
                         <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
-                        <td>{!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}</td>
+                        <td>
+                          {!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}
+                          {item.parallelRiskTrial && <div><Badge tone="amber">并行风险试制</Badge></div>}
+                          {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -84,7 +93,7 @@ export default async function BatchDetailPage({
             <div className="card-header"><div><h2 style={{ fontSize: 18 }}>集成测试进展</h2><p className="small muted" style={{ marginTop: 3 }}>本项目集成测试负责人可随时记录测试进展、阻塞和风险。</p></div><Badge tone="slate">{progressNotes.length} 条</Badge></div>
             <div className="card-body" style={{ paddingTop: 12 }}>
               {canTest && (
-                <ActionForm action={addBatchProgressAction} testId="add-batch-progress-form" hidden={{ batchId: batch.id }} submitText="提交进展说明" submitClassName="button-sm">
+                <ActionForm action={addBatchProgressAction} testId="add-batch-progress-form" hidden={batchFormFields} submitText="提交进展说明" submitClassName="button-sm">
                   <label className="field"><span className="label">进展说明</span><textarea className="textarea" name="content" required minLength={2} placeholder="记录本轮测试进展、发现的问题、阻塞项或下一步安排。" /></label>
                 </ActionForm>
               )}
@@ -110,9 +119,9 @@ export default async function BatchDetailPage({
               <div className="card-header"><div><div className="eyebrow">Ready to send</div><h2 style={{ fontSize: 17, marginTop: 5 }}>确认发起转测</h2></div><GitBranch size={18} style={{ color: "var(--brand)" }} /></div>
               <div className="card-body" style={{ paddingTop: 14 }}>
                 <p className="note" style={{ marginBottom: 12 }}>发起后，本批次变更版本在 {batch.projectName} 项目下进入集成测试。不同项目或同项目的其他批次可以同时测试。</p>
-                <ActionForm action={sendBatchAction} hidden={{ batchId: batch.id }} submitText="发起转测" confirmMessage={`确认将 ${batch.code} 发起集成测试？`} />
+                <ActionForm action={sendBatchAction} hidden={batchFormFields} submitText="发起转测" confirmMessage={`确认将 ${batch.code} 发起集成测试？`} />
                 <div style={{ borderTop: "1px solid var(--line)", marginTop: 16, paddingTop: 14 }}>
-                  <ActionForm action={deleteDraftBatchAction} hidden={{ batchId: batch.id }} submitText="删除草稿" submitVariant="outline-danger" submitClassName="button-sm" confirmMessage="确认删除这个转测草稿？" />
+                  <ActionForm action={deleteDraftBatchAction} hidden={batchFormFields} submitText="删除草稿" submitVariant="outline-danger" submitClassName="button-sm" confirmMessage="确认删除这个转测草稿？" />
                 </div>
               </div>
             </section>
@@ -122,10 +131,9 @@ export default async function BatchDetailPage({
             <section className="card">
               <div className="card-header"><div><div className="eyebrow">Test conclusion</div><h2 style={{ fontSize: 17, marginTop: 5 }}>提交项目测试结论</h2></div><ClipboardCheck size={18} style={{ color: "var(--info)" }} /></div>
               <div className="card-body" style={{ paddingTop: 14 }}>
-                <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={{ batchId: batch.id }} submitText="提交验证结论">
+                <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论">
                   <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-                    <label className="field"><span className="label">测试结论</span><select className="select" name="conclusion" defaultValue="PASS"><option value="PASS">测试通过</option><option value="FAIL">测试不通过</option><option value="BLOCKED">无法完成验证</option></select></label>
-                    <label className="field"><span className="label">问题归属</span><select className="select" name="issueAttribution" defaultValue="NONE"><option value="NONE">未发现问题</option><option value="PACKAGE_RELATED">问题与软件包相关</option><option value="NOT_PACKAGE_RELATED">问题与软件包无关</option><option value="UNKNOWN">原因待定位 / 无测试条件</option></select></label>
+                    <BatchConclusionFields items={items.map(({ versionId, packageName, version, parallelRiskTrial }) => ({ versionId, packageName, version, parallelRiskTrial }))} />
                     <label className="field"><span className="label">测试总结</span><textarea className="textarea" name="testSummary" required minLength={10} placeholder="说明本项目验证范围、通过情况与问题定位。" /></label>
                     <label className="field"><span className="label">验证报告 <span className="required-mark">*</span><span className="hint">PDF / 图片 / Word / Excel / TXT / ZIP，≤15MB</span></span><input className="input" name="reportFile" type="file" required accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt,.zip" /></label>
                   </div>
@@ -138,7 +146,7 @@ export default async function BatchDetailPage({
           {batch.status === "IN_TEST" && manager && (
             <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 16 }}>终止本轮测试</h2></div></div><div className="card-body" style={{ paddingTop: 12 }}>
               <details><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写原因并终止</summary><div style={{ marginTop: 12 }}>
-                <ActionForm action={terminateBatchAction} testId="terminate-batch-form" hidden={{ batchId: batch.id }} submitText="确认终止测试" submitVariant="danger" confirmMessage="终止后，本批次变更版本在该项目下退回待转测。确认继续？">
+                <ActionForm action={terminateBatchAction} testId="terminate-batch-form" hidden={batchFormFields} submitText="确认终止测试" submitVariant="danger" confirmMessage="终止后，本批次变更版本在该项目下退回待转测。确认继续？">
                   <label className="field"><span className="label">终止原因</span><textarea className="textarea" name="reason" required minLength={4} placeholder="说明终止原因和后续安排。" /></label>
                 </ActionForm>
               </div></details>
@@ -161,7 +169,7 @@ export default async function BatchDetailPage({
             <section className="card"><div className="card-header"><div><h2 style={{ fontSize: 17 }}>测试已终止</h2></div><Badge tone="rose">已终止</Badge></div><div className="card-body" style={{ paddingTop: 12 }}><div className="detail-row"><dt>终止时间</dt><dd>{formatDateTime(batch.terminatedAt)}</dd></div><div className="risk-callout" data-tone="danger" style={{ marginTop: 12 }}>{batch.terminateReason ?? "未填写终止原因"}</div></div></section>
           )}
 
-          <section className="card card-muted"><div className="card-body"><h3 style={{ fontSize: 13 }}>项目测试提示</h3><p className="note" style={{ marginTop: 7 }}>不同项目的软件包配套和测试批次相互独立。一个项目测试未结束时，仍可为同一软件包提交新版本或为其他项目安排测试。</p><div style={{ marginTop: 8 }}><Link href="/submissions" className="archive-link">查看按项目分发的转测申请</Link></div></div></section>
+          <section className="card card-muted"><div className="card-body"><h3 style={{ fontSize: 13 }}>项目测试提示</h3><p className="note" style={{ marginTop: 7 }}>不同项目的软件包配套和测试批次相互独立。一个项目测试未结束时，仍可为同一软件包提交新版本或为其他项目安排测试。</p><div style={{ marginTop: 8 }}><Link href={workflowHref("/submissions", project?.id)} className="archive-link">查看待转测申请</Link></div></div></section>
         </aside>
       </div>
     </>

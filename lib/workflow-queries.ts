@@ -1,6 +1,7 @@
 import { all, one } from "./db";
 import { getIntegrationManagedProjectIds } from "./access";
 import type { SessionUser } from "./types";
+import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 
 export type ProjectOption = { id: number; name: string; code: string; status: string };
 
@@ -26,7 +27,7 @@ export function getWorkflowProjectScope(user: SessionUser): number[] | null {
   if (user.role === "ADMIN") return null;
   if (user.role === "SOFTWARE_MANAGER") return getManagedProjectIds(user);
   const integrationProjects = getIntegrationManagedProjectIds(user.id);
-  if (integrationProjects.length > 0) return integrationProjects;
+  if (user.role === "INTEGRATION_TESTER" || integrationProjects.length > 0) return integrationProjects;
   return null;
 }
 
@@ -72,7 +73,12 @@ export function getPendingTransferGroups(projectIds: number[] | null = null): Pe
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
-     WHERE r.status = 'PENDING'
+     WHERE r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
+       AND pr.status != 'ARCHIVED'
+       AND NOT EXISTS (
+         SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+         WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT'
+       )
      ORDER BY pr.sort_order, pr.id, pv.submitted_at DESC`,
   );
   const groups = new Map<number, PendingTransferGroup>();
@@ -126,8 +132,14 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
      ORDER BY p.name`,
     projectId,
   );
-  const projectRequests = all<{ requestId: number; versionId: number; status: string }>(
-    `SELECT r.id AS requestId, r.package_version_id AS versionId, r.status
+  const projectRequests = all<{ requestId: number; versionId: number; status: string; reserved: number }>(
+    `SELECT r.id AS requestId, r.package_version_id AS versionId,
+            CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
+              THEN COALESCE(r.integration_status, r.status) ELSE r.status END AS status,
+            EXISTS (
+              SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+              WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT'
+            ) AS reserved
      FROM version_transfer_requests r WHERE r.project_id = ?`,
     projectId,
   );
@@ -147,7 +159,7 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
        ORDER BY submitted_at DESC, id DESC`,
       pkg.packageId,
     );
-    const versions = versionRows.map((version) => ({
+    const versions = versionRows.filter((version) => !requestByVersion.get(version.id)?.reserved).map((version) => ({
       id: version.id,
       version: version.version,
       status: version.status,
@@ -216,6 +228,7 @@ export type BatchSummaryRow = {
 };
 
 export function getBatches(limit = 80, projectIds: number[] | null = null): BatchSummaryRow[] {
+  if (projectIds?.length === 0) return [];
   const rows = all<Omit<BatchSummaryRow, "itemCount" | "changedCount"> & { itemCount: number; changedCount: number }>(
     `SELECT b.id, b.code, b.title, b.status, b.project_id AS projectId,
             pr.name AS projectName, pr.code AS projectCode, pr.software_manager_id AS softwareManagerId, b.conclusion,
@@ -229,14 +242,16 @@ export function getBatches(limit = 80, projectIds: number[] | null = null): Batc
      FROM integration_batches b
      JOIN projects pr ON pr.id = b.project_id
      LEFT JOIN users c ON c.id = b.created_by
+     ${projectIds ? `WHERE b.project_id IN (${projectIds.map(() => "?").join(",")})` : ""}
      ORDER BY COALESCE(b.sent_at, b.created_at) DESC, b.id DESC LIMIT ?`,
+     ...(projectIds ?? []),
     limit,
   ).map((batch) => ({
     ...batch,
     itemCount: Number(batch.itemCount),
     changedCount: Number(batch.changedCount),
   }));
-  return filterByProject(rows, projectIds);
+  return rows;
 }
 
 export type BatchItemRow = {
@@ -256,6 +271,8 @@ export type BatchItemRow = {
   previousTestVersion: string | null;
   changedVsPrevious: boolean;
   ownerName: string | null;
+  parallelRiskTrial: boolean;
+  issueAffected: boolean;
 };
 
 export type BatchProgressNote = {
@@ -270,16 +287,24 @@ export type BatchDetailRow = { batch: BatchSummaryRow; items: BatchItemRow[]; pr
 export function getBatchDetail(batchId: number): BatchDetailRow | null {
   const batch = getBatches(500).find((item) => item.id === batchId);
   if (!batch) return null;
-  const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious"> & { isChanged: number; changedVsPrevious: number }>(
+  const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious" | "parallelRiskTrial" | "issueAffected"> & {
+    isChanged: number;
+    changedVsPrevious: number;
+    parallelRiskTrial: number;
+    issueAffected: number;
+  }>(
     `SELECT bi.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
             bi.package_version_id AS versionId, bi.version, bi.archive_url AS archiveUrl,
             bi.change_summary AS changeSummary, bi.is_changed AS isChanged,
-            bi.transfer_request_id AS transferRequestId, r.status AS requestStatus,
+            bi.transfer_request_id AS transferRequestId, COALESCE(r.integration_status, r.status) AS requestStatus,
             bi.formal_version AS formalVersion, bi.trial_versions AS trialVersions,
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
-            u.name AS ownerName
+            u.name AS ownerName, bi.issue_affected AS issueAffected,
+            bi.transfer_request_id IS NOT NULL AND pv.release_mode = 'RISK'
+              AND pv.status IN ('TRIAL','PENDING_FORMAL') AS parallelRiskTrial
      FROM batch_items bi
      JOIN packages p ON p.id = bi.package_id
+     JOIN package_versions pv ON pv.id = bi.package_version_id
      LEFT JOIN version_transfer_requests r ON r.id = bi.transfer_request_id
      LEFT JOIN users u ON u.id = p.owner_id
      WHERE bi.batch_id = ?
@@ -289,6 +314,8 @@ export function getBatchDetail(batchId: number): BatchDetailRow | null {
     ...item,
     isChanged: Boolean(item.isChanged),
     changedVsPrevious: Boolean(item.changedVsPrevious),
+    parallelRiskTrial: Boolean(item.parallelRiskTrial),
+    issueAffected: Boolean(item.issueAffected),
   }));
   const progressNotes = all<BatchProgressNote>(
     `SELECT n.id, n.content, n.created_at AS createdAt, u.name AS authorName
@@ -310,6 +337,7 @@ export type TrialReadyVersion = {
   packageCode: string;
   version: string;
   integrationStatus: string;
+  versionStatus: string;
   changeSummary: string;
   archiveUrl: string;
   submittedByName: string | null;
@@ -326,19 +354,29 @@ export type TrialReadyVersion = {
   batchReportUrl: string | null;
   versionProjectCount: number;
   riskProjectCount: number;
+  ongoingTestCount: number;
 };
+
+const ONGOING_TEST_COUNT_SQL = `(
+  SELECT COUNT(DISTINCT b.id) FROM batch_items bi
+  JOIN integration_batches b ON b.id = bi.batch_id
+  JOIN projects p ON p.id = b.project_id
+  WHERE bi.package_version_id = pv.id AND bi.transfer_request_id IS NOT NULL
+    AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED'
+)`;
 
 export function getTrialReadyVersions(projectIds: number[] | null = null): TrialReadyVersion[] {
   return filterByProject(
     all<TrialReadyVersion>(
       `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-              pv.version, r.status AS integrationStatus, pv.change_summary AS changeSummary,
+              pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
               pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
               o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
               r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
               b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
+              ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
               (SELECT COUNT(*) FROM version_transfer_requests rr
                JOIN projects pp ON pp.id = rr.project_id
                WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED') AS versionProjectCount,
@@ -359,7 +397,8 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE r.status IN ('PASSED','FAILED','BLOCKED')
+       WHERE pr.status != 'ARCHIVED' AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')
+         AND r.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
          AND NOT EXISTS (
            SELECT 1 FROM package_usages u2
            JOIN projects p2 ON p2.id = u2.project_id
@@ -368,7 +407,7 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
                SELECT 1 FROM version_transfer_requests r2
                WHERE r2.package_version_id = r.package_version_id
                  AND r2.project_id = p2.id
-                 AND r2.status IN ('PASSED','FAILED','BLOCKED')
+                 AND r2.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
              )
          )
        ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
@@ -405,6 +444,7 @@ export type TrialVersionRow = {
   batchConclusion: string | null;
   requirementTotal: number;
   requirementPassed: number;
+  requirementWaived: number;
   pendingFlowCount: number;
 };
 
@@ -425,6 +465,7 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
               b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
+              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived,
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
@@ -443,6 +484,7 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
     ...version,
     requirementTotal: Number(version.requirementTotal),
     requirementPassed: Number(version.requirementPassed),
+    requirementWaived: Number(version.requirementWaived),
     pendingFlowCount: Number(version.pendingFlowCount),
   }));
 }
@@ -482,6 +524,8 @@ export type BindingRequirementRow = {
   pushedAt: string | null;
   pushedByName: string | null;
   decisionReason: string | null;
+  waivedAt: string | null;
+  waivedByName: string | null;
   approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string }>;
   flows: BindingFlowRow[];
 };
@@ -498,6 +542,8 @@ export type TrialDetail = {
     versionId: number;
     version: string;
     status: string;
+    integrationStatus: string | null;
+    ongoingTestCount: number;
     changeSummary: string;
     archiveUrl: string;
     trialFormNo: string | null;
@@ -512,6 +558,7 @@ export type TrialDetail = {
     batchCode: string | null;
     batchConclusion: string | null;
     voidReason: string | null;
+    voidKind: string | null;
     voidedAt: string | null;
     ownerName: string | null;
     softwareManagerName: string | null;
@@ -525,6 +572,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode,
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.id AS versionId,
             pv.version, r.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
+            r.integration_status AS integrationStatus, ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
             r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
             pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
@@ -533,7 +581,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
                  AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
                  THEN 1 ELSE 0 END AS isOverdue,
             b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
-            r.void_reason AS voidReason, r.voided_at AS voidedAt, o.name AS ownerName,
+            r.void_reason AS voidReason, pv.void_kind AS voidKind, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
@@ -553,13 +601,15 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             n.name AS nodeName, br.required_count AS requiredCount, br.status,
             br.binding_owner_id AS bindingOwnerId, bo.name AS bindingOwnerName,
             br.approver_id AS approverId, ba.name AS approverName,
-            br.pushed_at AS pushedAt, pu.name AS pushedByName, br.decision_reason AS decisionReason
+            br.pushed_at AS pushedAt, pu.name AS pushedByName, br.decision_reason AS decisionReason,
+            br.waived_at AS waivedAt, wu.name AS waivedByName
      FROM binding_requirements br
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
      LEFT JOIN users bo ON bo.id = br.binding_owner_id
      LEFT JOIN users ba ON ba.id = br.approver_id
      LEFT JOIN users pu ON pu.id = br.pushed_by
+     LEFT JOIN users wu ON wu.id = br.waived_by
      WHERE br.request_id = ? ORDER BY n.sort_order`,
     requestId,
   ).map((requirement) => {
@@ -626,6 +676,7 @@ export type PendingFormalVersion = {
   softwareManagerId: number | null;
   requirementTotal: number;
   requirementPassed: number;
+  requirementWaived: number;
   trialOverdueDays: number;
   isOverdue: number;
 };
@@ -643,7 +694,8 @@ export function getPendingFormalVersions(projectIds: number[] | null = null): Pe
                    AND datetime(r.trial_released_at, '+' || pg.trial_overdue_days || ' days') < datetime('now')
                    THEN 1 ELSE 0 END AS isOverdue,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed
+              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
+              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
@@ -659,6 +711,7 @@ export function getPendingFormalVersions(projectIds: number[] | null = null): Pe
     ...version,
     requirementTotal: Number(version.requirementTotal),
     requirementPassed: Number(version.requirementPassed),
+    requirementWaived: Number(version.requirementWaived),
   }));
 }
 
@@ -734,12 +787,13 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     updatedAt: string;
   }>(
     `SELECT r.id AS requestId, p.id AS packageId, p.name AS packageName, pv.version,
-            pr.name AS projectName, r.status, r.updated_at AS updatedAt
+            pr.name AS projectName, COALESCE(r.integration_status, r.status) AS status, r.updated_at AS updatedAt
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE pv.submitted_by = ? AND r.status IN ('FAILED','BLOCKED')
+     WHERE pv.submitted_by = ? AND COALESCE(r.integration_status, r.status) IN ('FAILED','BLOCKED')
+       AND COALESCE(pv.void_kind, '') != 'RISK_TEST_FAILURE'
      ORDER BY r.updated_at DESC`,
     user.id,
   );
@@ -751,6 +805,38 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       href: `/packages?open=${failure.packageId}`,
       tone: failure.status === "FAILED" ? "danger" : "warning",
       at: failure.updatedAt,
+    });
+  }
+
+  const voidedRiskTrials = all<{
+    versionId: number;
+    packageName: string;
+    version: string;
+    voidReason: string;
+    voidedAt: string;
+  }>(
+    `SELECT pv.id AS versionId, p.name AS packageName, pv.version, pv.void_reason AS voidReason, pv.voided_at AS voidedAt
+     FROM package_versions pv JOIN packages p ON p.id = pv.package_id
+     WHERE pv.void_kind = 'RISK_TEST_FAILURE' AND (
+       pv.submitted_by = ? OR EXISTS (
+         SELECT 1 FROM version_transfer_requests r
+         JOIN project_software_managers psm ON psm.project_id = r.project_id
+         WHERE r.package_version_id = pv.id AND psm.user_id = ?
+       ) OR EXISTS (
+         SELECT 1 FROM binding_requirements br
+         WHERE br.package_version_id = pv.id AND br.binding_owner_id = ? AND br.pushed_at IS NOT NULL
+       )
+     ) ORDER BY pv.voided_at DESC`,
+    user.id, user.id, user.id,
+  );
+  for (const trial of voidedRiskTrials) {
+    alerts.push({
+      key: `void-risk-trial-${trial.versionId}`,
+      title: `${trial.packageName} ${trial.version} 风险试制已作废`,
+      description: trial.voidReason,
+      href: `/versions/${trial.versionId}`,
+      tone: "danger",
+      at: trial.voidedAt,
     });
   }
 
@@ -799,9 +885,10 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     projectName: string;
     nodeName: string;
     voidReason: string | null;
+    status: string;
   }>(
     `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId,
-            pr.name AS projectName, n.name AS nodeName, r.void_reason AS voidReason
+            pr.name AS projectName, n.name AS nodeName, r.void_reason AS voidReason, f.status
      FROM binding_flows f
      JOIN binding_requirements br ON br.id = f.requirement_id
      JOIN version_transfer_requests r ON r.id = br.request_id
@@ -809,14 +896,15 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = f.project_id
      JOIN project_nodes n ON n.id = f.node_id
-     WHERE f.submitted_by = ? AND f.status = 'PENDING' AND r.status = 'VOID'
+     WHERE f.submitted_by = ? AND r.status = 'VOID'
+       AND (f.status = 'PENDING' OR (f.status = 'APPROVED' AND pv.void_kind = 'RISK_TEST_FAILURE'))
      ORDER BY f.submitted_at DESC`,
     user.id,
   );
   for (const flow of voidFlows) {
     alerts.push({
       key: `void-flow-${flow.id}`,
-      title: "试制版本已作废，请撤销绑定电子流",
+      title: flow.status === "APPROVED" ? "试制版本已作废，请撤销已通过的外部绑定" : "试制版本已作废，请撤销绑定电子流",
       description: `${flow.packageName} ${flow.version} · ${flow.projectName}/${flow.nodeName} 已作废，请撤销电子流 ${flow.flowNo}。${flow.voidReason ? `原因：${flow.voidReason}` : ""}`,
       href: `/trial/${flow.requestId}`,
       tone: "danger",
@@ -881,7 +969,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN projects pr ON pr.id = f.project_id
      JOIN project_nodes n ON n.id = f.node_id
      LEFT JOIN users su ON su.id = f.submitted_by
-     WHERE f.approver_id = ? AND f.status = 'PENDING' AND r.status = 'TRIAL'
+     WHERE f.approver_id = ? AND f.status = 'PENDING' AND br.status = 'PENDING' AND r.status = 'TRIAL'
      ORDER BY f.submitted_at`,
     user.id,
   );
@@ -1099,6 +1187,7 @@ export type VersionTrace = {
     projectName: string;
     projectCode: string;
     status: string;
+    integrationStatus: string | null;
     trialFormNo: string | null;
     trialReleasedAt: string | null;
     formalReleasedAt: string | null;
@@ -1128,7 +1217,7 @@ export type VersionTrace = {
   details: TrialDetail[];
 };
 
-export function getVersionTrace(versionId: number): VersionTrace | null {
+export function getVersionTrace(versionId: number, projectId?: number): VersionTrace | null {
   const version = one<VersionTrace["version"]>(
     `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version,
             pv.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
@@ -1146,7 +1235,8 @@ export function getVersionTrace(versionId: number): VersionTrace | null {
   if (!version) return null;
   const requests = all<VersionTrace["requests"][number]>(
     `SELECT r.id AS requestId, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode,
-            r.status, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
+            r.status, r.integration_status AS integrationStatus, r.trial_form_no AS trialFormNo,
+            r.trial_released_at AS trialReleasedAt,
             r.formal_released_at AS formalReleasedAt, r.form_flow_no AS formFlowNo,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
             b.id AS batchId, b.code AS batchCode, b.status AS batchStatus,
@@ -1157,9 +1247,11 @@ export function getVersionTrace(versionId: number): VersionTrace | null {
      LEFT JOIN integration_batches b ON b.id = (
        SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
      )
-     WHERE r.package_version_id = ?
+     WHERE r.package_version_id = ? AND (? IS NULL OR pr.id = ?)
      ORDER BY pr.sort_order`,
     versionId,
+    projectId ?? null,
+    projectId ?? null,
   );
   const batches = all<VersionTrace["batches"][number]>(
     `SELECT DISTINCT b.id, b.code, pr.id AS projectId, pr.name AS projectName, b.status,
@@ -1168,10 +1260,20 @@ export function getVersionTrace(versionId: number): VersionTrace | null {
      FROM batch_items bi
      JOIN integration_batches b ON b.id = bi.batch_id
      JOIN projects pr ON pr.id = b.project_id
-     WHERE bi.package_version_id = ?
+     WHERE bi.package_version_id = ? AND (? IS NULL OR pr.id = ?)
      ORDER BY b.created_at DESC`,
     versionId,
+    projectId ?? null,
+    projectId ?? null,
   );
+  if (projectId && requests.length === 0 && batches.length === 0) {
+    const standalone = one<{ id: number }>(
+      `SELECT pv.id FROM package_versions pv WHERE pv.id = ? AND ${STANDALONE_VERSION_IN_PROJECT_SQL}`,
+      versionId,
+      projectId,
+    );
+    if (!standalone) return null;
+  }
   const details = requests
     .map((request) => getTrialDetail(request.requestId))
     .filter((detail): detail is TrialDetail => detail !== null);
@@ -1220,5 +1322,38 @@ export function getProjectVersionRows(projectId: number): ProjectVersionRow[] {
      WHERE r.project_id = ?
      ORDER BY pv.submitted_at DESC, pv.id DESC`,
     projectId,
+  );
+}
+
+export function getTraceVersionRows(
+  query: string,
+  projectId: number | undefined,
+  packageId: number | undefined,
+  limit: number,
+  offset: number,
+) {
+  const terms = query.split(/\s+/).filter(Boolean);
+  return all<Pick<VersionTrace["version"], "id" | "packageId" | "packageName" | "packageCode" | "version" | "status" | "submittedAt">>(
+    `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
+            pv.version, pv.status, pv.submitted_at AS submittedAt
+     FROM package_versions pv JOIN packages p ON p.id = pv.package_id
+     WHERE (? IS NULL OR p.id = ?)
+       AND (? IS NULL OR EXISTS (
+         SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
+       ) OR EXISTS (
+         SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+         WHERE bi.package_version_id = pv.id AND b.project_id = ?
+       ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))
+       ${terms.map(() => "AND instr(lower(p.code || ' ' || p.name || ' ' || pv.version), lower(?)) > 0").join(" ")}
+     ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT ? OFFSET ?`,
+    packageId ?? null,
+    packageId ?? null,
+    projectId ?? null,
+    projectId ?? null,
+    projectId ?? null,
+    projectId ?? null,
+    ...terms,
+    limit,
+    offset,
   );
 }

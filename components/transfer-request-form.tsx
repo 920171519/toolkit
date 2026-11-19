@@ -12,7 +12,7 @@ type PackageOption = {
   ownerName: string | null;
 };
 
-export function TransferRequestForm({ packages }: { packages: PackageOption[] }) {
+export function TransferRequestForm({ packages, scopeProjectId }: { packages: PackageOption[]; scopeProjectId?: number }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(submitTransferAction, {});
   const [search, setSearch] = useState("");
   const [packageId, setPackageId] = useState<number | null>(null);
@@ -39,6 +39,7 @@ export function TransferRequestForm({ packages }: { packages: PackageOption[] })
   return (
     <form action={formAction} data-testid="transfer-form">
       <input type="hidden" name="packageId" value={packageId ?? ""} />
+      {scopeProjectId !== undefined && <input type="hidden" name="scopeProjectId" value={scopeProjectId} />}
       <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
         <div className="field">
           <span className="label">软件包 <span className="required-mark">*</span><span className="hint">支持搜索</span></span>

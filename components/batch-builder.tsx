@@ -16,24 +16,28 @@ export function BatchBuilder({
   project,
   candidates,
   defaultCode,
+  scopeProjectId,
 }: {
   project: ProjectOption;
   candidates: BatchCandidatePackage[];
   defaultCode: string;
+  scopeProjectId?: number;
 }) {
   const initial = useMemo(
     () => new Map(candidates.map((candidate) => [candidate.packageId, candidate.defaultVersionId])),
     [candidates],
   );
   const [selected, setSelected] = useState<Map<number, number>>(initial);
+  const [excluded, setExcluded] = useState<Set<number>>(() => new Set());
 
   const rows = candidates.map((candidate) => {
     const versionId = selected.get(candidate.packageId) ?? candidate.defaultVersionId;
     const version = candidate.versions.find((item) => item.id === versionId) ?? null;
     return { candidate, versionId, version };
   });
-  const changedCount = rows.filter((row) => row.version?.requestStatus === "PENDING").length;
-  const items = rows.map((row) => ({ packageId: row.candidate.packageId, packageVersionId: row.versionId }));
+  const included = rows.filter((row) => !excluded.has(row.candidate.packageId));
+  const changedCount = included.filter((row) => row.version?.requestStatus === "PENDING").length;
+  const items = included.map((row) => ({ packageId: row.candidate.packageId, packageVersionId: row.versionId }));
 
   return (
     <ActionForm
@@ -41,9 +45,9 @@ export function BatchBuilder({
       testId="batch-builder-form"
       submitText="创建整套配套批次"
       submitVariant="primary"
-      hidden={{ projectId: project.id, items: JSON.stringify(items) }}
+      hidden={{ projectId: project.id, scopeProjectId, items: JSON.stringify(items) }}
       disabled={changedCount === 0}
-      footerNote={<>项目：<strong>{project.name}</strong> · 整套 <strong>{candidates.length}</strong> 个软件包，其中 <strong>{changedCount}</strong> 个待测版本。默认沿用上次转测版本，有变更的软件包默认选择本次待转测版本。</>}
+      footerNote={<>项目：<strong>{project.name}</strong> · 本轮选中 <strong>{items.length}/{candidates.length}</strong> 个软件包，其中 <strong>{changedCount}</strong> 个待测版本。</>}
     >
       <div className="form-grid" style={{ marginBottom: 16 }}>
         <label className="field"><span className="label">批次号</span><input className="input" name="code" defaultValue={defaultCode} required pattern="[Bb][0-9]{3,}" /></label>
@@ -51,7 +55,7 @@ export function BatchBuilder({
       </div>
 
       <div className="toolbar-spread" style={{ marginBottom: 9 }}>
-        <div><h3 style={{ fontSize: 16 }}>本项目整套配套与版本选择</h3><p className="small muted" style={{ marginTop: 2 }}>所有软件包必须一起转测。默认选择上次转测版本；本次有变更的包默认本次待转测版本。可通过下拉框改为历史版本。</p></div>
+        <div><h3 style={{ fontSize: 16 }}>本项目整套配套与版本选择</h3><p className="small muted" style={{ marginTop: 2 }}>默认纳入全部有可用版本的包。取消勾选可留到下轮，待转测申请会保留。可通过下拉框改选历史版本。</p></div>
         <Badge tone={changedCount > 0 ? "amber" : "rose"}>{changedCount} 个待测版本</Badge>
       </div>
 
@@ -62,6 +66,7 @@ export function BatchBuilder({
           <table className="data-table">
             <thead>
               <tr>
+                <th>本轮转测</th>
                 <th>软件包</th>
                 <th>当前正式版本</th>
                 <th>当前试制版本</th>
@@ -74,6 +79,22 @@ export function BatchBuilder({
               {rows.map(({ candidate, versionId, version }) => (
                 <tr key={candidate.packageId}>
                   <td>
+                    <input
+                      type="checkbox"
+                      checked={!excluded.has(candidate.packageId)}
+                      aria-label={`本轮转测 ${candidate.packageName}`}
+                      onChange={(event) => {
+                        const include = event.target.checked;
+                        setExcluded((current) => {
+                          const next = new Set(current);
+                          if (include) next.delete(candidate.packageId);
+                          else next.add(candidate.packageId);
+                          return next;
+                        });
+                      }}
+                    />
+                  </td>
+                  <td>
                     <span style={{ fontWeight: 600 }}>{candidate.packageName}</span>
                     <div className="small muted">{candidate.packageCode} · {candidate.ownerName ?? "责任人待定"}</div>
                   </td>
@@ -84,6 +105,7 @@ export function BatchBuilder({
                     <select
                       className="select"
                       value={versionId}
+                      disabled={excluded.has(candidate.packageId)}
                       aria-label={`${candidate.packageName} 本次转测版本`}
                       onChange={(event) => {
                         const value = Number(event.target.value);
@@ -100,11 +122,13 @@ export function BatchBuilder({
                         </option>
                       ))}
                     </select>
-                    {version?.requestStatus === "PENDING" && <div style={{ marginTop: 4 }}><Badge tone="amber">本次新增转测</Badge></div>}
+                    {!excluded.has(candidate.packageId) && version?.requestStatus === "PENDING" && <div style={{ marginTop: 4 }}><Badge tone="amber">本次新增转测</Badge></div>}
                     {(version?.requestStatus === "VOID" || version?.status === "VOID") && <div className="void-version-warning">该版本在本项目已作废，如继续选择请确认已修复问题并重新验证。</div>}
                   </td>
                   <td>
-                    {!candidate.previousTestVersion
+                    {excluded.has(candidate.packageId)
+                      ? <Badge tone="slate">本轮不转测</Badge>
+                      : !candidate.previousTestVersion
                       ? <Badge tone="slate">首次转测</Badge>
                       : version?.requestStatus === "PENDING"
                         ? <Badge tone="violet">本次有变更</Badge>
@@ -121,7 +145,7 @@ export function BatchBuilder({
 
       <div className="archive-preview" style={{ marginTop: 9 }}>
         <Archive size={11} style={{ display: "inline", marginRight: 4, verticalAlign: -1 }} />
-        创建批次时会固化每行选择的版本、归档地址、当前正式/试制版本及上次转测版本。没有待测版本的配套不能创建批次。
+        创建批次时会固化本轮选中包的版本和归档地址。至少选择一个待测版本才能创建批次。
       </div>
     </ActionForm>
   );

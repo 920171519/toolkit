@@ -547,6 +547,7 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 /* Multiple project contacts */
 .person-check-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow: auto; padding: 2px 0; }
 .person-check { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 11px; cursor: pointer; }
+.person-check[hidden] { display: none; }
 .person-check input { accent-color: var(--brand); margin: 0; }
 .person-check:has(input:checked) { border-color: var(--brand-border); background: var(--brand-soft); color: var(--brand); }
 

@@ -3,6 +3,7 @@ import { ExternalLink, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
 import { hasAreaLeadership } from "@/lib/access";
+import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { Avatar } from "@/components/ui";
 import { Brand } from "@/components/brand";
 import { SidebarNav, type SidebarItem } from "@/components/sidebar-nav";
@@ -45,6 +46,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       label: "转正发布",
       icon: "formal",
     },
+    { href: "/versions", label: "版本全链路", icon: "versions" },
   ];
 
   const configItems: SidebarItem[] = [
@@ -59,9 +61,10 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       <aside className="sidebar">
         <Brand href="/dashboard" />
         <SidebarNav
+          workflowProjects={getWorkflowProjectOptions(user, true)}
           groups={[
             { label: "部门协同", items: departmentItems },
-            { label: "软件包流程", items: workflowItems },
+            { label: "软件包流程", items: workflowItems, projectScoped: true },
             ...(configItems.length > 0
               ? [{ label: "基础配置", items: configItems }]
               : []),
