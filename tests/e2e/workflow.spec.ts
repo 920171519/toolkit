@@ -371,11 +371,13 @@ test.describe("工程协同台项目维度流程", () => {
     acceptDialogs(page);
     await login(page, "MGR001");
     await page.goto("/trial");
-    const readyCard = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.0" }).filter({ hasText: "星云 N1" }).first();
-    await expect(readyCard).toContainText("待发试制");
-    await readyCard.getByText("发布全项目共享试制", { exact: true }).click();
-    await readyCard.locator('input[name="trialFormNo"]').fill("EF-TRIAL-N1-OTA-160");
-    await readyCard.getByRole("button", { name: "发布全项目共享试制版本" }).click();
+    const readyRow = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
+      .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.0" }).filter({ hasText: "星云 N1" });
+    await expect(readyRow).toContainText("待发试制");
+    await readyRow.getByRole("button", { name: "发布全项目共享试制", exact: true }).click();
+    const publication = page.getByRole("dialog", { name: "发布 1001OTA 1.6.0 试制" });
+    await publication.locator('input[name="trialFormNo"]').fill("EF-TRIAL-N1-OTA-160");
+    await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await expectFlash(page, "试制版本已发布");
     otaTrialUrl = page.url().split("?")[0];
     expect(otaTrialUrl).toMatch(/\/trial\/\d+$/);
@@ -559,10 +561,14 @@ test.describe("工程协同台项目维度流程", () => {
     acceptDialogs(page);
     await login(page, "MGR002");
     await page.goto("/trial");
-    const risk = page.locator("article.card-muted").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).first();
+    const risk = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
+      .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" });
     await expect(risk).toContainText("风险发布");
     await expect(risk).toContainText("未关联转测批次");
-    await expect(risk).toContainText("风险结论：");
+    await risk.getByRole("button", { name: "验收依据" }).click();
+    const evidence = page.getByRole("dialog", { name: "1001OTA 1.6.1 验收依据" });
+    await expect(evidence).toContainText("风险结论：");
+    await evidence.getByRole("button", { name: "关闭弹窗" }).click();
     await risk.getByText("发布全项目共享试制", { exact: true }).click();
     const publication = page.getByRole("dialog", { name: /发布 1001OTA 1.6.1 试制/ });
     await publication.getByRole("button", { name: "取消", exact: true }).click();
@@ -612,7 +618,7 @@ test.describe("工程协同台项目维度流程", () => {
     await draft.getByRole("button", { name: "发起转测" }).click();
     await expectFlash(page, "B953 已发起集成测试");
     await page.goto("/trial?project=1");
-    const pending = page.locator("article.card-muted").filter({ hasText: version });
+    const pending = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row").filter({ hasText: version });
     await expect(pending).toContainText("风险发布");
     await expect(pending).toContainText("B953");
     await pending.getByRole("button", { name: "发布全项目共享试制", exact: true }).click();
@@ -709,13 +715,14 @@ test.describe("工程协同台项目维度流程", () => {
     acceptDialogs(page);
     await login(page, "MGR001");
     await page.goto("/trial");
-    const card = page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" }).filter({ hasText: "星云 N1" }).first();
-    await expect(card).toContainText("放弃发布试制");
-    await card.getByText("放弃发布试制", { exact: true }).click();
-    await card.locator('textarea[name="conclusion"]').fill("集成测试已完成，评估该临时版本不需要发布试制，计划直接废弃。");
-    await card.getByRole("button", { name: "提交结论并放弃试制" }).click();
+    const abandonedRow = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
+      .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" }).filter({ hasText: "星云 N1" });
+    await abandonedRow.getByRole("button", { name: "放弃发布试制", exact: true }).click();
+    const abandonment = page.getByRole("dialog", { name: "放弃发布 1001OTA 1.6.2 试制" });
+    await abandonment.locator('textarea[name="conclusion"]').fill("集成测试已完成，评估该临时版本不需要发布试制，计划直接废弃。");
+    await abandonment.getByRole("button", { name: "提交结论并放弃试制" }).click();
     await expectFlash(page, "已提交放弃发布试制结论");
-    await expect(page.locator("article.card").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" })).toHaveCount(0);
+    await expect(abandonedRow).toHaveCount(0);
     await page.goto("/packages?project=1&open=1");
     const drawer = page.getByTestId("package-drawer");
     await expect(drawer).toContainText("1.6.2");

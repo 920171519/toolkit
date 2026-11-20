@@ -429,6 +429,7 @@ export type TrialVersionRow = {
   version: string;
   trialFormNo: string | null;
   trialReleasedAt: string | null;
+  submittedByName: string | null;
   archiveUrl: string;
   changeSummary: string;
   ownerName: string | null;
@@ -455,7 +456,7 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
       `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
-              pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
+              su.name AS submittedByName, pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
               sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
               r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
               pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
@@ -472,6 +473,7 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
        JOIN projects pr ON pr.id = r.project_id
+       LEFT JOIN users su ON su.id = pv.submitted_by
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
        LEFT JOIN integration_batches b ON b.id = (

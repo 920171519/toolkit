@@ -7,6 +7,7 @@ import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
+import { trialQueueParams } from "@/lib/trial-queue";
 import { parseFlash } from "@/lib/queries";
 import { getTrialDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
@@ -68,7 +69,7 @@ export default async function TrialDetailPage({
         eyebrow="Trial / Project binding"
         title={`${request.projectName} · ${request.packageName} ${request.version}`}
         description={<>项目试制电子流 {request.trialFormNo ?? "—"} · 发布 {formatDateTime(request.trialReleasedAt)} · 项目软件经理 {request.softwareManagerName ?? "—"}</>}
-        actions={<><Link href={workflowHref("/trial", scopeProjectId)} className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><Link href={workflowHref(`/versions/${request.versionId}`, scopeProjectId)} className="button button-secondary">版本全链路</Link><Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge></>}
+        actions={<><Link href={workflowHref("/trial", scopeProjectId, trialQueueParams(search))} className="button button-secondary"><ArrowLeft size={14} />返回试制队列</Link><Link href={workflowHref(`/versions/${request.versionId}`, scopeProjectId)} className="button button-secondary">版本全链路</Link><Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge></>}
       />
       <FlashMessage notice={notice} />
 
