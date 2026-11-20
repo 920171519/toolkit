@@ -7,6 +7,7 @@ import type { ActionState } from "@/lib/action-state";
 import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
 import { workflowHref } from "@/lib/workflow-links";
+import { readTraceListState, traceHref } from "@/lib/version-trace-list";
 import {
   addBatchProgress,
   cancelBindingFlow,
@@ -279,7 +280,9 @@ export async function voidPackageVersionAction(_prev: ActionState, formData: For
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/versions/${versionId}`, "该软件包版本已作废，不再作为可用版本。");
+  const state = readTraceListState(Object.fromEntries(formData));
+  const projectId = numberValue(formData, "scopeProjectId") ?? undefined;
+  successRedirect(traceHref(state, projectId, versionId), "该软件包版本已作废，不再作为可用版本。");
 }
 
 export async function voidTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

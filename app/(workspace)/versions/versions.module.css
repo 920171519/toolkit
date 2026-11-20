@@ -1,0 +1,103 @@
+.tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+  padding: 0 2px;
+}
+
+.tabLink, .tabClose {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tabLink {
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  line-height: 38px;
+}
+
+.tabLink[aria-current="page"] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+
+.tabWithClose {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.tabClose {
+  justify-content: center;
+  min-height: 30px;
+  width: 30px;
+  border-radius: 4px;
+}
+
+.tabLink:hover, .tabClose:hover, .sortLink:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.search {
+  flex: 1 1 180px;
+  max-width: 380px;
+}
+
+.sortLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sorted {
+  color: var(--brand);
+}
+
+.filterRow td {
+  vertical-align: middle;
+  padding: 8px 12px;
+  background: var(--surface-muted);
+}
+
+.filterRow input, .filterRow select {
+  min-width: 108px;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.dates {
+  display: flex;
+  gap: 6px;
+}
+
+.dates input {
+  min-width: 125px;
+}

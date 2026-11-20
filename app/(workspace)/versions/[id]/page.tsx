@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, Link2 } from "lucide-react";
+import { ArrowRight, Link2 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -9,7 +9,9 @@ import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { voidPackageVersionAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
-import { getVersionTrace } from "@/lib/workflow-queries";
+import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
+import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
+import { VersionTraceTabs } from "../trace-tabs";
 import { formatDateTime } from "@/lib/format";
 import { BAD_CONCLUSION_LABEL, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
@@ -42,12 +44,15 @@ export default async function VersionTracePage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const versionId = Number(id);
-  if (!Number.isInteger(versionId)) notFound();
+  if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
   const project = requireWorkflowProject(user, search.project);
   const projectId = project?.id;
   const trace = getVersionTrace(versionId, projectId);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
+  const requested = withTraceTab(readTraceListState(search), versionId);
+  const tabs = getTraceVersionTabs(requested.tabs, projectId);
+  const state = { ...requested, tabs: tabs.map((tab) => tab.id) };
   const detailByRequest = new Map(details.map((detail) => [detail.request.id, detail]));
   const projectIds = new Set([...requests.map((request) => request.projectId), ...batches.map((batch) => batch.projectId)]);
   const linkedProjects = new Set([...projectIds].filter((id) => canAccessProjectPage(user, id)));
@@ -61,12 +66,12 @@ export default async function VersionTracePage({
         title={`${version.packageName} ${version.version}`}
         description={`${project ? `${project.name} · ` : ""}${version.packageCode} · 提交人 ${version.submittedByName ?? "系统"} · ${formatDateTime(version.submittedAt)}`}
         actions={<>
-          <Link href={workflowHref("/versions", projectId)} className="button button-secondary"><ArrowLeft size={14} />返回版本列表</Link>
           <Link href={workflowHref("/packages", projectId, { open: version.packageId })} className="button button-secondary">查看软件包</Link>
           {project && <Link href={`/versions/${versionId}`} className="button button-secondary">查看跨项目版本证据</Link>}
         </>}
       />
 
+      <VersionTraceTabs state={state} tabs={tabs} projectId={projectId} activeId={versionId} />
       <FlashMessage notice={notice} />
       <div className="info-strip" style={{ marginBottom: 16 }}>
         <span><StatusPill status={version.status as "PENDING_TRANSFER" | "IN_TEST" | "PENDING_TRIAL" | "TRIAL" | "PENDING_FORMAL" | "FORMAL" | "VOID"} /></span>
@@ -136,7 +141,7 @@ export default async function VersionTracePage({
             <Badge tone="rose">高风险操作</Badge>
           </div>
           <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12, fontWeight: 600 }}>填写作废原因</summary><div style={{ marginTop: 12, maxWidth: 620 }}>
-            <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id, scopeProjectId: projectId }} submitText="确认作废该版本" submitVariant="danger" confirmMessage="确认作废该软件包版本？全部使用项目将同步失效，且不再参与任何流程。">
+            <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id, scopeProjectId: projectId, ...traceListParams(state) }} submitText="确认作废该版本" submitVariant="danger" confirmMessage="确认作废该软件包版本？全部使用项目将同步失效，且不再参与任何流程。">
               <label className="field"><span className="label">作废原因 <span className="required-mark">*</span></span><textarea className="textarea" name="reason" required minLength={5} placeholder="说明不再使用该版本的原因。" /></label>
             </ActionForm>
           </div></details>

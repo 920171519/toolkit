@@ -68,11 +68,12 @@ test("可直接搜索版本全链路，项目追溯按项目范围展示证据",
   await page.getByRole("textbox", { name: "软件包或版本" }).fill("1001OTA 1.6.0");
   await page.getByRole("button", { name: "搜索" }).click();
   await page.getByRole("link", { name: "全链路追溯", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/versions/\\d+\\?project=${projectId}$`));
+  await expect(page).toHaveURL(new RegExp(`/versions/\\d+\\?project=${projectId}&q=`));
   await expect(page.locator("main").getByRole("link", { name: "极光 M2", exact: true })).toBeVisible();
   await expect(page.locator("main").getByText("星云 N1", { exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "返回版本列表" }).click();
-  await expect(page).toHaveURL(new RegExp(`/versions\\?project=${projectId}$`));
+  await expect(page.getByRole("textbox", { name: "软件包或版本" })).toHaveValue("1001OTA 1.6.0");
+  await expect(page).toHaveURL(new RegExp(`/versions\\?project=${projectId}&q=`));
 
   await login(page, "MGR001");
   await page.goto(`/versions?project=${projectId}`);

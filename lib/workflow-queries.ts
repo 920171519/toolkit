@@ -2,6 +2,7 @@ import { all, one } from "./db";
 import { getIntegrationManagedProjectIds } from "./access";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
+import type { TraceListState } from "./version-trace-list";
 
 export type ProjectOption = { id: number; name: string; code: string; status: string };
 
@@ -1325,35 +1326,76 @@ export function getProjectVersionRows(projectId: number): ProjectVersionRow[] {
   );
 }
 
-export function getTraceVersionRows(
-  query: string,
-  projectId: number | undefined,
-  packageId: number | undefined,
-  limit: number,
-  offset: number,
-) {
-  const terms = query.split(/\s+/).filter(Boolean);
-  return all<Pick<VersionTrace["version"], "id" | "packageId" | "packageName" | "packageCode" | "version" | "status" | "submittedAt">>(
-    `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-            pv.version, pv.status, pv.submitted_at AS submittedAt
-     FROM package_versions pv JOIN packages p ON p.id = pv.package_id
-     WHERE (? IS NULL OR p.id = ?)
-       AND (? IS NULL OR EXISTS (
-         SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
-       ) OR EXISTS (
-         SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.package_version_id = pv.id AND b.project_id = ?
-       ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))
-       ${terms.map(() => "AND instr(lower(p.code || ' ' || p.name || ' ' || pv.version), lower(?)) > 0").join(" ")}
-     ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT ? OFFSET ?`,
-    packageId ?? null,
-    packageId ?? null,
-    projectId ?? null,
-    projectId ?? null,
-    projectId ?? null,
-    projectId ?? null,
-    ...terms,
-    limit,
-    offset,
+export type TraceVersionRow = Pick<VersionTrace["version"],
+  "id" | "packageId" | "packageName" | "packageCode" | "version" | "status" | "submittedAt">;
+
+const traceVersionFields = `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
+  pv.version, pv.status, pv.submitted_at AS submittedAt`;
+const traceVersionsFrom = "FROM package_versions pv JOIN packages p ON p.id = pv.package_id";
+const traceSubmittedDate = "date(pv.submitted_at, '+8 hours')";
+const traceSortSql = {
+  package: "p.name COLLATE NOCASE",
+  version: "pv.version COLLATE NOCASE",
+  status: `CASE pv.status
+    WHEN 'PENDING_TRANSFER' THEN 1 WHEN 'IN_TEST' THEN 2 WHEN 'PENDING_TRIAL' THEN 3
+    WHEN 'TRIAL' THEN 4 WHEN 'PENDING_FORMAL' THEN 5 WHEN 'FORMAL' THEN 6 ELSE 7 END`,
+  submitted: "julianday(pv.submitted_at)",
+} as const;
+
+function traceProjectScope(projectId?: number) {
+  return projectId === undefined ? { condition: "1 = 1", values: [] } : {
+    condition: `(EXISTS (
+      SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
+    ) OR EXISTS (
+      SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+      WHERE bi.package_version_id = pv.id AND b.project_id = ?
+    ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))`,
+    values: [projectId, projectId, projectId],
+  };
+}
+
+export function getTraceVersionPage(state: TraceListState, projectId?: number) {
+  const scope = traceProjectScope(projectId);
+  const conditions = [scope.condition];
+  const params: Array<string | number> = [...scope.values];
+  const filters: Array<[string, string | number | undefined]> = [
+    ["p.id = ?", state.packageId],
+    ["instr(lower(p.code || ' ' || p.name), lower(?)) > 0", state.packageFilter],
+    ["instr(lower(pv.version), lower(?)) > 0", state.versionFilter],
+    ["pv.status = ?", state.status],
+    [`${traceSubmittedDate} >= ?`, state.submittedFrom],
+    [`${traceSubmittedDate} <= ?`, state.submittedThrough],
+  ];
+  for (const term of state.query.split(/\s+/).filter(Boolean)) {
+    filters.push(["instr(lower(p.code || ' ' || p.name || ' ' || pv.version), lower(?)) > 0", term]);
+  }
+  for (const [condition, value] of filters) {
+    if (value === undefined || value === "") continue;
+    conditions.push(condition);
+    params.push(value);
+  }
+
+  const where = conditions.join(" AND ");
+  const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${traceVersionsFrom} WHERE ${where}`, ...params)?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
+  const page = Math.min(state.page, pageCount);
+  const direction = state.direction === "asc" ? "ASC" : "DESC";
+  const rows = all<TraceVersionRow>(
+    `${traceVersionFields} ${traceVersionsFrom} WHERE ${where}
+     ORDER BY ${traceSortSql[state.sort]} ${direction}, pv.id DESC LIMIT ? OFFSET ?`,
+    ...params, state.pageSize, (page - 1) * state.pageSize,
   );
+  return { rows, total, page, pageCount };
+}
+
+export function getTraceVersionTabs(ids: number[], projectId?: number): TraceVersionRow[] {
+  if (ids.length === 0) return [];
+  const scope = traceProjectScope(projectId);
+  const rows = all<TraceVersionRow>(
+    `${traceVersionFields} ${traceVersionsFrom}
+     WHERE ${scope.condition} AND pv.id IN (${ids.map(() => "?").join(", ")})`,
+    ...scope.values, ...ids,
+  );
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => rowsById.get(id) ?? []);
 }
