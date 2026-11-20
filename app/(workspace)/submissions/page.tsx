@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Boxes, ClipboardList, Link2, UserRound } from "lucide-react";
+import { Boxes, ClipboardList } from "lucide-react";
+import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { canCancelVersion, canManageWorkflow } from "@/lib/permissions";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
@@ -14,15 +15,14 @@ import {
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import {
-  cancelTransferAction,
   deleteDraftBatchAction,
   sendBatchAction,
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
-import { BatchBuilder } from "@/components/batch-builder";
 import { FormDialog } from "@/components/form-dialog";
+import { PendingTransferTable } from "@/components/pending-transfer-table";
 import { TransferRequestForm } from "@/components/transfer-request-form";
-import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
+import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "待转测申请" };
@@ -54,10 +54,10 @@ export default async function SubmissionsPage({
   const defaultCode = nextBatchCode(allBatches);
   const candidatesByProject = new Map(
     manager
-      ? groups.map((group, index) => [
+      ? groups.filter((group) => canManageProjectWorkflowForProject(user, group.projectId)).map((group, index) => [
           group.projectId,
           { candidates: getBatchCandidatesForProject(group.projectId), code: `B${String(Number(defaultCode.slice(1)) + index).padStart(3, "0")}` },
-        ])
+        ] as const)
       : [],
   );
   const requestCount = groups.reduce((total, group) => total + group.items.length, 0);
@@ -129,45 +129,17 @@ export default async function SubmissionsPage({
             <EmptyState title="没有待转测的申请" description="责任人提交后，申请会按项目出现在这里。" />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {groups.map((group) => {
-                const setup = candidatesByProject.get(group.projectId);
-                return (
-                  <section key={group.projectId} className="project-request-group">
-                    <div className="split-row">
-                      <div className="toolbar" style={{ gap: 8 }}><span className="chip">{group.projectCode}</span><span style={{ fontSize: 14, fontWeight: 600 }}>{group.projectName}</span><Badge tone="amber">{group.items.length} 个申请</Badge></div>
-                      {manager && setup && (
-                        <FormDialog label="整套发起转测" title={`${group.projectName} · 整套配套转测`} description="按项目配套选择本轮软件包。版本默认沿用上次转测，有待转测申请时优先选择新版本。" triggerClassName="button button-secondary button-sm" testId={`open-batch-${group.projectId}`} wide>
-                          {setup.candidates.length > 0 ? (
-                            <BatchBuilder project={{ id: group.projectId, name: group.projectName, code: group.projectCode, status: "ACTIVE" }} candidates={setup.candidates} defaultCode={setup.code} scopeProjectId={project?.id} />
-                          ) : <div className="muted-panel">本项目当前没有可组织转测的软件包版本。</div>}
-                        </FormDialog>
-                      )}
-                    </div>
-                    <div className="version-list">
-                      {group.items.map((item) => (
-                        <article key={`${group.projectId}-${item.requestId}`} className="version-row" style={{ alignItems: "flex-start", padding: "13px 0" }}>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div className="toolbar" style={{ gap: 8 }}>
-                              <Link prefetch={false} href={workflowHref("/packages", project?.id, { open: item.packageId })} style={{ fontWeight: 600, fontSize: 14 }}>{item.packageName}</Link>
-                              <span className="version-badge">{item.version}</span>
-                              <Badge tone="amber" dot>待集成测试</Badge>
-                            </div>
-                            <p className="change-copy" style={{ marginTop: 6 }}>{item.changeSummary}</p>
-                            <div className="toolbar" style={{ gap: 16, marginTop: 7, fontSize: 11, color: "var(--muted)" }}>
-                              <span className="toolbar" style={{ gap: 5 }}><UserRound size={12} /> {item.submittedByName ?? "未知申请人"} · {formatDateTime(item.submittedAt)}</span>
-                              <span className="toolbar" style={{ gap: 5 }}><Link2 size={12} /><ExternalLink href={item.archiveUrl}>包归档</ExternalLink></span>
-                              <span>责任人 {item.ownerName ?? "未指定"}</span>
-                            </div>
-                          </div>
-                          {item.versionStatus === "PENDING_TRANSFER" && canCancelVersion(user, item.submittedById) && (
-                            <ActionForm action={cancelTransferAction} hidden={{ versionId: item.versionId, scopeProjectId: project?.id }} submitText="撤回申请" submitVariant="outline-danger" submitClassName="button-sm" confirmMessage={`撤回将同时撤销 ${item.packageName} ${item.version} 在所有项目的转测申请，确认继续？`} className="inline-action-form" />
-                          )}
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+              {groups.map((group) => (
+                <PendingTransferTable
+                  key={group.projectId}
+                  group={{ ...group, items: group.items.map((item) => ({
+                    ...item,
+                    canCancel: item.versionStatus === "PENDING_TRANSFER" && canCancelVersion(user, item.submittedById),
+                  })) }}
+                  scopeProjectId={project?.id}
+                  batch={candidatesByProject.get(group.projectId)}
+                />
+              ))}
             </div>
           )}
         </div>

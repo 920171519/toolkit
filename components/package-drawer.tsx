@@ -52,12 +52,14 @@ export function PackageDrawer({
   people,
   onClose,
   initialDetail = null,
+  readOnly = false,
 }: {
   packageId: number;
   projectId?: number;
   people: PersonOption[];
   onClose: () => void;
   initialDetail?: DrawerPayload | null;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState<DrawerPayload | null>(initialDetail);
@@ -196,7 +198,7 @@ export function PackageDrawer({
                     <h3>责任信息</h3>
                     <p>责任田项目负责人、软件经理或管理员可修改</p>
                   </div>
-                  {detail.canEdit && (
+                  {!readOnly && detail.canEdit && (
                     <button
                       type="button"
                       className="button button-secondary button-sm"

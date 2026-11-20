@@ -17,18 +17,26 @@ export function BatchBuilder({
   candidates,
   defaultCode,
   scopeProjectId,
+  initialPendingChoices,
 }: {
   project: ProjectOption;
   candidates: BatchCandidatePackage[];
   defaultCode: string;
   scopeProjectId?: number;
+  initialPendingChoices?: Readonly<Record<number, number | null>>;
 }) {
   const initial = useMemo(
-    () => new Map(candidates.map((candidate) => [candidate.packageId, candidate.defaultVersionId])),
-    [candidates],
+    () => new Map(candidates.map((candidate) => {
+      const requestedId = initialPendingChoices?.[candidate.packageId];
+      const requestedVersion = candidate.versions.find((version) => version.id === requestedId && version.requestStatus === "PENDING");
+      return [candidate.packageId, requestedVersion?.id ?? candidate.defaultVersionId];
+    })),
+    [candidates, initialPendingChoices],
   );
   const [selected, setSelected] = useState<Map<number, number>>(initial);
-  const [excluded, setExcluded] = useState<Set<number>>(() => new Set());
+  const [excluded, setExcluded] = useState(() => new Set(
+    candidates.filter((candidate) => initialPendingChoices?.[candidate.packageId] === null).map((candidate) => candidate.packageId),
+  ));
 
   const rows = candidates.map((candidate) => {
     const versionId = selected.get(candidate.packageId) ?? candidate.defaultVersionId;
