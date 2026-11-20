@@ -1,0 +1,46 @@
+.picker {
+  display: grid;
+  gap: 14px;
+}
+
+.choices {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.choices legend {
+  margin-bottom: 6px;
+}
+
+.results {
+  max-height: min(250px, 35dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.option {
+  min-height: 40px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.option:hover,
+.option:focus-within {
+  background: var(--surface-muted);
+}
+
+.option:has(input:checked) {
+  background: var(--accent-soft);
+}
+
+.option input {
+  flex: none;
+  accent-color: var(--brand);
+}

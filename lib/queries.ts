@@ -744,18 +744,28 @@ export type AdminUser = {
   isActive: boolean;
   createdAt: string;
   ownedPackages: number;
+  activeOwnedPackages: number;
+  areas: Array<{ id: number; name: string }>;
 };
 
-export function getAdminUsers(): AdminUser[] {
-  return all<Omit<AdminUser, "isActive"> & { isActive: number }>(
+export function getAdminUsers(userId?: number): AdminUser[] {
+  const memberships = getAreaMemberships(userId);
+  const areasByUser = Map.groupBy(memberships, (membership) => membership.userId);
+  return all<Omit<AdminUser, "isActive" | "areas"> & { isActive: number }>(
     `SELECT u.id, u.name, u.employee_id AS employeeId, u.role, u.title, u.department,
             u.is_active AS isActive, u.created_at AS createdAt,
-            (SELECT COUNT(*) FROM packages p WHERE p.owner_id = u.id) AS ownedPackages
-     FROM users u ORDER BY u.is_active DESC, u.created_at, u.id`,
+            (SELECT COUNT(*) FROM packages p WHERE p.owner_id = u.id) AS ownedPackages,
+            (SELECT COUNT(*) FROM packages p WHERE p.owner_id = u.id AND p.is_active = 1) AS activeOwnedPackages
+     FROM users u
+     ${userId === undefined ? "" : "WHERE u.id = ?"}
+     ORDER BY u.is_active DESC, u.created_at, u.id`,
+    ...(userId === undefined ? [] : [userId]),
   ).map((row) => ({
     ...row,
     isActive: Boolean(row.isActive),
     ownedPackages: Number(row.ownedPackages),
+    activeOwnedPackages: Number(row.activeOwnedPackages),
+    areas: (areasByUser.get(row.id) ?? []).map(({ areaId, name }) => ({ id: areaId, name })),
   }));
 }
 
@@ -817,7 +827,56 @@ export type AreaConfig = {
   projectMembers: AreaProjectMember[];
 };
 
-export function getAreaConfigs(): AreaConfig[] {
+export function getAreaMemberships(userId?: number) {
+  return all<{ userId: number; areaId: number; name: string }>(
+    `WITH memberships AS (
+      SELECT user_id, area_id FROM area_leaders
+      UNION
+      SELECT user_id, area_id FROM area_project_leads
+      UNION
+      SELECT user_id, area_id FROM area_project_members
+    )
+    SELECT m.user_id AS userId, m.area_id AS areaId, a.name
+    FROM memberships m JOIN areas a ON a.id = m.area_id
+    ${userId === undefined ? "" : "WHERE m.user_id = ?"}
+    ORDER BY a.name, a.id`,
+    ...(userId === undefined ? [] : [userId]),
+  );
+}
+
+export function getResponsibilityAreaOptions() {
+  return all<{ id: number; name: string }>("SELECT id, name FROM areas ORDER BY name, id");
+}
+
+export function getAreaDirectory() {
+  const supervisors = all<AreaLeader & { areaId: number }>(
+    `SELECT al.id, al.area_id AS areaId, u.id AS userId, u.name AS userName,
+            u.employee_id AS userEmployeeId, u.title AS userTitle
+     FROM area_leaders al JOIN users u ON u.id = al.user_id
+     ORDER BY al.id`,
+  );
+  const supervisorsByArea = Map.groupBy(supervisors, (leader) => leader.areaId);
+
+  return all<{
+    id: number;
+    name: string;
+    description: string;
+    isIntegration: number;
+    packageCount: number;
+    projectCount: number;
+  }>(
+    `SELECT a.id, a.name, a.description, a.is_integration AS isIntegration,
+            (SELECT COUNT(*) FROM packages p WHERE p.area_id = a.id) AS packageCount,
+            (SELECT COUNT(*) FROM area_project_leads apl WHERE apl.area_id = a.id) AS projectCount
+     FROM areas a ORDER BY a.id`,
+  ).map((area) => ({
+    ...area,
+    isIntegration: Boolean(area.isIntegration),
+    leaders: supervisorsByArea.get(area.id) ?? [],
+  }));
+}
+
+export function getAreaConfigs(areaId?: number): AreaConfig[] {
   return all<{
     id: number;
     name: string;
@@ -827,7 +886,8 @@ export function getAreaConfigs(): AreaConfig[] {
   }>(
     `SELECT a.id, a.name, a.description, a.is_integration AS isIntegration,
             (SELECT COUNT(*) FROM packages p WHERE p.area_id = a.id) AS packageCount
-     FROM areas a ORDER BY a.id`,
+     FROM areas a ${areaId === undefined ? "" : "WHERE a.id = ?"} ORDER BY a.id`,
+    ...(areaId === undefined ? [] : [areaId]),
   ).map((area) => {
     const leaders = all<AreaLeader>(
       `SELECT al.id, u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle

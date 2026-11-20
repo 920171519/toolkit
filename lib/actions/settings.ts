@@ -37,6 +37,7 @@ import {
   updateUserRole,
 } from "@/lib/settings";
 import { ROLES, type Role } from "@/lib/constants";
+import { directoryActionHref } from "@/lib/settings-directory";
 
 async function actionUser() {
   const user = await getCurrentUser();
@@ -54,8 +55,9 @@ export async function saveAreaAction(
 ): Promise<ActionState> {
   const user = await actionUser();
   const id = numberValue(formData, "id");
+  let areaId: number;
   try {
-    saveArea(user, {
+    areaId = saveArea(user, {
       id: id ?? undefined,
       name: text(formData, "name"),
       description: text(formData, "description"),
@@ -64,7 +66,7 @@ export async function saveAreaAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", id ? "责任田配置已更新。" : "责任田已创建。");
+  successRedirect(directoryActionHref("areas", formData, areaId), id ? "责任田配置已更新。" : "责任田已创建。");
 }
 
 export async function addAreaLeaderAction(
@@ -81,7 +83,7 @@ export async function addAreaLeaderAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "责任田主管已设置。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "责任田主管已设置。");
 }
 
 export async function removeAreaLeaderAction(
@@ -91,13 +93,14 @@ export async function removeAreaLeaderAction(
   const user = await actionUser();
   const leaderId = numberValue(formData, "leaderId");
   if (!leaderId) return { error: "责任田主管参数无效。" };
+  let areaId: number;
   try {
-    removeAreaLeader(user, leaderId);
+    areaId = removeAreaLeader(user, leaderId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "责任田主管已移除。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "责任田主管已移除。");
 }
 
 export async function assignAreaProjectMemberAction(
@@ -115,7 +118,7 @@ export async function assignAreaProjectMemberAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "项目成员已添加。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "项目成员已添加。");
 }
 
 export async function removeAreaProjectMemberAction(
@@ -125,13 +128,14 @@ export async function removeAreaProjectMemberAction(
   const user = await actionUser();
   const memberId = numberValue(formData, "memberId");
   if (!memberId) return { error: "项目成员参数无效。" };
+  let areaId: number;
   try {
-    removeAreaProjectMember(user, memberId);
+    areaId = removeAreaProjectMember(user, memberId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "项目成员已移除。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "项目成员已移除。");
 }
 
 export async function assignAreaProjectLeadAction(
@@ -149,7 +153,7 @@ export async function assignAreaProjectLeadAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "项目负责人已设置。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "项目负责人已设置。");
 }
 
 export async function removeAreaProjectLeadAction(
@@ -159,13 +163,14 @@ export async function removeAreaProjectLeadAction(
   const user = await actionUser();
   const assignmentId = numberValue(formData, "assignmentId");
   if (!assignmentId) return { error: "项目负责人参数无效。" };
+  let areaId: number;
   try {
-    removeAreaProjectLead(user, assignmentId);
+    areaId = removeAreaProjectLead(user, assignmentId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "项目负责人已移除。");
+  successRedirect(directoryActionHref("areas", formData, areaId), "项目负责人已移除。");
 }
 
 export async function deleteAreaAction(
@@ -181,7 +186,7 @@ export async function deleteAreaAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/areas", "责任田已删除。");
+  successRedirect(directoryActionHref("areas", formData), "责任田已删除。");
 }
 
 export async function saveProjectAction(
@@ -434,7 +439,7 @@ export async function updateUserRoleAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/users", "人员角色已更新。");
+  successRedirect(directoryActionHref("users", formData, userId), "人员角色已更新。");
 }
 
 export async function setUserActiveAction(
@@ -451,7 +456,7 @@ export async function setUserActiveAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/users", active ? "账号已启用。" : "账号已停用。");
+  successRedirect(directoryActionHref("users", formData, userId), active ? "账号已启用。" : "账号已停用。");
 }
 
 export async function saveUserProfileAction(
@@ -467,5 +472,5 @@ export async function saveUserProfileAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/users", "人员资料已更新。");
+  successRedirect(directoryActionHref("users", formData, userId), "人员资料已更新。");
 }

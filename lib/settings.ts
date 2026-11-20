@@ -47,6 +47,7 @@ export function removeAreaLeader(actor: SessionUser, leaderId: number) {
     run("DELETE FROM area_leaders WHERE id = ?", leaderId);
     audit(actor.id, "REMOVE_AREA_LEADER", "AREA", leader.area_id, `${leader.area_name}：移除责任田主管 ${leader.user_name}`);
   });
+  return leader.area_id;
 }
 
 export function assignAreaProjectMember(
@@ -104,6 +105,7 @@ export function removeAreaProjectMember(actor: SessionUser, memberId: number) {
     run("DELETE FROM area_project_members WHERE id = ?", memberId);
     audit(actor.id, "REMOVE_AREA_PROJECT_MEMBER", "AREA", member.area_id, `${member.area_name}：${member.project_name} 移除项目成员 ${member.user_name}`);
   });
+  return member.area_id;
 }
 
 export type SaveAreaInput = {
@@ -232,6 +234,7 @@ export function removeAreaProjectLead(actor: SessionUser, assignmentId: number) 
       `${assignment.area_name}：移除 ${assignment.project_name} 负责人 ${assignment.user_name}`,
     );
   });
+  return assignment.area_id;
 }
 
 export function deleteArea(actor: SessionUser, areaId: number) {

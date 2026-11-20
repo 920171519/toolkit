@@ -1,0 +1,207 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.search {
+  flex: 1 1 190px;
+  min-width: min(100%, 190px);
+}
+
+.filters select {
+  max-width: 220px;
+}
+
+.tableScroll {
+  overflow-x: auto;
+  container-type: inline-size;
+}
+
+.table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th,
+.table td {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table th {
+  background: var(--surface-muted);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.table .filterCell {
+  background: inherit;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  white-space: normal;
+}
+
+.filterCell .filters {
+  border-bottom: 0;
+}
+
+.stickyContent {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+}
+
+.table tbody tr:hover,
+.table tbody tr:focus-within {
+  background: var(--surface-muted);
+}
+
+.sort,
+.rowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort:hover,
+.rowLink:hover {
+  text-decoration: underline;
+}
+
+.rowLink {
+  font-weight: 650;
+  color: var(--brand);
+}
+
+.rowDescription {
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.areaSupervisor {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-soft);
+}
+
+.areaSupervisor :global(.form-footer),
+.recordActions :global(.form-footer),
+.memberList :global(.form-footer) {
+  margin: 0;
+  padding: 0;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.recordList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.record {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(110px, 0.7fr) minmax(105px, 0.6fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.record dl {
+  display: contents;
+}
+
+.record dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recordActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.memberList {
+  display: grid;
+  list-style: none;
+  max-height: min(45vh, 320px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.memberList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 690px) {
+  .filters {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .filters label:not(.search) {
+    flex: 1 1 120px;
+  }
+
+  .filters select {
+    max-width: 100%;
+  }
+
+  .record {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px;
+  }
+
+  .recordName,
+  .recordActions {
+    grid-column: 1 / -1;
+  }
+
+  .recordActions {
+    justify-content: flex-start;
+  }
+}

@@ -19,10 +19,6 @@ function acceptDialogs(page: Page) {
   });
 }
 
-async function areaCard(page: Page, name: string): Promise<Locator> {
-  return page.locator("section.card").filter({ has: page.getByRole("heading", { name, exact: true }) }).first();
-}
-
 async function chooseByText(select: Locator, text: string) {
   const options = await select.locator("option").evaluateAll((items) =>
     items.map((item) => ({ value: (item as HTMLOptionElement).value, text: item.textContent ?? "" })),
@@ -72,37 +68,51 @@ test.describe("工程协同台项目维度流程", () => {
     await newAreaForm.getByRole("button", { name: "创建责任田" }).click();
     await expectFlash(page, "责任田已创建");
 
-    let card = await areaCard(page, areaName);
-    const leaderPanel = card.locator(".inset-panel").first();
-    await leaderPanel.locator("summary").filter({ hasText: "添加主管" }).click();
-    await chooseByText(leaderPanel.locator('select[name="userId"]'), "郑一");
-    await leaderPanel.getByRole("button", { name: "设置主管" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: areaName })).toBeVisible();
+    const areaPath = new URL(page.url()).pathname;
+    await page.getByRole("button", { name: "添加主管", exact: true }).click();
+    const leaderDialog = page.getByRole("dialog", { name: "添加责任田主管" });
+    await leaderDialog.getByRole("searchbox").fill("OWNER004");
+    await leaderDialog.getByRole("radio", { name: /郑一/ }).check();
+    await leaderDialog.getByRole("button", { name: "设置主管" }).click();
     await expectFlash(page, "责任田主管已设置");
-    await expect(await areaCard(page, areaName)).toContainText("郑一");
+    await expect(page.getByRole("region", { name: "责任田主管", exact: true })).toContainText("郑一");
 
     await login(page, "OWNER004");
-    await page.goto("/settings/areas");
-    await expect(page.getByTestId("new-area-form")).toHaveCount(0);
-    card = await areaCard(page, areaName);
-    let n1Row = card.locator(".area-project-row").filter({ hasText: "星云 N1" }).first();
-    await n1Row.locator("summary").filter({ hasText: "添加负责人" }).click();
-    let openDetails = n1Row.locator("details[open]").first();
-    await chooseByText(openDetails.locator('select[name="userId"]'), "王磊");
-    await openDetails.getByRole("button", { name: "设置项目负责人" }).click();
+    await page.goto(areaPath);
+    await expect(page.getByRole("button", { name: "添加主管", exact: true })).toHaveCount(0);
+    const n1Row = page.locator('[data-testid^="area-project-"]').filter({ hasText: "星云 N1" }).first();
+    await n1Row.getByRole("button", { name: "添加负责人", exact: true }).click();
+    const leadDialog = page.getByRole("dialog", { name: /星云 N1 · 添加负责人/ });
+    await leadDialog.getByRole("searchbox").fill("王磊");
+    await leadDialog.getByRole("radio", { name: /王磊/ }).check();
+    await leadDialog.getByRole("button", { name: "设置项目负责人" }).click();
     await expectFlash(page, "项目负责人已设置");
 
     await login(page, "OWNER001");
-    await page.goto("/settings/areas");
-    card = await areaCard(page, areaName);
-    n1Row = card.locator(".area-project-row").filter({ hasText: "星云 N1" }).first();
-    await n1Row.locator("summary").filter({ hasText: "添加成员" }).click();
-    openDetails = n1Row.locator("details[open]").first();
-    await chooseByText(openDetails.locator('select[name="userId"]'), "陈曦");
-    await openDetails.getByRole("button", { name: "添加项目成员" }).click();
+    await page.goto(areaPath);
+    await expect(n1Row.getByRole("button", { name: "移除负责人", exact: true })).toHaveCount(0);
+    await n1Row.getByRole("button", { name: "添加成员", exact: true }).click();
+    const memberDialog = page.getByRole("dialog", { name: /星云 N1 · 添加成员/ });
+    await memberDialog.getByRole("searchbox").fill("陈曦");
+    await memberDialog.getByRole("radio", { name: /陈曦/ }).check();
+    await memberDialog.getByRole("button", { name: "添加项目成员" }).click();
     await expectFlash(page, "项目成员已添加");
-    card = await areaCard(page, areaName);
-    await expect(card).toContainText("王磊");
-    await expect(card).toContainText("陈曦");
+    await expect(memberDialog).toBeHidden();
+    await expect(n1Row).toContainText("王磊");
+    await n1Row.getByRole("button", { name: "1 人", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: /星云 N1 · 项目成员/ })).toContainText("陈曦");
+
+    await login(page, "ADMIN001");
+    await page.goto("/settings/users");
+    const area = page.getByRole("combobox", { name: "责任田", exact: true });
+    await area.selectOption({ label: areaName });
+    await page.getByRole("button", { name: "筛选", exact: true }).click();
+    const rows = page.getByRole("table", { name: "人员列表" }).locator("tbody tr");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.filter({ hasText: "郑一" })).toHaveCount(1);
+    await expect(rows.filter({ hasText: "王磊" })).toHaveCount(1);
+    await expect(rows.filter({ hasText: "陈曦" })).toHaveCount(1);
   });
 
   test("项目节点绑定配置排版正常且可修改通过数量", async ({ page }) => {
