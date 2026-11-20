@@ -10,6 +10,7 @@ import { ExternalLink } from "@/components/ui";
 import { cancelTransferAction } from "@/lib/actions/workflow";
 import { formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
+import { packageIdentity } from "@/lib/package-identity";
 import type { BatchCandidatePackage, PendingTransferGroup, PendingTransferItem, ProjectOption } from "@/lib/workflow-queries";
 import styles from "./pending-transfer-table.module.css";
 
@@ -37,7 +38,7 @@ export function PendingTransferTable({ group, batch, scopeProjectId }: {
     const selectable = candidate?.versions.some((version) => version.id === item.versionId && version.requestStatus === "PENDING") ?? false;
     const choice = choices[item.packageId];
     const selection = choice === undefined ? candidate?.defaultVersionId : choice;
-    return { item, selectable, checked: selectable && selection === item.versionId };
+    return { item, identity: packageIdentity({ name: item.packageName, code: item.packageCode }), selectable, checked: selectable && selection === item.versionId };
   });
   const checkedCount = rows.filter((row) => row.checked).length;
 
@@ -71,7 +72,7 @@ export function PendingTransferTable({ group, batch, scopeProjectId }: {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ item, selectable, checked }) => (
+            {rows.map(({ item, identity, selectable, checked }) => (
               <tr key={item.requestId}>
                 {batch && <td><input type="checkbox" checked={checked} disabled={!selectable}
                   aria-label={`本轮转测 ${item.packageName} ${item.version}`}
@@ -80,8 +81,8 @@ export function PendingTransferTable({ group, batch, scopeProjectId }: {
                     setChoices((current) => ({ ...current, [item.packageId]: selection }));
                   }} /></td>}
                 <td>
-                  <strong className="mono">{item.packageCode}</strong>
-                  {item.packageName !== item.packageCode && <div className="small muted">{item.packageName}</div>}
+                  <strong className="mono">{identity.code}</strong>
+                  {identity.name !== identity.code && <div className="small muted">{identity.name}</div>}
                   {item.ownerName && <div className="small muted">责任人 {item.ownerName}</div>}
                 </td>
                 <td><span className="version-badge">{item.version}</span><div className={styles.changeSummary}>{item.changeSummary}</div></td>

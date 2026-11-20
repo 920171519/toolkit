@@ -25,6 +25,7 @@ test("项目待转测表格保留暂缓版本，并按勾选结果生成批次�
   ]);
   const request = pending.getByRole("row").filter({ hasText: "1003COM" }).filter({ hasText: "2.1.0" });
   const newRequest = pending.getByRole("row").filter({ hasText: "1003COM" }).filter({ hasText: "2.9.70" });
+  await expect(request.getByRole("cell").nth(1).locator("strong")).toHaveText("1003COM");
   await expect(request.getByRole("cell").nth(3)).toHaveText("陈曦");
   await expect(request.locator("time")).toHaveAttribute("datetime", /2026-11-12/);
   await expect(request.getByRole("link").first()).toHaveAttribute("href", /^https?:\/\//);

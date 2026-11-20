@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Boxes, CheckSquare2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
+import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { redirect } from "next/navigation";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
@@ -39,15 +40,15 @@ export default async function PackageSettingsDetailPage({
   const people = getPeople();
   const projects = getProjectConfigs();
   const { package: pkg, usages } = data;
+  const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));
   const bindingActive = pkg.currentStatus === "TRIAL" || pkg.currentStatus === "PENDING_FORMAL";
 
   return (
     <>
       <PageHeader
-        eyebrow="Settings / Software package"
-        title={pkg.name}
-        description="维护软件包的责任信息与项目节点使用范围。范围变更会影响下一次发试制时生成的绑定验证覆盖清单。"
+        title={identity.name}
+        description={identity.code + " · 维护责任信息与项目节点使用范围。"}
         actions={
           <Link href="/settings/packages" className="button button-secondary">
             <ArrowLeft size={14} /> 返回软件包配置
@@ -64,7 +65,7 @@ export default async function PackageSettingsDetailPage({
               <div>
                 <h2 style={{ fontSize: 18 }}>责任信息</h2>
                 <p className="small muted" style={{ marginTop: 3 }}>
-                  软件包编码会展示在归档与流程记录中，请谨慎修改。
+                  新增或修改编码时使用 5 位数字和 3 位字母。
                 </p>
               </div>
               <Boxes size={17} style={{ color: "var(--brand)" }} />
@@ -73,12 +74,12 @@ export default async function PackageSettingsDetailPage({
               <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ id: pkg.id }} submitText="保存责任信息">
                 <div className="form-grid">
                   <label className="field">
-                    <span className="label">软件包名称</span>
-                    <input className="input" name="name" defaultValue={pkg.name} required />
+                    <span className="label">软件包编码</span>
+                    <input className="input" name="code" defaultValue={identity.code} placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} required />
                   </label>
                   <label className="field">
-                    <span className="label">软件包编码</span>
-                    <input className="input" name="code" defaultValue={pkg.code} required />
+                    <span className="label">软件包名称</span>
+                    <input className="input" name="name" defaultValue={identity.name} required />
                   </label>
                   <label className="field">
                     <span className="label">责任人</span>

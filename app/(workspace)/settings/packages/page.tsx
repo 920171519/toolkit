@@ -5,14 +5,21 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { getAdminPackages, getAreaConfigs, getPeople, parseFlash } from "@/lib/queries";
+import { getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
-import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import { Badge, EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { FormDialog } from "@/components/form-dialog";
+import styles from "./package-settings.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "软件包配置" };
+
+function normalized(value: string) {
+  return value.normalize("NFKC").toLowerCase();
+}
 
 export default async function PackagesSettingsPage({
   searchParams,
@@ -21,70 +28,104 @@ export default async function PackagesSettingsPage({
 }) {
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
-  const ledAreaIds = getLedAreaIds(user.id);
-  if (!isAdmin && ledAreaIds.length === 0) {
+  const ledAreas = new Set(getLedAreaIds(user.id));
+  if (!isAdmin && ledAreas.size === 0) {
     redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
   }
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const ledAreas = new Set(ledAreaIds);
   const areas = getAreaConfigs().filter((area) => isAdmin || ledAreas.has(area.id));
   const packages = getAdminPackages().filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreas.has(pkg.areaId)));
   const people = getPeople();
+  const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const area = areas.find((item) => String(item.id) === params.area);
+  const state = params.state === "active" || params.state === "inactive" ? params.state : "";
+  const pageSize = getListPageSize(params.pageSize);
+  const terms = normalized(query).split(/\s+/).filter(Boolean);
+  const matching = packages.map((pkg) => ({ pkg, identity: packageIdentity(pkg) })).filter(({ pkg, identity }) => {
+    if (area && pkg.areaId !== area.id) return false;
+    if (state && pkg.isActive !== (state === "active")) return false;
+    const text = normalized([identity.code, identity.name, pkg.areaName, pkg.ownerName].join(" "));
+    return terms.every((term) => text.includes(term));
+  }).sort((a, b) => a.identity.code.localeCompare(b.identity.code, "zh-CN", { numeric: true }) || a.pkg.id - b.pkg.id);
+  const pageCount = Math.max(1, Math.ceil(matching.length / pageSize));
+  const requested = typeof params.page === "string" ? Number(params.page) : 1;
+  const page = Number.isSafeInteger(requested) ? Math.max(1, Math.min(requested, pageCount)) : 1;
+  const start = (page - 1) * pageSize;
+  const rows = matching.slice(start, start + pageSize);
+
+  function listHref(pageNumber: number, clear = false) {
+    const search = new URLSearchParams({ pageSize: String(pageSize) });
+    if (!clear && query) search.set("q", query);
+    if (!clear && area) search.set("area", String(area.id));
+    if (!clear && state) search.set("state", state);
+    if (pageNumber > 1) search.set("page", String(pageNumber));
+    return `/settings/packages?${search.toString()}`;
+  }
 
   return (
     <>
-      <PageHeader
-        eyebrow="Settings / Software packages"
-        title="软件包配置"
-        description="软件包由所属责任田主管维护；软件经理不负责软件包基础配置。进入配置后可维护责任信息与项目节点使用范围。"
-        actions={
-          <><Link href="/settings/packages/import" className="button button-secondary">导入历史版本</Link>
-          <FormDialog label={<><Plus size={14} /> 新建软件包</>} title="新建软件包" description="创建后继续配置该项目节点使用范围。" triggerClassName="button button-primary" testId="new-package-trigger">
-            <ActionForm action={savePackageAction} submitText="创建并配置使用范围" testId="new-package-form">
-              <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-                <label className="field"><span className="label">软件包名称</span><input className="input" name="name" placeholder="例如 1001OTA" required /></label>
-                <div className="form-grid">
-                  <label className="field"><span className="label">软件包编码</span><input className="input" name="code" placeholder="例如 OTA" required /></label>
-                  <label className="field"><span className="label">责任人</span><select className="select" name="ownerId" required defaultValue=""><option value="" disabled>选择责任人</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
-                </div>
-                <label className="field"><span className="label">责任田 <span className="required-mark">*</span></span><select className="select" name="areaId" required defaultValue={areas[0]?.id ?? ""}><option value="" disabled>选择责任田</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label>
-                <label className="field"><span className="label">说明</span><textarea className="textarea" name="description" placeholder="说明软件包提供的能力。" /></label>
-                <label className="field"><span className="label">试制超期天数 <span className="required-mark">*</span><span className="hint">超过后提示已超期</span></span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
-                <input type="hidden" name="isActive" value="on" />
-              </div>
-            </ActionForm>
-          </FormDialog></>
-        }
-      />
+      <PageHeader title="软件包配置" actions={<>
+        <Link href="/settings/packages/import" className="button button-secondary" prefetch={false}>导入历史版本</Link>
+        <FormDialog label={<><Plus size={15} aria-hidden="true" />新建软件包</>} title="新建软件包" testId="new-package-trigger">
+          <ActionForm action={savePackageAction} submitText="创建并配置使用范围" testId="new-package-form">
+            <div className="form-grid">
+              <label className="field">
+                <span className="label">软件包编码</span>
+                <input className="input" name="code" placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} pattern={PACKAGE_CODE_PATTERN} title="5 位数字加 3 位字母" required />
+              </label>
+              <label className="field"><span className="label">软件包名称</span><input className="input" name="name" placeholder="例如 OTA 升级服务" required /></label>
+              <label className="field"><span className="label">责任田</span><select className="select" name="areaId" required defaultValue={areas[0]?.id ?? ""}><option value="" disabled>选择责任田</option>{areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label className="field"><span className="label">责任人</span><select className="select" name="ownerId" required defaultValue=""><option value="" disabled>选择责任人</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+              <label className="field span-2"><span className="label">说明</span><textarea className="textarea" name="description" /></label>
+              <label className="field"><span className="label">试制超期天数</span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
+              <input type="hidden" name="isActive" value="on" />
+            </div>
+          </ActionForm>
+        </FormDialog>
+      </>} />
       <FlashMessage notice={notice} />
       <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} />
 
-      <section className="card">
-        <div className="card-header">
-          <div><h2 style={{ fontSize: 18 }}>软件包列表</h2><p className="small muted" style={{ marginTop: 3 }}>仅显示你担任主管的责任田下的软件包。</p></div>
-          <Badge tone="slate">{packages.length} 个</Badge>
-        </div>
-        <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
-          <div className="table-wrap">
+      <section className="card" aria-label="软件包列表">
+        <form action="/settings/packages" method="get" role="search" aria-label="查找软件包" className={styles.toolbar}>
+          <label className="field">
+            <span className="label">搜索软件包</span>
+            <input className="input" type="search" name="q" defaultValue={query} maxLength={100} placeholder="编码、名称、责任田或责任人" />
+          </label>
+          {areas.length > 1 && <div className="field"><label className="label" htmlFor="package-settings-area">责任田</label><select id="package-settings-area" className="select" name="area" defaultValue={area?.id ?? ""}><option value="">全部责任田</option>{areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>}
+          <div className="field"><label className="label" htmlFor="package-settings-state">启停状态</label><select id="package-settings-state" className="select" name="state" defaultValue={state}><option value="">全部</option><option value="active">启用</option><option value="inactive">停用</option></select></div>
+          <div className="field"><label className="label" htmlFor="package-settings-page-size">每页条数</label><select id="package-settings-page-size" className="select" name="pageSize" defaultValue={pageSize}>{LIST_PAGE_SIZES.map((size) => <option key={size}>{size}</option>)}</select></div>
+          <button className="button button-primary" type="submit">查询</button>
+          {(query || area || state) && <Link href={listHref(1, true)} prefetch={false} className="button button-ghost">清除筛选</Link>}
+        </form>
+        {rows.length ? (
+          <div className="table-wrap" role="region" aria-label="软件包配置表格" tabIndex={0}>
             <table className="data-table">
-              <thead><tr><th>软件包名称</th><th>软件包编码</th><th>责任田 / 责任人</th><th>版本记录</th><th>使用范围</th><th>当前状态</th><th aria-label="操作" /></tr></thead>
+              <thead><tr><th scope="col">软件包编码</th><th scope="col">软件包名称</th><th scope="col">责任田 / 责任人</th><th scope="col">版本记录</th><th scope="col">使用节点</th><th scope="col">启停状态</th><th scope="col">操作</th></tr></thead>
               <tbody>
-                {packages.map((pkg) => (
+                {rows.map(({ pkg, identity }) => (
                   <tr key={pkg.id}>
-                    <td><strong>{pkg.name}</strong></td>
-                    <td><span className="mono small">{pkg.code}</span></td>
-                    <td><div className="small">{pkg.areaName ?? "未归属"}</div><div className="small muted">{pkg.ownerName ?? "待指定"}</div></td>
-                    <td><span className="mono small">{pkg.versionCount}</span></td>
-                    <td><span className="mono small">{pkg.usageCount} 节点</span></td>
-                    <td>{pkg.currentStatus ? <StatusPill status={pkg.currentStatus} /> : <Badge tone="emerald">正式</Badge>}{!pkg.isActive && <Badge tone="slate">已停用</Badge>}</td>
-                    <td className="cell-actions"><Link href={`/settings/packages/${pkg.id}`} className="archive-link">配置 <ArrowUpRight size={12} /></Link></td>
+                    <th scope="row" className={styles.code}><Link href={`/settings/packages/${pkg.id}`} className="archive-link" prefetch={false}>{identity.code}</Link></th>
+                    <td>{identity.name}</td>
+                    <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "待指定"}</div></td>
+                    <td>{pkg.versionCount}</td>
+                    <td>{pkg.usageCount} 个</td>
+                    <td><Badge tone={pkg.isActive ? "emerald" : "slate"} dot>{pkg.isActive ? "启用" : "停用"}</Badge>{pkg.currentStatus && <div className={styles.progress}><StatusPill status={pkg.currentStatus} /></div>}</td>
+                    <td className="cell-actions"><Link href={`/settings/packages/${pkg.id}`} className="archive-link" aria-label={`配置 ${identity.code}`} prefetch={false}>配置 <ArrowUpRight size={12} aria-hidden="true" /></Link></td>
                   </tr>
                 ))}
-                {packages.length === 0 && <tr><td colSpan={7}><div className="muted-panel">当前责任田下暂无软件包。</div></td></tr>}
               </tbody>
             </table>
           </div>
+        ) : <EmptyState title={packages.length ? "没有匹配的软件包" : "暂无可维护的软件包"} />}
+        <div className={styles.pagination}>
+          <span role="status">{matching.length ? `${start + 1}–${start + rows.length} / ${matching.length} 个软件包` : "0 个软件包"}</span>
+          {pageCount > 1 && <nav aria-label="软件包分页">
+            {page > 1 && <Link href={listHref(page - 1)} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
+            <span>第 {page} / {pageCount} 页</span>
+            {page < pageCount && <Link href={listHref(page + 1)} prefetch={false} className="button button-secondary button-sm">下一页</Link>}
+          </nav>}
         </div>
       </section>
     </>

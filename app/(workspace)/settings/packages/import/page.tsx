@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManagePackageArea } from "@/lib/access";
+import { packageIdentity } from "@/lib/package-identity";
 import { getPackagesOverview } from "@/lib/queries";
 import { importLegacyVersionAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
@@ -31,7 +32,7 @@ export default async function ImportLegacyVersionPage() {
           <div className="card-body">
             <ActionForm action={importLegacyVersionAction} submitText="导入历史版本">
               <div className="form-grid">
-                <label className="field"><span className="label">软件包 <span className="required-mark">*</span></span><select className="select" name="packageId" required defaultValue=""><option value="" disabled>请选择软件包</option>{packages.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name} · {pkg.code}</option>)}</select></label>
+                <label className="field"><span className="label">软件包 <span className="required-mark">*</span></span><select className="select" name="packageId" required defaultValue=""><option value="" disabled>请选择软件包</option>{packages.map((pkg) => { const identity = packageIdentity(pkg); return <option key={pkg.id} value={pkg.id}>{identity.code} · {identity.name}</option>; })}</select></label>
                 <label className="field"><span className="label">版本号 <span className="required-mark">*</span></span><input className="input" name="version" required maxLength={40} placeholder="例如 1.6.0" /></label>
                 <label className="field span-2"><span className="label">版本说明/修复内容 <span className="required-mark">*</span></span><textarea className="textarea" name="changeSummary" required minLength={2} placeholder="简要说明该历史版本包含的需求或修复内容。" /></label>
                 <label className="field span-2"><span className="label">归档地址 <span className="required-mark">*</span></span><input className="input" name="archiveUrl" type="url" required placeholder="https://packages.example.com/releases/..." /></label>

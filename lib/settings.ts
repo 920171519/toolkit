@@ -6,6 +6,7 @@ import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
 import { canManagePackageArea, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject, isProjectSoftwareManager } from "./access";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, type ProjectStage } from "./project-stage";
 import { assert } from "./services";
+import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
@@ -610,7 +611,7 @@ export type SavePackageInput = {
 
 export function savePackage(actor: SessionUser, input: SavePackageInput): number {
   const existingPackage = input.id
-    ? one<{ id: number; area_id: number | null }>("SELECT id, area_id FROM packages WHERE id = ?", input.id)
+    ? one<{ id: number; area_id: number | null; name: string; code: string }>("SELECT id, area_id, name, code FROM packages WHERE id = ?", input.id)
     : null;
   if (input.id) {
     assert(existingPackage, "软件包不存在。", "NOT_FOUND");
@@ -631,19 +632,19 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
       "FORBIDDEN",
     );
   }
-  assert(input.name.trim().length >= 2, "软件包名称至少需要 2 个字符。");
-  assert(/^[A-Za-z0-9_-]{2,24}$/.test(input.code.trim()), "软件包编码需为 2-24 位字母、数字、下划线或中划线。");
+  const name = input.name.trim();
+  const code = input.code.trim().toUpperCase();
+  const current = existingPackage ? packageIdentity(existingPackage) : null;
+  const unchangedCode = current?.code.toUpperCase() === code;
+  assert(name.length >= 2, "软件包名称至少需要 2 个字符。");
+  assert(unchangedCode || isStandardPackageCode(code), "软件包编码需要 5 位数字加 3 位字母，例如 10001OTA。");
+  const identityChanged = current?.name !== name || !unchangedCode;
+  const identity = existingPackage && !identityChanged ? existingPackage : { name, code };
   assert(input.ownerId, "请为软件包指定责任人。");
   assert(
     Number.isInteger(input.trialOverdueDays) && input.trialOverdueDays >= 1 && input.trialOverdueDays <= 365,
     "试制超期天数需为 1-365 的整数。",
   );
-  const duplicate = one<{ id: number }>(
-    "SELECT id FROM packages WHERE UPPER(code) = UPPER(?) AND id != ?",
-    input.code.trim(),
-    input.id ?? -1,
-  );
-  assert(!duplicate, "软件包编码已存在。");
   const owner = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", input.ownerId);
   assert(owner, "责任人不存在或已停用。");
   if (input.areaId) {
@@ -658,14 +659,21 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
     assert(!activeVersion, "该软件包仍有在途版本，不能停用。");
   }
   return transaction(() => {
+    if (identityChanged) {
+      const matches = all<{ name: string; code: string }>(
+        "SELECT name, code FROM packages WHERE id != ? AND (UPPER(code) = ? OR UPPER(name) = ?)",
+        input.id ?? -1, code, code,
+      );
+      assert(!matches.some((pkg) => packageIdentity(pkg).code.toUpperCase() === code), "软件包编码已存在。");
+    }
     let packageId = input.id ?? 0;
     if (packageId) {
       const existing = one<{ id: number }>("SELECT id FROM packages WHERE id = ?", packageId);
       assert(existing, "软件包不存在。", "NOT_FOUND");
       run(
         "UPDATE packages SET name = ?, code = ?, description = ?, area_id = ?, owner_id = ?, is_active = ?, trial_overdue_days = ? WHERE id = ?",
-        input.name.trim(),
-        input.code.trim().toUpperCase(),
+        identity.name,
+        identity.code,
         input.description.trim(),
         input.areaId,
         input.ownerId,
@@ -677,8 +685,8 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
       const result = run(
         `INSERT INTO packages (name, code, description, area_id, owner_id, is_active, trial_overdue_days, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        input.name.trim(),
-        input.code.trim().toUpperCase(),
+        identity.name,
+        identity.code,
         input.description.trim(),
         input.areaId,
         input.ownerId,
@@ -693,7 +701,7 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
       input.id ? "UPDATE_PACKAGE" : "CREATE_PACKAGE",
       "PACKAGE",
       packageId,
-      `${input.id ? "更新" : "创建"}软件包：${input.name.trim()}`,
+      `${input.id ? "更新" : "创建"}软件包：${code} · ${name}`,
     );
     return packageId;
   });
