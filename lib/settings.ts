@@ -3,7 +3,8 @@ import "server-only";
 import { all, one, run, transaction } from "./db";
 import { ROLES, type Role } from "./constants";
 import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
-import { canManagePackageArea, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
+import { canManagePackageArea, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject, isProjectSoftwareManager } from "./access";
+import { DEFAULT_PROJECT_STAGE, isProjectStage, type ProjectStage } from "./project-stage";
 import { assert } from "./services";
 import type { SessionUser } from "./types";
 
@@ -255,6 +256,7 @@ export type SaveProjectInput = {
   pmUserIds: number[];
   softwareManagerIds: number[];
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  stage?: string;
   sortOrder?: number | null;
 };
 
@@ -294,16 +296,18 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     assert(softwareManager.role === "SOFTWARE_MANAGER", "选择的软件经理必须具有“软件经理”角色。");
   }
   assert(["ACTIVE", "PAUSED", "ARCHIVED"].includes(input.status), "项目状态无效。");
+  assert(input.stage === undefined || isProjectStage(input.stage), "项目阶段无效。");
   return transaction(() => {
     let projectId = input.id ?? 0;
     if (projectId) {
-      const existing = one<{ id: number; sort_order: number }>("SELECT id, sort_order FROM projects WHERE id = ?", projectId);
+      const existing = one<{ id: number; sort_order: number; stage: ProjectStage }>("SELECT id, sort_order, stage FROM projects WHERE id = ?", projectId);
       assert(existing, "项目不存在。", "NOT_FOUND");
+      assert(isAdmin(actor) || isProjectSoftwareManager(actor.id, projectId), "只能维护负责的项目。", "FORBIDDEN");
       const sortOrder = input.sortOrder == null ? existing.sort_order : Math.max(0, Math.floor(input.sortOrder));
       run(
         `UPDATE projects
          SET name = ?, code = ?, description = ?, pm_user_id = ?, software_manager_id = ?,
-             status = ?, sort_order = ?
+             status = ?, stage = ?, sort_order = ?
          WHERE id = ?`,
         input.name.trim(),
         input.code.trim().toUpperCase(),
@@ -311,6 +315,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         pmUserIds[0],
         softwareManagerIds[0],
         input.status,
+        input.stage ?? existing.stage,
         sortOrder,
         projectId,
       );
@@ -321,14 +326,15 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         : Math.max(0, Math.floor(input.sortOrder));
       const result = run(
         `INSERT INTO projects
-          (name, code, description, pm_user_id, software_manager_id, status, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          (name, code, description, pm_user_id, software_manager_id, status, stage, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         input.name.trim(),
         input.code.trim().toUpperCase(),
         input.description.trim(),
         pmUserIds[0],
         softwareManagerIds[0],
         input.status,
+        input.stage ?? DEFAULT_PROJECT_STAGE,
         sortOrder,
         new Date().toISOString(),
       );

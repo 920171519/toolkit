@@ -1,11 +1,13 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
+import { findWorkspaceProject } from "./workspace-project";
 
 const routeLabels: Array<[string, string]> = [
   ["/dashboard", "我的工作台"],
-  ["/overview", "部门总览"],
+  ["/overview", "项目总览"],
   ["/packages", "软件版本总览"],
   ["/submissions", "待转测申请"],
   ["/integration", "集成测试"],
@@ -19,17 +21,40 @@ const routeLabels: Array<[string, string]> = [
   ["/settings/users", "人员与角色"],
 ];
 
-export function TopbarBreadcrumb() {
+export function TopbarBreadcrumb({
+  workflowPaths,
+  workflowProjects,
+  catalogProjects,
+}: {
+  workflowPaths: string[];
+  workflowProjects: { id: number; name: string }[];
+  catalogProjects: { id: number; name: string }[];
+}) {
   const pathname = usePathname();
+  const params = useSearchParams();
+  const isProjectPage = /^\/projects\/\d+$/.test(pathname);
+  const project = findWorkspaceProject(pathname, params.getAll("project"), workflowPaths, isProjectPage ? catalogProjects : workflowProjects);
   const match = routeLabels.find(
     ([path]) => pathname === path || pathname.startsWith(path + "/"),
   );
-  let label = match?.[1] ?? "部门总览";
+  let label = match?.[1] ?? "项目总览";
   if (pathname.includes("/integration/") && pathname !== "/integration" && pathname !== "/integration/new") label = "转测批次详情";
   if (pathname.includes("/trial/") && pathname !== "/trial") label = "绑定验证详情";
   if (pathname.includes("/packages/") && pathname !== "/packages") label = "软件包详情";
   if (pathname === "/settings/packages/import") label = "导入历史版本";
   else if (pathname.includes("/settings/packages/") && pathname !== "/settings/packages") label = "软件包配置详情";
+  if (project) {
+    return (
+      <nav className="breadcrumb project-breadcrumb" aria-label="项目导航">
+        {isProjectPage ? <strong>{project.name}</strong> : (
+          <Link className="project-breadcrumb-name" href={"/projects/" + project.id} prefetch={false}>{project.name}</Link>
+        )}
+        <ChevronRight size={11} aria-hidden="true" />
+        {!isProjectPage && <span className="project-breadcrumb-section">{label}</span>}
+        <Link href="/overview" className="project-breadcrumb-return" prefetch={false}>返回项目总览</Link>
+      </nav>
+    );
+  }
   return (
     <div className="breadcrumb">
       <span>部门工作台</span>

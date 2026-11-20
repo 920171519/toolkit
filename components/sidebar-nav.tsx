@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { workflowHref } from "@/lib/workflow-links";
+import { findWorkspaceProject } from "./workspace-project";
 
 export type SidebarItem = {
   href: string;
@@ -69,25 +70,16 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const search = useSearchParams();
-  const workspaceId = pathname.match(/^\/projects\/(\d+)$/)?.[1];
-  const workflowPath = groups.some((group) =>
-    group.projectScoped && group.items.some((item) =>
-      pathname === item.href || pathname.startsWith(item.href + "/"),
-    ),
-  );
-  const projectId = Number(workspaceId ?? (workflowPath ? search.get("project") : null));
-  const project = workflowProjects.find((item) => item.id === projectId);
+  const workflowPaths = groups.find((group) => group.projectScoped)?.items.map((item) => item.href) ?? [];
+  const project = findWorkspaceProject(pathname, search.getAll("project"), workflowPaths, workflowProjects);
+  const projectDetail = /^\/projects\/\d+$/.test(pathname);
   return (
     <>
       {groups.map((group) => {
-        if (group.items.length === 0) return null;
-        const scoped = group.projectScoped && project;
-        const label = scoped ? `${project.name} · 项目流程` : group.label;
-        const items = scoped
-          ? [
-              { href: `/projects/${project.id}`, label: "项目工作区", icon: "projects" },
-              ...group.items.map((item) => ({ ...item, href: workflowHref(item.href, project.id) })),
-            ]
+        if (group.items.length === 0 || Boolean(group.projectScoped) !== Boolean(project) || (projectDetail && !project)) return null;
+        const label = project ? `${project.name} · 项目流程` : group.label;
+        const items = project
+          ? group.items.map((item) => ({ ...item, href: workflowHref(item.href, project.id) }))
           : group.items;
         return (
           <div key={group.label}>

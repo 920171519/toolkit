@@ -73,7 +73,7 @@ export default async function DashboardPage({
         description="这里只展示与你有关、需要你处理或关注的事项。转测申请按项目分发，测试异常、绑定任务与绑定电子流审批会主动出现在这里。"
         actions={
           <>
-            <Link prefetch={false} href="/overview" className="button button-secondary">部门总览</Link>
+            <Link prefetch={false} href="/overview" className="button button-secondary">项目总览</Link>
             <Link prefetch={false} href="/submissions" className="button button-primary">提交转测申请 <ArrowRight size={14} /></Link>
           </>
         }

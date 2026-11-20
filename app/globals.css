@@ -1624,6 +1624,34 @@ h4 {
   font-weight: 600;
 }
 
+.project-breadcrumb {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.project-breadcrumb-name,
+.project-breadcrumb strong {
+  font-size: 14px;
+}
+
+.project-breadcrumb-name,
+.project-breadcrumb-return {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.project-breadcrumb-return:hover,
+.project-breadcrumb-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.project-breadcrumb-section + .project-breadcrumb-return {
+  margin-left: 5px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line);
+}
+
 .topbar-right {
   display: flex;
   align-items: center;

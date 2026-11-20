@@ -200,6 +200,7 @@ export async function saveProjectAction(
       pmUserIds: formData.getAll("pmUserIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
       softwareManagerIds: formData.getAll("softwareManagerIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
       status: status || "ACTIVE",
+      stage: formData.has("stage") ? text(formData, "stage") : undefined,
       sortOrder: undefined,
     });
   } catch (error) {

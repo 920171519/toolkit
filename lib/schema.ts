@@ -1,4 +1,8 @@
-export const SCHEMA_VERSION = 8;
+import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES } from "./project-stage";
+
+export const PROJECT_STAGE_COLUMN = `TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${PROJECT_STAGES.map((stage) => "'" + stage + "'").join(", ")}))`;
+
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -73,6 +77,7 @@ CREATE TABLE IF NOT EXISTS projects (
   pm_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','PAUSED','ARCHIVED')),
+  stage ${PROJECT_STAGE_COLUMN},
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );

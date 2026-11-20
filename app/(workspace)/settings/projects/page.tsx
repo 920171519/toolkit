@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { CalendarDays, LayoutGrid, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
-import { getLedAreaIds } from "@/lib/access";
+import { getLedAreaIds, getManagedProjectIdsForUser } from "@/lib/access";
+import { DEFAULT_PROJECT_STAGE, getProjectStage, PROJECT_STAGE_META, PROJECT_STAGES, type ProjectStage } from "@/lib/project-stage";
 import {
   addProjectNodeAction,
   addProjectNodeApproverAction,
@@ -27,6 +28,17 @@ const statusOptions = [
   { value: "ARCHIVED", label: "已归档" },
 ];
 
+function ProjectStageField({ id, stage = DEFAULT_PROJECT_STAGE }: { id: string; stage?: ProjectStage }) {
+  return (
+    <div className="field">
+      <label htmlFor={id} className="label">项目阶段</label>
+      <select id={id} className="select" name="stage" defaultValue={stage}>
+        {PROJECT_STAGES.map((item) => <option key={item} value={item}>{PROJECT_STAGE_META[item].label}</option>)}
+      </select>
+    </div>
+  );
+}
+
 export default async function ProjectsSettingsPage({
   searchParams,
 }: {
@@ -35,7 +47,8 @@ export default async function ProjectsSettingsPage({
   const user = await requireRole(["ADMIN", "SOFTWARE_MANAGER"]);
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const projects = getProjectConfigs();
+  const assignedProjects = user.role === "ADMIN" ? null : new Set(getManagedProjectIdsForUser(user.id));
+  const projects = getProjectConfigs().filter((project) => assignedProjects === null || assignedProjects.has(project.id));
   const people = getPeople();
   const softwareManagers = people.filter((person) => person.role === "SOFTWARE_MANAGER");
 
@@ -44,7 +57,7 @@ export default async function ProjectsSettingsPage({
       <PageHeader
         eyebrow="Settings / Projects"
         title="项目与测试节点"
-        description="维护项目 PM、测试节点和项目状态。每个测试节点需要规划设备条码绑定验证责任人、主审批人与审批人范围、绑定通过数量，试制发布会按这些配置生成绑定任务。"
+        description="维护项目阶段、PM、测试节点和流程状态。归档项目在项目总览显示为已结束。每个测试节点需要规划设备条码绑定验证责任人、主审批人与审批人范围、绑定通过数量，试制发布会按这些配置生成绑定任务。"
         actions={user.role === "ADMIN" ? (
           <FormDialog label="新增项目" title="新建项目" description="仅管理员可以新建项目。" triggerClassName="button button-primary" testId="new-project-trigger">
             <ActionForm action={saveProjectAction} submitText="创建项目" testId="new-project-form">
@@ -54,6 +67,7 @@ export default async function ProjectsSettingsPage({
                 <ProjectContactPicker label="PM" name="pmUserIds" options={people} />
                 <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} />
                 <label className="field"><span className="label">项目说明</span><textarea className="textarea" name="description" placeholder="简要说明项目定位与交付目标。" /></label>
+                <ProjectStageField id="new-project-stage" />
                 <input type="hidden" name="status" value="ACTIVE" />
               </div>
             </ActionForm>
@@ -88,6 +102,7 @@ export default async function ProjectsSettingsPage({
                       <div className="toolbar" style={{ gap: 7 }}>
                         <h2 style={{ fontSize: 18 }}>{project.name}</h2>
                         <span className="chip">{project.code}</span>
+                        <span className="small">{PROJECT_STAGE_META[getProjectStage(project.status, project.stage)].label}</span>
                         <Badge tone={project.status === "ACTIVE" ? "emerald" : project.status === "PAUSED" ? "amber" : "slate"} dot>
                           {statusOptions.find((item) => item.value === project.status)?.label}
                         </Badge>
@@ -116,13 +131,14 @@ export default async function ProjectsSettingsPage({
                           <ProjectContactPicker label="PM" name="pmUserIds" options={people} defaultSelectedIds={project.pms.map((person) => person.id)} className="span-2" />
                           <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} defaultSelectedIds={project.softwareManagers.map((person) => person.id)} className="span-2" />
                           <label className="field">
-                            <span className="label">状态</span>
+                            <span className="label">流程状态</span>
                             <select className="select" name="status" defaultValue={project.status}>
                               {statusOptions.map((status) => (
                                 <option key={status.value} value={status.value}>{status.label}</option>
                               ))}
                             </select>
                           </label>
+                          <ProjectStageField id={`project-stage-${project.id}`} stage={project.stage} />
                           <label className="field span-2">
                             <span className="label">项目说明</span>
                             <textarea className="textarea" name="description" defaultValue={project.description} />

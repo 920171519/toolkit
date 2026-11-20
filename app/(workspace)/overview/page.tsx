@@ -1,123 +1,115 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Building2, Layers3, Package, UsersRound } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getProjectConfigs, parseFlash } from "@/lib/queries";
-import {
-  getBatches,
-  getPendingFormalVersions,
-  getPendingTransferGroups,
-  getTrialReadyVersions,
-  getTrialVersions,
-  getWorkflowProjectScope,
-} from "@/lib/workflow-queries";
-import { PROJECT_STATUS_META } from "@/lib/constants";
-import { formatDateTime } from "@/lib/format";
-import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import { getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { getProjectStage, PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
+import { getProjectCatalog, parseFlash } from "@/lib/queries";
+import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import styles from "./overview.module.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "部门总览" };
+export const metadata: Metadata = { title: "项目总览" };
+
+function normalize(value: string) {
+  return value.normalize("NFKC").toLowerCase();
+}
 
 export default async function OverviewPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const scope = getWorkflowProjectScope(user);
-  const scopeSet = scope ? new Set(scope) : null;
-  const projects = getProjectConfigs().filter(
-    (project) => !scopeSet || scopeSet.has(project.id),
-  );
-  const pendingGroups = getPendingTransferGroups(scope);
-  const batches = getBatches(200, scope);
-  const trialReady = getTrialReadyVersions(scope);
-  const trials = getTrialVersions(scope);
-  const pendingFormal = getPendingFormalVersions(scope);
-  const pendingByProject = new Map(pendingGroups.map((group) => [group.projectId, group.items.length]));
-  const activeBatchByProject = new Map<number, number>();
-  for (const batch of batches.filter((item) => item.status === "IN_TEST")) {
-    activeBatchByProject.set(batch.projectId, (activeBatchByProject.get(batch.projectId) ?? 0) + 1);
+  const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const terms = normalize(query).split(/\s+/).filter(Boolean);
+  const selectedStage = PROJECT_STAGES.find((stage) => stage === params.stage);
+  const pageSize = getListPageSize(params.pageSize);
+  const projects = getProjectCatalog().filter((project) => {
+    if (selectedStage && getProjectStage(project.status, project.stage) !== selectedStage) return false;
+    const text = normalize([
+      project.name,
+      project.code,
+      ...[...project.pms, ...project.softwareManagers].map((person) => person.name),
+    ].join(" "));
+    return terms.every((term) => text.includes(term));
+  });
+  const lastPage = Math.max(1, Math.ceil(projects.length / pageSize));
+  const requestedPage = typeof params.page === "string" ? Number(params.page) : 1;
+  const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(requestedPage, lastPage)) : 1;
+  const pageRows = projects.slice((page - 1) * pageSize, page * pageSize);
+
+  function pageHref(target: number) {
+    const search = new URLSearchParams({ pageSize: String(pageSize) });
+    if (query) search.set("q", query);
+    if (selectedStage) search.set("stage", selectedStage);
+    if (target > 1) search.set("page", String(target));
+    return "/overview?" + search.toString();
   }
-  const readyByProject = new Map<number, number>();
-  for (const item of trialReady) readyByProject.set(item.projectId, (readyByProject.get(item.projectId) ?? 0) + 1);
-  const trialByProject = new Map<number, number>();
-  for (const item of trials) trialByProject.set(item.projectId, (trialByProject.get(item.projectId) ?? 0) + 1);
-  const overdueByProject = new Map<number, number>();
-  for (const item of trials.filter((trial) => trial.isOverdue)) overdueByProject.set(item.projectId, (overdueByProject.get(item.projectId) ?? 0) + 1);
-  for (const item of pendingFormal.filter((version) => version.isOverdue)) overdueByProject.set(item.projectId, (overdueByProject.get(item.projectId) ?? 0) + 1);
-  const formalByProject = new Map<number, number>();
-  for (const item of pendingFormal) formalByProject.set(item.projectId, (formalByProject.get(item.projectId) ?? 0) + 1);
 
   return (
     <>
-      <PageHeader
-        eyebrow="Department overview"
-        title="部门总览"
-        description="按行查看各项目当前状态；点击项目进入项目页面，查看该项目的软件包、转测、集成测试、试制绑定和转正全部信息。"
-        actions={<Link href="/packages" className="button button-primary">软件版本总览 <ArrowRight size={14} /></Link>}
-      />
+      <PageHeader title="项目总览" />
       <FlashMessage notice={notice} />
-      <div className="info-strip" style={{ marginBottom: 16 }}>
-        <span><strong>{projects.length}</strong> 个项目</span>
-        <span><strong>{pendingGroups.reduce((sum, group) => sum + group.items.length, 0)}</strong> 个待转测申请</span>
-        <span><strong>{batches.filter((batch) => batch.status === "IN_TEST").length}</strong> 个在测批次</span>
-        <span><strong>{trialReady.length}</strong> 个待发试制</span>
-        <span><strong>{pendingFormal.length}</strong> 个待转正</span>
-        <span className={[...trials, ...pendingFormal].some((item) => item.isOverdue) ? "overdue-text" : undefined}><strong>{[...trials, ...pendingFormal].filter((item) => item.isOverdue).length}</strong> 个试制超期</span>
-      </div>
-
-      <section className="card">
-        <div className="card-header"><div><h2 style={{ fontSize: 18 }}>项目列表</h2><p className="small muted" style={{ marginTop: 3 }}>点击项目行进入项目工作区；所有项目级流程都在项目页面内查看。</p></div><Badge tone="slate">{projects.length} 个</Badge></div>
-        <div className="card-body" style={{ padding: 0, marginTop: 12 }}>
-          {projects.length === 0 ? (
-            <EmptyState title="暂无可查看项目" description="管理员创建项目后，会按行显示在这里。" />
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table project-overview-table">
-                <thead><tr><th>项目</th><th>状态</th><th>项目联系人</th><th>软件包 / 节点</th><th>待转测</th><th>在测批次</th><th>待发试制</th><th>绑定中</th><th>超期</th><th>待转正</th><th>最近活动</th><th aria-label="操作" /></tr></thead>
-                <tbody>
-                  {projects.map((project) => {
-                    const latestBatch = batches.filter((batch) => batch.projectId === project.id)
-                      .sort((a, b) => new Date(b.sentAt ?? b.createdAt).getTime() - new Date(a.sentAt ?? a.createdAt).getTime())[0];
-                    return (
-                      <tr key={project.id} className="project-overview-row">
-                        <td>
-                          <Link href={`/projects/${project.id}`} className="project-overview-name">{project.name}</Link>
-                          <div className="small muted">{project.code} · {project.description}</div>
-                        </td>
-                        <td><Badge tone={PROJECT_STATUS_META[project.status].tone} dot>{PROJECT_STATUS_META[project.status].label}</Badge></td>
-                        <td>
-                          <div className="small">PM {project.pmName ?? "待指定"}</div>
-                          <div className="small muted">经理 {project.softwareManagerName ?? "待指定"}</div>
-                        </td>
-                        <td><span className="mono small">{project.packageCount}</span><span className="small muted"> / {project.nodes.length} 节点</span></td>
-                        <td><span className="mono small">{pendingByProject.get(project.id) ?? 0}</span></td>
-                        <td><span className="mono small">{activeBatchByProject.get(project.id) ?? 0}</span></td>
-                        <td><span className="mono small">{readyByProject.get(project.id) ?? 0}</span></td>
-                        <td><span className="mono small">{trialByProject.get(project.id) ?? 0}</span></td>
-                        <td>{(overdueByProject.get(project.id) ?? 0) > 0 ? <Badge tone="rose">{overdueByProject.get(project.id)} 已超期</Badge> : <span className="small muted">—</span>}</td>
-                        <td><span className="mono small">{formalByProject.get(project.id) ?? 0}</span></td>
-                        <td className="small muted">{latestBatch ? `${latestBatch.code} · ${formatDateTime(latestBatch.sentAt ?? latestBatch.createdAt)}` : "—"}</td>
-                        <td className="cell-actions"><Link href={`/projects/${project.id}`} className="archive-link">进入项目 <ArrowRight size={11} /></Link></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+      <section className="card" aria-label="项目列表">
+        <form className={styles.filters} action="/overview" method="get" role="search" aria-label="查找项目">
+          <label className={styles.search}>
+            <span className="label">搜索项目</span>
+            <input className="input" type="search" name="q" defaultValue={query} maxLength={100} placeholder="项目名称、编码或联系人" />
+          </label>
+          <div>
+            <label className="label" htmlFor="overview-project-stage">项目阶段</label>
+            <select className="select" id="overview-project-stage" name="stage" defaultValue={selectedStage ?? ""}>
+              <option value="">全部阶段</option>
+              {PROJECT_STAGES.map((stage) => <option key={stage} value={stage}>{PROJECT_STAGE_META[stage].label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="overview-page-size">每页条数</label>
+            <select className="select" id="overview-page-size" name="pageSize" defaultValue={pageSize}>
+              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="button button-primary"><Search size={15} aria-hidden="true" />查询</button>
+          {(query || selectedStage) && <Link href={"/overview?pageSize=" + pageSize} className="button button-ghost" prefetch={false}>清除筛选</Link>}
+        </form>
+        {pageRows.length > 0 ? (
+          <div className="table-wrap" role="region" tabIndex={0} aria-label="项目表格">
+            <table className="data-table project-overview-table">
+              <thead><tr><th scope="col">项目</th><th scope="col">阶段</th><th scope="col">PM</th><th scope="col">软件经理</th></tr></thead>
+              <tbody>
+                {pageRows.map((project) => (
+                  <tr key={project.id} className="project-overview-row">
+                    <td>
+                      <Link href={"/projects/" + project.id} className="project-overview-name" prefetch={false}>
+                        {project.name}<ArrowRight size={13} aria-hidden="true" />
+                      </Link>
+                      <div className="small muted">{project.code}</div>
+                    </td>
+                    <td>{PROJECT_STAGE_META[getProjectStage(project.status, project.stage)].label}</td>
+                    <td>{project.pms.map((person) => person.name).join("、") || "待指定"}</td>
+                    <td>{project.softwareManagers.map((person) => person.name).join("、") || "待指定"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title={query || selectedStage ? "没有匹配的项目" : "暂无项目"} />
+        )}
+        <div className={styles.footer}>
+          <span className="small muted">{projects.length} 个项目</span>
+          {lastPage > 1 && (
+            <nav className={styles.pagination} aria-label="项目分页">
+              {page > 1 && <Link href={pageHref(page - 1)} className="button button-secondary button-sm" prefetch={false}>上一页</Link>}
+              <span>第 {page} / {lastPage} 页</span>
+              {page < lastPage && <Link href={pageHref(page + 1)} className="button button-secondary button-sm" prefetch={false}>下一页</Link>}
+            </nav>
           )}
         </div>
       </section>
-
-      <div className="overview-legend muted-panel" style={{ marginTop: 14 }}>
-        <span><Building2 size={13} /> 项目行按项目维度汇总</span>
-        <span><Package size={13} /> 软件包数量来自项目使用范围</span>
-        <span><Layers3 size={13} /> 在测批次只显示当前进行中的批次</span>
-        <span><UsersRound size={13} /> 项目联系人支持多 PM、多软件经理</span>
-      </div>
     </>
   );
 }

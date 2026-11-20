@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ExternalLink, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
-import { hasAreaLeadership } from "@/lib/access";
+import { getLedAreaIds } from "@/lib/access";
+import { getProjectOptions } from "@/lib/workflow-queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { Avatar } from "@/components/ui";
 import { Brand } from "@/components/brand";
@@ -16,12 +17,12 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const user = await requireUser();
   const canConfigure = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const isAdmin = user.role === "ADMIN";
-  const hasAreaRole = hasAreaLeadership(user.id);
-  const canManagePackages = isAdmin || hasAreaRole;
+  const canManagePackages = isAdmin || getLedAreaIds(user.id).length > 0;
+  const workflowProjects = getWorkflowProjectOptions(user, true);
 
   const departmentItems: SidebarItem[] = [
     { href: "/dashboard", label: "我的工作台", icon: "dashboard" },
-    { href: "/overview", label: "部门总览", icon: "overview" },
+    { href: "/overview", label: "项目总览", icon: "overview" },
   ];
 
   const workflowItems: SidebarItem[] = [
@@ -61,7 +62,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       <aside className="sidebar">
         <Brand href="/dashboard" />
         <SidebarNav
-          workflowProjects={getWorkflowProjectOptions(user, true)}
+          workflowProjects={workflowProjects}
           groups={[
             { label: "部门协同", items: departmentItems },
             { label: "软件包流程", items: workflowItems, projectScoped: true },
@@ -90,7 +91,11 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
 
       <div className="workspace-main">
         <header className="topbar">
-          <TopbarBreadcrumb />
+          <TopbarBreadcrumb
+            workflowPaths={workflowItems.map((item) => item.href)}
+            workflowProjects={workflowProjects}
+            catalogProjects={getProjectOptions(true).map(({ id, name }) => ({ id, name }))}
+          />
           <div className="topbar-right">
             <span className="topbar-link" style={{ cursor: "default" }}>
               转测窗口 · 每周三 17:00

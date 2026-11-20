@@ -22,11 +22,11 @@ export default function WorkspaceError({
       </span>
       <h1 style={{ marginTop: 14, fontSize: 24 }}>页面加载遇到问题</h1>
       <p className="muted small" style={{ marginTop: 7, lineHeight: 1.8 }}>
-        系统已记录本次异常。你可以重试当前操作，或返回部门总览。
+        系统已记录本次异常。你可以重试当前操作，或返回项目总览。
       </p>
       <div className="toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
         <button type="button" onClick={() => reset()} className="button button-primary">重试</button>
-        <Link href="/dashboard" className="button button-secondary">返回部门总览</Link>
+        <Link href="/overview" className="button button-secondary">返回项目总览</Link>
       </div>
     </div>
   );

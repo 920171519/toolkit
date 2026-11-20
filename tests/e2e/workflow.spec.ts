@@ -221,9 +221,10 @@ test.describe("工程协同台项目维度流程", () => {
 
     await page.goto("/overview");
     await expect(page.locator(".project-overview-row").filter({ hasText: "极光 M2" })).toHaveCount(1);
-    await expect(page.locator(".project-overview-row").filter({ hasText: "星云 N1" })).toHaveCount(0);
+    await expect(page.locator(".project-overview-row").filter({ hasText: "星云 N1" })).toHaveCount(1);
     await page.goto("/projects/1");
-    await expect(page).toHaveURL(/\/overview\?flash=/);
+    await expect(page.getByRole("region", { name: "项目基本资料" })).toContainText("需要项目流程权限");
+    await expect(page.locator("#batches")).toHaveCount(0);
 
     await login(page, "TEST001");
     await page.goto("/submissions");
@@ -244,11 +245,8 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByRole("heading", { name: "待发布试制" })).toBeVisible();
   });
 
-  test("试制超期在部门总览、项目工作区和试制页提示", async ({ page }) => {
+  test("试制超期在项目工作区和试制页提示", async ({ page }) => {
     await login(page, "MGR001");
-    await page.goto("/overview");
-    const n1Row = page.locator(".project-overview-row").filter({ hasText: "星云 N1" }).first();
-    await expect(n1Row).toContainText("已超期");
     await page.goto("/projects/1");
     await expect(page.locator("#trials")).toContainText("已超期");
     await page.goto("/trial");
@@ -486,7 +484,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.locator(".personal-alert").filter({ hasText: "试制版本已作废" })).toHaveCount(0);
   });
 
-  test("软件包使用范围跨项目展示，部门总览进入项目工作区", async ({ page }) => {
+  test("软件包使用范围跨项目展示，项目总览进入项目工作区", async ({ page }) => {
     await login(page, "OWNER001");
     await page.goto("/packages");
     await expect(page.locator(".data-table")).not.toContainText("远山 X0");

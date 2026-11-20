@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ArrowRight, Boxes, FlaskConical, GitBranch, ShieldCheck } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowRight, Boxes, FlaskConical, GitBranch, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage } from "@/lib/access";
-import { getPackageOverviewRows, getProjectConfigs, parseFlash } from "@/lib/queries";
+import { getPackageOverviewRows, getProjectCatalog, getProjectConfigs, parseFlash } from "@/lib/queries";
+import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { workflowHref } from "@/lib/workflow-links";
 import {
   getBatches,
@@ -40,16 +41,39 @@ export default async function ProjectWorkspacePage({
   const user = await requireUser();
   const { id } = await params;
   const projectId = Number(id);
-  if (!Number.isInteger(projectId)) notFound();
-  const project = getProjectConfigs().find((item) => item.id === projectId);
-  if (!project) notFound();
-  if (!canAccessProjectPage(user, projectId)) {
-    redirect(`/overview?flash=${encodeURIComponent("当前账号只能查看自己的项目流程")}&tone=error`);
-  }
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(projectId) || projectId < 1) notFound();
+  const [catalogEntry] = getProjectCatalog(projectId);
+  if (!catalogEntry) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const allowedProjects = getWorkflowProjectScope(user);
-  const scope = allowedProjects === null || allowedProjects.includes(projectId) ? [projectId] : [];
+  const hasWorkflowScope = allowedProjects === null || allowedProjects.includes(projectId);
+  const canViewArchivedHistory = user.role === "SOFTWARE_MANAGER" && catalogEntry.status === "ARCHIVED";
+  const canRead = canAccessProjectPage(user, projectId) && (hasWorkflowScope || canViewArchivedHistory);
+  const stage = PROJECT_STAGE_META[getProjectStage(catalogEntry.status, catalogEntry.stage)].label;
+
+  if (!canRead) {
+    return (
+      <>
+        <PageHeader title={catalogEntry.name} description={catalogEntry.code} />
+        <FlashMessage notice={notice} />
+        <section className="card" aria-label="项目基本资料">
+          <div className="card-body">
+            <dl>
+              <div><dt className="label">阶段</dt><dd>{stage}</dd></div>
+              <div><dt className="label">PM</dt><dd>{catalogEntry.pms.map((person) => person.name).join("、") || "待指定"}</dd></div>
+              <div><dt className="label">软件经理</dt><dd>{catalogEntry.softwareManagers.map((person) => person.name).join("、") || "待指定"}</dd></div>
+            </dl>
+            <p className="small muted">当前账号可查看项目基本资料。查看软件包和流转记录需要项目流程权限。</p>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  const [project] = getProjectConfigs(projectId);
+  if (!project) notFound();
+  const scope = hasWorkflowScope ? [projectId] : [];
   const pendingGroup = getPendingTransferGroups(scope)[0];
   const batches = getBatches(200, scope);
   const ready = getTrialReadyVersions(scope);
@@ -66,7 +90,7 @@ export default async function ProjectWorkspacePage({
         eyebrow="Project workspace"
         title={project.name}
         description={`${project.code} · ${project.description || "项目工作区"}`}
-        actions={<><Link href="/overview" className="button button-secondary"><ArrowLeft size={14} />返回部门总览</Link><Link href={workflowHref("/versions", projectId)} className="button button-secondary">版本全链路</Link></>}
+        actions={hasWorkflowScope ? <Link href={workflowHref("/versions", projectId)} className="button button-secondary">版本全链路</Link> : undefined}
       />
       <FlashMessage notice={notice} />
       <div className="project-head card" style={{ marginBottom: 16 }}>
@@ -74,6 +98,7 @@ export default async function ProjectWorkspacePage({
           <div className="toolbar-spread" style={{ alignItems: "flex-start" }}>
             <div>
               <div className="toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
+                <span className="chip">{stage}</span>
                 <Badge tone={PROJECT_STATUS_META[project.status].tone} dot>{PROJECT_STATUS_META[project.status].label}</Badge>
                 <span className="chip">PM {project.pms.map((person) => person.name).join(" / ") || "待指定"}</span>
                 <span className="chip">软件经理 {project.softwareManagers.map((person) => person.name).join(" / ") || "待指定"}</span>

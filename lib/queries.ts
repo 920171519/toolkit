@@ -1,3 +1,4 @@
+import type { ProjectStage } from "./project-stage";
 import "server-only";
 
 import { all, one } from "./db";
@@ -40,6 +41,22 @@ export type PublicProject = {
   softwareManagerTitle: string | null;
 };
 
+function getProjectContacts(projectId: number) {
+  const pms = all<ProjectContact>(
+    `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+     FROM project_pms pp JOIN users u ON u.id = pp.user_id
+     WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
+    projectId,
+  );
+  const softwareManagers = all<ProjectContact>(
+    `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
+     FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
+     WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
+    projectId,
+  );
+  return { pms, softwareManagers };
+}
+
 export function getPublicProjects(): PublicProject[] {
   const projects = all<{
     id: number;
@@ -51,18 +68,7 @@ export function getPublicProjects(): PublicProject[] {
      WHERE status != 'ARCHIVED' ORDER BY sort_order, id`,
   );
   return projects.map((project) => {
-    const pms = all<ProjectContact>(
-      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
-       FROM project_pms pp JOIN users u ON u.id = pp.user_id
-       WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
-      project.id,
-    );
-    const softwareManagers = all<ProjectContact>(
-      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
-       FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
-       WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
-      project.id,
-    );
+    const { pms, softwareManagers } = getProjectContacts(project.id);
     return {
       ...project,
       pms,
@@ -862,14 +868,27 @@ export function getAreaConfigs(): AreaConfig[] {
   });
 }
 
-export type ProjectConfig = {
+export type ProjectCatalogItem = {
   id: number;
   name: string;
   code: string;
   description: string;
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  stage: ProjectStage;
   pms: ProjectContact[];
   softwareManagers: ProjectContact[];
+};
+
+export function getProjectCatalog(projectId?: number): ProjectCatalogItem[] {
+  const projects = all<Omit<ProjectCatalogItem, "pms" | "softwareManagers">>(
+    `SELECT id, name, code, description, status, stage FROM projects
+     ${projectId === undefined ? "" : "WHERE id = ?"} ORDER BY sort_order, id`,
+    ...(projectId === undefined ? [] : [projectId]),
+  );
+  return projects.map((project) => ({ ...project, ...getProjectContacts(project.id) }));
+}
+
+export type ProjectConfig = ProjectCatalogItem & {
   pmUserId: number | null;
   pmName: string | null;
   softwareManagerUserId: number | null;
@@ -894,26 +913,16 @@ export type ProjectConfig = {
   packageCount: number;
 };
 
-export function getProjectConfigs(): ProjectConfig[] {
+export function getProjectConfigs(projectId?: number): ProjectConfig[] {
   return all<Omit<ProjectConfig, "nodes" | "packageCount" | "pms" | "softwareManagers"> & { packageCount: number }>(
-    `SELECT p.id, p.name, p.code, p.description, p.status,
+    `SELECT p.id, p.name, p.code, p.description, p.status, p.stage,
             p.sort_order AS sortOrder,
             (SELECT COUNT(DISTINCT pu.package_id) FROM package_usages pu WHERE pu.project_id = p.id) AS packageCount
      FROM projects p
-     ORDER BY p.sort_order, p.id`,
+     ${projectId === undefined ? "" : "WHERE p.id = ?"} ORDER BY p.sort_order, p.id`,
+    ...(projectId === undefined ? [] : [projectId]),
   ).map((project) => {
-    const pms = all<ProjectContact>(
-      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
-       FROM project_pms pp JOIN users u ON u.id = pp.user_id
-       WHERE pp.project_id = ? ORDER BY pp.created_at, u.id`,
-      project.id,
-    );
-    const softwareManagers = all<ProjectContact>(
-      `SELECT u.id, u.name, u.employee_id AS employeeId, u.title
-       FROM project_software_managers psm JOIN users u ON u.id = psm.user_id
-       WHERE psm.project_id = ? ORDER BY psm.created_at, u.id`,
-      project.id,
-    );
+    const { pms, softwareManagers } = getProjectContacts(project.id);
     return {
       ...project,
       pms,
