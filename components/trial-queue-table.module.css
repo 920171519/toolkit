@@ -1,6 +1,12 @@
 .queue {
   margin-block: 16px;
   min-width: 0;
+  scroll-margin-top: 16px;
+}
+
+.queue:target {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .header {

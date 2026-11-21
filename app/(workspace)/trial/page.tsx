@@ -134,7 +134,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       <PageHeader title="试制与绑定验证"
         description="试制按软件包版本共享，绑定按项目节点验证。"
         actions={<>
-          {canViewReleaseQueue && <Link href="#binding-queue" className="button button-secondary">定位绑定验证</Link>}
+          {canViewReleaseQueue && <a href="#binding-queue" className="button button-secondary">跳到绑定验证列表</a>}
           <Link href={workflowHref("/packages", projectId)} className="button button-secondary" prefetch={false}>查看版本总览</Link>
         </>} />
       <FlashMessage notice={notice} />

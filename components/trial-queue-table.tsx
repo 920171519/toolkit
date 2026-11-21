@@ -73,7 +73,7 @@ export function TrialQueueTable<Row>({
   const reset = () => href(Object.fromEntries([...inputKeys].filter((key) => key !== field("size")).map((key) => [key, undefined])));
 
   return (
-    <section className={`card ${styles.queue}`} aria-labelledby={titleId} id={kind === "binding" ? "binding-queue" : undefined}>
+    <section className={`card ${styles.queue}`} aria-labelledby={titleId} id={kind === "binding" ? "binding-queue" : undefined} tabIndex={kind === "binding" ? -1 : undefined}>
       <div className={`card-header ${styles.header}`}>
         <div>
           <h2 id={titleId}>{title}</h2>
