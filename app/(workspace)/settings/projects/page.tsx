@@ -112,12 +112,12 @@ export default async function ProjectsSettingsPage({
                       </div>
                     </div>
                   </div>
-                  <details>
+                  <details className="project-settings-editor">
                     <summary className="button button-secondary button-sm" style={{ display: "inline-flex", cursor: "pointer", listStyle: "none" }}>
                       <span className="when-closed">编辑项目</span>
                       <span className="when-open">取消编辑</span>
                     </summary>
-                    <div style={{ marginTop: 16, minWidth: "min(540px, 80vw)" }}>
+                    <div style={{ marginTop: 16 }}>
                       <ActionForm action={saveProjectAction} testId={`edit-project-form-${project.id}`} hidden={{ id: project.id }} submitText="保存项目配置">
                         <div className="form-grid">
                           <label className="field">

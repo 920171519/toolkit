@@ -544,6 +544,8 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .node-approver-range .member-pill form { margin: 0; }
 .node-approver-range .member-pill .chip-remove { width: 16px !important; height: 16px !important; min-height: 16px !important; }
 
+.project-settings-editor[open] { flex-basis: 100%; min-width: 0; }
+
 /* Multiple project contacts */
 .person-check-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow: auto; padding: 2px 0; }
 .person-check { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 11px; cursor: pointer; }
