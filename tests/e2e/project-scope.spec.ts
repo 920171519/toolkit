@@ -54,7 +54,6 @@ test("可直接搜索版本全链路，项目追溯按项目范围展示证据",
   await page.locator("main").getByRole("link", { name: "版本全链路", exact: true }).click();
   await expect(page).toHaveURL(/\/versions$/);
   await page.getByRole("textbox", { name: "软件包或版本" }).fill("1001OTA 1.6.0");
-  await page.getByRole("button", { name: "搜索" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await page.getByRole("link", { name: "全链路追溯", exact: true }).click();
   await expect(page.locator("main").getByRole("link", { name: "星云 N1" })).toBeVisible();
@@ -66,7 +65,7 @@ test("可直接搜索版本全链路，项目追溯按项目范围展示证据",
   const navigation = page.getByRole("navigation", { name: "极光 M2 · 项目流程" });
   await navigation.getByRole("link", { name: "版本全链路" }).click();
   await page.getByRole("textbox", { name: "软件包或版本" }).fill("1001OTA 1.6.0");
-  await page.getByRole("button", { name: "搜索" }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(1);
   await page.getByRole("link", { name: "全链路追溯", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/versions/\\d+\\?project=${projectId}&q=`));
   await expect(page.locator("main").getByRole("link", { name: "极光 M2", exact: true })).toBeVisible();

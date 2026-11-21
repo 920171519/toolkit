@@ -101,3 +101,27 @@
 .dates input {
   min-width: 125px;
 }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.pageSize {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pageSize select {
+  width: auto;
+  min-height: 32px;
+  padding-block: 4px;
+}
+
+form[data-enhanced="true"] .manualSearch {
+  display: none;
+}

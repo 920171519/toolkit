@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDown, ArrowDownUp, ArrowRight, ArrowUp, Search } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowRight, ArrowUp } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { PACKAGE_STATUS_META, PACKAGE_STATUSES } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
@@ -10,6 +10,7 @@ import { readTraceListState, traceHref, withTraceTab } from "@/lib/version-trace
 import { workflowHref } from "@/lib/workflow-links";
 import { getTraceVersionPage, getTraceVersionTabs } from "@/lib/workflow-queries";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
+import { TraceFilterForm } from "./trace-filter-form";
 import { VersionTraceTabs } from "./trace-tabs";
 import styles from "./versions.module.css";
 
@@ -44,7 +45,7 @@ export default async function VersionsPage({ searchParams }: {
       />
       <VersionTraceTabs state={state} tabs={tabs} projectId={project?.id} />
       <section className="card">
-        <form action="/versions" method="get" role="search" aria-label="查询版本">
+        <TraceFilterForm currentHref={traceHref(state, project?.id)} projectId={project?.id}>
           {project && <input type="hidden" name="project" value={project.id} />}
           {state.packageId && <input type="hidden" name="package" value={state.packageId} />}
           {state.tabs.length > 0 && <input type="hidden" name="tabs" value={state.tabs.join(",")} />}
@@ -55,13 +56,7 @@ export default async function VersionsPage({ searchParams }: {
               <span className="label">软件包或版本</span>
               <input className="input" name="q" defaultValue={state.query} maxLength={100} placeholder="例如 1001OTA 1.6.0" />
             </label>
-            <label className="field">
-              <span className="label">每页条数</span>
-              <select className="select" name="pageSize" defaultValue={state.pageSize}>
-                {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </label>
-            <button type="submit" className="button button-primary"><Search size={14} aria-hidden="true" />搜索</button>
+            <button type="submit" className={`button button-primary ${styles.manualSearch}`}>搜索</button>
             {hasFilters && <Link href={traceHref(cleared, project?.id)} className="button button-secondary" prefetch={false}>清除筛选</Link>}
             {state.packageId && <Link href={traceHref({ ...state, page: 1, packageId: undefined }, project?.id)} className="button button-secondary" prefetch={false}>全部软件包</Link>}
           </div>
@@ -123,14 +118,20 @@ export default async function VersionsPage({ searchParams }: {
               </tbody>
             </table>
           </div>
-        </form>
-        {rows.length === 0 && <EmptyState title="未找到版本" description="可以调整表头筛选或搜索关键词。" />}
-        <nav aria-label="版本列表分页" className="card-body toolbar" style={{ justifyContent: "flex-end", gap: 10 }}>
-          <span className="small muted">共 {total} 条</span>
-          {page > 1 && <Link href={traceHref({ ...state, page: page - 1 }, project?.id)} className="button button-secondary button-sm" prefetch={false}>上一页</Link>}
-          <span className="small muted">第 {page} / {pageCount} 页</span>
-          {page < pageCount && <Link href={traceHref({ ...state, page: page + 1 }, project?.id)} className="button button-secondary button-sm" prefetch={false}>下一页</Link>}
-        </nav>
+          {rows.length === 0 && <EmptyState title="未找到版本" description="可以调整表头筛选或搜索关键词。" />}
+          <nav aria-label="版本列表分页" className={`card-body ${styles.pagination}`}>
+            <span className="small muted" role="status">共 {total} 条</span>
+            <label className={styles.pageSize}>
+              <span className="small muted">每页条数</span>
+              <select className="select" name="pageSize" defaultValue={state.pageSize}>
+                {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
+            {page > 1 && <Link href={traceHref({ ...state, page: page - 1 }, project?.id)} className="button button-secondary button-sm" prefetch={false}>上一页</Link>}
+            <span className="small muted">第 {page} / {pageCount} 页</span>
+            {page < pageCount && <Link href={traceHref({ ...state, page: page + 1 }, project?.id)} className="button button-secondary button-sm" prefetch={false}>下一页</Link>}
+          </nav>
+        </TraceFilterForm>
       </section>
     </>
   );
