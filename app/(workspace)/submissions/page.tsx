@@ -14,6 +14,7 @@ import {
   getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
+import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import {
   deleteDraftBatchAction,
   sendBatchAction,
@@ -61,6 +62,9 @@ export default async function SubmissionsPage({
       : [],
   );
   const requestCount = groups.reduce((total, group) => total + group.items.length, 0);
+  const riskEntries = getRiskTrialEntries(groups.flatMap((group) =>
+    candidatesByProject.has(group.projectId) ? group.items.map((item) => item.requestId) : [],
+  ));
 
   const transferDialog = availablePackages.length > 0 ? (
     <FormDialog
@@ -135,6 +139,7 @@ export default async function SubmissionsPage({
                   group={{ ...group, items: group.items.map((item) => ({
                     ...item,
                     canCancel: item.versionStatus === "PENDING_TRANSFER" && canCancelVersion(user, item.submittedById),
+                    riskEntry: riskEntries[item.requestId],
                   })) }}
                   scopeProjectId={project?.id}
                   batch={candidatesByProject.get(group.projectId)}

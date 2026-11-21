@@ -9,6 +9,9 @@ import {
 } from "./permissions";
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getTransferAreaIds } from "./access";
 import { assert } from "./services";
+import { getTrialReadyVersions } from "./workflow-queries";
+import { getRiskTrialEntries } from "./trial-risk-entry";
+import { trialReleaseStateKey } from "./trial-release-state";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 
@@ -484,6 +487,10 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
       refreshVersionAggregate(request.package_version_id);
       refreshTrialReadiness(request.package_version_id, timestamp);
     }
+    run(
+      "UPDATE trial_risk_admissions SET invalidated_at = ? WHERE batch_id = ? AND stage = 'IN_TEST' AND invalidated_at IS NULL",
+      timestamp, batchId,
+    );
     audit(actor.id, "TERMINATE_BATCH", "BATCH", batchId, `终止 ${batch.code} 集成测试：${reason.trim()}`);
   });
 }
@@ -619,6 +626,15 @@ export async function completeBatchTest(
            WHERE id = ?`,
           requestStatus, requestStatus, timestamp, item.request_id,
         );
+        if (requestStatus !== "PASSED") {
+          run(
+            `UPDATE trial_risk_admissions SET invalidated_at = ?
+             WHERE package_version_id = ? AND invalidated_at IS NULL
+               AND EXISTS (SELECT 1 FROM package_versions pv WHERE pv.id = package_version_id
+                 AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL'))`,
+            timestamp, item.version_id,
+          );
+        }
         refreshVersionAggregate(item.version_id);
         refreshTrialReadiness(item.version_id, timestamp);
       }
@@ -655,7 +671,38 @@ function voidParallelRiskTrial(
   audit(actor.id, "VOID_RISK_TRIAL_TEST_FAILURE", "PACKAGE_VERSION", item.version_id, `作废 ${item.package_name} ${item.version} 风险试制。${reason}`);
 }
 
-export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, riskConclusion = "") {
+
+export function admitRiskTrial(
+  actor: SessionUser,
+  input: { requestId: number; stage: string; batchId?: number; reason: string },
+) {
+  const reason = input.reason.trim();
+  assert(reason.length >= 5 && reason.length <= 1000, "请填写 5 至 1000 字的风险试制原因。");
+  return transaction(() => {
+    const request = one<{ versionId: number; projectId: number }>(
+      "SELECT package_version_id AS versionId, project_id AS projectId FROM version_transfer_requests WHERE id = ?",
+      input.requestId,
+    );
+    assert(request, "项目版本记录不存在。", "NOT_FOUND");
+    const project = assertProjectManager(actor, request.projectId);
+    const entry = getRiskTrialEntries([input.requestId])[input.requestId];
+    assert(entry && entry.stage === input.stage && entry.batchId === (input.batchId ?? null),
+      "转测状态已变化，请刷新页面并按当前阶段登记风险原因。");
+    assert(!entry.registered, "该版本已经登记风险试制原因，请查看待发布试制队列。");
+    const [candidate] = getTrialReadyVersions([project.id], { requestId: input.requestId, includeUnregisteredRisk: true });
+    assert(candidate && candidate.riskProjectCount > 0, "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
+    run(
+      `INSERT INTO trial_risk_admissions
+         (package_version_id, request_id, project_id, project_name, batch_id, stage, reason, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      request.versionId, input.requestId, project.id, project.name, entry.batchId, entry.stage, reason, actor.id, now(),
+    );
+    audit(actor.id, "ADMIT_RISK_TRIAL", "PACKAGE_VERSION", request.versionId, `${project.name}登记风险试制：${reason}`);
+    return { projectId: project.id };
+  });
+}
+
+export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, eligibility: string) {
   assert(trialFormNo.trim().length >= 3, "请填写发布试制电子流。");
   return transaction(() => {
     const anchor = one<{
@@ -681,17 +728,14 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       project_id: number;
       project_name: string;
       status: string;
-      batch_conclusion: string | null;
     }>(
-      `SELECT r.id, r.project_id, pr.name AS project_name, r.status, b.conclusion AS batch_conclusion
+      `SELECT r.id, r.project_id, pr.name AS project_name, r.status
        FROM version_transfer_requests r
        JOIN projects pr ON pr.id = r.project_id
-       LEFT JOIN integration_batches b ON b.id = (
-         SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-       )
        WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+         AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = ? AND u.project_id = r.project_id)
        ORDER BY pr.sort_order`,
-      anchor.package_version_id,
+      anchor.package_version_id, anchor.package_id,
     );
     assert(requests.length > 0, "该版本没有可发布试制的项目记录。", "NOT_FOUND");
     assert(
@@ -720,12 +764,11 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         `${request.project_name} 的版本状态不支持发布试制。`,
       );
     }
-    const riskRequired = requests.some(
-      (request) => request.status !== "PASSED" || request.batch_conclusion !== "PASS",
-    );
-    if (riskRequired) {
-      assert(riskConclusion.trim().length >= 5, "存在未完成或未通过集成测试的项目，请填写全版本风险发布结论。");
-    }
+    const [ready] = getTrialReadyVersions(null, { requestId });
+    assert(ready, "请先在待转测申请或集成测试页面登记风险试制原因。");
+    assert(trialReleaseStateKey(ready) === eligibility, "试制资格已变化，请刷新后重新确认。");
+    const riskRequired = ready.riskProjectCount > 0;
+    const riskConclusion = riskRequired ? ready.riskConclusion : null;
 
     const requirementsToCreate: Array<{
       requestId: number;
@@ -786,7 +829,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       trialFormNo.trim(),
       timestamp,
       riskRequired ? "RISK" : "INTEGRATION",
-      riskRequired ? riskConclusion.trim() : null,
+      riskConclusion ?? null,
       timestamp,
       anchor.package_version_id,
     );
@@ -800,7 +843,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         timestamp,
         actor.id,
         riskRequired ? "RISK" : "INTEGRATION",
-        riskRequired ? riskConclusion.trim() : null,
+        riskConclusion ?? null,
         timestamp,
         request.id,
       );
@@ -845,8 +888,13 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
 function assertVersionProjectManager(actor: SessionUser, versionId: number) {
   const requests = all<{ project_id: number }>(
     `SELECT r.project_id FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'`,
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+       AND CASE WHEN pv.status IN ('TRIAL','PENDING_FORMAL','FORMAL')
+         THEN r.trial_released_at IS NOT NULL OR r.formal_released_at IS NOT NULL
+         ELSE EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
+       END`,
     versionId,
   );
   if (requests.length === 0) {
@@ -979,11 +1027,11 @@ export function waiveBindingRequirement(actor: SessionUser, requirementId: numbe
   });
 }
 
-export function abandonTrialRelease(actor: SessionUser, requestId: number, conclusion: string) {
+export function abandonTrialRelease(actor: SessionUser, requestId: number, conclusion: string, eligibility: string) {
   assert(conclusion.trim().length >= 5, "请填写放弃发布试制的结论。");
   return transaction(() => {
-    const anchor = one<{ package_version_id: number; status: string; package_name: string; version: string }>(
-      `SELECT r.package_version_id, pv.status, p.name AS package_name, pv.version
+    const anchor = one<{ package_version_id: number; package_name: string; version: string }>(
+      `SELECT r.package_version_id, p.name AS package_name, pv.version
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
@@ -991,9 +1039,17 @@ export function abandonTrialRelease(actor: SessionUser, requestId: number, concl
       requestId,
     );
     assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
-    assertVersionProjectManager(actor, anchor.package_version_id);
-    assert(anchor.status === "PENDING_TRIAL", "只有待发布试制的版本可以放弃发布试制。");
+    const [ready] = getTrialReadyVersions(null, { requestId });
+    assert(ready, "试制资格已变化，请刷新后重新确认。");
+    assertProjectManager(actor, ready.projectId);
+    assert(trialReleaseStateKey(ready) === eligibility, "试制资格已变化，请刷新后重新确认。");
     const timestamp = now();
+    if (ready.riskProjectCount > 0) {
+      run("UPDATE trial_risk_admissions SET invalidated_at = ? WHERE package_version_id = ? AND invalidated_at IS NULL",
+        timestamp, anchor.package_version_id);
+      audit(actor.id, "WITHDRAW_RISK_TRIAL", "PACKAGE_VERSION", anchor.package_version_id, conclusion.trim());
+      return { withdrawnRisk: true };
+    }
     run(
       `UPDATE package_versions SET status = 'VOID', void_kind = 'ABANDON', void_reason = ?, voided_at = ?, voided_by = ?, updated_at = ? WHERE id = ?`,
       `放弃发布试制：${conclusion.trim()}`,
@@ -1010,6 +1066,7 @@ export function abandonTrialRelease(actor: SessionUser, requestId: number, concl
       anchor.package_version_id,
     );
     audit(actor.id, "ABANDON_TRIAL_RELEASE", "PACKAGE_VERSION", anchor.package_version_id, `放弃发布 ${anchor.package_name} ${anchor.version} 试制：${conclusion.trim()}`);
+    return { withdrawnRisk: false };
   });
 }
 
@@ -1335,11 +1392,11 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
     const requests = all<{ id: number; project_id: number; project_name: string; status: string }>(
       `SELECT r.id, r.project_id, pr.name AS project_name, r.status
        FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
-       WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+       WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED' AND r.trial_released_at IS NOT NULL
        ORDER BY pr.sort_order`,
       anchor.package_version_id,
     );
-    assert(requests.length > 0, "该版本没有可转正的项目记录。", "NOT_FOUND");
+    assert(requests.some((request) => request.id === requestId), "该项目没有可转正的试制记录。", "NOT_FOUND");
     assert(
       requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
       "只有使用该软件包的项目软件经理或系统管理员可以发布转正。",

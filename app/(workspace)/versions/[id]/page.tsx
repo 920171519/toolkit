@@ -9,6 +9,8 @@ import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { voidPackageVersionAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
+import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
+import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
@@ -56,7 +58,9 @@ export default async function VersionTracePage({
   const detailByRequest = new Map(details.map((detail) => [detail.request.id, detail]));
   const projectIds = new Set([...requests.map((request) => request.projectId), ...batches.map((batch) => batch.projectId)]);
   const linkedProjects = new Set([...projectIds].filter((id) => canAccessProjectPage(user, id)));
-  const canManage = requests.some((request) => canManageProjectWorkflowForProject(user, request.projectId));
+  const managedRequests = requests.filter((request) => canManageProjectWorkflowForProject(user, request.projectId));
+  const canManage = managedRequests.length > 0;
+  const riskEntries = getRiskTrialEntries(managedRequests.filter((request) => request.status === "PASSED").map((request) => request.requestId));
   const canVoid = canManage && ["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status);
 
   return (
@@ -98,15 +102,18 @@ export default async function VersionTracePage({
               const passed = detail?.requirements.filter((requirement) => requirement.status === "PASSED").length ?? 0;
               const total = detail?.requirements.length ?? 0;
               const linked = linkedProjects.has(request.projectId);
+              const riskEntry = riskEntries[request.requestId];
               return (
                 <tr key={request.requestId}>
                   <td>{linked ? <Link href={`/projects/${request.projectId}`} style={{ fontWeight: 600 }}>{request.projectName}</Link> : <strong>{request.projectName}</strong>}<div className="small muted">{request.projectCode}</div></td>
                   <td><Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? request.status}</Badge>{testMeta && <div className="small muted">验收：{testMeta.label}</div>}{request.status === "FAILED" || request.status === "BLOCKED" ? <div className="small muted">{BAD_CONCLUSION_LABEL[request.status]}</div> : null}</td>
-                  <td>{request.batchId ? <>{linked ? <Link href={workflowHref(`/integration/${request.batchId}`, projectId)} className="archive-link">{request.batchCode} <ArrowRight size={11} /></Link> : <span className="mono small">{request.batchCode}</span>}<div className="small muted">{request.batchConclusion ?? "进行中"}{request.batchReportUrl ? <> · <a href={request.batchReportUrl} className="archive-link">验证报告</a></> : null}</div></> : <span className="small muted">无批次/风险发布</span>}</td>
+                  <td>{request.batchId ? <>{linked ? <Link href={workflowHref(`/integration/${request.batchId}`, projectId)} className="archive-link">{request.batchCode} <ArrowRight size={11} /></Link> : <span className="mono small">{request.batchCode}</span>}<div className="small muted">{request.batchConclusion ?? "进行中"}{request.batchReportUrl ? <> · <a href={request.batchReportUrl} className="archive-link">验证报告</a></> : null}</div></> : <span className="small muted">无关联批次</span>}</td>
                   <td>{request.trialFormNo ? <span className="mono small">{request.trialFormNo}</span> : <span className="small muted">—</span>}{request.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
                   <td>{total > 0 ? <><ProgressBar value={passed} max={total} /><span className="small muted">{passed}/{total}</span></> : <span className="small muted">—</span>}</td>
                   <td>{request.formFlowNo ? <span className="mono small">{request.formFlowNo}</span> : <span className="small muted">—</span>}</td>
-                  <td className="cell-actions">{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, projectId)} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
+                  <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && (
+                    <RiskTrialEntryAction entry={riskEntry} packageName={version.packageName} version={version.version} projectName={request.projectName} />
+                  )}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, projectId)} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
                 </tr>
               );
             })}</tbody>

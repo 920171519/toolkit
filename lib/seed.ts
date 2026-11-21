@@ -562,6 +562,9 @@ function seedAll(db: DatabaseSync) {
   addBatch("B120", 0, "星云 N1 DVT 配套验证", "IN_TEST", "2026-11-12T16:00:00+08:00", "2026-11-13T09:00:00+08:00", null, null, null, null, null, "DIA", diagInTest);
   addBatch("B121", 1, "极光 M2 媒体专项验证", "IN_TEST", "2026-11-13T14:00:00+08:00", "2026-11-13T16:00:00+08:00", null, null, null, null, null, "MED", mediaInTest);
 
+  addBatch("B123", 0, "星云 N1 临时 OTA 验证", "COMPLETED", "2026-11-14T10:00:00+08:00", "2026-11-14T10:30:00+08:00", "2026-11-14T15:30:00+08:00", "PASS", "NONE", "1001OTA 1.6.2 的临时问题验证通过。", "https://ci.example.com/reports/B123", "OTA", otaAbandonTrial);
+  addBatch("B124", 1, "极光 M2 临时 OTA 验证", "COMPLETED", "2026-11-14T10:00:00+08:00", "2026-11-14T10:45:00+08:00", "2026-11-14T16:00:00+08:00", "PASS", "NONE", "1001OTA 1.6.2 的兼容性复测通过。", "https://ci.example.com/reports/B124", "OTA", otaAbandonTrial);
+
   const nodeApprover = (nodeId: number) => {
     const projectIndex = nodesByProject.findIndex((nodes) => nodes.includes(nodeId));
     return projectApprovers[projectIndex];

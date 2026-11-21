@@ -6,15 +6,17 @@ import { ActionForm } from "@/components/action-form";
 import { BatchBuilder } from "@/components/batch-builder";
 import { FormDialog } from "@/components/form-dialog";
 import { PackageDrawer } from "@/components/package-drawer";
+import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { ExternalLink } from "@/components/ui";
 import { cancelTransferAction } from "@/lib/actions/workflow";
 import { formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
 import { packageIdentity } from "@/lib/package-identity";
+import type { RiskTrialEntry } from "@/lib/trial-risk-entry";
 import type { BatchCandidatePackage, PendingTransferGroup, PendingTransferItem, ProjectOption } from "@/lib/workflow-queries";
 import styles from "./pending-transfer-table.module.css";
 
-type RequestRow = PendingTransferItem & { canCancel: boolean };
+type RequestRow = PendingTransferItem & { canCancel: boolean; riskEntry?: RiskTrialEntry };
 type RequestGroup = Omit<PendingTransferGroup, "items"> & { items: RequestRow[] };
 
 export function PendingTransferTable({ group, batch, scopeProjectId }: {
@@ -99,6 +101,9 @@ export function PendingTransferTable({ group, batch, scopeProjectId }: {
                         detailTrigger.current = event.currentTarget;
                         setDetailPackageId(item.packageId);
                       }}>详情</Link>
+                    {item.riskEntry?.stage === "PENDING" && (
+                      <RiskTrialEntryAction entry={item.riskEntry} packageName={item.packageName} version={item.version} projectName={projectName} />
+                    )}
                     {item.canCancel && (
                       <ActionForm action={cancelTransferAction} hidden={{ versionId: item.versionId, scopeProjectId }} submitText="撤回申请" submitVariant="outline-danger"
                         submitClassName="button-sm" confirmMessage={`撤回将同时撤销 ${item.packageName} ${item.version} 在所有项目的转测申请，确认继续？`} className="inline-action-form" />

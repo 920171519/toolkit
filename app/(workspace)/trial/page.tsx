@@ -3,16 +3,17 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { TrialQueueFilters } from "@/components/trial-queue-filters";
 import { TrialQueueTable, type TrialTableColumn } from "@/components/trial-queue-table";
-import { Badge, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
+import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/trial-queue-table.module.css";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { abandonTrialReleaseAction, releaseTrialAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
-import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
+import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTrialReadyVersions, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
 
@@ -42,29 +43,6 @@ function batchLink(row: TrialReadyVersion | TrialVersionRow, projectId?: number)
   return <Link href={workflowHref("/integration/" + row.batchId, projectId)} className="archive-link" prefetch={false}>
     {row.batchCode ?? "查看批次"}
   </Link>;
-}
-
-function releaseEvidence(row: TrialReadyVersion, projectId?: number) {
-  const conclusion = row.batchConclusion ? CONCLUSION_META[row.batchConclusion as BatchConclusion] : null;
-  const integration = TRANSFER_REQUEST_STATUS_META[row.integrationStatus as TransferRequestStatus];
-  const risk = riskRelease(row);
-  return (
-    <section className={styles.evidence} aria-label="验收依据">
-      <h3>验收依据</h3>
-      <div className="trial-source-line">
-        {batchLink(row, projectId)}
-        <span>验收结论：{conclusion?.label ?? integration?.label ?? "待提交"}</span>
-        {row.batchReportUrl && <ExternalLink href={row.batchReportUrl}>验证报告</ExternalLink>}
-        <ExternalLink href={row.archiveUrl}>归档包</ExternalLink>
-      </div>
-      {row.batchTestSummary && <p className="small muted">{row.batchTestSummary}</p>}
-      <p className="small muted">{row.changeSummary}</p>
-      {risk && <div className="risk-callout" style={{ marginTop: 8 }}>
-        <strong>风险结论：</strong>{row.riskConclusion ?? `有 ${row.riskProjectCount} 个使用项目验收未完成、未通过或缺少批次，发布时须填写全版本风险结论。`}
-        {row.ongoingTestCount > 0 && <p className="small">已有 {row.ongoingTestCount} 个项目安排测试。试制后测试会继续，完成前无法转正。</p>}
-      </div>}
-    </section>
-  );
 }
 
 export default async function TrialPage({ searchParams }: { searchParams: Promise<TrialSearchParams> }) {
@@ -139,52 +117,58 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
         </>} />
       <FlashMessage notice={notice} />
 
-      {canViewReleaseQueue && <TrialQueueTable
-        kind="release" title="待发布试制" rows={ready} columns={releaseColumns} query={query} projectId={projectId}
-        rowKey={(row) => row.requestId} details={(row) => [row.packageCode, row.projectCode]}
-        emptyTitle="没有待发试制的项目版本"
-        actions={(row) => (
-          <div className={styles.actions}>
-            <FormDialog label="验收依据" title={`${row.packageName} ${row.version} 验收依据`}
-              triggerClassName="button button-secondary button-sm" cancelLabel="关闭">{releaseEvidence(row, projectId)}</FormDialog>
-            {canRelease(row) && <><FormDialog label="发布全项目共享试制" title={`发布 ${row.packageName} ${row.version} 试制`}
-              description={`发布后同步到全部 ${row.versionProjectCount} 个使用项目。`} triggerClassName="button button-primary button-sm" cancelLabel="取消">
-              {releaseEvidence(row, projectId)}
-              <ActionForm action={releaseTrialAction} hidden={{ requestId: row.requestId, scopeProjectId: projectId }}
-                submitText="发布全项目共享试制版本" submitClassName="button-sm"
-                confirmMessage={`确认发布 ${row.packageName} ${row.version} 共享试制版本？将同步覆盖该软件包全部 ${row.versionProjectCount} 个使用项目。`}>
-                <label className="field"><span className="label">发布试制电子流 <span className="required-mark">*</span></span>
-                  <input className="input" name="trialFormNo" required minLength={3} placeholder="例如 EF-TRIAL-N1-OTA-160" />
-                </label>
-                {riskRelease(row) && <label className="field" style={{ marginTop: 9 }}>
-                  <span className="label">风险发布结论 <span className="required-mark">*</span></span>
-                  <textarea className="textarea" name="riskConclusion" required minLength={5} defaultValue={row.riskConclusion ?? ""}
-                    placeholder="说明各项目尚未完成或未通过的情况，以及全版本风险评估结论。" />
-                </label>}
-              </ActionForm>
-            </FormDialog>
-            {row.versionStatus === "PENDING_TRIAL" && <FormDialog label="放弃发布试制" title={`放弃发布 ${row.packageName} ${row.version} 试制`}
-              description="保存后，该版本作废，所有使用项目将停止发布此试制版本。" triggerClassName="button button-ghost button-sm" cancelLabel="取消">
-              <ActionForm action={abandonTrialReleaseAction} hidden={{ requestId: row.requestId, scopeProjectId: projectId }}
-                submitText="提交结论并放弃试制" submitVariant="danger" submitClassName="button-sm"
-                confirmMessage={`确认放弃 ${row.packageName} ${row.version} 试制？`}>
-                <label className="field"><span className="label">放弃发布试制结论 <span className="required-mark">*</span></span>
-                  <textarea className="textarea" name="conclusion" required minLength={5} />
-                </label>
-              </ActionForm>
-            </FormDialog>}</>}
-          </div>
-        )}
-      />}
+      <TrialQueueFilters projectId={projectId} query={query}>
+        {canViewReleaseQueue && <TrialQueueTable
+          kind="release" title="待发布试制" rows={ready} columns={releaseColumns} query={query} projectId={projectId}
+          rowKey={(row) => row.requestId} details={(row) => [row.packageCode, row.projectCode]}
+          emptyTitle="没有待发试制的项目版本"
+          actions={(row) => {
+            const risk = riskRelease(row);
+            const title = row.packageName + " " + row.version;
+            return (
+              <div className={styles.actions}>
+                {canRelease(row) && <>
+                  <FormDialog label="发布" title={"发布 " + title + " 试制"}
+                    description={"发布后同步到全部 " + row.versionProjectCount + " 个使用项目。"}
+                    triggerClassName="button button-primary button-sm" cancelLabel="取消">
+                    {risk && <p className="risk-callout" style={{ marginBottom: 10 }}>风险发布原因 · {row.riskConclusion}</p>}
+                    <ActionForm action={releaseTrialAction} hidden={{ requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
+                      submitText="发布全项目共享试制版本" submitClassName="button-sm"
+                      confirmMessage={"确认发布 " + title + " 共享试制版本？"}>
+                      <label className="field">
+                        <span className="label">发布试制电子流 <span className="required-mark">*</span></span>
+                        <input className="input" name="trialFormNo" required minLength={3} placeholder="例如 EF-TRIAL-N1-OTA-160" />
+                      </label>
+                    </ActionForm>
+                  </FormDialog>
+                  <FormDialog label="放弃" title={"放弃发布 " + title + " 试制"}
+                    description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
+                    triggerClassName="button button-ghost button-sm" cancelLabel="取消">
+                    <ActionForm action={abandonTrialReleaseAction} hidden={{ requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
+                      submitText="提交结论并放弃试制" submitVariant="danger" submitClassName="button-sm"
+                      confirmMessage={"确认放弃 " + title + " 试制？"}>
+                      <label className="field">
+                        <span className="label">放弃发布试制结论 <span className="required-mark">*</span></span>
+                        <textarea className="textarea" name="conclusion" required minLength={5} />
+                      </label>
+                    </ActionForm>
+                  </FormDialog>
+                </>}
+                <Link href={workflowHref("/trial/ready/" + row.requestId, projectId, query)} className="button button-secondary button-sm" prefetch={false}>详情</Link>
+              </div>
+            );
+          }}
+        />}
 
-      <TrialQueueTable
-        kind="binding" title="试制版本绑定验证" rows={trials} columns={bindingColumns} query={query} projectId={projectId}
-        rowKey={(row) => row.requestId} details={(row) => [row.packageCode, row.projectCode]}
-        emptyTitle="没有正在绑定验证的试制版本"
-        actions={(row) => <Link href={workflowHref("/trial/" + row.requestId, projectId, query)} prefetch={false} className="archive-link">
-          处理 <ArrowRight size={12} />
-        </Link>}
-      />
+        <TrialQueueTable
+          kind="binding" title="试制版本绑定验证" rows={trials} columns={bindingColumns} query={query} projectId={projectId}
+          rowKey={(row) => row.requestId} details={(row) => [row.packageCode, row.projectCode]}
+          emptyTitle="没有正在绑定验证的试制版本"
+          actions={(row) => <Link href={workflowHref("/trial/" + row.requestId, projectId, query)} prefetch={false} className="archive-link">
+            处理 <ArrowRight size={12} />
+          </Link>}
+        />
+      </TrialQueueFilters>
     </>
   );
 }

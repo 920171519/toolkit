@@ -13,6 +13,14 @@ const projectName = "E2E 项目维度验证";
 const projectCode = "E2EP4";
 let otaTrialUrl = "";
 
+async function registerRisk(page: Page, reason: string) {
+  await page.getByRole("button", { name: "登记风险原因", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("textbox", { name: "风险试制原因" }).fill(reason);
+  await form.getByRole("button", { name: "纳入待发布试制" }).click();
+  await expectFlash(page, "风险试制原因已登记");
+}
+
 function acceptDialogs(page: Page) {
   page.on("dialog", async (dialog) => {
     await dialog.accept();
@@ -308,12 +316,12 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByTestId("open-batch-1").click();
     const builder = page.getByTestId("batch-builder-form");
     await expect(builder).toBeVisible();
-    await expect(page.locator('input[name="code"]')).toHaveValue("B123");
+    await expect(page.locator('input[name="code"]')).toHaveValue("B125");
     await expect(builder.getByRole("checkbox")).toHaveCount(8);
     await expect(builder.locator(".compact-batch-table tbody tr")).toHaveCount(8);
     await expect(builder.locator(".compact-batch-table select")).toHaveCount(8);
     const otaRow = builder.locator(".compact-batch-table tbody tr").filter({ hasText: "1001OTA" }).first();
-    await expect(otaRow.locator("select option:checked")).toContainText("1.5.2");
+    await expect(otaRow.locator("select option:checked")).toContainText("1.6.2");
     const comRow = builder.locator(".compact-batch-table tbody tr").filter({ hasText: "1003COM" }).first();
     await expect(comRow.locator("select option:checked")).toContainText("2.1.0");
     await chooseByText(comRow.locator("select"), "2.0.3");
@@ -385,7 +393,7 @@ test.describe("工程协同台项目维度流程", () => {
     const readyRow = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
       .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.0" }).filter({ hasText: "星云 N1" });
     await expect(readyRow).toContainText("待发试制");
-    await readyRow.getByRole("button", { name: "发布全项目共享试制", exact: true }).click();
+    await readyRow.getByRole("button", { name: "发布", exact: true }).click();
     const publication = page.getByRole("dialog", { name: "发布 1001OTA 1.6.0 试制" });
     await publication.locator('input[name="trialFormNo"]').fill("EF-TRIAL-N1-OTA-160");
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
@@ -575,20 +583,23 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto("/trial");
     const risk = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
       .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" });
+    await expect(risk).toHaveCount(0);
+    await page.goto("/versions?project=2&q=1001OTA%201.6.1");
+    await page.getByRole("link", { name: "全链路追溯", exact: true }).click();
+    const reason = "集成测试资源不足，按历史回归结论和风险评估结果发布共享试制。";
+    await registerRisk(page, reason);
     await expect(risk).toContainText("风险发布");
     await expect(risk).toContainText("未关联转测批次");
-    await risk.getByRole("button", { name: "验收依据" }).click();
-    const evidence = page.getByRole("dialog", { name: "1001OTA 1.6.1 验收依据" });
-    await expect(evidence).toContainText("风险结论：");
-    await evidence.getByRole("button", { name: "关闭弹窗" }).click();
-    await risk.getByText("发布全项目共享试制", { exact: true }).click();
+    await risk.getByRole("link", { name: "详情", exact: true }).click();
+    await expect(page.getByText(reason, { exact: false })).toBeVisible();
+    await page.goBack();
+    await risk.getByRole("button", { name: "发布", exact: true }).click();
     const publication = page.getByRole("dialog", { name: /发布 1001OTA 1.6.1 试制/ });
     await publication.getByRole("button", { name: "取消", exact: true }).click();
     await expect(publication).toBeHidden();
-    await risk.getByText("发布全项目共享试制", { exact: true }).click();
-    await expect(publication.locator('textarea[name="riskConclusion"]')).toBeVisible();
+    await risk.getByRole("button", { name: "发布", exact: true }).click();
+    await expect(publication.locator('textarea[name="riskConclusion"]')).toHaveCount(0);
     await publication.locator('input[name="trialFormNo"]').fill("EF-TRIAL-M2-OTA-161");
-    await publication.locator('textarea[name="riskConclusion"]').fill("集成测试资源不足，按历史回归结论和风险评估结果发布共享试制。");
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await expectFlash(page, "试制版本已发布");
     await page.goto("/trial");
@@ -629,14 +640,14 @@ test.describe("工程协同台项目维度流程", () => {
     if (!batchUrl) throw new Error("找不到待发起批次快照链接");
     await draft.getByRole("button", { name: "发起转测" }).click();
     await expectFlash(page, "B953 已发起集成测试");
-    await page.goto("/trial?project=1");
+    await page.goto(batchUrl);
+    await registerRisk(page, "现场先行试制，集成测试同步继续，发现问题即撤回。");
     const pending = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row").filter({ hasText: version });
     await expect(pending).toContainText("风险发布");
     await expect(pending).toContainText("B953");
-    await pending.getByRole("button", { name: "发布全项目共享试制", exact: true }).click();
+    await pending.getByRole("button", { name: "发布", exact: true }).click();
     const publish = page.getByRole("dialog", { name: /发布 1001OTA/ });
     await publish.locator('input[name="trialFormNo"]').fill("EF-TRIAL-PARALLEL-E2E");
-    await publish.locator('textarea[name="riskConclusion"]').fill("现场先行试制，集成测试同步继续，发现问题即撤回。");
     await publish.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await expectFlash(page, "试制版本已发布");
     const trialUrl = new URL(page.url());
@@ -729,7 +740,7 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto("/trial");
     const abandonedRow = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row")
       .filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.2" }).filter({ hasText: "星云 N1" });
-    await abandonedRow.getByRole("button", { name: "放弃发布试制", exact: true }).click();
+    await abandonedRow.getByRole("button", { name: "放弃", exact: true }).click();
     const abandonment = page.getByRole("dialog", { name: "放弃发布 1001OTA 1.6.2 试制" });
     await abandonment.locator('textarea[name="conclusion"]').fill("集成测试已完成，评估该临时版本不需要发布试制，计划直接废弃。");
     await abandonment.getByRole("button", { name: "提交结论并放弃试制" }).click();

@@ -201,6 +201,24 @@ CREATE TABLE IF NOT EXISTS integration_batches (
   terminate_reason TEXT
 );
 
+
+CREATE TABLE IF NOT EXISTS trial_risk_admissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  package_version_id INTEGER NOT NULL REFERENCES package_versions(id) ON DELETE CASCADE,
+  request_id INTEGER REFERENCES version_transfer_requests(id) ON DELETE SET NULL,
+  project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+  project_name TEXT NOT NULL,
+  batch_id INTEGER REFERENCES integration_batches(id) ON DELETE SET NULL,
+  stage TEXT NOT NULL CHECK (stage IN ('PENDING','IN_TEST','FAILED','BLOCKED','PASSED_NO_EVIDENCE')),
+  reason TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  invalidated_at TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS trial_risk_admissions_current
+  ON trial_risk_admissions(package_version_id) WHERE invalidated_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS batch_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   batch_id INTEGER NOT NULL REFERENCES integration_batches(id) ON DELETE CASCADE,

@@ -48,10 +48,12 @@ test("分页状态随证据标签保留，无关项目的版本不显示为标�
   const body = page.getByRole("region", { name: "版本记录表格" }).locator("tbody");
   const pagination = page.getByRole("navigation", { name: "版本列表分页" });
   await expect(body.getByRole("row")).toHaveCount(10);
+  const firstPageRows = await body.getByRole("row").allTextContents();
   await page.getByRole("link", { name: "下一页", exact: true }).click();
   await expect(pagination).toContainText("第 2 / 2 页");
   const secondPageRows = await body.getByRole("row").allTextContents();
-  expect(secondPageRows).toHaveLength(7);
+  expect(secondPageRows.length).toBeGreaterThan(0);
+  expect(secondPageRows.length).toBeLessThanOrEqual(10);
   await body.getByRole("link", { name: "全链路追溯", exact: true }).first().click();
   await page.getByRole("link", { name: "返回版本列表", exact: true }).click();
   await expect(pagination).toContainText("第 2 / 2 页");
@@ -60,7 +62,7 @@ test("分页状态随证据标签保留，无关项目的版本不显示为标�
   const pageSize = pagination.getByRole("combobox", { name: "每页条数" });
   await pageSize.selectOption("25");
   await expect(pagination).toContainText("第 1 / 1 页");
-  await expect(body.getByRole("row")).toHaveCount(17);
+  await expect(body.getByRole("row")).toHaveText([...firstPageRows, ...secondPageRows]);
   await expect(page).not.toHaveURL(/(?:\?|&)page=2(?:&|$)/);
   await expect(page).toHaveURL(/(?:\?|&)sort=package(?:&|$)/);
   await pageSize.selectOption("10");

@@ -76,6 +76,7 @@ export function getPendingTransferGroups(projectIds: number[] | null = null): Pe
      LEFT JOIN users o ON o.id = p.owner_id
      WHERE r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
        AND pr.status != 'ARCHIVED'
+       AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
        AND NOT EXISTS (
          SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
          WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT'
@@ -365,6 +366,7 @@ export type TrialReadyVersion = {
   batchReportUrl: string | null;
   versionProjectCount: number;
   riskProjectCount: number;
+  riskAdmissionId: number | null;
   ongoingTestCount: number;
 };
 
@@ -376,27 +378,34 @@ const ONGOING_TEST_COUNT_SQL = `(
     AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED'
 )`;
 
-export function getTrialReadyVersions(projectIds: number[] | null = null): TrialReadyVersion[] {
+export function getTrialReadyVersions(
+  projectIds: number[] | null = null,
+  options: { requestId?: number; includeUnregisteredRisk?: boolean } = {},
+): TrialReadyVersion[] {
   return filterByProject(
     all<TrialReadyVersion>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+      `SELECT ready.*, CASE WHEN riskProjectCount > 0 THEN 'RISK' ELSE 'INTEGRATION' END AS releaseMode FROM (
+       SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
               pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
               o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
-              r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
+              admission.reason AS riskConclusion, admission.id AS riskAdmissionId,
               b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
               ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
               (SELECT COUNT(*) FROM version_transfer_requests rr
                JOIN projects pp ON pp.id = rr.project_id
-               WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED') AS versionProjectCount,
+               WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED'
+                 AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pp.id)) AS versionProjectCount,
               (SELECT COUNT(*) FROM version_transfer_requests rr
                JOIN projects pp ON pp.id = rr.project_id
                WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED'
+                 AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pp.id)
                  AND (rr.status != 'PASSED' OR NOT EXISTS (
                    SELECT 1 FROM batch_items bi2 JOIN integration_batches b2 ON b2.id = bi2.batch_id
-                   WHERE bi2.transfer_request_id = rr.id AND b2.conclusion = 'PASS'
+                   WHERE bi2.id = (SELECT id FROM batch_items WHERE transfer_request_id = rr.id ORDER BY id DESC LIMIT 1)
+                     AND b2.status = 'COMPLETED' AND b2.conclusion = 'PASS'
                  ))) AS riskProjectCount
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
@@ -408,8 +417,11 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE pr.status != 'ARCHIVED' AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')
+       LEFT JOIN trial_risk_admissions admission ON admission.package_version_id = pv.id AND admission.invalidated_at IS NULL
+       WHERE (? IS NULL OR r.id = ?)
+         AND pr.status != 'ARCHIVED' AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')
          AND r.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
+         AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pr.id)
          AND NOT EXISTS (
            SELECT 1 FROM package_usages u2
            JOIN projects p2 ON p2.id = u2.project_id
@@ -421,7 +433,10 @@ export function getTrialReadyVersions(projectIds: number[] | null = null): Trial
                  AND r2.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
              )
          )
-       ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
+       ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC
+      ) ready WHERE (? OR riskProjectCount = 0 OR riskConclusion IS NOT NULL)`,
+      options.requestId ?? null, options.requestId ?? null,
+      options.includeUnregisteredRisk ? 1 : 0,
     ),
     projectIds,
   );

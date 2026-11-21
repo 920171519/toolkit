@@ -28,6 +28,10 @@
   min-width: 0;
 }
 
+.filters[data-enhanced="true"] .manualFilter {
+  display: none;
+}
+
 .toolbar input[type="search"] {
   width: min(236px, 62vw);
 }
@@ -82,12 +86,9 @@
 }
 
 .actions {
-  white-space: normal;
   display: flex;
-  gap: 4px;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  min-width: min(296px, 32vw);
+  gap: 5px;
 }
 
 .pagination {
@@ -100,9 +101,15 @@
   padding: 10px 16px;
 }
 
-.evidence {
-  margin-bottom: 14px;
-  white-space: normal;
+.pageSize {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pageSize select {
+  width: auto;
+  min-height: 28px;
 }
 
 @media (max-width: 640px) {

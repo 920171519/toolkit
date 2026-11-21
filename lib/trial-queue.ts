@@ -15,6 +15,10 @@ export function trialQueueKey(kind: TrialQueueKind, field: string) {
   return kind + "_" + field;
 }
 
+export function trialQueueFilterKeys(kind: TrialQueueKind) {
+  return ["q", "size", ...trialQueueColumns[kind]].map((field) => trialQueueKey(kind, field));
+}
+
 export function trialQueueParams(search: TrialSearchParams): Record<string, string> {
   const result: Record<string, string> = {};
   for (const kind of ["release", "binding"] as const) {

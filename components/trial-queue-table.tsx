@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { EmptyState } from "@/components/ui";
 import { LIST_PAGE_SIZES, getListPageSize } from "@/lib/list-pagination";
 import { workflowHref } from "@/lib/workflow-links";
-import { trialDefaultPageSize, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
+import { trialDefaultPageSize, trialQueueFilterKeys, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
 import styles from "./trial-queue-table.module.css";
 
 export type TrialTableColumn<Row> = {
@@ -68,7 +68,7 @@ export function TrialQueueTable<Row>({
   const formId = kind + "-trial-filters";
   const titleId = kind + "-trial-title";
   const href = (changes: Record<string, string | number | undefined>) => workflowHref("/trial", projectId, { ...query, ...changes });
-  const inputKeys = new Set([field("q"), field("size"), field("page"), ...columns.map(({ key }) => field(key))]);
+  const inputKeys = new Set([...trialQueueFilterKeys(kind), field("page")]);
   const filtered = activeFilters.length > 0 || Boolean(search);
   const reset = () => href(Object.fromEntries([...inputKeys].filter((key) => key !== field("size")).map((key) => [key, undefined])));
 
@@ -77,22 +77,16 @@ export function TrialQueueTable<Row>({
       <div className={`card-header ${styles.header}`}>
         <div>
           <h2 id={titleId}>{title}</h2>
-          <p className="small muted">{matching.length} 条记录{filtered && rows.length !== matching.length ? "，共 " + rows.length + " 条" : ""}</p>
+          <p className="small muted" role="status">{matching.length} 条记录{filtered && rows.length !== matching.length ? "，共 " + rows.length + " 条" : ""}</p>
         </div>
-        <form className={styles.toolbar} id={formId} action="/trial">
+        <form className={styles.toolbar} id={formId} action="/trial" method="get" role="search" aria-label={"筛选" + title} data-trial-filters={kind}>
           {projectId !== undefined && <input type="hidden" name="project" value={projectId} />}
           {Object.entries(query).filter(([key]) => !inputKeys.has(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
           <label className="field">
             <span className="label">搜索{title}</span>
-            <input className="input" type="search" name={field("q")} key={search} defaultValue={search} placeholder="软件包、版本、批次或提交人" maxLength={120} />
+            <input className="input" type="search" name={field("q")} defaultValue={search} placeholder="软件包、版本、批次或提交人" maxLength={120} />
           </label>
-          <label className="field">
-            <span className="label">每页条数</span>
-            <select className="select" name={field("size")} key={pageSize} defaultValue={pageSize}>
-              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
-          <button type="submit" className="button button-primary"><Search size={14} />应用筛选</button>
+          <button type="submit" className={"button button-primary " + styles.manualFilter}><Search size={14} />应用筛选</button>
           {filtered && <Link href={reset()} className="button button-secondary" prefetch={false}>清除筛选</Link>}
         </form>
       </div>
@@ -110,11 +104,11 @@ export function TrialQueueTable<Row>({
                     [field("page")]: undefined,
                   })} prefetch={false} aria-label={"按" + column.label + "排序"}>{column.label}<Icon size={13} aria-hidden /></Link>
                   {column.options
-                    ? <select className="select" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} defaultValue={query[field(column.key)] ?? ""} key={query[field(column.key)] ?? ""}>
+                    ? <select className="select" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} defaultValue={query[field(column.key)] ?? ""}>
                       <option value="">全部</option>
                       {column.options.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
-                    : <input className="input" type="search" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} placeholder="全部" maxLength={120} defaultValue={query[field(column.key)] ?? ""} key={query[field(column.key)] ?? ""} />}
+                    : <input className="input" type="search" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} placeholder="全部" maxLength={120} defaultValue={query[field(column.key)] ?? ""} />}
                 </th>;
               })}
               <th scope="col">操作</th>
@@ -129,11 +123,17 @@ export function TrialQueueTable<Row>({
         </table>
       </div>
       {!visible.length && <EmptyState title={filtered ? "没有匹配的版本" : emptyTitle} />}
-      {matching.length > 0 && <nav className={styles.pagination} aria-label={title + "分页"}>
-        <span className="small muted">第 {page} / {pages} 页，显示 {offset + 1}–{offset + visible.length} 条</span>
+      <nav className={styles.pagination} aria-label={title + "分页"}>
+        <label className={styles.pageSize}>
+          <span className="small muted">每页条数</span>
+          <select className="select" form={formId} name={field("size")} defaultValue={pageSize}>
+            {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>
+        <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>
         {page > 1 && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page > 2 ? page - 1 : undefined })} prefetch={false}><ArrowLeft size={13} />上一页</Link>}
         {page < pages && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page + 1 })} prefetch={false}>下一页<ArrowRight size={13} /></Link>}
-      </nav>}
+      </nav>
     </section>
   );
 }

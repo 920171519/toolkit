@@ -10,6 +10,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { readTraceListState, traceHref } from "@/lib/version-trace-list";
 import {
   addBatchProgress,
+  admitRiskTrial,
   cancelBindingFlow,
   cancelTransfer,
   completeBatchTest,
@@ -194,13 +195,33 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
     : "测试结论已提交，验证报告已上传。");
 }
 
+export async function admitRiskTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requestId = numberValue(formData, "requestId");
+  if (!requestId) return { error: "项目版本参数无效。" };
+  let projectId: number;
+  try {
+    const result = admitRiskTrial(user, {
+      requestId,
+      stage: text(formData, "stage"),
+      batchId: numberValue(formData, "batchId") ?? undefined,
+      reason: text(formData, "reason"),
+    });
+    projectId = result.projectId;
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(workflowHref("/trial", projectId), "风险试制原因已登记，版本已纳入待发布试制。");
+}
+
 export async function releaseTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requestId = numberValue(formData, "requestId");
   if (!requestId) return { error: "项目版本参数无效。" };
   let taskCount = 0;
   try {
-    taskCount = releaseTrial(user, requestId, text(formData, "trialFormNo"), text(formData, "riskConclusion"));
+    taskCount = releaseTrial(user, requestId, text(formData, "trialFormNo"), text(formData, "eligibility"));
   } catch (error) {
     return failure(error);
   }
@@ -263,13 +284,16 @@ export async function abandonTrialReleaseAction(_prev: ActionState, formData: Fo
   const user = await actionUser();
   const requestId = numberValue(formData, "requestId");
   if (!requestId) return { error: "项目版本参数无效。" };
+  let withdrawnRisk = false;
   try {
-    abandonTrialRelease(user, requestId, text(formData, "conclusion"));
+    withdrawnRisk = abandonTrialRelease(user, requestId, text(formData, "conclusion"), text(formData, "eligibility")).withdrawnRisk;
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, "/trial", "已提交放弃发布试制结论，该版本将不再发布试制。");
+  workflowSuccessRedirect(formData, "/trial", withdrawnRisk
+    ? "已放弃本次风险试制，转测和集成测试继续。"
+    : "已提交放弃发布试制结论，该版本将不再发布试制。");
 }
 
 export async function voidPackageVersionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

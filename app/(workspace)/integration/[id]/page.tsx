@@ -8,11 +8,13 @@ import { parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getBatchDetail } from "@/lib/workflow-queries";
+import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { formatDateTime } from "@/lib/format";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
 import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { BatchConclusionFields } from "@/components/batch-conclusion-fields";
+import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { Badge, BatchStatusPill, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,14 @@ export default async function BatchDetailPage({
   const manager = canManageProjectWorkflowForProject(user, batch.projectId);
   const canTest = canSubmitIntegrationConclusionForProject(user, batch.projectId);
   const changedItems = items.filter((item) => item.isChanged);
+  const riskStage = batch.status === "IN_TEST" ? "IN_TEST"
+    : batch.status === "COMPLETED" && batch.conclusion === "FAIL" ? "FAILED"
+    : batch.status === "COMPLETED" && batch.conclusion === "BLOCKED" ? "BLOCKED"
+    : null;
+  const riskEntries = getRiskTrialEntries(manager && riskStage ? changedItems.flatMap((item) =>
+    item.transferRequestId && item.requestStatus === riskStage ? [item.transferRequestId] : [],
+  ) : []);
+  const showRisk = Object.keys(riskEntries).length > 0;
 
   return (
     <>
@@ -65,23 +75,28 @@ export default async function BatchDetailPage({
             <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
               <div className="table-wrap">
                 <table className="data-table">
-                  <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th></tr></thead>
+                  <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th>{showRisk && <th scope="col">试制</th>}</tr></thead>
                   <tbody>
-                    {items.map((item) => (
-                      <tr key={item.id}>
-                        <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className="small muted">{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
-                        <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
-                        <td><span className="mono small">{item.trialVersions || "—"}</span></td>
-                        <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
-                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="version-badge">{item.version}</Link><div><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="archive-link">全链路</Link></div>{item.isChanged && <div><Badge tone="amber">本次变更包</Badge></div>}</td>
-                        <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
-                        <td>
-                          {!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}
-                          {item.parallelRiskTrial && <div><Badge tone="amber">并行风险试制</Badge></div>}
-                          {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((item) => {
+                      const entry = item.transferRequestId ? riskEntries[item.transferRequestId] : undefined;
+                      const riskEntry = entry?.batchId === batch.id && entry.stage === riskStage ? entry : undefined;
+                      return (
+                        <tr key={item.id}>
+                          <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className="small muted">{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
+                          <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
+                          <td><span className="mono small">{item.trialVersions || "—"}</span></td>
+                          <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
+                          <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="version-badge">{item.version}</Link><div><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} className="archive-link">全链路</Link></div>{item.isChanged && <div><Badge tone="amber">本次变更包</Badge></div>}</td>
+                          <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
+                          <td>
+                            {!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}
+                            {item.parallelRiskTrial && <div><Badge tone="amber">并行风险试制</Badge></div>}
+                            {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
+                          </td>
+                          {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} version={item.version} projectName={batch.projectName} />}</td>}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
