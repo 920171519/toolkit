@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, Search } from "lucide-react";
 import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
@@ -12,25 +13,15 @@ function packageHref(packageId: number, projectId?: number) {
   return `/packages?open=${packageId}${projectId ? `&project=${projectId}` : ""}`;
 }
 
-function syncOpenParam(packageId: number | null) {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (packageId) url.searchParams.set("open", String(packageId));
-  else url.searchParams.delete("open");
-  window.history.replaceState(null, "", url.toString());
-}
-
 export function PackageOverviewTable({
   packages,
   people,
-  initialOpenId,
   scopeLabel = "全部",
   initialDetail = null,
   selectedProjectId,
 }: {
   packages: PackageOverviewRow[];
   people: PersonOption[];
-  initialOpenId?: number;
   scopeLabel?: string;
   initialDetail?: DrawerPayload | null;
   selectedProjectId?: number;
@@ -44,7 +35,7 @@ export function PackageOverviewTable({
   const [trialFilter, setTrialFilter] = useState("");
   const [currentFilter, setCurrentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
+  const openId = Number(useSearchParams().get("open"));
 
   const areas = useMemo(() => [...new Set(packages.map((pkg) => pkg.areaName).filter((item): item is string => Boolean(item)))].sort(), [packages]);
   const projects = useMemo(() => {
@@ -79,8 +70,9 @@ export function PackageOverviewTable({
   }, [packages, query, nameFilter, areaFilter, projectFilter, nodeFilter, formalFilter, trialFilter, currentFilter, statusFilter]);
 
   function closePackage() {
-    setOpenId(null);
-    syncOpenParam(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("open");
+    window.history.replaceState(null, "", url.toString());
   }
 
   return (
@@ -232,8 +224,8 @@ export function PackageOverviewTable({
         “试制版本”会同时展示一个软件包当前所有处于试制验证或待转正的版本；使用范围只展示在行项目，已归档项目的软件包记录请到项目总览中查找已结束的项目。
       </p>
 
-      {openId && (
-        <PackageDrawer packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
+      {Number.isSafeInteger(openId) && openId > 0 && (
+        <PackageDrawer key={openId} packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
       )}
     </div>
   );

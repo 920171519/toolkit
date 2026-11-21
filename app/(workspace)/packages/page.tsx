@@ -84,10 +84,9 @@ export default async function PackagesPage({
       </div>
 
       <PackageOverviewTable
-        key={`${selectedProject?.id ?? "all"}-${initialOpenId ?? "closed"}`}
+        key={selectedProject?.id ?? "all"}
         packages={packages}
         people={people}
-        initialOpenId={initialOpenId}
         scopeLabel={selectedProject?.name ?? "全部在行项目"}
         selectedProjectId={selectedProject?.id}
         initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit } : null}
