@@ -107,10 +107,10 @@ export default async function SubmissionsPage({
                       <td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span><div className="small muted">配套 / 变更</div></td>
                       <td className="small muted">{formatDateTime(batch.createdAt)}</td>
                       <td className="cell-actions">
-                        <div className="toolbar" style={{ justifyContent: "flex-end", gap: 6 }}>
+                        <div className="toolbar" style={{ justifyContent: "flex-end", gap: 6, flexWrap: "nowrap" }}>
                           <Link href={workflowHref(`/integration/${batch.id}`, project?.id)} className="button button-secondary button-sm" aria-label={`查看 ${batch.code} 配套`}>查看配套</Link>
-                          <ActionForm action={sendBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="发起转测" submitClassName="button-sm" confirmMessage={`确认发起 ${batch.code}？`} />
-                          <ActionForm action={deleteDraftBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="删除" submitVariant="ghost" submitClassName="button-sm" confirmMessage="确认删除这个转测草稿？" />
+                          <ActionForm action={sendBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="发起转测" submitClassName="button-sm" className="inline-action-form" confirmMessage={`确认发起 ${batch.code}？`} />
+                          <ActionForm action={deleteDraftBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="删除" submitVariant="ghost" submitClassName="button-sm" className="inline-action-form" confirmMessage="确认删除这个转测草稿？" />
                         </div>
                       </td>
                     </tr>

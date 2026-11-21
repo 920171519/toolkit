@@ -50,7 +50,7 @@ export function PendingTransferTable({ group, batch, scopeProjectId }: {
           {batch && <p className="small muted">已选 {checkedCount} 个版本。同一软件包本轮可选一个版本，未勾选的申请保留到下轮。</p>}
         </div>
         {batch && (
-          <FormDialog label="整套发起转测" title={`${projectName} · 整套配套转测`}
+          <FormDialog label="整套发起转测" title={`${projectName} · 发起整套转测`}
             triggerClassName="button button-secondary button-sm" testId={`open-batch-${projectId}`} wide>
             {batch.candidates.length > 0 ? (
               <BatchBuilder project={project} candidates={batch.candidates} defaultCode={batch.code} scopeProjectId={scopeProjectId} initialPendingChoices={choices} />

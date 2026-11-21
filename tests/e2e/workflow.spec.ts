@@ -329,11 +329,12 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(draftRow).toContainText("星云 N1");
     await expect(page.locator(".project-request-group").getByText("1003COM", { exact: true })).toBeVisible();
     await draftRow.getByRole("link", { name: "查看 B950 配套" }).click();
-    await expect(page.getByRole("row", { name: /1003COM/ })).toHaveCount(0);
+    await expect(page.getByRole("row", { name: /1003COM/ }).getByRole("cell").nth(4)).toContainText("2.0.3");
     await expect(page.getByRole("row", { name: /1001OTA/ })).toBeVisible();
     await page.goBack();
     await draftRow.getByRole("button", { name: "发起转测" }).click();
     await expectFlash(page, "B950 已发起集成测试");
+    await expect(page.getByRole("checkbox", { name: "本轮转测 1003COM 2.1.0" })).toBeVisible();
 
     await page.goto("/integration");
     const activeCard = page.locator("article.card").filter({ hasText: "B950" }).first();

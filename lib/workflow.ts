@@ -10,6 +10,7 @@ import {
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getTransferAreaIds } from "./access";
 import { assert } from "./services";
 import type { SessionUser } from "./types";
+import { getPreviousBatchVersion } from "./workflow-queries";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
   run(
@@ -225,7 +226,7 @@ export type CreateBatchInput = {
   projectId: number;
   code: string;
   title: string;
-  items: Array<{ packageId: number; packageVersionId: number }>;
+  items: Array<{ packageId: number; packageVersionId: number; carryPrevious?: boolean }>;
 };
 
 export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
@@ -243,99 +244,96 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
     input.projectId,
   );
   assert(projectPackages.length > 0, "该项目尚未关联任何启用中的软件包，无法组织转测。");
-  const selectedByPackage = new Map<number, number>();
-  for (const item of input.items) {
-    assert(!selectedByPackage.has(item.packageId), "同一个软件包不能在批次中重复出现。");
-    selectedByPackage.set(item.packageId, item.packageVersionId);
-  }
+  const selectedByPackage = new Map(input.items.map((item) => [item.packageId, item]));
+  assert(selectedByPackage.size === input.items.length, "同一个软件包不能在批次中重复出现。");
   const selectedPackages = projectPackages.filter((pkg) => selectedByPackage.has(pkg.packageId));
   assert(selectedPackages.length > 0, "请至少选择一个软件包加入本次转测。");
   assert(selectedPackages.length === selectedByPackage.size, "只能选择本项目启用的在用软件包，请刷新页面后重试。");
 
-  const items = selectedPackages.map((pkg) => {
-    const selectedVersionId = selectedByPackage.get(pkg.packageId);
-    assert(selectedVersionId, `请选择 ${pkg.packageName} 的转测版本。`);
-    const selected = one<{
-      id: number;
-      version: string;
-      status: string;
-      archiveUrl: string;
-      changeSummary: string;
-    }>(
-      `SELECT id, version, status, archive_url AS archiveUrl, change_summary AS changeSummary
-       FROM package_versions WHERE id = ? AND package_id = ?`,
-      selectedVersionId,
-      pkg.packageId,
-    );
-    assert(selected, `${pkg.packageName} 选择的版本不存在。`);
-    const usedInProject = one<{ id: number }>(
-      "SELECT id FROM package_usages WHERE package_id = ? AND project_id = ? LIMIT 1",
-      pkg.packageId,
-      input.projectId,
-    );
-    assert(usedInProject, `${pkg.packageName} 不在 ${project.name} 项目的使用范围内。`);
-    const pendingRequest = one<{ id: number }>(
-      `SELECT id FROM version_transfer_requests WHERE package_version_id = ? AND project_id = ?
-       AND status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(integration_status, status) = 'PENDING'`,
-      selected.id,
-      input.projectId,
-    );
-    if (pendingRequest) {
-      const conflict = one<{ id: number }>(
-        `SELECT bi.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') LIMIT 1`,
-        pendingRequest.id,
-      );
-      assert(!conflict, `${pkg.packageName} ${selected.version} 已在另一个转测批次中。`);
-    }
-    const formal = one<{ version: string }>(
-      `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'FORMAL'
-       ORDER BY r.formal_released_at DESC, pv.id DESC LIMIT 1`,
-      input.projectId,
-      pkg.packageId,
-    ) ?? one<{ version: string }>(
-      `SELECT version FROM package_versions WHERE package_id = ? AND status = 'FORMAL' ORDER BY id DESC LIMIT 1`,
-      pkg.packageId,
-    );
-    const trialVersions = all<{ version: string }>(
-      `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       WHERE r.project_id = ? AND pv.package_id = ? AND r.status IN ('TRIAL','PENDING_FORMAL')
-       ORDER BY r.trial_released_at DESC, pv.id DESC`,
-      input.projectId,
-      pkg.packageId,
-    );
-    const previous = one<{ version: string }>(
-      `SELECT bi.version FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-       WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
-       ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC LIMIT 1`,
-      input.projectId,
-      pkg.packageId,
-    );
-    return {
-      ...pkg,
-      versionId: selected.id,
-      version: selected.version,
-      archiveUrl: selected.archiveUrl,
-      changeSummary: selected.changeSummary,
-      requestId: pendingRequest?.id ?? null,
-      formalVersion: formal?.version ?? null,
-      trialVersions: trialVersions.map((row) => row.version).join(", "),
-      previousVersion: previous?.version ?? null,
-      changedVsPrevious: previous?.version !== selected.version,
-    };
-  });
-  const changedCount = items.filter((item) => item.requestId !== null).length;
-  assert(changedCount > 0, "本次配套中没有选择待转测的新版本。请为有变更的软件包选择待转测版本。");
-
   return transaction(() => {
+    const items = selectedPackages.map((pkg) => {
+      const selection = selectedByPackage.get(pkg.packageId);
+      assert(selection, `请选择 ${pkg.packageName} 的转测版本。`);
+      const selected = one<{
+        id: number;
+        version: string;
+        status: string;
+        archiveUrl: string;
+        changeSummary: string;
+      }>(
+        `SELECT id, version, status, archive_url AS archiveUrl, change_summary AS changeSummary
+         FROM package_versions WHERE id = ? AND package_id = ?`,
+        selection.packageVersionId,
+        pkg.packageId,
+      );
+      assert(selected, `${pkg.packageName} 选择的版本不存在。`);
+      const usedInProject = one<{ id: number }>(
+        "SELECT id FROM package_usages WHERE package_id = ? AND project_id = ? LIMIT 1",
+        pkg.packageId,
+        input.projectId,
+      );
+      assert(usedInProject, `${pkg.packageName} 不在 ${project.name} 项目的使用范围内。`);
+      const previous = getPreviousBatchVersion(input.projectId, pkg.packageId);
+      if (selection.carryPrevious) {
+        assert(
+          previous?.canCarry && previous.versionId === selected.id,
+          `${pkg.packageName} 无法沿用所选的上次转测版本，请刷新后重试。`,
+        );
+      }
+      const pendingRequest = selection.carryPrevious ? null : one<{ id: number }>(
+        `SELECT id FROM version_transfer_requests WHERE package_version_id = ? AND project_id = ?
+         AND status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(integration_status, status) = 'PENDING'`,
+        selected.id,
+        input.projectId,
+      );
+      if (pendingRequest) {
+        const conflict = one<{ id: number }>(
+          `SELECT bi.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+           WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') LIMIT 1`,
+          pendingRequest.id,
+        );
+        assert(!conflict, `${pkg.packageName} ${selected.version} 已在另一个转测批次中。`);
+      }
+      const formal = one<{ version: string }>(
+        `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
+         WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'FORMAL'
+         ORDER BY r.formal_released_at DESC, pv.id DESC LIMIT 1`,
+        input.projectId,
+        pkg.packageId,
+      ) ?? one<{ version: string }>(
+        `SELECT version FROM package_versions WHERE package_id = ? AND status = 'FORMAL' ORDER BY id DESC LIMIT 1`,
+        pkg.packageId,
+      );
+      const trialVersions = all<{ version: string }>(
+        `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
+         WHERE r.project_id = ? AND pv.package_id = ? AND r.status IN ('TRIAL','PENDING_FORMAL')
+         ORDER BY r.trial_released_at DESC, pv.id DESC`,
+        input.projectId,
+        pkg.packageId,
+      );
+      return {
+        ...pkg,
+        versionId: selected.id,
+        version: selected.version,
+        archiveUrl: selected.archiveUrl,
+        changeSummary: selected.changeSummary,
+        requestId: pendingRequest?.id ?? null,
+        formalVersion: formal?.version ?? null,
+        trialVersions: trialVersions.map((row) => row.version).join(", "),
+        previousVersion: previous?.version ?? null,
+        changedVsPrevious: previous?.version !== selected.version,
+      };
+    });
+    const changedCount = items.filter((item) => item.requestId !== null).length;
+    assert(changedCount > 0, "本次配套中没有选择待转测的新版本。请为有变更的软件包选择待转测版本。");
+
     const timestamp = now();
     const result = run(
       `INSERT INTO integration_batches (code, project_id, title, status, created_by, created_at)
        VALUES (?, ?, ?, 'DRAFT', ?, ?)`,
       code,
       input.projectId,
-      input.title.trim() || `${project.name} ${code} 整套配套转测`,
+      input.title.trim() || `${project.name} ${code} 整套转测`,
       actor.id,
       timestamp,
     );

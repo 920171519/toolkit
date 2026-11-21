@@ -105,7 +105,7 @@ export type BatchCandidatePackage = {
   versionStatus: string;
   versions: Array<{ id: number; version: string; status: string; requestStatus: string | null }>;
   defaultVersionId: number;
-  previousTestVersionId: number | null;
+  carryVersionId: number | null;
   requestId: number | null;
   formalVersion: string | null;
   currentTrialVersions: string[];
@@ -114,6 +114,23 @@ export type BatchCandidatePackage = {
   changeSummary: string;
   archiveUrl: string;
 };
+
+export function getPreviousBatchVersion(projectId: number, packageId: number) {
+  return one<{ versionId: number; version: string; canCarry: number }>(
+    `SELECT bi.package_version_id AS versionId, bi.version,
+            pv.status != 'VOID' AND COALESCE(
+              CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL') THEN COALESCE(r.integration_status, r.status)
+                   ELSE r.status END NOT IN ('VOID','CANCELLED','PENDING'), 1
+            ) AS canCarry
+     FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+     JOIN package_versions pv ON pv.id = bi.package_version_id
+     LEFT JOIN version_transfer_requests r ON r.package_version_id = pv.id AND r.project_id = b.project_id
+     WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
+     ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC LIMIT 1`,
+    projectId,
+    packageId,
+  );
+}
 
 export function getBatchCandidatesForProject(projectId: number): BatchCandidatePackage[] {
   const packages = all<{
@@ -169,16 +186,9 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
     const pending = versions.find((version) => version.requestStatus === "PENDING") ?? null;
     const formal = versions.find((version) => version.status === "FORMAL") ?? null;
     const trialVersions = versions.filter((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
-    const previous = one<{ versionId: number; version: string }>(
-      `SELECT bi.package_version_id AS versionId, bi.version FROM batch_items bi
-       JOIN integration_batches b ON b.id = bi.batch_id
-       WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
-       ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC LIMIT 1`,
-      projectId,
-      pkg.packageId,
-    );
+    const previous = getPreviousBatchVersion(projectId, pkg.packageId);
     const previousVersion = previous ? versions.find((version) => version.id === previous.versionId) ?? null : null;
-    const previousSafe = previousVersion && previousVersion.status !== "VOID" && previousVersion.requestStatus !== "VOID" ? previousVersion : null;
+    const previousSafe = previous?.canCarry ? previousVersion : null;
     const firstSafe = versions.find((version) => version.status !== "VOID" && version.requestStatus !== "VOID") ?? null;
     const defaultVersion = pending ?? previousSafe ?? formal ?? firstSafe ?? versions[0] ?? null;
     if (!defaultVersion) return null;
@@ -191,12 +201,12 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
       versionStatus: selectedRequest?.status ?? defaultVersion.status,
       versions,
       defaultVersionId: defaultVersion.id,
-      previousTestVersionId: previousVersion?.id ?? null,
+      carryVersionId: previousSafe?.id ?? null,
       requestId: selectedRequest?.status === "PENDING" ? selectedRequest.requestId : null,
       formalVersion: formal?.version ?? null,
       currentTrialVersions: trialVersions.map((version) => version.version),
-      previousTestVersion: previousVersion?.version ?? null,
-      changedVsPrevious: previousVersion ? previousVersion.version !== defaultVersion.version : true,
+      previousTestVersion: previous?.version ?? null,
+      changedVsPrevious: previous?.version !== defaultVersion.version,
       changeSummary: selectedRow?.changeSummary ?? "",
       archiveUrl: selectedRow?.archiveUrl ?? "",
     };

@@ -14,6 +14,7 @@ import {
   cancelTransfer,
   completeBatchTest,
   createBatchDraft,
+  type CreateBatchInput,
   decideBindingFlow,
   deleteDraftBatch,
   releaseFormal,
@@ -86,16 +87,17 @@ export async function createBatchAction(_prev: ActionState, formData: FormData):
   const title = text(formData, "title");
   if (!projectId) return { error: "请选择项目。" };
   if (!code) return { error: "请填写批次号。" };
-  let items: Array<{ packageId: number; packageVersionId: number }> = [];
+  let items: CreateBatchInput["items"] = [];
   try {
     const payload = JSON.parse(text(formData, "items")) as unknown;
     if (!Array.isArray(payload)) throw new Error("invalid items");
     items = payload.map((item) => {
-      const record = item as { packageId?: unknown; packageVersionId?: unknown };
+      const record = item as { packageId?: unknown; packageVersionId?: unknown; carryPrevious?: unknown };
       const packageId = Number(record.packageId);
       const packageVersionId = Number(record.packageVersionId);
-      if (!Number.isInteger(packageId) || !Number.isInteger(packageVersionId)) throw new Error("invalid item");
-      return { packageId, packageVersionId };
+      if (!Number.isSafeInteger(packageId) || !Number.isSafeInteger(packageVersionId)) throw new Error("invalid item");
+      if (record.carryPrevious !== undefined && typeof record.carryPrevious !== "boolean") throw new Error("invalid carry choice");
+      return { packageId, packageVersionId, carryPrevious: record.carryPrevious };
     });
   } catch {
     return { error: "配套版本选择已失效，请刷新页面后重试。" };
