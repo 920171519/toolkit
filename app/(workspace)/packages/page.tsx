@@ -10,7 +10,7 @@ import {
 } from "@/lib/queries";
 import { canEditPackageById } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
-import { getWorkflowProjectOptions, requireWorkflowProject } from "@/lib/project-scope";
+import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { FlashMessage, PageHeader } from "@/components/ui";
 
@@ -26,7 +26,6 @@ export default async function PackagesPage({
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const selectedProject = requireWorkflowProject(user, params.project);
-  const projects = getWorkflowProjectOptions(user);
   const packages = getPackageOverviewRows(selectedProject?.id);
   const people = getPeople();
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
@@ -60,26 +59,6 @@ export default async function PackagesPage({
         }
       />
       <FlashMessage notice={notice} />
-
-      <section className="card" style={{ marginBottom: 14 }}>
-        <div className="card-body" style={{ padding: "12px 15px" }}>
-          <form method="get" action="/packages" className="toolbar-spread" style={{ alignItems: "flex-end" }}>
-            <div className="toolbar" style={{ alignItems: "flex-end", gap: 10 }}>
-              <label className="field" style={{ minWidth: 240 }}>
-                <span className="label">查看范围</span>
-                <select className="select" name="project" defaultValue={selectedProject?.id ?? ""}>
-                  <option value="">全部在行项目</option>
-                  {(selectedProject?.status === "ARCHIVED" ? [...projects, selectedProject] : projects).map((project) =>
-                    <option value={project.id} key={project.id}>{project.name}</option>,
-                  )}
-                </select>
-              </label>
-              <button type="submit" className="button button-secondary button-sm">切换</button>
-            </div>
-            <span className="small muted">按项目筛选只限制软件包列表；使用范围列始终展示全部在行项目，已结束项目不在本页展示。</span>
-          </form>
-        </div>
-      </section>
 
       <div className="info-strip" style={{ marginBottom: 18 }}>
         <span>

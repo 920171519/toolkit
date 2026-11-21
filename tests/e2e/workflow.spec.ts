@@ -501,7 +501,8 @@ test.describe("工程协同台项目维度流程", () => {
     await page.goto("/packages");
     await expect(page.locator(".data-table")).not.toContainText("远山 X0");
     await page.goto("/packages?project=1");
-    await expect(page.locator('select[name="project"]')).toHaveValue("1");
+    await expect(page.getByRole("combobox", { name: "查看范围" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "项目工作区" })).toHaveAttribute("href", "/projects/1");
     const table = page.locator(".data-table");
     await expect(table).toContainText("1001OTA");
     await expect(table).not.toContainText("远山 X0");
