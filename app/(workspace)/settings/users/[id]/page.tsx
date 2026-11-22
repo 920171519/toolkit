@@ -36,7 +36,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
     <div className={styles.stack}>
       <PageHeader
         title={member.name}
-        description={<>{member.employeeId} · {member.department} · <Badge tone={role.tone}>{role.label}</Badge> <Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></>}
+        description={<>{member.employeeId} · {member.department} · <span className={styles.meta}>{role.label}</span> <Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></>}
         actions={<Link href={directoryHref("/settings/users", filters)} className="button button-secondary" prefetch={false}><ArrowLeft size={15} aria-hidden="true" /> 返回人员列表</Link>}
       />
       <FlashMessage notice={notice} />

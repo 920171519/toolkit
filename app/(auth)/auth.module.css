@@ -1,0 +1,68 @@
+.header {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  max-width: 1100px;
+}
+
+.main {
+  width: min(100% - 32px, 440px);
+  margin-inline: auto;
+  padding-block: 48px;
+}
+
+.panel:global(.card) {
+  padding: 32px;
+  box-shadow: none;
+}
+
+.heading {
+  margin-bottom: 20px;
+}
+
+.heading h1 {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
+}
+
+.heading p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media (max-width: 640px) {
+  .navigation {
+    min-height: 60px;
+  }
+
+  .navigation :global(.button) {
+    min-height: 44px;
+  }
+
+  .navigation :global(.brand-sub) {
+    display: none;
+  }
+
+  .main {
+    padding-block: 24px 32px;
+  }
+
+  .panel:global(.card) {
+    padding: 24px;
+  }
+
+  .heading h1 {
+    font-size: 28px;
+    line-height: 36px;
+  }
+}

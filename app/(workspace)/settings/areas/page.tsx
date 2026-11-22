@@ -6,7 +6,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { DirectoryFilters, DirectoryPagination, DirectorySort } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
-import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { saveAreaAction } from "@/lib/actions/settings";
 import { requireUser } from "@/lib/auth";
 import { getListPageSize } from "@/lib/list-pagination";
@@ -56,7 +56,6 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
   return (
     <>
       <PageHeader
-        eyebrow="Settings / Responsibility areas"
         title="责任田配置"
         description="查看责任田、主管和项目分工。"
         actions={isAdmin && (
@@ -105,8 +104,8 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
                 <DirectorySort column="name" label="责任田" path={path} params={filters} />
                 <th scope="col">类型</th>
                 <DirectorySort column="leaders" label="主管" path={path} params={filters} />
-                <DirectorySort column="projects" label="已设负责人的项目" path={path} params={filters} />
-                <DirectorySort column="packages" label="软件包" path={path} params={filters} />
+                <DirectorySort column="projects" label="已设负责人的项目" path={path} params={filters} numeric />
+                <DirectorySort column="packages" label="软件包" path={path} params={filters} numeric />
               </tr>
             </thead>
             <tbody>
@@ -116,10 +115,10 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
                     <Link href={directoryHref(`${path}/${area.id}`, filters)} className={styles.rowLink} prefetch={false}>{area.name}</Link>
                     {area.description && <div className={`small muted ${styles.rowDescription}`} title={area.description}>{area.description}</div>}
                   </td>
-                  <td>{area.isIntegration ? <Badge tone="teal">集成测试</Badge> : "普通"}</td>
+                  <td><span className={styles.meta}>{area.isIntegration ? "集成测试" : "普通"}</span></td>
                   <td>{supervisors(area) || <span className="muted">未指定</span>}</td>
-                  <td>{area.projectCount}</td>
-                  <td>{area.packageCount}</td>
+                  <td className={styles.number}>{area.projectCount}</td>
+                  <td className={styles.number}>{area.packageCount}</td>
                 </tr>
               )) : <tr><td colSpan={5}>
                 <div className={styles.stickyContent}>

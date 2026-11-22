@@ -2,16 +2,16 @@
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
 .toolbar > :first-child {
-  flex: 1 1 230px;
+  flex: 1 1 232px;
   min-width: 0;
+  max-width: 384px;
 }
-.toolbar > div { min-width: 110px; }
-.toolbar button, .toolbar a { min-height: 40px; }
+.toolbar :is(input, select, button, a) { min-height: 40px; }
 .code { font-family: var(--font-mono); }
 .code[scope="row"] {
   color: var(--ink);
@@ -19,17 +19,24 @@
   font-size: 13px;
   letter-spacing: normal;
 }
-.progress { margin-top: 4px; }
-.pagination, .pagination nav {
+.statuses,
+.pagination {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 .pagination {
-  justify-content: space-between;
-  padding: 12px 16px;
+  justify-content: flex-end;
+  padding: 12px 20px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .toolbar, .pagination { padding-inline: 16px; }
+  .toolbar > :first-child { max-width: none; }
+  .toolbar :is(input, select, button, a),
+  .pagination :global(.button) { min-height: 44px; }
 }

@@ -19,6 +19,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { PROJECT_STATUS_META, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import styles from "./project-workspace.module.css";
 
 const versionStatusFallback: Record<string, { label: string; tone: string }> = {
   TRIAL: { label: "试制中", tone: "teal" },
@@ -59,7 +60,7 @@ export default async function ProjectWorkspacePage({
         <FlashMessage notice={notice} />
         <section className="card" aria-label="项目基本资料">
           <div className="card-body">
-            <dl>
+            <dl className={styles.projectIdentity}>
               <div><dt className="label">阶段</dt><dd>{stage}</dd></div>
               <div><dt className="label">PM</dt><dd>{catalogEntry.pms.map((person) => person.name).join("、") || "待指定"}</dd></div>
               <div><dt className="label">软件经理</dt><dd>{catalogEntry.softwareManagers.map((person) => person.name).join("、") || "待指定"}</dd></div>
@@ -83,11 +84,12 @@ export default async function ProjectWorkspacePage({
   const projectVersions = getProjectVersionRows(projectId);
   const activeBatches = batches.filter((batch) => batch.status === "IN_TEST");
   const visibleBatches = [...activeBatches, ...batches.filter((batch) => batch.status !== "IN_TEST")];
+  const overdueTrials = trials.filter((version) => version.isOverdue).length;
+  const overdueFormal = formal.filter((version) => version.isOverdue).length;
 
   return (
     <>
       <PageHeader
-        eyebrow="Project workspace"
         title={project.name}
         description={`${project.code} · ${project.description || "项目工作区"}`}
         actions={hasWorkflowScope ? <Link href={workflowHref("/versions", projectId)} className="button button-secondary">版本全链路</Link> : undefined}
@@ -117,13 +119,27 @@ export default async function ProjectWorkspacePage({
         </div>
       </div>
 
-      <div className="info-strip" style={{ marginBottom: 16 }}>
-        <span><strong>{pendingGroup?.items.length ?? 0}</strong> 个待转测申请</span>
-        <span><strong>{activeBatches.length}</strong> 个在测批次</span>
-        <span><strong>{ready.length}</strong> 个待发试制</span>
-        <span><strong>{trials.length}</strong> 个试制绑定中</span>
-        <span><strong>{formal.length}</strong> 个待转正</span>
-      </div>
+      <dl className={styles.flowSummary} aria-label="当前流程">
+        <div className={styles.stage}>
+          <dt>转测</dt>
+          <dd><strong>{pendingGroup?.items.length ?? 0}</strong> 个待转测申请</dd>
+        </div>
+        <div className={styles.stage}>
+          <dt>集成测试</dt>
+          <dd><strong>{activeBatches.length}</strong> 个在测批次</dd>
+        </div>
+        <div className={styles.stage} data-overdue={overdueTrials > 0}>
+          <dt>试制与绑定</dt>
+          <dd><strong>{ready.length}</strong> 个待发试制</dd>
+          <dd className={styles.stageDetail}>{trials.length} 个试制绑定中</dd>
+          {overdueTrials > 0 && <dd className={styles.overdue}>{overdueTrials} 已超期</dd>}
+        </div>
+        <div className={styles.stage} data-overdue={overdueFormal > 0}>
+          <dt>转正</dt>
+          <dd><strong>{formal.length}</strong> 个待转正</dd>
+          {overdueFormal > 0 && <dd className={styles.overdue}>{overdueFormal} 已超期</dd>}
+        </div>
+      </dl>
 
       <section id="packages" className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div><h2 style={{ fontSize: 18 }}>软件包与全局使用范围</h2><p className="small muted" style={{ marginTop: 3 }}>即使在本项目页面，也展示软件包在所有在行项目中的使用范围，便于判断转测和绑定覆盖是否完整。</p></div><Badge tone="slate">{packageRows.length} 个</Badge></div>
@@ -163,7 +179,7 @@ export default async function ProjectWorkspacePage({
           {visibleBatches.length === 0 ? <EmptyState title="暂无集成测试批次" /> : <div className="table-wrap"><table className="data-table">
             <thead><tr><th>批次</th><th>状态</th><th>配套 / 变更</th><th>结论</th><th>发起 / 完成</th><th aria-label="操作" /></tr></thead>
             <tbody>{visibleBatches.map((batch) => (
-              <tr key={batch.id}><td><Link href={workflowHref(`/integration/${batch.id}`, projectId)} style={{ fontWeight: 600 }}>{batch.code}</Link><div className="small muted">{batch.title}</div></td><td><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></td><td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td><td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : "rose"}>{batch.conclusion === "PASS" ? "测试通过" : batch.conclusion === "FAIL" ? "测试不通过" : "无法验证"}</Badge> : <span className="small muted">—</span>}</td><td className="small muted">{formatDateTime(batch.sentAt ?? batch.createdAt)}</td><td className="cell-actions"><Link href={workflowHref(`/integration/${batch.id}`, projectId)} className="archive-link">查看 <ArrowRight size={11} /></Link></td></tr>
+              <tr key={batch.id}><td><Link href={workflowHref(`/integration/${batch.id}`, projectId)} className="archive-link mono">{batch.code}</Link><div className="small muted">{batch.title}</div></td><td><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></td><td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td><td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : "rose"}>{batch.conclusion === "PASS" ? "测试通过" : batch.conclusion === "FAIL" ? "测试不通过" : "无法验证"}</Badge> : <span className="small muted">—</span>}</td><td className="small muted">{formatDateTime(batch.sentAt ?? batch.createdAt)}</td><td className="cell-actions"><Link href={workflowHref(`/integration/${batch.id}`, projectId)} className="archive-link">查看 <ArrowRight size={11} /></Link></td></tr>
             ))}</tbody>
           </table></div>}
         </div>
@@ -189,7 +205,7 @@ export default async function ProjectWorkspacePage({
               return <tr key={version.requestId}>
                 <td><Link href={workflowHref(`/versions/${version.versionId}`, projectId)} style={{ fontWeight: 600 }}>{version.packageName}</Link><div className="small muted">{version.packageCode} · {version.version}</div></td>
                 <td><Badge tone={meta.tone as "emerald" | "rose" | "amber" | "slate" | "sky" | "violet" | "orange"}>{meta.label}</Badge>{version.isOverdue ? <div style={{ marginTop: 4 }}><Badge tone="rose">已超期</Badge></div> : null}{version.bindingMode === "PENDING" && version.status === "TRIAL" ? <div style={{ marginTop: 4 }}><Badge tone="amber">待推送绑定</Badge></div> : null}{version.riskConclusion && <div className="small muted">风险结论：{version.riskConclusion.slice(0, 24)}{version.riskConclusion.length > 24 ? "…" : ""}</div>}</td>
-                <td>{version.batchId ? <Link href={workflowHref(`/integration/${version.batchId}`, projectId)} className="archive-link">{version.batchCode} · {version.batchConclusion ?? "进行中"} <ArrowRight size={11} /></Link> : <span className="small muted">无批次</span>}</td>
+                <td>{version.batchId ? <Link href={workflowHref(`/integration/${version.batchId}`, projectId)} className="archive-link"><span className="mono">{version.batchCode}</span> · {version.batchConclusion ?? "进行中"} <ArrowRight size={11} /></Link> : <span className="small muted">无批次</span>}</td>
                 <td className="small mono">{version.trialFormNo ?? "—"}</td>
                 <td className="small mono">{version.formFlowNo ?? "—"}</td>
                 <td className="cell-actions"><div className="toolbar" style={{ justifyContent: "flex-end", gap: 8 }}><Link href={workflowHref(`/versions/${version.versionId}`, projectId)} className="archive-link">全链路</Link>{["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status) && <Link href={workflowHref(`/trial/${version.requestId}`, projectId)} className="archive-link">绑定</Link>}</div></td>

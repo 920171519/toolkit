@@ -41,7 +41,7 @@ function bindingStatus(row: TrialVersionRow) {
 function batchLink(row: TrialReadyVersion | TrialVersionRow, projectId?: number) {
   if (!row.batchId) return <span className="small muted">未关联转测批次</span>;
   return <Link href={workflowHref("/integration/" + row.batchId, projectId)} className="archive-link" prefetch={false}>
-    {row.batchCode ?? "查看批次"}
+    {row.batchCode ? <span className="mono">{row.batchCode}</span> : "查看批次"}
   </Link>;
 }
 
@@ -63,7 +63,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
 
   const identityColumns: TrialTableColumn<TrialReadyVersion | TrialVersionRow>[] = [
     { key: "package", label: "软件包", value: (row) => row.packageName, cell: packageLink },
-    { key: "version", label: "版本", value: (row) => row.version, cell: (row) => <span className="mono">{row.version}</span> },
+    { key: "version", label: "版本", value: (row) => row.version, cell: (row) => <span className={`mono ${styles.version}`}>{row.version}</span> },
     { key: "project", label: "项目", value: (row) => row.projectName },
     {
       key: "batch",
@@ -80,7 +80,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       label: "发布状态",
       value: readyStatus,
       options: ["待发试制", "风险发布"],
-      cell: (row) => <Badge tone={riskRelease(row) ? "rose" : "violet"} dot>{readyStatus(row)}</Badge>,
+      cell: (row) => <Badge tone={riskRelease(row) ? "amber" : "emerald"} dot>{readyStatus(row)}</Badge>,
     },
   ];
   const bindingColumns: TrialTableColumn<TrialVersionRow>[] = [
@@ -89,9 +89,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       key: "status",
       label: "绑定状态",
       value: bindingStatus,
-      cell: (row) => <div>{bindingModes[row.bindingMode]}
-        {(row.releaseMode === "RISK" || !row.batchId) && <span className="small muted"> · 风险发布</span>}
-        {Boolean(row.isOverdue) && <div><Badge tone="rose">已超期</Badge></div>}
+      cell: (row) => <div className={styles.bindingStatus}>
+        <span>{bindingModes[row.bindingMode]}</span>
+        {(row.releaseMode === "RISK" || !row.batchId) && <Badge tone="amber">风险发布</Badge>}
+        {Boolean(row.isOverdue) && <Badge tone="rose">已超期</Badge>}
       </div>,
     },
     { key: "form", label: "试制电子流", value: (row) => row.trialFormNo ?? "—" },
@@ -130,7 +131,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                 {canRelease(row) && <>
                   <FormDialog label="发布" title={"发布 " + title + " 试制"}
                     description={"发布后同步到全部 " + row.versionProjectCount + " 个使用项目。"}
-                    triggerClassName="button button-primary button-sm" cancelLabel="取消">
+                    triggerClassName="button button-secondary button-sm" cancelLabel="取消">
                     {risk && <p className="risk-callout" style={{ marginBottom: 10 }}>风险发布原因 · {row.riskConclusion}</p>}
                     <ActionForm action={releaseTrialAction} hidden={{ requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
                       submitText="发布全项目共享试制版本" submitClassName="button-sm"
@@ -154,7 +155,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                     </ActionForm>
                   </FormDialog>
                 </>}
-                <Link href={workflowHref("/trial/ready/" + row.requestId, projectId, query)} className="button button-secondary button-sm" prefetch={false}>详情</Link>
+                <Link href={workflowHref("/trial/ready/" + row.requestId, projectId, query)} className="button button-ghost button-sm" prefetch={false}>详情</Link>
               </div>
             );
           }}

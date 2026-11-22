@@ -37,17 +37,18 @@ export function DirectoryFilters({ path, query, placeholder, params, children, f
   );
 }
 
-export function DirectorySort({ column, label, path, params }: {
+export function DirectorySort({ column, label, path, params, numeric }: {
   column: string;
   label: string;
   path: string;
   params: Record<string, string | undefined>;
+  numeric?: boolean;
 }) {
   const selected = column === params.sort;
   const ascending = selected && params.order !== "desc";
   const Arrow = selected ? ascending ? ArrowUp : ArrowDown : ArrowDownUp;
   return (
-    <th scope="col" aria-sort={selected ? ascending ? "ascending" : "descending" : undefined}>
+    <th scope="col" className={numeric ? styles.number : undefined} aria-sort={selected ? ascending ? "ascending" : "descending" : undefined}>
       <Link
         className={styles.sort}
         href={directoryHref(path, { ...params, sort: column, order: ascending ? "desc" : "asc", page: undefined })}
@@ -70,7 +71,7 @@ export function DirectoryPagination({ path, params, page, pages, total, unit }: 
   const href = (nextPage: number) => directoryHref(path, { ...params, page: String(nextPage) });
   return (
     <nav className={styles.pagination} aria-label="列表分页">
-      <span className="small muted">共 {total} {unit}</span>
+      <span className={styles.meta}>共 {total} {unit}</span>
       {pages > 1 && <div className="toolbar">
         {page > 1 && <Link href={href(page - 1)} prefetch={false} className="button button-secondary button-sm"><ChevronLeft size={14} aria-hidden="true" />上一页</Link>}
         <span className="small muted">第 {page} 页 / 共 {pages} 页</span>

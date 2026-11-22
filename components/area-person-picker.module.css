@@ -1,6 +1,7 @@
 .picker {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-width: 0;
 }
 
 .choices {
@@ -11,11 +12,11 @@
 }
 
 .choices legend {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .results {
-  max-height: min(250px, 35dvh);
+  max-height: min(264px, 40dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -23,24 +24,35 @@
 .option {
   min-height: 40px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 7px 9px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
-.option:hover,
-.option:focus-within {
+.option:hover {
   background: var(--surface-muted);
 }
 
 .option:has(input:checked) {
-  background: var(--accent-soft);
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
 }
 
 .option input {
   flex: none;
   accent-color: var(--brand);
+}
+
+@media (max-width: 640px) {
+  .option {
+    min-height: 44px;
+  }
 }

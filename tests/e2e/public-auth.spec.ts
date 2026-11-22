@@ -85,6 +85,25 @@ test.describe("公开项目联系人与账号", () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
+  test("桌面侧栏在一行内完整显示角色和账号编号", async ({ page }) => {
+    await login(page, "OWNER001");
+    const account = page.locator(".sidebar-user-role");
+    await expect(account).toContainText(" · OWNER001");
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const width of [1440, 901]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await account.evaluate((element) => {
+        const lineHeight = parseFloat(getComputedStyle(element).lineHeight);
+        return {
+          singleLine: element.getBoundingClientRect().height <= lineHeight,
+          fullyVisible: element.scrollWidth <= element.clientWidth,
+        };
+      });
+      expect(layout, `${width}px`).toEqual({ singleLine: true, fullyVisible: true });
+    }
+  });
+
   test("移动端工作台保留可见的退出登录入口", async ({ page }) => {
     await login(page, "MEMBER001");
     await page.setViewportSize({ width: 390, height: 844 });

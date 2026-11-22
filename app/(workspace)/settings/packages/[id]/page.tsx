@@ -10,6 +10,7 @@ import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFl
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import styles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
 
 export const dynamic = "force-dynamic";
@@ -129,7 +130,7 @@ export default async function PackageSettingsDetailPage({
                   勾选代表该项目测试节点会加载此软件包。发布试制时，系统会为全部勾选节点生成绑定验证任务。
                 </p>
               </div>
-              <Badge tone="slate">{usedNodeIds.size} 个节点</Badge>
+              <span className={styles.meta}>{usedNodeIds.size} 个节点</span>
             </div>
             <div className="card-body" style={{ paddingTop: 14 }}>
               {bindingActive ? (

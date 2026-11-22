@@ -56,6 +56,27 @@
   overflow-x: auto;
 }
 
+.evidenceHeader {
+  align-items: flex-start;
+}
+
+.evidenceHeader h2 {
+  font-size: 18px;
+}
+
+.evidenceHeader p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.evidenceCount {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .toolbar {
   display: flex;
   align-items: flex-end;

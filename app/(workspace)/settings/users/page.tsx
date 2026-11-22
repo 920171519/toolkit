@@ -56,7 +56,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
 
   return (
     <div className={styles.stack}>
-      <PageHeader eyebrow="Settings / People & roles" title="人员与角色" description="按姓名、工号、角色和责任田查找人员。" />
+      <PageHeader title="人员与角色" description="按姓名、工号、角色和责任田查找人员。" />
       <FlashMessage notice={notice} />
       <SettingsTabs isAdmin />
       <section className="card" aria-labelledby="user-list-title">
@@ -93,21 +93,21 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
                 <DirectorySort column="role" label="系统角色" path={path} params={filters} />
                 <DirectorySort column="area" label="责任田" path={path} params={filters} />
                 <DirectorySort column="status" label="账号状态" path={path} params={filters} />
-                <DirectorySort column="packages" label="软件包" path={path} params={filters} />
+                <DirectorySort column="packages" label="软件包" path={path} params={filters} numeric />
               </tr></thead>
               <tbody>
                 {list.items.map((member) => (
                   <tr key={member.id} data-testid={`user-row-${member.id}`}>
                     <td>
                       <Link href={directoryHref(`${path}/${member.id}`, filters)} className={styles.rowLink} prefetch={false}>{member.name}</Link>
-                      {member.id === user.id && <> <Badge tone="sky">我</Badge></>}
+                      {member.id === user.id && <> <span className={styles.meta}>我</span></>}
                       <div className="small muted">{[member.title, member.department].filter(Boolean).join(" · ")}</div>
                     </td>
                     <td>{member.employeeId}</td>
-                    <td><Badge tone={ROLE_META[member.role].tone}>{ROLE_META[member.role].label}</Badge></td>
+                    <td><span className={styles.meta}>{ROLE_META[member.role].label}</span></td>
                     <td>{areaNames(member) || <span className="muted">未分配</span>}</td>
                     <td><Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></td>
-                    <td>{member.ownedPackages}</td>
+                    <td className={styles.number}>{member.ownedPackages}</td>
                   </tr>
                 ))}
               </tbody>
@@ -121,7 +121,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
         <dl className={`card-body ${styles.stack}`}>
           {ROLES.map((value) => (
             <div key={value}>
-              <dt><Badge tone={ROLE_META[value].tone}>{ROLE_META[value].label}</Badge></dt>
+              <dt className={styles.meta}>{ROLE_META[value].label}</dt>
               <dd className="small muted">{ROLE_META[value].description}</dd>
             </div>
           ))}

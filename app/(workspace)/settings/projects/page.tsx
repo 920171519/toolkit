@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarDays, LayoutGrid, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { getLedAreaIds, getManagedProjectIdsForUser } from "@/lib/access";
@@ -18,6 +18,7 @@ import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 import { FormDialog } from "@/components/form-dialog";
 import { ProjectContactPicker } from "@/components/project-contact-picker";
 import { SettingsTabs } from "@/components/settings-tabs";
+import styles from "@/components/settings-directory.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "项目与节点配置" };
@@ -55,13 +56,12 @@ export default async function ProjectsSettingsPage({
   return (
     <>
       <PageHeader
-        eyebrow="Settings / Projects"
         title="项目与测试节点"
         description="维护项目阶段、PM、测试节点和流程状态。归档项目在项目总览显示为已结束。每个测试节点需要规划设备条码绑定验证责任人、主审批人与审批人范围、绑定通过数量，试制发布会按这些配置生成绑定任务。"
         actions={user.role === "ADMIN" ? (
           <FormDialog label="新增项目" title="新建项目" description="仅管理员可以新建项目。" triggerClassName="button button-primary" testId="new-project-trigger">
             <ActionForm action={saveProjectAction} submitText="创建项目" testId="new-project-form">
-              <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              <div className={styles.stack}>
                 <label className="field"><span className="label">项目名称</span><input className="input" name="name" placeholder="例如 星云 N2" required /></label>
                 <label className="field"><span className="label">项目编码</span><input className="input" name="code" placeholder="N2" required /></label>
                 <ProjectContactPicker label="PM" name="pmUserIds" options={people} />
@@ -78,38 +78,22 @@ export default async function ProjectsSettingsPage({
       <FlashMessage notice={notice} />
       <SettingsTabs isAdmin={user.role === "ADMIN"} canManagePackages={user.role === "ADMIN" || getLedAreaIds(user.id).length > 0} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className={styles.stack}>
           {projects.map((project) => (
             <section className="card" key={project.id}>
-              <div className="card-body" style={{ padding: 19 }}>
+              <div className="card-body" style={{ padding: 20 }}>
                 <div className="toolbar-spread">
-                  <div className="toolbar" style={{ gap: 9 }}>
-                    <span
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 9,
-                        background: "var(--brand-soft)",
-                        color: "var(--brand)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <LayoutGrid size={16} />
-                    </span>
-                    <div>
-                      <div className="toolbar" style={{ gap: 7 }}>
-                        <h2 style={{ fontSize: 18 }}>{project.name}</h2>
-                        <span className="chip">{project.code}</span>
-                        <span className="small">{PROJECT_STAGE_META[getProjectStage(project.status, project.stage)].label}</span>
-                        <Badge tone={project.status === "ACTIVE" ? "emerald" : project.status === "PAUSED" ? "amber" : "slate"} dot>
-                          {statusOptions.find((item) => item.value === project.status)?.label}
-                        </Badge>
-                      </div>
-                      <div className="small muted" style={{ marginTop: 2 }}>
-                        PM {project.pmName ?? "待指定"} · 软件经理 {project.softwareManagerName ?? "待指定"} · {project.packageCount} 个软件包
-                      </div>
+                  <div>
+                    <div className="toolbar" style={{ gap: 8 }}>
+                      <h2 style={{ fontSize: 18 }}>{project.name}</h2>
+                      <span className={styles.stage}>{project.code}</span>
+                      <span className={styles.stage}>{PROJECT_STAGE_META[getProjectStage(project.status, project.stage)].label}</span>
+                      <Badge tone={project.status === "ACTIVE" ? "emerald" : project.status === "PAUSED" ? "amber" : "slate"} dot>
+                        {statusOptions.find((item) => item.value === project.status)?.label}
+                      </Badge>
+                    </div>
+                    <div className={styles.meta} style={{ marginTop: 4 }}>
+                      PM {project.pmName ?? "待指定"} · 软件经理 {project.softwareManagerName ?? "待指定"} · {project.packageCount} 个软件包
                     </div>
                   </div>
                   <details className="project-settings-editor">
@@ -160,12 +144,11 @@ export default async function ProjectsSettingsPage({
                     </div>
                   </details>
                 </div>
-                <p className="change-copy" style={{ marginTop: 9 }}>{project.description}</p>
+                <p className="change-copy" style={{ marginTop: 8 }}>{project.description}</p>
 
-                <div className="inset-panel" style={{ marginTop: 13 }}>
+                <div className="inset-panel" style={{ marginTop: 12 }}>
                   <div className="split-row">
-                    <div className="toolbar" style={{ gap: 7 }}>
-                      <CalendarDays size={14} style={{ color: "var(--muted)" }} />
+                    <div className="toolbar" style={{ gap: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 600 }}>测试节点与绑定责任</span>
                       <span className="small muted">绑定验证按节点展开，每个节点需配置设备条码责任人与电子流审批人</span>
                     </div>

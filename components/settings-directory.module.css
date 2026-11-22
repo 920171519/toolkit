@@ -3,13 +3,18 @@
   flex-wrap: wrap;
   align-items: end;
   gap: 12px;
-  padding: 14px 20px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
 
 .search {
   flex: 1 1 190px;
   min-width: min(100%, 190px);
+  max-width: 384px;
+}
+
+.filters :is(input, select, button, a) {
+  min-height: 40px;
 }
 
 .filters select {
@@ -30,8 +35,28 @@
 
 .table th,
 .table td {
-  padding: 9px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.table .number,
+:global(.data-table) .number {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .table th {
@@ -77,7 +102,7 @@
 }
 
 .rowLink {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--brand);
 }
 
@@ -117,7 +142,8 @@
 
 .stack {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-width: 0;
   margin: 0;
 }
 
@@ -166,12 +192,13 @@
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .memberList li {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
@@ -180,7 +207,16 @@
 @media (max-width: 690px) {
   .filters {
     gap: 8px;
-    padding: 12px;
+    padding: 12px 16px;
+  }
+
+  .search {
+    max-width: none;
+  }
+
+  .filters :is(input, select, button, a),
+  .pagination :global(.button) {
+    min-height: 44px;
   }
 
   .filters label:not(.search) {

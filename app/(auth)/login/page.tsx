@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth-forms";
 import { getCurrentUser } from "@/lib/auth";
+import styles from "../auth.module.css";
 
 export const metadata: Metadata = { title: "登录" };
 export const dynamic = "force-dynamic";
@@ -17,12 +18,11 @@ export default async function LoginPage({
   const next = params.next && params.next.startsWith("/") && !params.next.startsWith("//") ? params.next : undefined;
 
   return (
-    <div className="auth-form-wrap">
-      <div className="auth-heading">
-        <div className="eyebrow">Internal workspace</div>
-        <h2 style={{ marginTop: 9 }}>欢迎回来</h2>
+    <section className={`card ${styles.panel}`} aria-labelledby="login-title">
+      <header className={styles.heading}>
+        <h1 id="login-title">登录工作台</h1>
         <p>登录后查看部门项目、软件包版本与转测流程。</p>
-      </div>
+      </header>
       <LoginForm next={next} />
       <details className="demo-accounts">
         <summary>查看演示账号（仅用于本地体验）</summary>
@@ -38,6 +38,6 @@ export default async function LoginPage({
           </span>
         </div>
       </details>
-    </div>
+    </section>
   );
 }

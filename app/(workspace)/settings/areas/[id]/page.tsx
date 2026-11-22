@@ -7,7 +7,7 @@ import { AreaPersonPicker, type AreaPersonOption } from "@/components/area-perso
 import { FormDialog } from "@/components/form-dialog";
 import styles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
-import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { getLedAreaIds } from "@/lib/access";
 import {
   addAreaLeaderAction,
@@ -133,7 +133,7 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
       />
       <section className="card" aria-labelledby="area-leaders">
         <div className="card-header">
-          <div><h2 id="area-leaders">责任田主管</h2>{area.isIntegration && <Badge tone="teal">集成测试责任田</Badge>}</div>
+          <div><h2 id="area-leaders">责任田主管</h2>{area.isIntegration && <span className={styles.meta}>集成测试责任田</span>}</div>
           {eligibleLeaders.length > 0 && <FormDialog key={area.leaders.map(({ id: leaderId }) => leaderId).join(".")} label={<><Plus size={13} aria-hidden="true" /> 添加主管</>} title="添加责任田主管" triggerClassName={secondary} cancelLabel="取消">
             <ActionForm action={addAreaLeaderAction} hidden={{ ...filters, areaId: id }} submitText="设置主管">
               <AreaPersonPicker label="责任田主管" people={eligibleLeaders} />

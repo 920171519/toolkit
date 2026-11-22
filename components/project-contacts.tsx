@@ -50,20 +50,18 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
 
   return (
     <div id="project-contacts">
-      <div className="toolbar-spread" style={{ marginBottom: 16, justifyContent: "flex-end" }}>
-        <label
-          className="input directory-search"
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
-        >
-          <Search size={14} style={{ color: "var(--muted-light)", flex: "none" }} />
+      <div className="directory-search-bar" role="search">
+        <label className="directory-search">
+          <Search aria-hidden="true" />
           <input
+            className="input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索项目、PM 或软件经理"
             aria-label="搜索项目联系人"
-            style={{ border: 0, outline: 0, width: "100%", background: "transparent" }}
           />
         </label>
+        <p className="small muted" role="status">{filtered.length} 个项目</p>
       </div>
 
       {filtered.length === 0 ? (

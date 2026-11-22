@@ -21,15 +21,15 @@ export default async function HomePage() {
       <main>
         <section className="contact-hero">
           <div className="container-wide">
-            <div className="eyebrow">Project contacts / {DEPARTMENT_NAME}</div>
             <h1>项目联系人</h1>
             <p>每个项目可以配置多位 PM 和软件经理。需要跨部门协作时，请联系对应项目的 PM 或软件经理。</p>
           </div>
         </section>
 
-        <section className="public-section-tight" style={{ paddingTop: 34 }}>
+        <section className="public-section-tight">
           <div className="container-wide">
-            <ProjectContacts projects={projects} />          </div>
+            <ProjectContacts projects={projects} />
+          </div>
         </section>
       </main>
       <footer className="public-footer">

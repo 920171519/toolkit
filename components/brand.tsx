@@ -13,7 +13,7 @@ export function Brand({
       {!compact && (
         <span className="brand-copy">
           <span className="brand-name">工程协同台</span>
-          <span className="brand-sub">Engineering Hub / 软件工程部</span>
+          <span className="brand-sub">软件工程部</span>
         </span>
       )}
     </Link>

@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const accountLabel = `${ROLE_META[user.role].label} · ${user.employeeId}`;
   const canConfigure = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const isAdmin = user.role === "ADMIN";
   const canManagePackages = isAdmin || getLedAreaIds(user.id).length > 0;
@@ -74,12 +75,8 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
         <div className="sidebar-user">
           <div className="sidebar-user-card">
             <Avatar name={user.name} size="sm" />
-            <div className="sidebar-user-copy">
-              <div className="sidebar-user-name">{user.name}</div>
-              <div className="sidebar-user-role">
-                {ROLE_META[user.role].label} · {user.employeeId}
-              </div>
-            </div>
+            <div className="sidebar-user-name" title={user.name}>{user.name}</div>
+            <div className="sidebar-user-role" title={accountLabel}>{accountLabel}</div>
             <form action={logoutAction}>
               <button type="submit" className="sidebar-logout" title="退出登录" aria-label="退出登录">
                 <LogOut size={14} />

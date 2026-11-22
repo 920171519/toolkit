@@ -1,0 +1,79 @@
+.projectIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 12px;
+}
+
+.projectIdentity dd {
+  margin: 4px 0 0;
+}
+
+.flowSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--line);
+}
+
+.stage {
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.stage[data-overdue="true"] {
+  box-shadow: inset 0 2px var(--danger);
+}
+
+.stage dt {
+  margin-bottom: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stage dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage dd + dd {
+  margin-top: 4px;
+}
+
+.stage strong {
+  margin-inline-end: 4px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.stageDetail, .overdue {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overdue {
+  color: var(--danger);
+}
+
+@media (max-width: 1060px) {
+  .flowSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .stage {
+    padding: 12px;
+  }
+
+  .stage strong {
+    font-size: 20px;
+  }
+}

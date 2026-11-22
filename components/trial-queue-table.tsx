@@ -77,7 +77,7 @@ export function TrialQueueTable<Row>({
       <div className={`card-header ${styles.header}`}>
         <div>
           <h2 id={titleId}>{title}</h2>
-          <p className="small muted" role="status">{matching.length} 条记录{filtered && rows.length !== matching.length ? "，共 " + rows.length + " 条" : ""}</p>
+          <p className={styles.count} role="status">{matching.length} 条记录{filtered && rows.length !== matching.length ? "，共 " + rows.length + " 条" : ""}</p>
         </div>
         <form className={styles.toolbar} id={formId} action="/trial" method="get" role="search" aria-label={"筛选" + title} data-trial-filters={kind}>
           {projectId !== undefined && <input type="hidden" name="project" value={projectId} />}
@@ -86,7 +86,7 @@ export function TrialQueueTable<Row>({
             <span className="label">搜索{title}</span>
             <input className="input" type="search" name={field("q")} defaultValue={search} placeholder="软件包、版本、批次或提交人" maxLength={120} />
           </label>
-          <button type="submit" className={"button button-primary " + styles.manualFilter}><Search size={14} />应用筛选</button>
+          <button type="submit" className={"button button-secondary " + styles.manualFilter}><Search size={14} />应用筛选</button>
           {filtered && <Link href={reset()} className="button button-secondary" prefetch={false}>清除筛选</Link>}
         </form>
       </div>

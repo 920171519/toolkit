@@ -10,6 +10,7 @@ import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/l
 import { savePackageAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Badge, EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import directoryStyles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { FormDialog } from "@/components/form-dialog";
 import styles from "./package-settings.module.css";
@@ -87,7 +88,7 @@ export default async function PackagesSettingsPage({
       <FlashMessage notice={notice} />
       <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} />
 
-      <section className="card" aria-label="软件包列表">
+      <section className="card" aria-labelledby="settings-package-list">
         <form action="/settings/packages" method="get" role="search" aria-label="查找软件包" className={styles.toolbar}>
           <label className="field">
             <span className="label">搜索软件包</span>
@@ -96,37 +97,55 @@ export default async function PackagesSettingsPage({
           {areas.length > 1 && <div className="field"><label className="label" htmlFor="package-settings-area">责任田</label><select id="package-settings-area" className="select" name="area" defaultValue={area?.id ?? ""}><option value="">全部责任田</option>{areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>}
           <div className="field"><label className="label" htmlFor="package-settings-state">启停状态</label><select id="package-settings-state" className="select" name="state" defaultValue={state}><option value="">全部</option><option value="active">启用</option><option value="inactive">停用</option></select></div>
           <div className="field"><label className="label" htmlFor="package-settings-page-size">每页条数</label><select id="package-settings-page-size" className="select" name="pageSize" defaultValue={pageSize}>{LIST_PAGE_SIZES.map((size) => <option key={size}>{size}</option>)}</select></div>
-          <button className="button button-primary" type="submit">查询</button>
+          <button className="button button-secondary" type="submit">查询</button>
           {(query || area || state) && <Link href={listHref(1, true)} prefetch={false} className="button button-ghost">清除筛选</Link>}
         </form>
+        <div className="card-header">
+          <h2 id="settings-package-list">软件包列表</h2>
+          <span className={directoryStyles.meta} role="status">{matching.length ? `${start + 1}–${start + rows.length} / ${matching.length} 个软件包` : "0 个软件包"}</span>
+        </div>
         {rows.length ? (
           <div className="table-wrap" role="region" aria-label="软件包配置表格" tabIndex={0}>
             <table className="data-table">
-              <thead><tr><th scope="col">软件包编码</th><th scope="col">软件包名称</th><th scope="col">责任田 / 责任人</th><th scope="col">版本记录</th><th scope="col">使用节点</th><th scope="col">启停状态</th><th scope="col">操作</th></tr></thead>
+              <thead>
+                <tr>
+                  <th scope="col">软件包编码</th>
+                  <th scope="col">软件包名称</th>
+                  <th scope="col">责任田 / 责任人</th>
+                  <th scope="col" className={directoryStyles.number}>版本记录</th>
+                  <th scope="col" className={directoryStyles.number}>使用节点</th>
+                  <th scope="col">启停状态</th>
+                  <th scope="col">操作</th>
+                </tr>
+              </thead>
               <tbody>
                 {rows.map(({ pkg, identity }) => (
                   <tr key={pkg.id}>
                     <th scope="row" className={styles.code}><Link href={`/settings/packages/${pkg.id}`} className="archive-link" prefetch={false}>{identity.code}</Link></th>
                     <td>{identity.name}</td>
                     <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "待指定"}</div></td>
-                    <td>{pkg.versionCount}</td>
-                    <td>{pkg.usageCount} 个</td>
-                    <td><Badge tone={pkg.isActive ? "emerald" : "slate"} dot>{pkg.isActive ? "启用" : "停用"}</Badge>{pkg.currentStatus && <div className={styles.progress}><StatusPill status={pkg.currentStatus} /></div>}</td>
-                    <td className="cell-actions"><Link href={`/settings/packages/${pkg.id}`} className="archive-link" aria-label={`配置 ${identity.code}`} prefetch={false}>配置 <ArrowUpRight size={12} aria-hidden="true" /></Link></td>
+                    <td className={directoryStyles.number}>{pkg.versionCount}</td>
+                    <td className={directoryStyles.number}>{pkg.usageCount} 个</td>
+                    <td>
+                      <div className={styles.statuses}>
+                        <Badge tone={pkg.isActive ? "emerald" : "slate"} dot>{pkg.isActive ? "启用" : "停用"}</Badge>
+                        {pkg.currentStatus && <StatusPill status={pkg.currentStatus} />}
+                      </div>
+                    </td>
+                    <td className="cell-actions"><Link href={`/settings/packages/${pkg.id}`} className="button button-secondary button-sm" aria-label={`配置 ${identity.code}`} prefetch={false}>配置 <ArrowUpRight size={12} aria-hidden="true" /></Link></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : <EmptyState title={packages.length ? "没有匹配的软件包" : "暂无可维护的软件包"} />}
-        <div className={styles.pagination}>
-          <span role="status">{matching.length ? `${start + 1}–${start + rows.length} / ${matching.length} 个软件包` : "0 个软件包"}</span>
-          {pageCount > 1 && <nav aria-label="软件包分页">
+        {pageCount > 1 && (
+          <nav className={styles.pagination} aria-label="软件包分页">
             {page > 1 && <Link href={listHref(page - 1)} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
             <span>第 {page} / {pageCount} 页</span>
             {page < pageCount && <Link href={listHref(page + 1)} prefetch={false} className="button button-secondary button-sm">下一页</Link>}
-          </nav>}
-        </div>
+          </nav>
+        )}
       </section>
     </>
   );
