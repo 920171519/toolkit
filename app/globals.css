@@ -2289,7 +2289,7 @@ h4 {
     min-height: auto;
     flex-wrap: wrap;
   }
-  .topbar-right .topbar-link:first-child {
+  .topbar-right .topbar-contact-link {
     display: none;
   }
   .topbar-mobile-user {

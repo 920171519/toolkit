@@ -5,8 +5,8 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role } from "./constants";
-import { one, run } from "./db";
-import { verifyPassword } from "./password";
+import { one, run, transaction } from "./db";
+import { hashPassword, verifyPassword } from "./password";
 import type { SessionUser } from "./types";
 import { safeWorkspacePath } from "./return-to";
 
@@ -28,27 +28,31 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function verifyLogin(employeeId: string, password: string): Promise<SessionUser | null> {
-  const normalizedId = employeeId.trim().toUpperCase();
-  const user = one<UserRow>(
-    "SELECT * FROM users WHERE employee_id = ? COLLATE NOCASE AND is_active = 1",
-    normalizedId,
+export async function loginWithPassword(employeeId: string, password: string): Promise<boolean> {
+  const user = one<{ id: number; password_hash: string }>(
+    "SELECT id, password_hash FROM users WHERE employee_id = ? COLLATE NOCASE AND is_active = 1",
+    employeeId.trim().toUpperCase(),
   );
-  if (!user || !verifyPassword(password, user.password_hash)) return null;
-  return toSessionUser(user);
+  if (!user || !verifyPassword(password, user.password_hash)) return false;
+  return createSession(user.id, user.password_hash);
 }
 
-export async function createSession(userId: number): Promise<void> {
+export async function createSession(userId: number, verifiedPasswordHash?: string): Promise<boolean> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  run(
-    "INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  // Issue a session only while the password verified at login is still current.
+  const inserted = run(
+    `INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
+     SELECT ?, id, ?, ? FROM users WHERE id = ? AND is_active = 1 AND password_hash = COALESCE(?, password_hash)`,
     hashToken(token),
-    userId,
     expiresAt.toISOString(),
-    new Date().toISOString(),
+    now.toISOString(),
+    userId,
+    verifiedPasswordHash ?? null,
   );
-  run("DELETE FROM sessions WHERE expires_at < ?", new Date().toISOString());
+  if (!inserted.changes) return false;
+  run("DELETE FROM sessions WHERE expires_at < ?", now.toISOString());
   const cookieStore = await cookies();
   const requestHeaders = await headers();
   const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
@@ -62,6 +66,52 @@ export async function createSession(userId: number): Promise<void> {
     path: "/",
     expires: expiresAt,
   });
+  return true;
+}
+
+export async function changeCurrentPassword(userId: number, currentPassword: string, newPassword: string) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!token) return "expired";
+  const tokenHash = hashToken(token);
+  const credentials = one<{ password_hash: string }>(
+    `SELECT u.password_hash
+     FROM users u JOIN sessions s ON s.user_id = u.id
+     WHERE u.id = ? AND u.is_active = 1 AND s.token_hash = ? AND s.expires_at > ?`,
+    userId,
+    tokenHash,
+    new Date().toISOString(),
+  );
+  if (!credentials) return "expired";
+  if (!verifyPassword(currentPassword, credentials.password_hash)) return "incorrect";
+  const replacement = hashPassword(newPassword);
+
+  const changed = transaction(() => {
+    const now = new Date().toISOString();
+    const result = run(
+      `UPDATE users SET password_hash = ?
+       WHERE id = ? AND is_active = 1 AND password_hash = ?
+         AND EXISTS (SELECT 1 FROM sessions WHERE user_id = users.id AND token_hash = ? AND expires_at > ?)`,
+      replacement,
+      userId,
+      credentials.password_hash,
+      tokenHash,
+      now,
+    );
+    if (!result.changes) return false;
+    run("DELETE FROM sessions WHERE user_id = ?", userId);
+    run(
+      `INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at)
+       VALUES (?, 'CHANGE_PASSWORD', 'USER', ?, '用户修改自己的登录密码', ?)`,
+      userId,
+      userId,
+      now,
+    );
+    return true;
+  });
+  if (!changed) return "expired";
+  cookieStore.delete(SESSION_COOKIE);
+  return "changed";
 }
 
 export async function destroySession(): Promise<void> {

@@ -23,6 +23,10 @@
   box-shadow: none;
 }
 
+.passwordChangePanel {
+  max-width: 480px;
+}
+
 .heading {
   display: flex;
   align-items: center;

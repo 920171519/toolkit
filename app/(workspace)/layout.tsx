@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut, MapPinned } from "lucide-react";
+import { KeyRound, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
 import { getLedAreaIds } from "@/lib/access";
@@ -83,9 +83,13 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
         </div>
       }
       actions={<>
-            <Link href="/" prefetch={false} className="topbar-link">
+            <Link href="/" prefetch={false} className="topbar-link topbar-contact-link">
               <MapPinned size={13} aria-hidden="true" />
               <span>项目联系人</span>
+            </Link>
+            <Link href="/account/password" prefetch={false} className="topbar-link topbar-password-link" aria-label="修改密码" title="修改密码">
+              <KeyRound size={16} aria-hidden="true" />
+              <span>修改密码</span>
             </Link>
             <div className="topbar-mobile-user">
               <Avatar name={user.name} size="sm" />

@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Eye, EyeOff, LoaderCircle } from "lucide-react";
-import { loginAction, registerAction } from "@/app/(auth)/actions";
+import { changePasswordAction, loginAction, registerAction } from "@/app/(auth)/actions";
 import styles from "@/app/(auth)/auth.module.css";
 import type { ActionState } from "@/lib/action-state";
 
@@ -117,6 +117,27 @@ export function RegisterForm() {
         {pending ? "正在注册…" : "注册并进入工作台"}
       </button>
       <Link href="/login" prefetch={false} className={styles.alternate}>返回登录</Link>
+    </form>
+  );
+}
+
+export function ChangePasswordForm() {
+  const [state, formAction, pending] = useActionState(changePasswordAction, initial);
+  const errors = state?.fieldErrors;
+
+  return (
+    <form action={formAction} className={styles.form} data-testid="change-password-form" aria-busy={pending}>
+      <FormError message={state?.error} />
+      <PasswordField id="change-current-password" name="currentPassword" label="当前密码" autoComplete="current-password" error={errors?.currentPassword} />
+      <PasswordField id="change-new-password" name="newPassword" label="新密码" autoComplete="new-password" hint="8–72 个字符" error={errors?.newPassword} />
+      <PasswordField id="change-confirm-password" name="confirmPassword" label="确认新密码" autoComplete="new-password" error={errors?.confirmPassword} />
+      <div className="form-footer">
+        <Link href="/dashboard" prefetch={false} className="button button-secondary">取消</Link>
+        <button type="submit" className="button button-primary" disabled={pending}>
+          {pending && <LoaderCircle className={styles.spinner} size={16} aria-hidden="true" />}
+          {pending ? "正在保存…" : "保存新密码"}
+        </button>
+      </div>
     </form>
   );
 }

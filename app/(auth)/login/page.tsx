@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth-forms";
+import { FlashMessage } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { safeWorkspacePath } from "@/lib/return-to";
 import styles from "../auth.module.css";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string | string[] }>;
+  searchParams: Promise<{ next?: string | string[]; passwordChanged?: string | string[] }>;
 }) {
   const user = await getCurrentUser();
   const params = await searchParams;
@@ -23,6 +24,9 @@ export default async function LoginPage({
       <header className={styles.heading}>
         <h1 id="login-title">登录</h1>
       </header>
+      {params.passwordChanged === "1" && (
+        <FlashMessage notice={{ tone: "success", message: "密码已修改，请使用新密码登录。" }} />
+      )}
       <LoginForm next={next} />
       {process.env.TOOLKIT_SKIP_SEED !== "1" && <details className={styles.demo}>
         <summary>本地演示账号</summary>

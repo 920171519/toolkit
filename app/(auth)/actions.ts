@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getCurrentUser, createSession, destroySession, verifyLogin } from "@/lib/auth";
+import { changeCurrentPassword, createSession, destroySession, getCurrentUser, loginWithPassword } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { one, run } from "@/lib/db";
 import { DEPARTMENT_NAME } from "@/lib/constants";
@@ -9,6 +9,11 @@ import type { ActionState } from "@/lib/action-state";
 import { text } from "@/lib/action-helpers";
 import { failure } from "@/lib/action-helpers";
 import { safeWorkspacePath } from "@/lib/return-to";
+
+function passwordLengthError(password: string): string | undefined {
+  if (password.length < 8) return "密码至少需要 8 个字符。";
+  if (password.length > 72) return "密码不能超过 72 个字符。";
+}
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const name = text(formData, "name");
@@ -20,8 +25,8 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   if (!/^[A-Za-z0-9_-]{3,32}$/.test(employeeId)) {
     fieldErrors.employeeId = "工号需为 3-32 位字母、数字、下划线或中划线。";
   }
-  if (password.length < 8) fieldErrors.password = "密码至少需要 8 个字符。";
-  if (password.length > 72) fieldErrors.password = "密码不能超过 72 个字符。";
+  const passwordError = passwordLengthError(password);
+  if (passwordError) fieldErrors.password = passwordError;
   if (password !== confirmPassword) fieldErrors.confirmPassword = "两次输入的密码不一致。";
   if (Object.keys(fieldErrors).length > 0) return { error: "请检查注册信息。", fieldErrors };
 
@@ -50,10 +55,37 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   const password = text(formData, "password");
   const next = text(formData, "next");
   if (!employeeId || !password) return { error: "请输入工号和密码。" };
-  const user = await verifyLogin(employeeId, password);
-  if (!user) return { error: "工号或密码不正确，或账号已停用。" };
-  await createSession(user.id);
+  if (!await loginWithPassword(employeeId, password)) return { error: "工号或密码不正确，或账号已停用。" };
   redirect(safeWorkspacePath(next) ?? "/dashboard");
+}
+
+export async function changePasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const loginPath = "/login?next=%2Faccount%2Fpassword";
+  const user = await getCurrentUser();
+  if (!user) redirect(loginPath);
+
+  const currentPassword = text(formData, "currentPassword");
+  const newPassword = text(formData, "newPassword");
+  const confirmation = text(formData, "confirmPassword");
+  const fieldErrors: Record<string, string> = {};
+  if (!currentPassword) fieldErrors.currentPassword = "请输入当前密码。";
+  const lengthError = passwordLengthError(newPassword);
+  if (lengthError) fieldErrors.newPassword = lengthError;
+  else if (newPassword === currentPassword) fieldErrors.newPassword = "新密码不能与当前密码相同。";
+  if (newPassword !== confirmation) fieldErrors.confirmPassword = "两次输入的新密码不一致。";
+  if (Object.keys(fieldErrors).length > 0) return { error: "请检查密码信息。", fieldErrors };
+
+  let result: Awaited<ReturnType<typeof changeCurrentPassword>>;
+  try {
+    result = await changeCurrentPassword(user.id, currentPassword, newPassword);
+  } catch (error) {
+    return failure(error);
+  }
+  if (result === "incorrect") {
+    return { error: "当前密码不正确。", fieldErrors: { currentPassword: "当前密码不正确。" } };
+  }
+  if (result === "expired") redirect(loginPath);
+  redirect("/login?passwordChanged=1");
 }
 
 export async function logoutAction(): Promise<void> {

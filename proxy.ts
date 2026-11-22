@@ -12,6 +12,6 @@ export const config = {
   matcher: [
     "/dashboard/:path*", "/overview/:path*", "/projects/:path*", "/packages/:path*",
     "/submissions/:path*", "/integration/:path*", "/trial/:path*", "/formal/:path*",
-    "/versions/:path*", "/settings/:path*",
+    "/versions/:path*", "/settings/:path*", "/account/password",
   ],
 };

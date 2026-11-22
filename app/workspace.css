@@ -77,6 +77,8 @@ dialog.workspace-package-drawer::backdrop { background: var(--dialog-backdrop); 
   .workspace-mobile-links .sidebar-link { min-height: 44px; }
   .workspace-navigation .topbar { position: relative; padding-block: 8px; flex-wrap: nowrap; }
   .workspace-navigation .topbar-right { flex: none; }
+  .workspace-navigation .topbar-password-link { justify-content: center; min-width: 44px; min-height: 44px; }
+  .topbar-password-link span { display: none; }
 }
 
 @media (max-width: 520px) {

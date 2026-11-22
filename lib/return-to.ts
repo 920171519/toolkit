@@ -5,7 +5,8 @@ export function safeWorkspacePath(value: unknown): string | undefined {
   try {
     const base = "http://toolkit.local";
     const target = new URL(value, base);
-    if (target.origin !== base || !workspaceRoots.has(target.pathname.split("/")[1])) return undefined;
+    if (target.origin !== base) return undefined;
+    if (target.pathname !== "/account/password" && !workspaceRoots.has(target.pathname.split("/")[1])) return undefined;
     return target.pathname + target.search + target.hash;
   } catch {
     return undefined;
