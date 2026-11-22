@@ -6,15 +6,17 @@ import { canManagePackageArea } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { getPackagesOverview } from "@/lib/queries";
 import { importLegacyVersionAction } from "@/lib/actions/settings";
+import { directoryFilters, directoryHref, type DirectoryParams } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "导入历史版本" };
 
-export default async function ImportLegacyVersionPage() {
+export default async function ImportLegacyVersionPage({ searchParams }: { searchParams: Promise<DirectoryParams> }) {
   const user = await requireUser();
   const packages = getPackagesOverview(true).filter((pkg) => canManagePackageArea(user, pkg.areaId));
+  const listParams = directoryFilters("packages", await searchParams);
 
   return (
     <>
@@ -22,7 +24,7 @@ export default async function ImportLegacyVersionPage() {
         eyebrow="Legacy import"
         title="导入历史版本"
         description="用于系统启用前已经转正或已发布试制的软件包版本。只录入版本基本信息和电子流证据；导入版本不进入后续转测/绑定流程，后续新版本仍从转测申请开始跟踪。"
-        actions={<Link href="/settings/packages" className="button button-secondary"><ArrowLeft size={14} />返回软件包配置</Link>}
+        actions={<Link href={directoryHref("/settings/packages", listParams)} className="button button-secondary" prefetch={false}><ArrowLeft size={14} />返回软件包配置</Link>}
       />
       {packages.length === 0 ? (
         <EmptyState title="没有可维护的软件包" description="仅系统管理员和责任田主管可以导入自己责任田下的软件包版本。" />
@@ -30,7 +32,7 @@ export default async function ImportLegacyVersionPage() {
         <section className="card" style={{ maxWidth: 860 }}>
           <div className="card-header"><div><h2 style={{ fontSize: 18 }}>版本基本信息</h2><p className="small muted" style={{ marginTop: 3 }}>版本号在软件包内唯一；已转正版本至少填写转正电子流和转正日期，试制中版本至少填写试制电子流和试制发布日期。</p></div></div>
           <div className="card-body">
-            <ActionForm action={importLegacyVersionAction} submitText="导入历史版本">
+            <ActionForm action={importLegacyVersionAction} hidden={listParams} submitText="导入历史版本">
               <div className="form-grid">
                 <label className="field"><span className="label">软件包 <span className="required-mark">*</span></span><select className="select" name="packageId" required defaultValue=""><option value="" disabled>请选择软件包</option>{packages.map((pkg) => { const identity = packageIdentity(pkg); return <option key={pkg.id} value={pkg.id}>{identity.code} · {identity.name}</option>; })}</select></label>
                 <label className="field"><span className="label">版本号 <span className="required-mark">*</span></span><input className="input" name="version" required maxLength={40} placeholder="例如 1.6.0" /></label>

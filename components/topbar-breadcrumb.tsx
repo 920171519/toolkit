@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { findWorkspaceProject } from "./workspace-project";
 
+const overviewQueryKeys = new Set(["q", "page", "pageSize", "f_name", "f_name_mode", "f_code", "f_code_mode", "f_stage", "f_pm", "f_manager"]);
+
 const routeLabels: Array<[string, string]> = [
   ["/dashboard", "我的工作台"],
   ["/overview", "项目总览"],
@@ -33,6 +35,11 @@ export function TopbarBreadcrumb({
   const pathname = usePathname();
   const params = useSearchParams();
   const isProjectPage = /^\/projects\/\d+$/.test(pathname);
+  const returnQuery = new URLSearchParams(isProjectPage ? params.get("overviewQuery") ?? "" : "");
+  const overviewQuery = new URLSearchParams(
+    [...returnQuery].filter(([key]) => overviewQueryKeys.has(key)),
+  ).toString();
+  const overviewHref = overviewQuery ? "/overview?" + overviewQuery : "/overview";
   const project = findWorkspaceProject(pathname, params.getAll("project"), workflowPaths, isProjectPage ? catalogProjects : workflowProjects);
   const match = routeLabels.find(
     ([path]) => pathname === path || pathname.startsWith(path + "/"),
@@ -51,7 +58,7 @@ export function TopbarBreadcrumb({
         )}
         <ChevronRight size={11} aria-hidden="true" />
         {!isProjectPage && <span className="project-breadcrumb-section">{label}</span>}
-        <Link href="/overview" className="project-breadcrumb-return" prefetch={false}>返回项目总览</Link>
+        <Link href={overviewHref} className="project-breadcrumb-return" prefetch={false}>返回项目总览</Link>
       </nav>
     );
   }

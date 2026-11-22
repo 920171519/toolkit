@@ -27,26 +27,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.toolbar {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.filters[data-enhanced="true"] .manualFilter {
-  display: none;
-}
-
-.toolbar input[type="search"] {
-  width: min(236px, 62vw);
-}
-
-.toolbar :global(.field) {
-  min-width: 0;
-}
-
 .scroll {
   max-width: 100%;
 }
@@ -61,35 +41,6 @@
 
 .table th {
   vertical-align: top;
-}
-
-.table th input, .table th select {
-  display: block;
-  width: 100%;
-  min-width: 68px;
-  max-width: 140px;
-  min-height: 32px;
-  margin-top: 6px;
-  padding: 4px 8px;
-  font-size: 12px;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--ink);
-}
-
-.sort:hover {
-  color: var(--brand);
-}
-
-.sort svg {
-  color: var(--muted);
-  flex: none;
 }
 
 .table td:last-child {
@@ -125,28 +76,9 @@
   padding: 12px 16px;
 }
 
-.pageSize {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pageSize select {
-  width: auto;
-  min-height: 32px;
-}
-
 @media (max-width: 640px) {
   .header {
     padding-inline: 16px;
-  }
-
-  .toolbar {
-    max-width: 100%;
-  }
-
-  .toolbar input[type="search"] {
-    width: min(200px, 52vw);
   }
 
   .pagination {

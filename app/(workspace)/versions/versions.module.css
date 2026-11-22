@@ -46,7 +46,7 @@
   border-radius: 4px;
 }
 
-.tabLink:hover, .tabClose:hover, .sortLink:hover {
+.tabLink:hover, .tabClose:hover {
   background: var(--surface-muted);
   color: var(--ink);
 }
@@ -77,72 +77,8 @@
   white-space: nowrap;
 }
 
-.toolbar {
+.packageScope {
   display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.search {
-  flex: 1 1 180px;
-  max-width: 380px;
-}
-
-.sortLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.sorted {
-  color: var(--brand);
-}
-
-.filterRow td {
-  vertical-align: middle;
-  padding: 8px 12px;
-  background: var(--surface-muted);
-}
-
-.filterRow input, .filterRow select {
-  min-width: 108px;
-  width: 100%;
-  min-height: 34px;
-  padding: 5px 8px;
-}
-
-.dates {
-  display: flex;
-  gap: 6px;
-}
-
-.dates input {
-  min-width: 125px;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-
-.pageSize {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pageSize select {
-  width: auto;
-  min-height: 32px;
-  padding-block: 4px;
-}
-
-form[data-enhanced="true"] .manualSearch {
-  display: none;
+  padding: 8px 16px;
 }

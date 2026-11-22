@@ -1,82 +1,61 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowDownUp, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
-import { LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { directoryHref } from "@/lib/settings-directory";
+import { DirectoryPageSize } from "./directory-page-size";
 import styles from "./settings-directory.module.css";
 
-export function DirectoryFilters({ path, query, placeholder, params, children, filtered, pageSize }: {
+export function DirectoryFilterBar({ path, params, filterPrefix = "f_", searchParam = "q", pageParam = "page", hash = "" }: {
   path: string;
-  query: string;
-  placeholder: string;
   params: Record<string, string | undefined>;
-  children?: ReactNode;
-  filtered: boolean;
-  pageSize: number;
+  filterPrefix?: string;
+  searchParam?: string;
+  pageParam?: string;
+  hash?: string;
 }) {
+  const query = params[searchParam];
+  const active = Object.entries(params).some(([key, value]) => key.startsWith(filterPrefix) && value);
+  if (!active && !query) return null;
+  const clear = Object.fromEntries(Object.entries(params).filter(([key]) => !key.startsWith(filterPrefix) && key !== searchParam && key !== pageParam));
   return (
-    <form action={path} method="get" className={styles.filters} role="search" aria-label="筛选列表">
-      <label className={`field ${styles.search}`}>
-        <span className="label">搜索</span>
-        <input key={query} className="input" type="search" name="q" defaultValue={query} placeholder={placeholder} maxLength={120} />
-      </label>
-      {children}
-      {params.sort && <input type="hidden" name="sort" value={params.sort} />}
-      {params.order && <input type="hidden" name="order" value={params.order} />}
-      <label className="field">
-        <span className="label">每页条数</span>
-        <select key={pageSize} className="select" name="pageSize" defaultValue={pageSize}>
-          {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-        </select>
-      </label>
-      <div className="toolbar">
-        <button type="submit" className="button button-secondary">筛选</button>
-        {filtered && <Link href={directoryHref(path, { sort: params.sort, order: params.order, pageSize: String(pageSize) })} prefetch={false} className="button button-ghost">清除筛选</Link>}
-      </div>
-    </form>
+    <div className={styles.filterSummary}>
+      {query && (
+        <Link
+          className={styles.legacySearch}
+          href={directoryHref(path, { ...params, [searchParam]: undefined, [pageParam]: undefined }) + hash}
+          aria-label={`清除搜索条件 ${query}`}
+          prefetch={false}
+          scroll={false}
+        >
+          搜索 {query} ×
+        </Link>
+      )}
+      <Link href={directoryHref(path, clear) + hash} className="button button-ghost button-sm" prefetch={false} scroll={false}>清除全部筛选</Link>
+    </div>
   );
 }
 
-export function DirectorySort({ column, label, path, params, numeric }: {
-  column: string;
-  label: string;
-  path: string;
-  params: Record<string, string | undefined>;
-  numeric?: boolean;
-}) {
-  const selected = column === params.sort;
-  const ascending = selected && params.order !== "desc";
-  const Arrow = selected ? ascending ? ArrowUp : ArrowDown : ArrowDownUp;
-  return (
-    <th scope="col" className={numeric ? styles.number : undefined} aria-sort={selected ? ascending ? "ascending" : "descending" : undefined}>
-      <Link
-        className={styles.sort}
-        href={directoryHref(path, { ...params, sort: column, order: ascending ? "desc" : "asc", page: undefined })}
-        prefetch={false}
-      >
-        {label}<Arrow size={13} aria-hidden="true" />
-      </Link>
-    </th>
-  );
-}
-
-export function DirectoryPagination({ path, params, page, pages, total, unit }: {
+export function DirectoryPagination({ path, params, page, pages, total, unit, pageSize, label = "列表分页" }: {
   path: string;
   params: Record<string, string | undefined>;
   page: number;
   pages: number;
   total: number;
   unit: string;
+  pageSize: number;
+  label?: string;
 }) {
   const href = (nextPage: number) => directoryHref(path, { ...params, page: String(nextPage) });
   return (
-    <nav className={styles.pagination} aria-label="列表分页">
-      <span className={styles.meta}>共 {total} {unit}</span>
-      {pages > 1 && <div className="toolbar">
-        {page > 1 && <Link href={href(page - 1)} prefetch={false} className="button button-secondary button-sm"><ChevronLeft size={14} aria-hidden="true" />上一页</Link>}
-        <span className="small muted">第 {page} 页 / 共 {pages} 页</span>
-        {page < pages && <Link href={href(page + 1)} prefetch={false} className="button button-secondary button-sm">下一页<ChevronRight size={14} aria-hidden="true" /></Link>}
-      </div>}
-    </nav>
+    <div className={styles.pagination}>
+      <span className={styles.meta} role="status">共 {total} {unit}</span>
+      <div className="toolbar">
+        <DirectoryPageSize path={path} params={params} pageSize={pageSize} />
+        {pages > 1 && <nav aria-label={label} className="toolbar">
+          {page > 1 && <Link href={href(page - 1)} prefetch={false} className="button button-secondary button-sm"><ChevronLeft size={14} aria-hidden="true" />上一页</Link>}
+          <span className="small muted">第 {page} 页 / 共 {pages} 页</span>
+          {page < pages && <Link href={href(page + 1)} prefetch={false} className="button button-secondary button-sm">下一页<ChevronRight size={14} aria-hidden="true" /></Link>}
+        </nav>}
+      </div>
+    </div>
   );
 }

@@ -1,10 +1,14 @@
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { ColumnFilterHeader } from "@/components/column-filter-header";
+import { DirectoryPageSize } from "@/components/directory-page-size";
+import { DirectoryFilterBar } from "@/components/settings-directory";
 import { EmptyState } from "@/components/ui";
-import { LIST_PAGE_SIZES, getListPageSize } from "@/lib/list-pagination";
+import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, type ColumnFilterOption } from "@/lib/column-filters";
+import { getListPageSize } from "@/lib/list-pagination";
 import { workflowHref } from "@/lib/workflow-links";
-import { trialDefaultPageSize, trialQueueFilterKeys, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
+import { trialColumnFilter, trialDefaultPageSize, trialLegacyFilter, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
 import styles from "./trial-queue-table.module.css";
 
 export type TrialTableColumn<Row> = {
@@ -13,7 +17,7 @@ export type TrialTableColumn<Row> = {
   value: (row: Row) => string | number;
   sortValue?: (row: Row) => string | number;
   cell?: (row: Row) => ReactNode;
-  options?: string[];
+  choices?: (row: Row) => ColumnFilterOption[];
 };
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -37,7 +41,15 @@ export function TrialQueueTable<Row>({
   const pageSize = query[field("size")] ? getListPageSize(query[field("size")]) : trialDefaultPageSize;
   const search = query[field("q")] ?? "";
   const terms = normalize(search).split(/\s+/).filter(Boolean);
-  const activeFilters = columns.filter((column) => query[field(column.key)]);
+  const columnFilters = columns.map((column) => {
+    const filter = trialColumnFilter(kind, column.key, column.label);
+    if (column.choices && !filter.options) {
+      filter.options = filterOptions(rows.flatMap(column.choices));
+    }
+    const legacy = trialLegacyFilter(filter, column.label);
+    const hasLegacy = Boolean(query[`f_${legacy.key}`]);
+    return { column, filter, fields: hasLegacy ? [filter, legacy] : [filter], legacy };
+  });
   const sort = columns.find((column) => column.key === query[field("sort")]);
   const descending = query[field("direction")] === "desc";
   const matching = rows.filter((row) => {
@@ -45,10 +57,14 @@ export function TrialQueueTable<Row>({
       const values = [...columns.map((column) => column.value(row)), ...(details?.(row) ?? [])].map(normalize);
       if (!terms.every((term) => values.some((value) => value.includes(term)))) return false;
     }
-    return activeFilters.every((column) => {
+    return columnFilters.every(({ column, filter, legacy }) => {
       const value = column.value(row);
-      const filter = normalize(query[field(column.key)]);
-      return column.options || typeof value === "number" ? normalize(value) === filter : normalize(value).includes(filter);
+      if (!matchesTextFilter(query, legacy.key, String(value))) return false;
+      if (filter.kind === "choices") {
+        return matchesChoiceFilter(query, filter.key, column.choices?.(row).map((option) => option.value) ?? []);
+      }
+      if (filter.kind === "number" && typeof value === "number") return matchesNumberFilter(query, filter.key, value);
+      return matchesTextFilter(query, filter.key, String(value));
     });
   });
   if (sort) {
@@ -65,12 +81,12 @@ export function TrialQueueTable<Row>({
   const page = Math.min(Number(query[field("page")] ?? 1), pages);
   const offset = (page - 1) * pageSize;
   const visible = matching.slice(offset, offset + pageSize);
-  const formId = kind + "-trial-filters";
   const titleId = kind + "-trial-title";
-  const href = (changes: Record<string, string | number | undefined>) => workflowHref("/trial", projectId, { ...query, ...changes });
-  const inputKeys = new Set([...trialQueueFilterKeys(kind), field("page")]);
-  const filtered = activeFilters.length > 0 || Boolean(search);
-  const reset = () => href(Object.fromEntries([...inputKeys].filter((key) => key !== field("size")).map((key) => [key, undefined])));
+  const hash = kind === "binding" ? "#binding-queue" : "";
+  const href = (changes: Record<string, string | number | undefined>) => workflowHref("/trial", projectId, { ...query, ...changes }) + hash;
+  const filterPrefix = `f_${kind}_`;
+  const filtered = Object.keys(query).some((key) => key.startsWith(filterPrefix)) || Boolean(search);
+  const listParams = { project: projectId?.toString(), ...query };
 
   return (
     <section className={`card ${styles.queue}`} aria-labelledby={titleId} id={kind === "binding" ? "binding-queue" : undefined} tabIndex={kind === "binding" ? -1 : undefined}>
@@ -79,38 +95,27 @@ export function TrialQueueTable<Row>({
           <h2 id={titleId}>{title}</h2>
           <p className={styles.count} role="status">{matching.length} 条记录{filtered && rows.length !== matching.length ? "，共 " + rows.length + " 条" : ""}</p>
         </div>
-        <form className={styles.toolbar} id={formId} action="/trial" method="get" role="search" aria-label={"筛选" + title} data-trial-filters={kind}>
-          {projectId !== undefined && <input type="hidden" name="project" value={projectId} />}
-          {Object.entries(query).filter(([key]) => !inputKeys.has(key)).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
-          <label className="field">
-            <span className="label">搜索{title}</span>
-            <input className="input" type="search" name={field("q")} defaultValue={search} placeholder="软件包、版本、批次或提交人" maxLength={120} />
-          </label>
-          <button type="submit" className={"button button-secondary " + styles.manualFilter}><Search size={14} />应用筛选</button>
-          {filtered && <Link href={reset()} className="button button-secondary" prefetch={false}>清除筛选</Link>}
-        </form>
+        <DirectoryFilterBar path="/trial" params={listParams} filterPrefix={filterPrefix} searchParam={field("q")} pageParam={field("page")} hash={hash} />
       </div>
       <div className={`table-wrap ${styles.scroll}`} role="region" aria-label={title + "表格"} tabIndex={0}>
         <table className={`data-table ${styles.table}`}>
           <thead>
             <tr>
-              {columns.map((column) => {
-                const active = sort?.key === column.key;
-                const Icon = !active ? ArrowUpDown : descending ? ArrowDown : ArrowUp;
-                return <th key={column.key} scope="col" aria-sort={active ? descending ? "descending" : "ascending" : undefined}>
-                  <Link className={styles.sort} href={href({
-                    [field("sort")]: column.key,
-                    [field("direction")]: active && !descending ? "desc" : undefined,
-                    [field("page")]: undefined,
-                  })} prefetch={false} aria-label={"按" + column.label + "排序"}>{column.label}<Icon size={13} aria-hidden /></Link>
-                  {column.options
-                    ? <select className="select" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} defaultValue={query[field(column.key)] ?? ""}>
-                      <option value="">全部</option>
-                      {column.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
-                    : <input className="input" type="search" form={formId} name={field(column.key)} aria-label={"筛选" + column.label} placeholder="全部" maxLength={120} defaultValue={query[field(column.key)] ?? ""} />}
-                </th>;
-              })}
+              {columnFilters.map(({ column, fields }) => (
+                <ColumnFilterHeader
+                  key={column.key}
+                  label={column.label}
+                  path="/trial"
+                  params={listParams}
+                  fields={fields}
+                  sortKey={column.key}
+                  sortLabel={"按" + column.label + "排序"}
+                  sortParam={field("sort")}
+                  orderParam={field("direction")}
+                  pageParam={field("page")}
+                  hash={hash}
+                />
+              ))}
               <th scope="col">操作</th>
             </tr>
           </thead>
@@ -124,12 +129,7 @@ export function TrialQueueTable<Row>({
       </div>
       {!visible.length && <EmptyState title={filtered ? "没有匹配的版本" : emptyTitle} />}
       <nav className={styles.pagination} aria-label={title + "分页"}>
-        <label className={styles.pageSize}>
-          <span className="small muted">每页条数</span>
-          <select className="select" form={formId} name={field("size")} defaultValue={pageSize}>
-            {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-          </select>
-        </label>
+        <DirectoryPageSize path="/trial" params={listParams} pageSize={pageSize} pageParam={field("page")} sizeParam={field("size")} hash={hash} />
         <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>
         {page > 1 && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page > 2 ? page - 1 : undefined })} prefetch={false}><ArrowLeft size={13} />上一页</Link>}
         {page < pages && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page + 1 })} prefetch={false}>下一页<ArrowRight size={13} /></Link>}

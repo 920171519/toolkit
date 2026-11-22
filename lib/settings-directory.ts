@@ -1,10 +1,11 @@
 export type DirectoryParams = Record<string, string | string[] | undefined>;
-export type Directory = "areas" | "users";
+export type Directory = "areas" | "packages" | "users";
 
 const sharedKeys = ["q", "sort", "order", "page", "pageSize"];
 const filterKeys = {
-  areas: ["type", "scope"],
-  users: ["role", "area", "status"],
+  areas: ["type", "scope", "f_name", "f_name_mode", "f_description", "f_description_mode", "f_type", "f_leaders", "f_projects_min", "f_projects_max", "f_packages_min", "f_packages_max"],
+  packages: ["area", "state", "f_code", "f_code_mode", "f_name", "f_name_mode", "f_area", "f_owner", "f_enabled", "f_progress", "f_versions_min", "f_versions_max", "f_nodes_min", "f_nodes_max"],
+  users: ["area", "status", "f_name", "f_name_mode", "f_title", "f_title_mode", "f_department", "f_department_mode", "f_employeeId", "f_employeeId_mode", "f_role", "f_area", "f_status", "f_packages_min", "f_packages_max"],
 };
 
 export const directoryCollator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
@@ -16,7 +17,10 @@ export function directoryValue(value: string | string[] | undefined) {
 export function directoryFilters(directory: Directory, params: DirectoryParams) {
   return Object.fromEntries(
     [...sharedKeys, ...filterKeys[directory]].flatMap((key) => {
-      const value = directoryValue(params[key]);
+      const raw = params[key];
+      const value = key.startsWith("f_")
+        ? typeof raw === "string" && raw.length <= 4096 ? raw.trim() : ""
+        : directoryValue(raw);
       return value ? [[key, value]] : [];
     }),
   );

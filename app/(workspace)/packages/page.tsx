@@ -13,6 +13,7 @@ import { PackageOverviewTable } from "@/components/package-overview-table";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { FlashMessage, PageHeader } from "@/components/ui";
+import { PackageOverviewDrawer } from "./package-overview-drawer";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "软件版本总览" };
@@ -83,12 +84,11 @@ export default async function PackagesPage({
         </span>
       </div>
 
-      <PackageOverviewTable
+      <PackageOverviewTable packages={packages} params={params} selectedProjectId={selectedProject?.id} />
+      <PackageOverviewDrawer
         key={selectedProject?.id ?? "all"}
-        packages={packages}
         people={people}
-        scopeLabel={selectedProject?.name ?? "全部在行项目"}
-        selectedProjectId={selectedProject?.id}
+        projectId={selectedProject?.id}
         initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit } : null}
       />
     </>

@@ -636,7 +636,4 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 
 .overdue-text, .overdue-text strong { color: var(--danger); }
 
-.package-filter-row th { padding: 8px; background: var(--surface-muted); }
 .input-sm, .select-sm { min-height: 32px; padding: 4px 8px; font-size: 12px; }
-.package-filter-row .select-sm { min-width: 86px; max-width: 140px; }
-.package-filter-row .input-sm { min-width: 72px; width: 100%; }

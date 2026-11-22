@@ -19,12 +19,14 @@ export function BatchBuilder({
   defaultCode,
   scopeProjectId,
   initialPendingChoices,
+  filteredOutPendingVersionIds,
 }: {
   project: ProjectOption;
   candidates: BatchCandidatePackage[];
   defaultCode: string;
   scopeProjectId?: number;
   initialPendingChoices?: Readonly<Record<number, number | null>>;
+  filteredOutPendingVersionIds?: readonly number[];
 }) {
   const initial = useMemo(
     () => new Map(candidates.map((candidate) => {
@@ -39,14 +41,17 @@ export function BatchBuilder({
     candidates.filter((candidate) => initialPendingChoices?.[candidate.packageId] === null).map((candidate) => candidate.packageId),
   ));
 
+  const filteredOut = new Set(filteredOutPendingVersionIds);
   const rows = candidates.map((candidate) => {
     const deferred = excluded.has(candidate.packageId);
     const versionId = deferred ? candidate.carryVersionId : (selected.get(candidate.packageId) ?? candidate.defaultVersionId);
     const version = candidate.versions.find((option) => option.id === versionId);
     const options = deferred ? candidate.versions.filter((option) => option.id === versionId) : candidate.versions;
-    return { candidate, version, options, deferred };
+    const hiddenSelection = !deferred && version?.requestStatus === "PENDING" && filteredOut.has(version.id);
+    return { candidate, version, options, deferred, hiddenSelection };
   });
   const changedCount = rows.filter(({ deferred, version }) => !deferred && version?.requestStatus === "PENDING").length;
+  const hiddenCount = rows.filter(({ hiddenSelection }) => hiddenSelection).length;
   const items: CreateBatchInput["items"] = rows.flatMap(({ candidate, version, deferred }) => version ? [{
     packageId: candidate.packageId,
     packageVersionId: version.id,
@@ -69,7 +74,11 @@ export function BatchBuilder({
       </div>
 
       <div className="toolbar-spread" style={{ marginBottom: 9 }}>
-        <div><h3 style={{ fontSize: 16 }}>配套与版本选择</h3><p className="small muted" style={{ marginTop: 2 }}>默认选中所有有可用版本的软件包。取消勾选会暂缓新版本，本轮配套沿用该项目上次可用的转测版本。</p></div>
+        <div>
+          <h3 style={{ fontSize: 16 }}>完整配套清单</h3>
+          <p className="small muted" style={{ marginTop: 2 }}>创建批次前请核对软件包和本次转测版本。取消勾选会暂缓新版本，本轮配套沿用该项目上次可用的转测版本。</p>
+          {hiddenCount > 0 && <p className="small muted" role="status">有 {hiddenCount} 个已勾选版本在申请列表中被筛选隐藏，仍纳入本轮。</p>}
+        </div>
         <Badge tone={changedCount > 0 ? "amber" : "rose"}>{changedCount} 个待测版本</Badge>
       </div>
 
@@ -77,7 +86,7 @@ export function BatchBuilder({
         <div className="muted-panel">该项目暂未关联任何启用中的软件包。</div>
       ) : (
         <div className="table-wrap compact-batch-table">
-          <table className="data-table">
+          <table className="data-table" aria-label="完整配套清单">
             <thead>
               <tr>
                 <th>本轮转测</th>
@@ -90,7 +99,7 @@ export function BatchBuilder({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ candidate, version, options, deferred }) => (
+              {rows.map(({ candidate, version, options, deferred, hiddenSelection }) => (
                 <tr key={candidate.packageId}>
                   <td>
                     <input
@@ -138,6 +147,7 @@ export function BatchBuilder({
                       ))}
                     </select>
                     {!deferred && version?.requestStatus === "PENDING" && <div style={{ marginTop: 4 }}><Badge tone="amber">本次新增转测</Badge></div>}
+                    {hiddenSelection && <div style={{ marginTop: 4 }}><Badge tone="slate">在申请列表中已筛选隐藏</Badge></div>}
                     {(version?.requestStatus === "VOID" || version?.status === "VOID") && <div className="void-version-warning">该版本在本项目已作废，如继续选择请确认已修复问题并重新验证。</div>}
                   </td>
                   <td>

@@ -2,13 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
+import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { FormDialog } from "@/components/form-dialog";
-import { DirectoryFilters, DirectoryPagination, DirectorySort } from "@/components/settings-directory";
+import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { saveAreaAction } from "@/lib/actions/settings";
 import { requireUser } from "@/lib/auth";
+import {
+  filterOptions,
+  matchesChoiceFilter,
+  matchesNumberFilter,
+  matchesTextFilter,
+  readColumnFilters,
+  type ColumnFilterField,
+} from "@/lib/column-filters";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAreaDirectory, getAreaMemberships, parseFlash } from "@/lib/queries";
 import {
@@ -28,6 +37,7 @@ type Area = ReturnType<typeof getAreaDirectory>[number];
 const supervisors = (area: Area) => area.leaders.map(({ userName }) => userName).join("、");
 const columns = {
   name: (area: Area) => area.name,
+  type: (area: Area) => Number(area.isIntegration),
   leaders: supervisors,
   projects: (area: Area) => area.projectCount,
   packages: (area: Area) => area.packageCount,
@@ -41,17 +51,44 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
   const areas = getAreaDirectory();
   const myAreaIds = new Set(getAreaMemberships(user.id).map(({ areaId }) => areaId));
   const query = directoryValue(search.q);
-  const type = search.type === "integration" || search.type === "standard" ? search.type : "";
   const scope = search.scope === "mine" ? search.scope : "";
+  const fields = {
+    name: { key: "name", label: "责任田名称", kind: "text" },
+    description: { key: "description", label: "责任田说明", kind: "text" },
+    type: {
+      key: "type", label: "责任田类型", kind: "choices",
+      options: [{ value: "standard", label: "普通责任田" }, { value: "integration", label: "集成测试责任田" }],
+    },
+    leaders: {
+      key: "leaders", label: "主管", kind: "choices",
+      options: filterOptions([
+        { value: "empty", label: "未指定" },
+        ...areas.flatMap((area) => area.leaders.map(({ userId, userName, userEmployeeId }) => ({
+          value: String(userId),
+          label: `${userName} · ${userEmployeeId}`,
+        }))),
+      ]),
+    },
+    projects: { key: "projects", label: "已设负责人的项目数", kind: "number" },
+    packages: { key: "packages", label: "软件包数量", kind: "number" },
+  } satisfies Record<string, ColumnFilterField>;
+  const legacyType = fields.type.options.find(({ value }) => value === search.type)?.value;
+  const selected = readColumnFilters({ ...search, f_type: search.f_type ?? legacyType }, Object.values(fields));
   const filtered = areas.filter((area) =>
-    (!type || area.isIntegration === (type === "integration")) &&
     (!scope || myAreaIds.has(area.id)) &&
+    matchesTextFilter(selected, "name", area.name) &&
+    matchesTextFilter(selected, "description", area.description) &&
+    matchesChoiceFilter(selected, "type", [area.isIntegration ? "integration" : "standard"]) &&
+    matchesChoiceFilter(selected, "leaders", area.leaders.length ? area.leaders.map(({ userId }) => String(userId)) : ["empty"]) &&
+    matchesNumberFilter(selected, "projects", area.projectCount) &&
+    matchesNumberFilter(selected, "packages", area.packageCount) &&
     matchesDirectorySearch(query, area.name, area.description, ...area.leaders.flatMap((leader) => [leader.userName, leader.userEmployeeId])),
   );
   const { sorted, sort, order } = directoryOrder(filtered, columns, search, "name");
   const pageSize = getListPageSize(search.pageSize);
   const list = directoryPage(sorted, search.page, pageSize);
-  const filters = { q: query, type, scope, sort, order, pageSize: String(pageSize), page: String(list.page) };
+  const filters = { ...selected, q: query, scope, sort, order, pageSize: String(pageSize), page: String(list.page) };
+  const header = { path, params: filters };
 
   return (
     <>
@@ -76,36 +113,26 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
         canManagePackages={isAdmin || areas.some((area) => area.leaders.some((leader) => leader.userId === user.id))}
       />
       <section className="card" aria-labelledby="area-list-title">
-        <div className="card-header"><h2 id="area-list-title">责任田列表</h2></div>
+        <div className="card-header">
+          <h2 id="area-list-title">责任田列表</h2>
+          <Link
+            href={directoryHref(path, { ...filters, scope: scope ? undefined : "mine", page: undefined })}
+            className="button button-secondary button-sm"
+            prefetch={false}
+          >
+            {scope ? "显示全部责任田" : "只看我的责任田"}
+          </Link>
+        </div>
+        <DirectoryFilterBar path={path} params={filters} />
         <div className={styles.tableScroll} role="region" aria-label="责任田列表" tabIndex={0}>
           <table className={styles.table} aria-labelledby="area-list-title">
             <thead>
               <tr>
-                <th colSpan={5} className={styles.filterCell}>
-                  <div className={styles.stickyContent}>
-                    <DirectoryFilters path={path} query={query} placeholder="名称、说明、主管姓名或工号" params={filters} filtered={Boolean(query || type || scope)} pageSize={pageSize}>
-                      <label className="field">
-                        <span className="label">责任田类型</span>
-                        <select key={type} className="select" name="type" defaultValue={type}>
-                          <option value="">全部类型</option><option value="standard">普通责任田</option><option value="integration">集成测试责任田</option>
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span className="label">分工范围</span>
-                        <select key={scope} className="select" name="scope" defaultValue={scope}>
-                          <option value="">全部责任田</option><option value="mine">我的责任田</option>
-                        </select>
-                      </label>
-                    </DirectoryFilters>
-                  </div>
-                </th>
-              </tr>
-              <tr>
-                <DirectorySort column="name" label="责任田" path={path} params={filters} />
-                <th scope="col">类型</th>
-                <DirectorySort column="leaders" label="主管" path={path} params={filters} />
-                <DirectorySort column="projects" label="已设负责人的项目" path={path} params={filters} numeric />
-                <DirectorySort column="packages" label="软件包" path={path} params={filters} numeric />
+                <ColumnFilterHeader {...header} sortKey="name" label="责任田" fields={[fields.name, fields.description]} />
+                <ColumnFilterHeader {...header} sortKey="type" label="类型" fields={[fields.type]} />
+                <ColumnFilterHeader {...header} sortKey="leaders" label="主管" fields={[fields.leaders]} />
+                <ColumnFilterHeader {...header} sortKey="projects" label="已设负责人的项目" fields={[fields.projects]} numeric />
+                <ColumnFilterHeader {...header} sortKey="packages" label="软件包" fields={[fields.packages]} numeric />
               </tr>
             </thead>
             <tbody>
@@ -128,7 +155,7 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
             </tbody>
           </table>
         </div>
-        <DirectoryPagination path={path} params={filters} page={list.page} pages={list.pages} total={list.total} unit="个责任田" />
+        <DirectoryPagination path={path} params={filters} page={list.page} pages={list.pages} total={list.total} unit="个责任田" pageSize={pageSize} />
       </section>
     </>
   );

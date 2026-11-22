@@ -1,0 +1,190 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+
+.numeric .header {
+  justify-content: flex-end;
+}
+
+.sort,
+.sort:visited {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+}
+
+.sort:hover {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trigger {
+  display: inline-grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  background: var(--bg-deep);
+  color: var(--ink);
+}
+
+.trigger[data-filtered="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.trigger:focus-visible,
+.sort:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.menu {
+  position: fixed;
+  inset: 8px auto auto 8px;
+  width: min(336px, calc(100vw - 16px));
+  max-height: min(440px, calc(100dvh - 16px));
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--ink);
+  text-align: left;
+  white-space: normal;
+}
+
+.menuHeader,
+.menuFooter {
+  position: sticky;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+}
+
+.menuHeader {
+  top: 0;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.menuHeader h2 {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.menuFooter {
+  bottom: 0;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+}
+
+.menuBody {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldset legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.optionToolbar,
+.textFields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.optionToolbar input,
+.textFields input {
+  flex: 1;
+  min-width: 0;
+}
+
+.textFields select {
+  width: auto;
+  flex: none;
+}
+
+.options {
+  max-height: 176px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.options label:focus-within,
+.options label:hover {
+  background: var(--surface-muted);
+}
+
+.options input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+
+.range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.range input {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+
+  .menu :is(input:not([type="checkbox"]), select, button),
+  .menuFooter a,
+  .options label {
+    min-height: 44px;
+  }
+}

@@ -355,7 +355,7 @@ export async function savePackageAction(
   }
   refreshAll();
   successRedirect(
-    `/settings/packages/${packageId}`,
+    directoryActionHref("packages", formData, packageId),
     id ? "软件包信息已更新。" : "软件包已创建，请继续配置使用范围。",
   );
 }
@@ -386,7 +386,7 @@ export async function importLegacyVersionAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/packages/${packageId}`, "历史版本已导入，可在软件包详情中查看。");
+  successRedirect(directoryActionHref("packages", formData, packageId), "历史版本已导入，可在软件包详情中查看。");
 }
 
 export async function updatePackageResponsibilityAction(
@@ -422,7 +422,7 @@ export async function savePackageUsagesAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/packages/${packageId}`, "项目使用范围已更新。");
+  successRedirect(directoryActionHref("packages", formData, packageId), "项目使用范围已更新。");
 }
 
 export async function updateUserRoleAction(

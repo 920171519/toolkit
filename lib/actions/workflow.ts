@@ -7,6 +7,7 @@ import type { ActionState } from "@/lib/action-state";
 import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
 import { workflowHref } from "@/lib/workflow-links";
+import { trialQueueParams } from "@/lib/trial-queue";
 import { readTraceListState, traceHref } from "@/lib/version-trace-list";
 import {
   addBatchProgress,
@@ -39,7 +40,10 @@ async function actionUser() {
 }
 
 function workflowSuccessRedirect(formData: FormData, path: string, message: string): never {
-  return successRedirect(workflowHref(path, numberValue(formData, "scopeProjectId")), message);
+  const trialQuery = path === "/trial" || path.startsWith("/trial/")
+    ? trialQueueParams(Object.fromEntries([...formData].map(([name, value]) => [name, typeof value === "string" ? value : undefined])))
+    : undefined;
+  return successRedirect(workflowHref(path, numberValue(formData, "scopeProjectId"), trialQuery), message);
 }
 
 function refreshAll() {

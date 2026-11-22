@@ -1,134 +1,106 @@
-"use client";
-
-import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, Search } from "lucide-react";
-import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
+import { ArrowUpRight } from "lucide-react";
+import type { PackageOverviewRow } from "@/lib/queries";
+import { filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { directoryHref, directoryValue, matchesDirectorySearch, type DirectoryParams } from "@/lib/settings-directory";
+import { ColumnFilterHeader } from "@/components/column-filter-header";
+import { DirectoryFilterBar } from "@/components/settings-directory";
 import { Badge, EmptyState, StatusPill } from "@/components/ui";
-import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
 
-function packageHref(packageId: number, projectId?: number) {
-  return `/packages?open=${packageId}${projectId ? `&project=${projectId}` : ""}`;
+const path = "/packages";
+const empty = "_empty";
+
+function nodeOptionValue(name: string) {
+  return Buffer.from(name).toString("base64url");
 }
 
 export function PackageOverviewTable({
   packages,
-  people,
-  scopeLabel = "全部",
-  initialDetail = null,
+  params,
   selectedProjectId,
 }: {
   packages: PackageOverviewRow[];
-  people: PersonOption[];
-  scopeLabel?: string;
-  initialDetail?: DrawerPayload | null;
+  params: DirectoryParams;
   selectedProjectId?: number;
 }) {
-  const [query, setQuery] = useState("");
-  const [nameFilter, setNameFilter] = useState("");
-  const [areaFilter, setAreaFilter] = useState("");
-  const [projectFilter, setProjectFilter] = useState("");
-  const [nodeFilter, setNodeFilter] = useState("");
-  const [formalFilter, setFormalFilter] = useState("");
-  const [trialFilter, setTrialFilter] = useState("");
-  const [currentFilter, setCurrentFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const openId = Number(useSearchParams().get("open"));
-
-  const areas = useMemo(() => [...new Set(packages.map((pkg) => pkg.areaName).filter((item): item is string => Boolean(item)))].sort(), [packages]);
-  const projects = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const pkg of packages) for (const usage of pkg.usages) map.set(usage.projectId, usage.projectName);
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "zh-CN"));
-  }, [packages]);
-  const nodes = useMemo(() => [...new Set(packages.flatMap((pkg) => pkg.usages.flatMap((usage) => usage.nodeNames)))].sort(), [packages]);
-  const statuses = useMemo(() => [...new Set(packages.map((pkg) => pkg.currentStatus).filter((item): item is NonNullable<typeof item> => Boolean(item)))], [packages]);
-
-  const hasColumnFilter = Boolean(nameFilter || areaFilter || projectFilter || nodeFilter || formalFilter || trialFilter || currentFilter || statusFilter);
-  function resetFilters() {
-    setNameFilter(""); setAreaFilter(""); setProjectFilter(""); setNodeFilter("");
-    setFormalFilter(""); setTrialFilter(""); setCurrentFilter(""); setStatusFilter("");
-  }
-
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return packages.filter((pkg) => {
-      const globalText = [pkg.name, pkg.code, pkg.ownerName ?? "", pkg.areaName ?? "", pkg.formalVersion ?? "", ...pkg.usages.flatMap((usage) => [usage.projectName, ...usage.nodeNames])].join(" ").toLowerCase();
-      if (normalized && !globalText.includes(normalized)) return false;
-      if (nameFilter && !`${pkg.name} ${pkg.code}`.toLowerCase().includes(nameFilter.toLowerCase())) return false;
-      if (areaFilter && pkg.areaName !== areaFilter) return false;
-      if (projectFilter && !pkg.usages.some((usage) => String(usage.projectId) === projectFilter)) return false;
-      if (nodeFilter && !pkg.usages.some((usage) => usage.nodeNames.includes(nodeFilter))) return false;
-      if (formalFilter && !(pkg.formalVersion ?? "").toLowerCase().includes(formalFilter.toLowerCase())) return false;
-      if (trialFilter && !pkg.trialVersions.some((version) => version.toLowerCase().includes(trialFilter.toLowerCase()))) return false;
-      if (currentFilter && !(pkg.currentVersion ?? "").toLowerCase().includes(currentFilter.toLowerCase())) return false;
-      if (statusFilter && pkg.currentStatus !== statusFilter) return false;
-      return true;
-    });
-  }, [packages, query, nameFilter, areaFilter, projectFilter, nodeFilter, formalFilter, trialFilter, currentFilter, statusFilter]);
-
-  function closePackage() {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("open");
-    window.history.replaceState(null, "", url.toString());
-  }
+  const usages = packages.flatMap((pkg) => pkg.usages);
+  const fields = {
+    name: { key: "name", label: "软件包名称", kind: "text" },
+    code: { key: "code", label: "软件包编码", kind: "text" },
+    area: { key: "area", label: "责任田", kind: "choices", options: filterOptions(packages.map((pkg) => ({
+      value: String(pkg.areaId ?? empty),
+      label: pkg.areaName ?? "未归属",
+    }))) },
+    owner: { key: "owner", label: "责任人", kind: "choices", options: filterOptions(packages.map((pkg) => ({
+      value: String(pkg.ownerId ?? empty),
+      label: [pkg.ownerName, pkg.ownerEmployeeId].filter(Boolean).join(" · ") || "责任人待指定",
+    }))) },
+    project: { key: "usage_project", label: "使用项目", kind: "choices", options: filterOptions(usages.map((usage) => ({
+      value: String(usage.projectId),
+      label: usage.projectName,
+    }))) },
+    node: { key: "usage_node", label: "使用节点", kind: "choices", options: filterOptions(usages.flatMap((usage) => usage.nodeNames.map((name) => ({
+      value: nodeOptionValue(name),
+      label: name,
+    })))) },
+    formal: { key: "formal", label: "正式版本", kind: "text" },
+    trial: { key: "trial", label: "试制版本", kind: "text" },
+    current: { key: "current", label: "在途版本", kind: "text" },
+    status: { key: "status", label: "状态", kind: "choices", options: filterOptions(packages.map((pkg) => ({
+      value: pkg.currentStatus ?? empty,
+      label: pkg.currentStatus ? PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : "已全量转正",
+    }))) },
+  } satisfies Record<string, ColumnFilterField>;
+  const filters = readColumnFilters(params, Object.values(fields));
+  const query = directoryValue(params.q);
+  const header = { path, params: { project: selectedProjectId?.toString(), ...filters, q: query || undefined } };
+  const filtered = packages.filter((pkg) => {
+    const usageMatches = !(filters.f_usage_project || filters.f_usage_node) || pkg.usages.some((usage) =>
+      matchesChoiceFilter(filters, "usage_project", [String(usage.projectId)]) &&
+      matchesChoiceFilter(filters, "usage_node", usage.nodeNames.map(nodeOptionValue)));
+    return usageMatches &&
+      matchesTextFilter(filters, "name", pkg.name) &&
+      matchesTextFilter(filters, "code", pkg.code) &&
+      matchesChoiceFilter(filters, "area", [String(pkg.areaId ?? empty)]) &&
+      matchesChoiceFilter(filters, "owner", [String(pkg.ownerId ?? empty)]) &&
+      matchesTextFilter(filters, "formal", pkg.formalVersion) &&
+      (!filters.f_trial || pkg.trialVersions.some((version) => matchesTextFilter(filters, "trial", version))) &&
+      [pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion].some((version) => matchesTextFilter(filters, "current", version)) &&
+      matchesChoiceFilter(filters, "status", [pkg.currentStatus ?? empty]) &&
+      matchesDirectorySearch(query, pkg.name, pkg.code, pkg.ownerName, pkg.areaName, pkg.formalVersion,
+        ...pkg.usages.flatMap((usage) => [usage.projectName, ...usage.nodeNames]));
+  });
 
   return (
     <div>
-      <div className="toolbar-spread" style={{ marginBottom: 14 }}>
-        <div className="stage-tabs">
-          <span className="stage-tab" data-active="true">
-            {scopeLabel} · {packages.length}
-          </span>
+      <section className="card" aria-labelledby="package-overview-list">
+        <div className="card-header">
+          <h2 id="package-overview-list">软件包列表</h2>
+          <DirectoryFilterBar {...header} />
         </div>
-        <label className="input" style={{ width: 280, display: "flex", alignItems: "center", gap: 7, minHeight: 34, background: "var(--surface)" }}>
-          <Search size={13} style={{ color: "var(--muted-light)", flex: "none" }} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索软件包、责任人或使用项目"
-            aria-label="搜索软件包"
-            style={{ border: 0, outline: 0, width: "100%", background: "transparent" }}
-          />
-        </label>
-      </div>
-
-      <div className="card" style={{ overflow: "hidden" }}>
-        {filtered.length === 0 ? (
-          <EmptyState title="没有匹配的软件包" description="调整搜索关键词后重试。" />
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>软件包</th>
-                  <th>责任田 / 责任人</th>
-                  <th>使用范围</th>
-                  <th>正式版</th>
-                  <th>试制版</th>
-                  <th>在途版本</th>
-                  <th>状态</th>
-                  <th aria-label="操作" />
-                </tr>
-                <tr className="package-filter-row">
-                  <th><input className="input input-sm" value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="筛选包/编码" aria-label="筛选软件包" /></th>
-                  <th><select className="select select-sm" value={areaFilter} onChange={(event) => setAreaFilter(event.target.value)} aria-label="筛选责任田"><option value="">全部责任田</option>{areas.map((area) => <option key={area} value={area}>{area}</option>)}</select></th>
-                  <th><div style={{ display: "flex", gap: 4 }}><select className="select select-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="筛选使用项目"><option value="">全部项目</option>{projects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select className="select select-sm" value={nodeFilter} onChange={(event) => setNodeFilter(event.target.value)} aria-label="筛选使用节点"><option value="">全部节点</option>{nodes.map((node) => <option key={node} value={node}>{node}</option>)}</select></div></th>
-                  <th><input className="input input-sm" value={formalFilter} onChange={(event) => setFormalFilter(event.target.value)} placeholder="筛选正式版" aria-label="筛选正式版本" /></th>
-                  <th><input className="input input-sm" value={trialFilter} onChange={(event) => setTrialFilter(event.target.value)} placeholder="筛选试制版" aria-label="筛选试制版本" /></th>
-                  <th><input className="input input-sm" value={currentFilter} onChange={(event) => setCurrentFilter(event.target.value)} placeholder="筛选在途版本" aria-label="筛选在途版本" /></th>
-                  <th><select className="select select-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="筛选状态"><option value="">全部状态</option>{statuses.map((status) => <option key={status} value={status}>{PACKAGE_STATUS_META[status]?.label ?? status}</option>)}</select></th>
-                  <th>{hasColumnFilter ? <button type="button" className="button button-ghost button-sm" onClick={resetFilters}>重置</button> : null}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((pkg) => (
+        <div className="table-wrap" role="region" aria-label="软件版本总览表格" tabIndex={0}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <ColumnFilterHeader {...header} label="软件包" fields={[fields.name, fields.code]} />
+                <ColumnFilterHeader {...header} label="责任田 / 责任人" fields={[fields.area, fields.owner]} />
+                <ColumnFilterHeader {...header} label="使用范围" fields={[fields.project, fields.node]} />
+                <ColumnFilterHeader {...header} label="正式版" fields={[fields.formal]} />
+                <ColumnFilterHeader {...header} label="试制版" fields={[fields.trial]} />
+                <ColumnFilterHeader {...header} label="在途版本" fields={[fields.current]} />
+                <ColumnFilterHeader {...header} label="状态" fields={[fields.status]} />
+                <th scope="col" aria-label="操作" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((pkg) => {
+                const detailHref = directoryHref(path, { ...header.params, open: String(pkg.id) });
+                return (
                   <tr key={pkg.id}>
                     <td>
                       <Link
-                        href={packageHref(pkg.id, selectedProjectId)}
+                        href={detailHref}
                         className="link-button"
                         style={{ fontWeight: 600, textAlign: "left" }}
                         prefetch={false}
@@ -205,7 +177,7 @@ export function PackageOverviewTable({
                     </td>
                     <td className="cell-actions">
                       <Link
-                        href={packageHref(pkg.id, selectedProjectId)}
+                        href={detailHref}
                         className="archive-link"
                         prefetch={false}
                         aria-label={`查看 ${pkg.name} 详情`}
@@ -214,19 +186,17 @@ export function PackageOverviewTable({
                       </Link>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length === 0 && <EmptyState title="没有匹配的软件包" description="可继续调整各列筛选条件。" />}
+        {filtered.length > 0 && <p className="small muted" style={{ padding: "12px 16px" }} role="status">共 {filtered.length} 个软件包</p>}
+      </section>
       <p className="page-footnote">
         “试制版本”会同时展示一个软件包当前所有处于试制验证或待转正的版本；使用范围只展示在行项目，已归档项目的软件包记录请到项目总览中查找已结束的项目。
       </p>
-
-      {Number.isSafeInteger(openId) && openId > 0 && (
-        <PackageDrawer key={openId} packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} />
-      )}
     </div>
   );
 }

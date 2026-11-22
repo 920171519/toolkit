@@ -1,5 +1,7 @@
 import { all, one } from "./db";
 import { getIntegrationManagedProjectIds } from "./access";
+import type { BatchStatus } from "./constants";
+import type { readIntegrationHistory } from "./integration-history";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
@@ -239,31 +241,102 @@ export type BatchSummaryRow = {
   changedCount: number;
 };
 
-export function getBatches(limit = 80, projectIds: number[] | null = null): BatchSummaryRow[] {
-  if (projectIds?.length === 0) return [];
-  const rows = all<Omit<BatchSummaryRow, "itemCount" | "changedCount"> & { itemCount: number; changedCount: number }>(
-    `SELECT b.id, b.code, b.title, b.status, b.project_id AS projectId,
+const batchItemCount = "(SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id)";
+const batchChangedCount = "(SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id AND bi.is_changed = 1)";
+const batchSummaryColumns = `b.id, b.code, b.title, b.status, b.project_id AS projectId,
             pr.name AS projectName, pr.code AS projectCode, pr.software_manager_id AS softwareManagerId, b.conclusion,
             b.issue_attribution AS issueAttribution, b.created_at AS createdAt,
             b.sent_at AS sentAt, b.completed_at AS completedAt, b.terminated_at AS terminatedAt,
             b.terminate_reason AS terminateReason, b.test_summary AS testSummary,
             b.test_report_url AS testReportUrl, b.test_report_name AS testReportName,
             b.test_report_file_id AS testReportFileId, c.name AS createdByName,
-            (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id) AS itemCount,
-            (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id AND bi.is_changed = 1) AS changedCount
-     FROM integration_batches b
+            ${batchItemCount} AS itemCount, ${batchChangedCount} AS changedCount`;
+const batchSummaryFrom = `FROM integration_batches b
      JOIN projects pr ON pr.id = b.project_id
-     LEFT JOIN users c ON c.id = b.created_by
-     ${projectIds ? `WHERE b.project_id IN (${projectIds.map(() => "?").join(",")})` : ""}
-     ORDER BY COALESCE(b.sent_at, b.created_at) DESC, b.id DESC LIMIT ?`,
-     ...(projectIds ?? []),
+     LEFT JOIN users c ON c.id = b.created_by`;
+const batchSummaryOrder = "ORDER BY COALESCE(b.sent_at, b.created_at) DESC, b.id DESC";
+
+export function getBatches(limit = 80, projectIds: number[] | null = null, status?: BatchStatus): BatchSummaryRow[] {
+  if (projectIds?.length === 0) return [];
+  const conditions = [
+    ...(projectIds ? [`b.project_id IN (${projectIds.map(() => "?").join(", ")})`] : []),
+    ...(status ? ["b.status = ?"] : []),
+  ];
+  return all<BatchSummaryRow>(
+    `SELECT ${batchSummaryColumns} ${batchSummaryFrom}
+     ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+     ${batchSummaryOrder} LIMIT ?`,
+    ...(projectIds ?? []),
+    ...(status ? [status] : []),
     limit,
-  ).map((batch) => ({
-    ...batch,
-    itemCount: Number(batch.itemCount),
-    changedCount: Number(batch.changedCount),
-  }));
-  return rows;
+  );
+}
+
+export function getIntegrationHistoryPage(
+  state: ReturnType<typeof readIntegrationHistory>,
+  projectIds: number[] | null,
+) {
+  if (projectIds?.length === 0) return { rows: [], total: 0, page: 1, pages: 1 };
+  const { filters, pageSize } = state;
+  const conditions = ["b.status IN ('COMPLETED', 'TERMINATED')"];
+  const values: Array<string | number> = [];
+
+  if (projectIds) {
+    conditions.push(`b.project_id IN (${projectIds.map(() => "?").join(", ")})`);
+    values.push(...projectIds);
+  }
+
+  for (const [key, column] of [["batch", "b.code"], ["title", "b.title"]]) {
+    const value = filters[`f_${key}`];
+    if (!value) continue;
+    conditions.push(filters[`f_${key}_mode`] === "exact"
+      ? `${column} = ? COLLATE NOCASE`
+      : `instr(lower(${column}), lower(?)) > 0`);
+    values.push(value);
+  }
+
+  for (const [key, column] of [
+    ["project", "b.project_id"], ["status", "b.status"], ["conclusion", "COALESCE(b.conclusion, 'NONE')"],
+  ]) {
+    const selection = filters[`f_${key}`]?.split(",");
+    if (!selection) continue;
+    conditions.push(`${column} IN (${selection.map(() => "?").join(", ")})`);
+    values.push(...selection);
+  }
+
+  for (const [key, expression] of [["items", batchItemCount], ["changed", batchChangedCount]]) {
+    const min = filters[`f_${key}_min`];
+    const max = filters[`f_${key}_max`];
+    if (min !== undefined) {
+      conditions.push(`${expression} >= ?`);
+      values.push(Number(min));
+    }
+    if (max !== undefined) {
+      conditions.push(`${expression} <= ?`);
+      values.push(Number(max));
+    }
+  }
+
+  const localDate = "date(COALESCE(b.completed_at, b.terminated_at, b.sent_at, b.created_at), '+8 hours')";
+  if (filters.f_date_min) {
+    conditions.push(`${localDate} >= ?`);
+    values.push(filters.f_date_min);
+  }
+  if (filters.f_date_max) {
+    conditions.push(`${localDate} <= ?`);
+    values.push(filters.f_date_max);
+  }
+
+  const where = conditions.join(" AND ");
+  const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${batchSummaryFrom} WHERE ${where}`, ...values)?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(state.page, pages);
+  const rows = total === 0 ? [] : all<BatchSummaryRow>(
+    `SELECT ${batchSummaryColumns} ${batchSummaryFrom}
+     WHERE ${where} ${batchSummaryOrder} LIMIT ? OFFSET ?`,
+    ...values, pageSize, (page - 1) * pageSize,
+  );
+  return { rows, total, page, pages };
 }
 
 export type BatchItemRow = {
@@ -296,8 +369,13 @@ export type BatchProgressNote = {
 
 export type BatchDetailRow = { batch: BatchSummaryRow; items: BatchItemRow[]; progressNotes: BatchProgressNote[] };
 
-export function getBatchDetail(batchId: number): BatchDetailRow | null {
-  const batch = getBatches(500).find((item) => item.id === batchId);
+export function getBatchDetail(batchId: number, projectIds: number[] | null): BatchDetailRow | null {
+  if (projectIds?.length === 0) return null;
+  const scope = projectIds ? `AND b.project_id IN (${projectIds.map(() => "?").join(", ")})` : "";
+  const batch = one<BatchSummaryRow>(
+    `SELECT ${batchSummaryColumns} ${batchSummaryFrom} WHERE b.id = ? ${scope}`,
+    batchId, ...(projectIds ?? []),
+  );
   if (!batch) return null;
   const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious" | "parallelRiskTrial" | "issueAffected"> & {
     isChanged: number;
@@ -1385,13 +1463,17 @@ export function getTraceVersionPage(state: TraceListState, projectId?: number) {
   const scope = traceProjectScope(projectId);
   const conditions = [scope.condition];
   const params: Array<string | number> = [...scope.values];
+  const columns = state.filters;
+  const packageExact = columns.f_package_mode === "exact";
   const filters: Array<[string, string | number | undefined]> = [
     ["p.id = ?", state.packageId],
-    ["instr(lower(p.code || ' ' || p.name), lower(?)) > 0", state.packageFilter],
-    ["instr(lower(pv.version), lower(?)) > 0", state.versionFilter],
-    ["pv.status = ?", state.status],
-    [`${traceSubmittedDate} >= ?`, state.submittedFrom],
-    [`${traceSubmittedDate} <= ?`, state.submittedThrough],
+    ["instr(lower(p.code || ' ' || p.name), lower(?)) > 0", packageExact ? undefined : columns.f_package],
+    [
+      columns.f_version_mode === "exact" ? "pv.version = ? COLLATE NOCASE" : "instr(lower(pv.version), lower(?)) > 0",
+      columns.f_version,
+    ],
+    [`${traceSubmittedDate} >= ?`, columns.f_submitted_min],
+    [`${traceSubmittedDate} <= ?`, columns.f_submitted_max],
   ];
   for (const term of state.query.split(/\s+/).filter(Boolean)) {
     filters.push(["instr(lower(p.code || ' ' || p.name || ' ' || pv.version), lower(?)) > 0", term]);
@@ -1400,6 +1482,15 @@ export function getTraceVersionPage(state: TraceListState, projectId?: number) {
     if (value === undefined || value === "") continue;
     conditions.push(condition);
     params.push(value);
+  }
+  if (packageExact && columns.f_package) {
+    conditions.push("(p.code = ? COLLATE NOCASE OR p.name = ? COLLATE NOCASE)");
+    params.push(columns.f_package, columns.f_package);
+  }
+  if (columns.f_status) {
+    const statuses = columns.f_status.split(",");
+    conditions.push(`pv.status IN (${statuses.map(() => "?").join(", ")})`);
+    params.push(...statuses);
   }
 
   const where = conditions.join(" AND ");

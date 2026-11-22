@@ -3,11 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, FileText, GitBranch, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getIntegrationManagedProjectIds } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
-import { getBatchDetail } from "@/lib/workflow-queries";
+import { getBatchDetail, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { formatDateTime } from "@/lib/format";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
@@ -31,12 +32,20 @@ export default async function BatchDetailPage({
   const { id } = await params;
   const batchId = Number(id);
   if (!Number.isInteger(batchId)) notFound();
-  const data = getBatchDetail(batchId);
+  const scope = getWorkflowProjectScope(user);
+  const detailScope = scope && user.role === "SOFTWARE_MANAGER"
+    ? [...new Set([...scope, ...getIntegrationManagedProjectIds(user.id)])]
+    : scope;
+  const data = getBatchDetail(batchId, detailScope);
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { batch, items, progressNotes } = data;
   const project = requireWorkflowProject(user, search.project, batch.projectId);
+  const historyState = readIntegrationHistory(search);
+  const returnHref = historyState.open
+    ? workflowHref("/integration", project?.id, integrationHistoryParams(historyState)) + "#integration-history"
+    : workflowHref("/integration", project?.id);
   const batchFormFields = { batchId: batch.id, scopeProjectId: project?.id };
   const manager = canManageProjectWorkflowForProject(user, batch.projectId);
   const canTest = canSubmitIntegrationConclusionForProject(user, batch.projectId);
@@ -56,7 +65,7 @@ export default async function BatchDetailPage({
         eyebrow="Integration / Batch detail"
         title={`${batch.code} · ${batch.projectName ?? "未指定项目"}`}
         description={<>{batch.title} · 发起人 {batch.createdByName ?? "系统"} · {formatDateTime(batch.sentAt ?? batch.createdAt)} · {batch.changedCount} 个变更包 / {batch.itemCount} 个配套包</>}
-        actions={<><Link href={workflowHref("/integration", project?.id)} className="button button-secondary"><ArrowLeft size={14} />返回列表</Link><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></>}
+        actions={<><Link href={returnHref} className="button button-secondary"><ArrowLeft size={14} />返回列表</Link><BatchStatusPill status={batch.status as "DRAFT" | "IN_TEST" | "COMPLETED" | "TERMINATED"} /></>}
       />
       <FlashMessage notice={notice} />
 

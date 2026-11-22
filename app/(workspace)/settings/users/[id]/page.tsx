@@ -10,7 +10,7 @@ import { saveUserProfileAction, setUserActiveAction, updateUserRoleAction } from
 import { requireRole } from "@/lib/auth";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { getAdminUsers, parseFlash } from "@/lib/queries";
-import { directoryFilters, directoryHref, type DirectoryParams } from "@/lib/settings-directory";
+import { directoryFilters, directoryHref, directoryValue, type DirectoryParams } from "@/lib/settings-directory";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "账号管理" };
@@ -26,7 +26,8 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
   if (!member) notFound();
 
   const search = await searchParams;
-  const filters = directoryFilters("users", search);
+  const legacyRole = ROLES.find((role) => role === directoryValue(search.role));
+  const filters = directoryFilters("users", { ...search, f_role: search.f_role ?? legacyRole });
   const hidden = { ...filters, userId };
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const isSelf = member.id === user.id;

@@ -1,26 +1,3 @@
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.search {
-  flex: 1 1 190px;
-  min-width: min(100%, 190px);
-  max-width: 384px;
-}
-
-.filters :is(input, select, button, a) {
-  min-height: 40px;
-}
-
-.filters select {
-  max-width: 220px;
-}
-
 .tableScroll {
   overflow-x: auto;
   container-type: inline-size;
@@ -66,18 +43,6 @@
   white-space: nowrap;
 }
 
-.table .filterCell {
-  background: inherit;
-  padding: 0;
-  font-size: inherit;
-  font-weight: inherit;
-  white-space: normal;
-}
-
-.filterCell .filters {
-  border-bottom: 0;
-}
-
 .stickyContent {
   position: sticky;
   left: 0;
@@ -89,14 +54,12 @@
   background: var(--surface-muted);
 }
 
-.sort,
 .rowLink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.sort:hover,
 .rowLink:hover {
   text-decoration: underline;
 }
@@ -205,26 +168,9 @@
 }
 
 @media (max-width: 690px) {
-  .filters {
-    gap: 8px;
-    padding: 12px 16px;
-  }
-
-  .search {
-    max-width: none;
-  }
-
-  .filters :is(input, select, button, a),
-  .pagination :global(.button) {
+  .pagination :global(.button),
+  .pagination :global(.select) {
     min-height: 44px;
-  }
-
-  .filters label:not(.search) {
-    flex: 1 1 120px;
-  }
-
-  .filters select {
-    max-width: 100%;
   }
 
   .record {
@@ -240,4 +186,23 @@
   .recordActions {
     justify-content: flex-start;
   }
+}
+
+.filterSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 16px;
+}
+
+.legacySearch {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--brand);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }

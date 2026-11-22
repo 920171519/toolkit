@@ -8,6 +8,7 @@ import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { redirect } from "next/navigation";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
+import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
 import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import styles from "@/components/settings-directory.module.css";
@@ -35,6 +36,7 @@ export default async function PackageSettingsDetailPage({
     redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
   }
   const search = await searchParams;
+  const listParams = directoryFilters("packages", search);
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const allAreas = getAreaConfigs();
   const areas = isAdmin ? allAreas : allAreas.filter((area) => ledAreaIds.includes(area.id));
@@ -51,7 +53,7 @@ export default async function PackageSettingsDetailPage({
         title={identity.name}
         description={identity.code + " · 维护责任信息与项目节点使用范围。"}
         actions={
-          <Link href="/settings/packages" className="button button-secondary">
+          <Link href={directoryHref("/settings/packages", listParams)} className="button button-secondary" prefetch={false}>
             <ArrowLeft size={14} /> 返回软件包配置
           </Link>
         }
@@ -72,7 +74,7 @@ export default async function PackageSettingsDetailPage({
               <Boxes size={17} style={{ color: "var(--brand)" }} />
             </div>
             <div className="card-body" style={{ paddingTop: 14 }}>
-              <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ id: pkg.id }} submitText="保存责任信息">
+              <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id }} submitText="保存责任信息">
                 <div className="form-grid">
                   <label className="field">
                     <span className="label">软件包编码</span>
@@ -159,7 +161,7 @@ export default async function PackageSettingsDetailPage({
                   </div>
                 </div>
               ) : (
-                <ActionForm action={savePackageUsagesAction} testId="package-usage-form" hidden={{ packageId: pkg.id }} submitText="保存使用范围">
+                <ActionForm action={savePackageUsagesAction} testId="package-usage-form" hidden={{ ...listParams, packageId: pkg.id }} submitText="保存使用范围">
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     {projects.map((project) => (
                       <div key={project.id}>

@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DirectoryFilters, DirectoryPagination, DirectorySort } from "@/components/settings-directory";
+import { ColumnFilterHeader } from "@/components/column-filter-header";
+import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
-import { ROLE_META, ROLES, type Role } from "@/lib/constants";
+import {
+  filterOptions,
+  matchesChoiceFilter,
+  matchesNumberFilter,
+  matchesTextFilter,
+  readColumnFilters,
+  type ColumnFilterField,
+} from "@/lib/column-filters";
+import { ROLE_META, ROLES } from "@/lib/constants";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAdminUsers, getResponsibilityAreaOptions, parseFlash, type AdminUser } from "@/lib/queries";
 import {
@@ -38,21 +47,53 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const query = directoryValue(search.q);
-  const roleValue = directoryValue(search.role) as Role;
-  const role = ROLES.includes(roleValue) ? roleValue : "";
-  const areaValue = directoryValue(search.area);
-  const area = areaValue === "unassigned" || areas.some(({ id }) => String(id) === areaValue) ? areaValue : "";
-  const status = search.status === "active" || search.status === "inactive" ? search.status : "";
+  const fields = {
+    name: { key: "name", label: "姓名", kind: "text" },
+    title: { key: "title", label: "职位", kind: "text" },
+    department: { key: "department", label: "部门", kind: "text" },
+    employeeId: { key: "employeeId", label: "工号", kind: "text" },
+    role: {
+      key: "role", label: "系统角色", kind: "choices",
+      options: ROLES.map((role) => ({ value: role, label: ROLE_META[role].label })),
+    },
+    area: {
+      key: "area", label: "责任田", kind: "choices",
+      options: filterOptions([
+        { value: "empty", label: "未分配责任田" },
+        ...areas.map((area) => ({ value: String(area.id), label: area.name })),
+      ]),
+    },
+    status: {
+      key: "status", label: "账号状态", kind: "choices",
+      options: [{ value: "active", label: "启用" }, { value: "inactive", label: "停用" }],
+    },
+    packages: { key: "packages", label: "软件包数量", kind: "number" },
+  } satisfies Record<string, ColumnFilterField>;
+  const legacyRole = ROLES.find((role) => role === directoryValue(search.role));
+  const legacyArea = search.area === "unassigned" ? "empty" : directoryValue(search.area);
+  const legacyStatus = fields.status.options.find(({ value }) => value === search.status)?.value;
+  const selected = readColumnFilters({
+    ...search,
+    f_role: search.f_role ?? legacyRole,
+    f_area: search.f_area ?? fields.area.options.find(({ value }) => value === legacyArea)?.value,
+    f_status: search.f_status ?? legacyStatus,
+  }, Object.values(fields));
   const filtered = members.filter((member) =>
-    (!role || member.role === role) &&
-    (!status || member.isActive === (status === "active")) &&
-    (!area || (area === "unassigned" ? member.areas.length === 0 : member.areas.some(({ id }) => String(id) === area))) &&
+    matchesTextFilter(selected, "name", member.name) &&
+    matchesTextFilter(selected, "title", member.title) &&
+    matchesTextFilter(selected, "department", member.department) &&
+    matchesTextFilter(selected, "employeeId", member.employeeId) &&
+    matchesChoiceFilter(selected, "role", [member.role]) &&
+    matchesChoiceFilter(selected, "area", member.areas.length ? member.areas.map(({ id }) => String(id)) : ["empty"]) &&
+    matchesChoiceFilter(selected, "status", [member.isActive ? "active" : "inactive"]) &&
+    matchesNumberFilter(selected, "packages", member.ownedPackages) &&
     matchesDirectorySearch(query, member.name, member.employeeId, member.title, member.department, ROLE_META[member.role].label, areaNames(member)),
   );
   const { sorted, sort, order } = directoryOrder(filtered, columns, search, "name");
   const pageSize = getListPageSize(search.pageSize);
   const list = directoryPage(sorted, search.page, pageSize);
-  const filters = { q: query, role, area, status, sort, order, pageSize: String(pageSize), page: String(list.page) };
+  const filters = { ...selected, q: query, sort, order, pageSize: String(pageSize), page: String(list.page) };
+  const header = { path, params: filters };
 
   return (
     <div className={styles.stack}>
@@ -61,60 +102,40 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
       <SettingsTabs isAdmin />
       <section className="card" aria-labelledby="user-list-title">
         <div className="card-header"><h2 id="user-list-title">人员列表</h2></div>
-        <DirectoryFilters path={path} query={query} placeholder="姓名、工号、职位或部门" params={filters} filtered={Boolean(query || role || area || status)} pageSize={pageSize}>
-          <label className="field">
-            <span className="label">系统角色</span>
-            <select key={role} className="select" name="role" defaultValue={role}>
-              <option value="">全部角色</option>
-              {ROLES.map((value) => <option key={value} value={value}>{ROLE_META[value].label}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">责任田</span>
-            <select key={area} className="select" name="area" defaultValue={area}>
-              <option value="">全部责任田</option>
-              <option value="unassigned">未分配责任田</option>
-              {areas.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">账号状态</span>
-            <select key={status} className="select" name="status" defaultValue={status}>
-              <option value="">全部状态</option><option value="active">启用</option><option value="inactive">停用</option>
-            </select>
-          </label>
-        </DirectoryFilters>
-        {list.items.length ? (
-          <div className={styles.tableScroll} role="region" aria-label="人员列表" tabIndex={0}>
-            <table className={styles.table} aria-labelledby="user-list-title">
-              <thead><tr>
-                <DirectorySort column="name" label="姓名" path={path} params={filters} />
-                <DirectorySort column="employeeId" label="工号" path={path} params={filters} />
-                <DirectorySort column="role" label="系统角色" path={path} params={filters} />
-                <DirectorySort column="area" label="责任田" path={path} params={filters} />
-                <DirectorySort column="status" label="账号状态" path={path} params={filters} />
-                <DirectorySort column="packages" label="软件包" path={path} params={filters} numeric />
-              </tr></thead>
-              <tbody>
-                {list.items.map((member) => (
-                  <tr key={member.id} data-testid={`user-row-${member.id}`}>
-                    <td>
-                      <Link href={directoryHref(`${path}/${member.id}`, filters)} className={styles.rowLink} prefetch={false}>{member.name}</Link>
-                      {member.id === user.id && <> <span className={styles.meta}>我</span></>}
-                      <div className="small muted">{[member.title, member.department].filter(Boolean).join(" · ")}</div>
-                    </td>
-                    <td>{member.employeeId}</td>
-                    <td><span className={styles.meta}>{ROLE_META[member.role].label}</span></td>
-                    <td>{areaNames(member) || <span className="muted">未分配</span>}</td>
-                    <td><Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></td>
-                    <td className={styles.number}>{member.ownedPackages}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <EmptyState title="没有匹配的人员" description="可以调整搜索词或筛选条件。" />}
-        <DirectoryPagination path={path} params={filters} page={list.page} pages={list.pages} total={list.total} unit="人" />
+        <DirectoryFilterBar path={path} params={filters} />
+        <div className={styles.tableScroll} role="region" aria-label="人员列表" tabIndex={0}>
+          <table className={styles.table} aria-labelledby="user-list-title">
+            <thead><tr>
+              <ColumnFilterHeader {...header} sortKey="name" label="姓名" fields={[fields.name, fields.title, fields.department]} />
+              <ColumnFilterHeader {...header} sortKey="employeeId" label="工号" fields={[fields.employeeId]} />
+              <ColumnFilterHeader {...header} sortKey="role" label="系统角色" fields={[fields.role]} />
+              <ColumnFilterHeader {...header} sortKey="area" label="责任田" fields={[fields.area]} />
+              <ColumnFilterHeader {...header} sortKey="status" label="账号状态" fields={[fields.status]} />
+              <ColumnFilterHeader {...header} sortKey="packages" label="软件包" fields={[fields.packages]} numeric />
+            </tr></thead>
+            <tbody>
+              {list.items.length ? list.items.map((member) => (
+                <tr key={member.id} data-testid={`user-row-${member.id}`}>
+                  <td>
+                    <Link href={directoryHref(`${path}/${member.id}`, filters)} className={styles.rowLink} prefetch={false}>{member.name}</Link>
+                    {member.id === user.id && <> <span className={styles.meta}>我</span></>}
+                    <div className="small muted">{[member.title, member.department].filter(Boolean).join(" · ")}</div>
+                  </td>
+                  <td>{member.employeeId}</td>
+                  <td><span className={styles.meta}>{ROLE_META[member.role].label}</span></td>
+                  <td>{areaNames(member) || <span className="muted">未分配</span>}</td>
+                  <td><Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></td>
+                  <td className={styles.number}>{member.ownedPackages}</td>
+                </tr>
+              )) : <tr><td colSpan={6}>
+                <div className={styles.stickyContent}>
+                  <EmptyState title="没有匹配的人员" description="可以调整列筛选条件。" />
+                </div>
+              </td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <DirectoryPagination path={path} params={filters} page={list.page} pages={list.pages} total={list.total} unit="人" pageSize={pageSize} />
       </section>
       <details className="card">
         <summary className="card-header">角色权限说明</summary>

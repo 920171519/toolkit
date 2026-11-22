@@ -113,9 +113,10 @@ test.describe("工程协同台项目维度流程", () => {
 
     await login(page, "ADMIN001");
     await page.goto("/settings/users");
-    const area = page.getByRole("combobox", { name: "责任田", exact: true });
-    await area.selectOption({ label: areaName });
-    await page.getByRole("button", { name: "筛选", exact: true }).click();
+    await page.getByRole("button", { name: "筛选责任田", exact: true }).click();
+    const area = page.getByRole("dialog", { name: "筛选责任田", exact: true });
+    await area.getByRole("checkbox", { name: areaName, exact: true }).check();
+    await area.getByRole("button", { name: "应用", exact: true }).click();
     const rows = page.getByRole("table", { name: "人员列表" }).locator("tbody tr");
     await expect(rows).toHaveCount(3);
     await expect(rows.filter({ hasText: "郑一" })).toHaveCount(1);
@@ -786,13 +787,37 @@ test.describe("工程协同台项目维度流程", () => {
   test("软件包总览支持按列筛选，详情展示说明与构建地址", async ({ page }) => {
     await login(page, "OWNER001");
     await page.goto("/packages?project=1");
-    await expect(page.locator(".package-filter-row")).toBeVisible();
-    await page.locator('select[aria-label="筛选使用项目"]').selectOption({ label: "极光 M2" });
-    await page.locator('select[aria-label="筛选使用节点"]').selectOption({ label: "EVT" });
-    const rows = page.locator(".data-table tbody tr");
-    await expect(rows.first()).toBeVisible();
-    await expect(rows.first()).toContainText("EVT");
-    await page.goto("/packages?project=1&open=1");
+    const table = page.getByRole("region", { name: "软件版本总览表格" });
+    const usageFilter = table.getByRole("button", { name: "筛选使用范围", exact: true });
+    const otaLink = table.getByRole("link", { name: "查看 1001OTA 详情", exact: true });
+    await expect(otaLink).toBeVisible();
+    await usageFilter.click();
+    const usage = page.getByRole("dialog", { name: "筛选使用范围", exact: true });
+    await usage.getByRole("checkbox", { name: "极光 M2", exact: true }).check();
+    await usage.getByRole("checkbox", { name: "EVT", exact: true }).check();
+    await usage.getByRole("button", { name: "应用", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.searchParams.get("project") === "1" &&
+      url.searchParams.get("f_usage_project") === "2" && url.searchParams.has("f_usage_node"));
+
+    // OTA uses EVT on N1 but only PVT on M2. COM satisfies both on M2.
+    await expect(otaLink).toHaveCount(0);
+    const comRow = table.getByRole("row").filter({ hasText: "1003COM" });
+    await expect(comRow).toContainText("极光 M2");
+    await expect(comRow).toContainText("星云 N1");
+    await usageFilter.click();
+    await usage.getByRole("link", { name: "清除本列", exact: true }).click();
+    await expect(otaLink).toBeVisible();
+
+    const nameFilter = table.getByRole("button", { name: "筛选软件包", exact: true });
+    await nameFilter.click();
+    const nameMenu = page.getByRole("dialog", { name: "筛选软件包", exact: true });
+    await nameMenu.getByRole("textbox", { name: "软件包名称", exact: true }).fill("没有匹配的软件包999");
+    await nameMenu.getByRole("button", { name: "应用", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "没有匹配的软件包", exact: true })).toBeVisible();
+    await expect(nameFilter).toBeVisible();
+    await page.getByRole("link", { name: "清除全部筛选", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.searchParams.get("project") === "1" && !url.searchParams.has("f_name"));
+    await otaLink.click();
     const drawer = page.getByTestId("package-drawer");
     await expect(drawer).toContainText("OTA 升级服务");
     await expect(drawer.getByRole("link", { name: /构建地址/ }).first()).toBeVisible();
@@ -820,7 +845,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByText("转正电子流 EF-LEGACY-CFG-991")).toBeVisible();
     await expect(page.getByText("暂无项目转测记录。")).toBeVisible();
     await page.goto("/versions?project=1&q=1002CFG+9.9.1");
-    await expect(page.getByRole("link", { name: "9.9.1" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "9.9.1", exact: true })).toBeVisible();
     await page.goto("/versions?project=2&q=1002CFG+9.9.1");
     await expect(page.getByText("未找到版本", { exact: true })).toBeVisible();
   });

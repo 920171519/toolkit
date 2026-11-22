@@ -12,20 +12,34 @@
   margin-bottom: 3px;
 }
 
+.headingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hiddenSelection {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 .actions {
   display: flex;
+  min-width: 132px;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
 }
 
 .address {
-  max-width: 190px;
+  max-width: 152px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .changeSummary {
+  min-width: 140px;
   max-width: 230px;
   white-space: normal;
   overflow-wrap: anywhere;

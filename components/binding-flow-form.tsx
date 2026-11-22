@@ -9,12 +9,14 @@ export function BindingFlowForm({
   approvers,
   currentUserId,
   scopeProjectId,
+  trialQuery,
 }: {
   requirementId: number;
   requestId: number;
   approvers: ApproverOption[];
   currentUserId: number;
   scopeProjectId?: number;
+  trialQuery: Record<string, string>;
 }) {
   const selectableApprovers = approvers.filter((approver) => approver.userId !== currentUserId);
   if (selectableApprovers.length === 0) {
@@ -24,7 +26,7 @@ export function BindingFlowForm({
   return (
     <ActionForm
       action={submitBindingFlowAction}
-      hidden={{ requirementId, requestId, scopeProjectId }}
+      hidden={{ ...trialQuery, requirementId, requestId, scopeProjectId }}
       submitText="提交绑定电子流"
       submitClassName="button-sm"
       footerNote="设备条码每行一个，支持扫码枪连续录入或一次粘贴多个条码。"
