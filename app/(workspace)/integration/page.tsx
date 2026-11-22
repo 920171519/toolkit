@@ -1,18 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { canSubmitIntegrationConclusionForProject } from "@/lib/access";
+import { BATCH_STATUS_META, type BatchStatus } from "@/lib/constants";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
-import { requireUser } from "@/lib/auth";
 import { filterOptions } from "@/lib/column-filters";
+import { historyFields, integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
+import { requireUser } from "@/lib/auth";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
-import { getBatches, getIntegrationHistoryPage, getProjectOptions, getWorkflowProjectScope } from "@/lib/workflow-queries";
-import { historyFields, historyStatuses, integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
+import { getWorkflowListState, getWorkflowPage, getWorkflowSearch } from "@/lib/workflow-list";
+import { getBatchCount, getBatches, getIntegrationHistoryPage, getProjectOptions, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
-import styles from "./history.module.css";
+import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
+import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
+import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "集成测试" };
@@ -26,92 +32,125 @@ export default async function IntegrationPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
+  const { returnTo } = getWorkflowListState(params);
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
+  const archived = project?.status === "ARCHIVED";
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
-  const active = getBatches(200, scope, "IN_TEST");
+  const activeStatuses: BatchStatus[] = ["IN_TEST"];
+  const historyStatuses: BatchStatus[] = archived ? ["IN_TEST", "COMPLETED", "TERMINATED"] : ["COMPLETED", "TERMINATED"];
+  const activeCount = archived ? 0 : getBatchCount(scope, { statuses: activeStatuses, activeProjectsOnly: true });
+  const historyCount = getBatchCount(scope, { statuses: historyStatuses });
   const historyState = readIntegrationHistory(params);
-  const history = getIntegrationHistoryPage(historyState, scope);
-  const historyParams = integrationHistoryParams({ ...historyState, page: history.page });
-  const listParams = { project: project ? String(project.id) : undefined, ...historyParams };
-  const filterHeader = { path: "/integration", params: listParams };
-  const projectOptions = project ? [project] : getProjectOptions(true).filter(({ id }) => scope === null || scope.includes(id));
+  const inHistory = archived || params.view === "history" || params.history === "1" || Object.keys(historyState.filters).length > 0;
+  const query = getWorkflowSearch(params.q);
+  const filters = { statuses: activeStatuses, query, activeProjectsOnly: true };
+  const total = inHistory ? 0 : query ? getBatchCount(scope, filters) : activeCount;
+  const pageSize = getListPageSize(params.pageSize);
+  const page = getWorkflowPage(total, pageSize, params.page);
+  const visible = inHistory ? [] : getBatches(pageSize, scope, { ...filters, offset: page.offset });
+  const history = inHistory ? getIntegrationHistoryPage(historyState, scope, { statuses: historyStatuses, query }) : undefined;
+  const historyParams = { ...integrationHistoryParams({ ...historyState, page: history?.page ?? 1 }), view: "history", q: query || undefined, returnTo };
+  const filterHeader = { path: "/integration", params: { ...historyParams, project: project ? String(project.id) : undefined } };
+  const projectOptions = inHistory ? project ? [project] : getProjectOptions(true).filter(({ id }) => scope === null || scope.includes(id)) : [];
   const projectField = { ...historyFields.project, options: filterOptions(projectOptions.map(({ id, name }) => ({ value: String(id), label: name }))) };
-  const projects = new Set(active.map((batch) => batch.projectId));
+  const statusField = { ...historyFields.status, options: historyStatuses.map((value) => ({ value, label: BATCH_STATUS_META[value].label })) };
+  const visibleProjectIds = new Set(inHistory ? [] : visible.map((batch) => batch.projectId));
+  const testingRights = new Map([...visibleProjectIds].map((id) => [id, canSubmitIntegrationConclusionForProject(user, id)]));
+  const queueHref = (showHistory: boolean, searchTerm = query, page = 1) => workflowHref("/integration", project?.id, {
+    view: showHistory ? "history" : undefined,
+    q: searchTerm || undefined,
+    page: page > 1 ? page : undefined,
+    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    returnTo,
+  });
+  const detailHref = (id: number) => workflowHref(`/integration/${id}`, project?.id, {
+    q: query || undefined,
+    page: page.current > 1 ? page.current : undefined,
+    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    returnTo,
+  });
 
   return (
     <>
       <PageHeader
-        eyebrow="Integration / In test"
         title="集成测试"
-        description={project ? `${project.name} · 查看本项目的在测批次和历史批次。` : "查看正在进行的集成测试批次和历史记录，到待转测申请页准备配套版本并发起转测。"}
-        actions={<Link href={workflowHref("/submissions", project?.id)} className="button button-primary">待转测申请 <ArrowRight size={14} /></Link>}
+        description={archived ? "项目已归档" : undefined}
+        actions={<Link href={workflowHref("/submissions", project?.id, { returnTo })} prefetch={false} className="button button-secondary">查看转测申请 <ArrowRight size={14} /></Link>}
       />
       <FlashMessage notice={notice} />
-      <div className="info-strip" style={{ marginBottom: 16 }}>
-        <span><strong>{active.length}</strong> 个批次正在测试</span>
-        <span>覆盖 <strong>{projects.size}</strong> 个项目</span>
-        <span>集成测试结论由本项目测试负责人提交并上传报告</span>
-        <span style={{ marginLeft: "auto" }}>待发起批次请到待转测申请页</span>
-      </div>
+      {!archived && <WorkflowQueueNav label="集成测试队列" views={[
+        { label: "在测批次", href: queueHref(false), count: activeCount, current: !inHistory },
+        { label: "历史批次", href: inHistory ? workflowHref("/integration", project?.id, historyParams) : queueHref(true), count: historyCount, current: inHistory },
+      ]} />}
 
-      <section className="card">
-        <div className="card-header"><div><h2 style={{ fontSize: 18 }}>当前在测批次</h2><p className="small muted" style={{ marginTop: 3 }}>每个批次只针对一个项目，包含本项目整套软件包快照。</p></div><Badge tone="sky">{active.length} 个进行中</Badge></div>
-        <div className="card-body" style={{ paddingTop: 12 }}>
-          {active.length === 0 ? (
-            <EmptyState title="当前没有集成测试中的批次" description="在待转测申请页发起整套配套转测后，批次会出现在这里。" />
-          ) : (
-            <div className="three-col">
-              {active.map((batch) => (
-                <article className="card" key={batch.id} style={{ padding: 16 }}>
-                  <div className="split-row"><div className="toolbar" style={{ gap: 7 }}><span className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{batch.code}</span><BatchStatusPill status="IN_TEST" /></div><span className="chip">{batch.projectName}</span></div>
-                  <div style={{ marginTop: 7, fontSize: 13, fontWeight: 600 }}>{batch.title}</div>
-                  <div className="small muted" style={{ marginTop: 3 }}>{formatDateTime(batch.sentAt)} 发起 · {batch.changedCount} 个变更包 / {batch.itemCount} 个配套包</div>
-                  <div style={{ marginTop: 12 }}><Link href={workflowHref(`/integration/${batch.id}`, project?.id)} className="archive-link">查看批次并提交测试结论 <ArrowRight size={11} /></Link></div>
-                </article>
-              ))}
-            </div>
-          )}
+      {history ? (
+        <section id="integration-history" className="card">
+          <div className={`card-header ${styles.listHeader}`}>
+            <h2 className={styles.tableHeading}>历史批次</h2>
+            <WorkflowListSearch action="/integration" label="批次号、标题或项目" query={query} pageSize={pageSize} showPageSize={false} fields={{ project: project?.id, view: "history", returnTo, ...historyState.filters }} />
+          </div>
+          <DirectoryFilterBar {...filterHeader} />
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="历史批次表格">
+            <table className="data-table">
+              <thead><tr>
+                <ColumnFilterHeader {...filterHeader} label="批次" fields={[historyFields.batch, historyFields.title]} />
+                <ColumnFilterHeader {...filterHeader} label="项目" fields={[projectField]} />
+                <ColumnFilterHeader {...filterHeader} label="状态" fields={[statusField]} />
+                <ColumnFilterHeader {...filterHeader} label="配套 / 变更" fields={[historyFields.items, historyFields.changed]} numeric />
+                <ColumnFilterHeader {...filterHeader} label="结论" fields={[historyFields.conclusion]} />
+                <ColumnFilterHeader {...filterHeader} label="时间" fields={[historyFields.date]} />
+                <th scope="col" aria-label="操作" />
+              </tr></thead>
+              <tbody>{history.rows.map((batch) => {
+                const detailHref = workflowHref(`/integration/${batch.id}`, project?.id, historyParams);
+                return (
+                    <tr key={batch.id}>
+                      <td><Link href={detailHref} className="archive-link mono" prefetch={false}>{batch.code}</Link><div className="small muted">{batch.title}</div></td>
+                      <td><span className="chip">{batch.projectName}</span></td>
+                      <td><BatchStatusPill status={batch.status as BatchStatus} /></td>
+                      <td className="cell-actions"><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td>
+                      <td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : batch.conclusion === "FAIL" ? "rose" : "amber"}>{conclusionLabel[batch.conclusion] ?? batch.conclusion}</Badge> : <span className="small muted">无测试结论</span>}</td>
+                      <td className="small muted">{formatDateTime(batch.completedAt ?? batch.terminatedAt ?? batch.sentAt ?? batch.createdAt)}</td>
+                      <td className="cell-actions"><Link href={detailHref} className="button button-secondary button-sm" prefetch={false}>查看记录</Link></td>
+                    </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+          {history.rows.length === 0 && <EmptyState title={(query || Object.keys(historyState.filters).length) ? "没有匹配的历史批次" : "暂无历史批次"} />}
+          <DirectoryPagination {...filterHeader} page={history.page} pages={history.pages} total={history.total} unit="个批次" pageSize={historyState.pageSize} label="历史批次分页" />
+        </section>
+      ) : <section className="card">
+        <div className={`card-header ${styles.listHeader}`}>
+          <h2 className={styles.tableHeading}>当前在测批次</h2>
+          <WorkflowListSearch action="/integration" label="批次号、标题或项目" query={query} pageSize={pageSize} fields={{ project: project?.id, returnTo }} />
         </div>
-      </section>
-
-      <details id="integration-history" className={`card ${styles.history}`} open={historyState.open}>
-        <summary className={styles.summary}>
-          <ChevronDown size={16} aria-hidden="true" />
-          <span>历史批次记录</span>
-          <Badge tone="slate">{history.total}</Badge>
-        </summary>
-        <DirectoryFilterBar {...filterHeader} />
-        <div className="table-wrap" tabIndex={0} role="region" aria-label="历史批次表格">
-          <table className="data-table">
-            <thead><tr>
-              <ColumnFilterHeader {...filterHeader} label="批次" fields={[historyFields.batch, historyFields.title]} />
-              <ColumnFilterHeader {...filterHeader} label="项目" fields={[projectField]} />
-              <ColumnFilterHeader {...filterHeader} label="状态" fields={[historyFields.status]} />
-              <ColumnFilterHeader {...filterHeader} label="配套 / 变更" fields={[historyFields.items, historyFields.changed]} numeric />
-              <ColumnFilterHeader {...filterHeader} label="结论" fields={[historyFields.conclusion]} />
-              <ColumnFilterHeader {...filterHeader} label="时间" fields={[historyFields.date]} />
-              <th scope="col" aria-label="操作" />
-            </tr></thead>
-            <tbody>{history.rows.map((batch) => {
-              const detailHref = workflowHref(`/integration/${batch.id}`, project?.id, historyParams);
-              return (
-                  <tr key={batch.id}>
-                    <td><Link href={detailHref} className="archive-link mono" prefetch={false}>{batch.code}</Link><div className="small muted">{batch.title}</div></td>
-                    <td><span className="chip">{batch.projectName}</span></td>
-                    <td><BatchStatusPill status={batch.status as (typeof historyStatuses)[number]} /></td>
-                    <td className="cell-actions"><span className="mono small">{batch.itemCount} / {batch.changedCount}</span></td>
-                    <td>{batch.conclusion ? <Badge tone={batch.conclusion === "PASS" ? "emerald" : batch.conclusion === "FAIL" ? "rose" : "amber"}>{conclusionLabel[batch.conclusion] ?? batch.conclusion}</Badge> : <span className="small muted">无测试结论</span>}</td>
-                    <td className="small muted">{formatDateTime(batch.completedAt ?? batch.terminatedAt ?? batch.sentAt ?? batch.createdAt)}</td>
-                    <td className="cell-actions"><Link href={detailHref} className="archive-link" prefetch={false}>查看</Link></td>
-                  </tr>
-              );
-            })}</tbody>
-          </table>
-        </div>
-        {history.rows.length === 0 && <EmptyState title={Object.keys(historyState.filters).length ? "没有匹配的历史批次" : "暂无历史批次"} />}
-        <DirectoryPagination {...filterHeader} page={history.page} pages={history.pages} total={history.total} unit="个批次" pageSize={historyState.pageSize} label="历史批次分页" />
-      </details>
+        {visible.length === 0 ? (
+          query ? <EmptyState title="没有匹配的批次" action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} /> : (
+            <EmptyState title="当前没有在测批次" />
+          )
+        ) : (
+          <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="在测批次列表" tabIndex={0}>
+            <table className="data-table">
+              <thead><tr><th scope="col">批次</th><th scope="col">项目</th><th scope="col">状态</th><th scope="col">配套与变更</th><th scope="col">发起时间</th><th scope="col">操作</th></tr></thead>
+              <tbody>{visible.map((batch) => {
+                const canTest = testingRights.get(batch.projectId);
+                return (
+                <tr key={batch.id}>
+                  <th scope="row"><Link href={detailHref(batch.id)} prefetch={false} className="archive-link mono">{batch.code}</Link><div className="small muted">{batch.title}</div></th>
+                  <td>{batch.projectName}</td>
+                  <td><BatchStatusPill status={batch.status as BatchStatus} /></td>
+                  <td>{batch.itemCount} 个包 · {batch.changedCount} 个变更</td>
+                  <td className={`small muted ${styles.nowrap}`}>{formatDateTime(batch.sentAt)}</td>
+                  <td className="cell-actions"><Link href={detailHref(batch.id)} prefetch={false} className={`button ${canTest ? "button-primary" : "button-secondary"} button-sm`}>{canTest ? "处理测试批次" : "查看批次进展"} <ArrowRight size={12} aria-hidden="true" /></Link></td>
+                </tr>
+              ); })}</tbody>
+            </table>
+          </div>
+        )}
+        <WorkflowListPagination label="批次列表分页" current={page.current} pages={page.pages} href={(nextPage) => queueHref(false, query, nextPage)} />
+      </section>}
     </>
   );
 }

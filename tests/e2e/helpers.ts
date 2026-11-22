@@ -9,12 +9,16 @@ export async function login(page: Page, employeeId: string) {
   await page.locator('input[name="password"]').fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: /登录工作台/ }).click();
   await page.waitForURL("**/dashboard**");
-  await expect(page.locator(".sidebar-user-name")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的工作台", exact: true })).toBeVisible();
 }
 
 export async function expectFlash(page: Page, text: string | RegExp) {
   await expect(page.locator(".flash")).toBeVisible();
   await expect(page.locator(".flash")).toContainText(text);
+}
+
+export async function confirmAction(page: Page) {
+  await page.getByRole("alertdialog").getByRole("button", { name: /^确认/ }).click();
 }
 
 export async function selectOptionContaining(select: Locator, text: string) {

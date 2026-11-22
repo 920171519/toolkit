@@ -1,95 +1,125 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
-import type { PublicProject } from "@/lib/queries";
-import { Avatar, EmptyState } from "./ui";
+import { useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import styles from "@/app/public-contacts.module.css";
+import type { ProjectContact, PublicProject } from "@/lib/queries";
+import { EmptyState } from "./ui";
 
-function ContactLine({
-  role,
-  name,
-  title,
-  employeeId,
-}: {
-  role: string;
-  name: string | null;
-  title: string | null;
-  employeeId: string | null;
-}) {
+const pageSize = 12;
+
+function normalize(value: string) {
+  return value.normalize("NFKC").toLowerCase();
+}
+
+function ContactGroup({ role, people }: { role: string; people: ProjectContact[] }) {
   return (
-    <div className="project-contact-line">
-      <Avatar name={name ?? role} size="md" />
-      <div className="project-contact-copy">
-        <span className="project-contact-role">{role}</span>
-        <span className="project-contact-name">{name ?? "待指定"}</span>
-        <span className="project-contact-role">
-          {title || "部门成员"}
-          {employeeId ? ` · ${employeeId}` : ""}
-        </span>
-      </div>
+    <div className={styles.contactGroup}>
+      <dt>{role}</dt>
+      <dd>
+        {people.length === 0 ? <span className={styles.secondary}>未分配</span> : (
+          <ul className={styles.people}>
+            {people.map((person) => (
+              <li key={person.id}>
+                <span className={styles.personName}>{person.name}</span>
+                <span className={styles.secondary}>{[person.title !== role && person.title, person.employeeId].filter(Boolean).join(" · ")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </dd>
     </div>
   );
 }
 
 export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
   const [query, setQuery] = useState("");
-  const normalized = query.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (!normalized) return projects;
-    return projects.filter((project) =>
-      [
-        project.name,
-        ...project.pms.flatMap((person) => [person.name, person.employeeId, person.title]),
-        ...project.softwareManagers.flatMap((person) => [person.name, person.employeeId, person.title]),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
-    );
-  }, [projects, normalized]);
+  const [page, setPage] = useState(1);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const directory = useRef<HTMLElement>(null);
+  const index = useMemo(() => projects.map((project) => ({
+    project,
+    terms: normalize([
+      project.name,
+      project.code,
+      ...[...project.pms, ...project.softwareManagers].flatMap((person) => [person.name, person.employeeId, person.title]),
+    ].join(" ")),
+  })), [projects]);
+  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  const filtered = index.filter((entry) => terms.every((term) => entry.terms.includes(term)));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const offset = (currentPage - 1) * pageSize;
+  const visible = filtered.slice(offset, offset + pageSize);
+
+  function changeSearch(value: string) {
+    setQuery(value);
+    setPage(1);
+  }
+
+  function changePage(nextPage: number) {
+    setPage(nextPage);
+    directory.current?.focus();
+  }
 
   return (
-    <div id="project-contacts">
-      <div className="directory-search-bar" role="search">
-        <label className="directory-search">
-          <Search aria-hidden="true" />
+    <section ref={directory} tabIndex={-1} id="project-contacts" aria-label="在行项目联系人">
+      <div className={styles.searchBar} role="search" aria-label="查找公开联系人">
+        <div className={styles.searchControl}>
+          <Search size={17} aria-hidden="true" />
           <input
             className="input"
+            ref={searchInput}
+            type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索项目、PM 或软件经理"
+            onChange={(event) => changeSearch(event.target.value)}
+            placeholder="项目名称、代号、姓名或工号"
             aria-label="搜索项目联系人"
+            maxLength={100}
           />
-        </label>
-        <p className="small muted" role="status">{filtered.length} 个项目</p>
+          {query && (
+            <button type="button" className={styles.clear} onClick={() => {
+              changeSearch("");
+              searchInput.current?.focus();
+            }} aria-label="清除搜索">
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <p className={styles.resultCount} role="status">{filtered.length} 个项目</p>
       </div>
 
-      {filtered.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="card">
           <EmptyState
-            title="没有匹配的项目联系人"
-            description="可以尝试搜索项目名称、PM 姓名或软件经理姓名。"
+            title={terms.length > 0 ? "没有匹配的项目联系人" : "暂无在行项目"}
           />
         </div>
       ) : (
-        <div className="project-contact-grid">
-          {filtered.map((project) => (
-            <article className="card project-contact-card" key={project.id}>
+        <div className={styles.grid}>
+          {visible.map(({ project }) => (
+            <article className={`card project-contact-card ${styles.project}`} key={project.id}>
               <h2>{project.name}</h2>
-              <div className="project-contact-people">
-                {project.pms.map((person) => (
-                  <ContactLine key={`pm-${person.id}`} role="PM" name={person.name} title={person.title} employeeId={person.employeeId} />
-                ))}
-                {project.pms.length === 0 && <ContactLine role="PM" name={null} title={null} employeeId={null} />}
-                {project.softwareManagers.map((person) => (
-                  <ContactLine key={`sm-${person.id}`} role="软件经理" name={person.name} title={person.title} employeeId={person.employeeId} />
-                ))}
-                {project.softwareManagers.length === 0 && <ContactLine role="软件经理" name={null} title={null} employeeId={null} />}
-              </div>
+              {!normalize(project.name).split(/\s+/).includes(normalize(project.code)) && <span className={styles.secondary}>{project.code}</span>}
+              <dl className={styles.contactGroups}>
+                <ContactGroup role="PM" people={project.pms} />
+                <ContactGroup role="软件经理" people={project.softwareManagers} />
+              </dl>
             </article>
           ))}
         </div>
       )}
-    </div>
+      {pageCount > 1 && (
+        <nav className={styles.pagination} aria-label="项目联系人分页">
+          <button type="button" className="button button-secondary" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>
+            <ChevronLeft size={15} aria-hidden="true" /> 上一页
+          </button>
+          <span aria-live="polite">第 {currentPage} / {pageCount} 页</span>
+          <button type="button" className="button button-secondary" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}>
+            下一页 <ChevronRight size={15} aria-hidden="true" />
+          </button>
+        </nav>
+      )}
+    </section>
   );
 }

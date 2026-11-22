@@ -10,6 +10,7 @@ import { getListPageSize } from "@/lib/list-pagination";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialColumnFilter, trialDefaultPageSize, trialLegacyFilter, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
 import styles from "./trial-queue-table.module.css";
+import { TrialBindingFocus } from "./trial-binding-focus";
 
 export type TrialTableColumn<Row> = {
   key: TrialColumnKey;
@@ -17,6 +18,7 @@ export type TrialTableColumn<Row> = {
   value: (row: Row) => string | number;
   sortValue?: (row: Row) => string | number;
   cell?: (row: Row) => ReactNode;
+  filterValues?: (row: Row) => string[];
   choices?: (row: Row) => ColumnFilterOption[];
 };
 
@@ -64,7 +66,7 @@ export function TrialQueueTable<Row>({
         return matchesChoiceFilter(query, filter.key, column.choices?.(row).map((option) => option.value) ?? []);
       }
       if (filter.kind === "number" && typeof value === "number") return matchesNumberFilter(query, filter.key, value);
-      return matchesTextFilter(query, filter.key, String(value));
+      return (column.filterValues?.(row) ?? [String(value)]).some((candidate) => matchesTextFilter(query, filter.key, candidate));
     });
   });
   if (sort) {
@@ -90,6 +92,7 @@ export function TrialQueueTable<Row>({
 
   return (
     <section className={`card ${styles.queue}`} aria-labelledby={titleId} id={kind === "binding" ? "binding-queue" : undefined} tabIndex={kind === "binding" ? -1 : undefined}>
+      {kind === "binding" && <TrialBindingFocus />}
       <div className={`card-header ${styles.header}`}>
         <div>
           <h2 id={titleId}>{title}</h2>

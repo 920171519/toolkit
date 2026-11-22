@@ -1,0 +1,218 @@
+.navigation {
+  max-width: 1100px;
+}
+
+.accountLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page {
+  max-width: 1100px;
+  padding-block: 48px;
+}
+
+.heading {
+  margin-bottom: 24px;
+}
+
+.heading h1 {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.searchControl {
+  position: relative;
+  flex: 1 1 288px;
+  max-width: 440px;
+  min-width: 0;
+}
+
+.searchControl > svg {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 12px;
+  inset-block-start: calc(50% - 8px);
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.searchControl input {
+  min-height: 48px;
+  padding-inline: 36px 52px;
+  font-size: 16px;
+}
+
+.searchControl input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.clear {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: none;
+  transform: translateY(-50%);
+}
+
+.clear > svg {
+  stroke-width: 1.5;
+}
+
+.clear:focus-visible {
+  outline-offset: -2px;
+}
+
+.clear:hover {
+  color: var(--brand);
+  background: var(--surface-muted);
+}
+
+.resultCount,
+.secondary {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.resultCount {
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+
+.project.project {
+  min-width: 0;
+  padding: 20px;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+.project.project h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: normal;
+}
+
+.contactGroups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.contactGroup dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.contactGroup dd,
+.people {
+  margin: 0;
+}
+
+.people {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.personName,
+.people .secondary {
+  display: block;
+}
+
+.personName {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 920px) {
+  .page {
+    padding-block: 32px 40px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .navigation .accountLinks :global(.button),
+  .pagination :global(.button) {
+    min-height: 44px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .page {
+    padding-block: 24px 32px;
+  }
+
+  .heading {
+    margin-bottom: 16px;
+  }
+
+  .heading h1 {
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .searchControl {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .project.project {
+    padding: 16px;
+  }
+}

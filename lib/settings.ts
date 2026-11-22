@@ -3,8 +3,8 @@ import "server-only";
 import { all, one, run, transaction } from "./db";
 import { ROLES, type Role } from "./constants";
 import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
-import { canManagePackageArea, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject, isProjectSoftwareManager } from "./access";
-import { DEFAULT_PROJECT_STAGE, isProjectStage, type ProjectStage } from "./project-stage";
+import { canManagePackageArea, canManageProjectWorkflowForProject, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
+import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { assert } from "./services";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
@@ -169,6 +169,8 @@ export function assignAreaProjectLead(
   areaId: number,
   projectId: number,
   userId: number,
+  expectedAssignmentId?: number,
+  expectedUserId?: number,
 ) {
   assert(canManageAreas(actor) || isAreaLeader(actor.id, areaId), "只有责任田主管或系统管理员可以添加项目负责人。", "FORBIDDEN");
   const area = one<{ id: number; name: string }>("SELECT id, name FROM areas WHERE id = ?", areaId);
@@ -180,20 +182,24 @@ export function assignAreaProjectLead(
     userId,
   );
   assert(person, "负责人不存在或已停用。");
-  const existing = one<{ id: number }>(
-    "SELECT id FROM area_project_leads WHERE area_id = ? AND project_id = ?",
-    areaId,
-    projectId,
-  );
-  assert(!existing, "该项目在此责任田下已经设置了负责人，请先移除后再重新指定。");
   transaction(() => {
-    run(
-      "INSERT INTO area_project_leads (area_id, project_id, user_id, created_at) VALUES (?, ?, ?, ?)",
+    const existing = one<{ id: number; user_id: number }>(
+      "SELECT id, user_id FROM area_project_leads WHERE area_id = ? AND project_id = ?",
       areaId,
       projectId,
-      userId,
-      new Date().toISOString(),
     );
+    assert(existing?.id === expectedAssignmentId && existing?.user_id === expectedUserId, "当前负责人配置已变化，请刷新后再操作。");
+    if (existing) {
+      run("UPDATE area_project_leads SET user_id = ? WHERE id = ?", userId, existing.id);
+    } else {
+      run(
+        "INSERT INTO area_project_leads (area_id, project_id, user_id, created_at) VALUES (?, ?, ?, ?)",
+        areaId,
+        projectId,
+        userId,
+        new Date().toISOString(),
+      );
+    }
     audit(
       actor.id,
       "ASSIGN_AREA_PROJECT_LEAD",
@@ -266,7 +272,9 @@ export type SaveProjectInput = {
 
 export function saveProject(actor: SessionUser, input: SaveProjectInput): number {
   assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目。", "FORBIDDEN");
-  if (!input.id) {
+  if (input.id) {
+    assertProjectConfigurationAccess(actor, input.id);
+  } else {
     assert(isAdmin(actor), "只有系统管理员可以新建项目。", "FORBIDDEN");
   }
   assert(input.name.trim().length >= 2, "项目名称至少需要 2 个字符。");
@@ -300,13 +308,15 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     assert(softwareManager.role === "SOFTWARE_MANAGER", "选择的软件经理必须具有“软件经理”角色。");
   }
   assert(["ACTIVE", "PAUSED", "ARCHIVED"].includes(input.status), "项目状态无效。");
-  assert(input.stage === undefined || isProjectStage(input.stage), "项目阶段无效。");
+  const requestedStage = input.stage;
+  assert(requestedStage === undefined || isProjectStage(requestedStage), "项目阶段无效。");
   return transaction(() => {
     let projectId = input.id ?? 0;
+    let stage = requestedStage ?? DEFAULT_PROJECT_STAGE;
     if (projectId) {
-      const existing = one<{ id: number; sort_order: number; stage: ProjectStage }>("SELECT id, sort_order, stage FROM projects WHERE id = ?", projectId);
+      const existing = one<{ sort_order: number; stage: ProjectStage }>("SELECT sort_order, stage FROM projects WHERE id = ?", projectId);
       assert(existing, "项目不存在。", "NOT_FOUND");
-      assert(isAdmin(actor) || isProjectSoftwareManager(actor.id, projectId), "只能维护负责的项目。", "FORBIDDEN");
+      stage = requestedStage ?? existing.stage;
       const sortOrder = input.sortOrder == null ? existing.sort_order : Math.max(0, Math.floor(input.sortOrder));
       run(
         `UPDATE projects
@@ -319,7 +329,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         pmUserIds[0],
         softwareManagerIds[0],
         input.status,
-        input.stage ?? existing.stage,
+        stage,
         sortOrder,
         projectId,
       );
@@ -338,7 +348,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         pmUserIds[0],
         softwareManagerIds[0],
         input.status,
-        input.stage ?? DEFAULT_PROJECT_STAGE,
+        stage,
         sortOrder,
         new Date().toISOString(),
       );
@@ -358,7 +368,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
       input.id ? "UPDATE_PROJECT" : "CREATE_PROJECT",
       "PROJECT",
       projectId,
-      `${input.id ? "更新" : "创建"}项目：${input.name.trim()}`,
+      `${input.id ? "更新" : "创建"}项目：${input.name.trim()}（项目阶段 ${PROJECT_STAGE_META[stage].label}）`,
     );
     return projectId;
   });
@@ -369,6 +379,10 @@ export type NodeOwnersInput = {
   bindingApproverId: number | null;
   requiredBindingCount: number;
 };
+
+function assertProjectConfigurationAccess(actor: SessionUser, projectId: number) {
+  assert(canManageProjectWorkflowForProject(actor, projectId), "只有负责本项目的软件经理或系统管理员可以修改项目配置。", "FORBIDDEN");
+}
 
 function validateNodeOwners(input: NodeOwnersInput) {
   assert(input.bindingOwnerId, "请选择设备条码绑定验证责任人。");
@@ -406,6 +420,7 @@ export function addProjectNode(
   assert(name.trim().length >= 1 && name.trim().length <= 20, "节点名称需为 1-20 个字符。");
   const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
   assert(project, "项目不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, projectId);
   validateNodeOwners(owners);
   const duplicate = one<{ id: number }>(
     "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?)",
@@ -463,6 +478,7 @@ export function updateProjectNode(
     nodeId,
   );
   assert(node, "项目节点不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, node.project_id);
   const duplicate = one<{ id: number }>(
     "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?) AND id != ?",
     node.project_id,
@@ -496,6 +512,7 @@ export function updateProjectNode(
       `更新 ${node.project_name} 节点 ${node.old_name} 的绑定责任人、审批人与通过数量`,
     );
   });
+  return node.project_id;
 }
 
 export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userId: number) {
@@ -506,6 +523,7 @@ export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userI
     nodeId,
   );
   assert(node, "项目节点不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, node.project_id);
   const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
   assert(person, "审批人不存在或已停用。");
   const existing = one<{ id: number }>(
@@ -523,6 +541,7 @@ export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userI
     );
     audit(actor.id, "ADD_NODE_APPROVER", "PROJECT", node.project_id, `${node.project_name}/${node.name} 添加绑定电子流审批人 ${person.name}`);
   });
+  return node.project_id;
 }
 
 export function removeProjectNodeApprover(actor: SessionUser, assignmentId: number) {
@@ -547,6 +566,7 @@ export function removeProjectNodeApprover(actor: SessionUser, assignmentId: numb
     assignmentId,
   );
   assert(assignment, "节点审批人配置不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, assignment.project_id);
   assert(assignment.user_id !== assignment.primary_approver_id, "主审批人不能从审批人范围移除，请先修改节点审批人。");
   const count = one<{ count: number }>(
     "SELECT COUNT(*) AS count FROM project_node_approvers WHERE node_id = ?",
@@ -557,6 +577,7 @@ export function removeProjectNodeApprover(actor: SessionUser, assignmentId: numb
     run("DELETE FROM project_node_approvers WHERE id = ?", assignmentId);
     audit(actor.id, "REMOVE_NODE_APPROVER", "PROJECT", assignment.project_id, `${assignment.project_name}/${assignment.node_name} 移除绑定电子流审批人 ${assignment.user_name}`);
   });
+  return { projectId: assignment.project_id, nodeId: assignment.node_id };
 }
 
 export function deleteProjectNode(actor: SessionUser, nodeId: number) {
@@ -567,6 +588,7 @@ export function deleteProjectNode(actor: SessionUser, nodeId: number) {
     nodeId,
   );
   assert(node, "项目节点不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, node.project_id);
   const usageCount = one<{ count: number }>(
     "SELECT COUNT(*) AS count FROM package_usages WHERE node_id = ?",
     nodeId,
@@ -584,12 +606,14 @@ export function deleteProjectNode(actor: SessionUser, nodeId: number) {
     run("DELETE FROM project_nodes WHERE id = ?", nodeId);
     audit(actor.id, "DELETE_PROJECT_NODE", "PROJECT", node.project_id, `删除 ${node.project_name} 的节点 ${node.name}`);
   });
+  return node.project_id;
 }
 
 export function deleteProject(actor: SessionUser, projectId: number) {
   assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目。", "FORBIDDEN");
   const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
   assert(project, "项目不存在。", "NOT_FOUND");
+  assertProjectConfigurationAccess(actor, projectId);
   const usageCount = one<{ count: number }>(
     "SELECT COUNT(*) AS count FROM package_usages WHERE project_id = ?",
     projectId,

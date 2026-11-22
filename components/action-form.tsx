@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 import { AlertCircle, LoaderCircle } from "lucide-react";
+import { DialogSurface } from "@/components/form-dialog";
 import type { ActionState } from "@/lib/action-state";
 
 type Action = (prevState: ActionState, formData: FormData) => Promise<ActionState>;
 
- type Props = {
+type Props = {
   action: Action;
   children?: ReactNode;
   submitText?: string;
@@ -55,16 +56,40 @@ export function ActionForm({
   testId,
 }: Props) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [confirmation, setConfirmation] = useState<{ text: string; danger: boolean } | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const submitter = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
+  const confirmed = useRef(false);
+
+  function submitConfirmed() {
+    setConfirmation(null);
+    confirmed.current = true;
+    try {
+      const button = submitter.current;
+      form.current?.requestSubmit(button?.form === form.current ? button : undefined);
+    } finally {
+      confirmed.current = false;
+    }
+  }
 
   return (
+    <>
     <form
+      ref={form}
       action={formAction}
       className={className}
       data-testid={testId}
       onSubmit={(event) => {
-        if (confirmMessage && !window.confirm(confirmMessage)) {
-          event.preventDefault();
-        }
+        if (!confirmMessage || confirmed.current) return;
+        event.preventDefault();
+        const nativeSubmitter = (event.nativeEvent as SubmitEvent).submitter;
+        submitter.current = nativeSubmitter instanceof HTMLButtonElement || nativeSubmitter instanceof HTMLInputElement ? nativeSubmitter : null;
+        const button = submitter.current;
+        const secondary = secondarySubmit && button?.name === "decision" && button.value === secondarySubmit.value;
+        setConfirmation({
+          text: secondary ? secondarySubmit.text : submitText,
+          danger: (secondary ? secondarySubmit.variant : submitVariant)?.includes("danger") ?? false,
+        });
       }}
       title={title}
     >
@@ -77,7 +102,7 @@ export function ActionForm({
       {children}
       {state?.error && (
         <div className="form-error" role="alert">
-          <AlertCircle size={14} strokeWidth={2} style={{ marginTop: 1, flex: "none" }} />
+          <AlertCircle size={14} strokeWidth={2} style={{ marginTop: 1, flex: "none" }} aria-hidden="true" />
           <span>{state.error}</span>
         </div>
       )}
@@ -91,6 +116,7 @@ export function ActionForm({
               value={secondarySubmit.value}
               className={`${variantClass[secondarySubmit.variant ?? "secondary"]} ${submitClassName}`}
               disabled={pending || disabled}
+              aria-haspopup={confirmMessage ? "dialog" : undefined}
             >
               {pending ? pendingText : secondarySubmit.text}
             </button>
@@ -101,17 +127,24 @@ export function ActionForm({
             value={submitValue}
             className={`${variantClass[submitVariant]} ${submitClassName}`}
             disabled={pending || disabled}
+            aria-haspopup={confirmMessage ? "dialog" : undefined}
           >
             {pending && (
-              <LoaderCircle size={14} strokeWidth={2} style={{ animation: "spin 1s linear infinite" }} />
+              <LoaderCircle size={14} strokeWidth={2} className="animate-spin" aria-hidden="true" />
             )}
             {pending ? pendingText : submitText}
           </button>
         </div>
       )}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
     </form>
+    {confirmation && confirmMessage && (
+      <DialogSurface alert title={confirmation.text} description={confirmMessage} returnFocus={submitter} onClose={() => setConfirmation(null)}>
+        <div className="form-footer">
+          <button type="button" className="button button-secondary" data-dialog-autofocus onClick={() => setConfirmation(null)}>取消</button>
+          <button type="button" className={variantClass[confirmation.danger ? "danger" : "primary"]} onClick={submitConfirmed}>确认{confirmation.text}</button>
+        </div>
+      </DialogSurface>
+    )}
+    </>
   );
 }

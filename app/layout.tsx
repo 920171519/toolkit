@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import "@fontsource-variable/noto-sans-sc";
 import "./globals.css";
 import "./site.css";
+import "./workspace.css";
 
 export const metadata: Metadata = {
   title: {

@@ -22,7 +22,7 @@ test("软件包详情在关闭后可再次打开并保留项目和表格筛选",
   await trigger.click();
   await expect(heading).toBeVisible();
 
-  await page.locator(".drawer-backdrop").click({ position: { x: 16, y: 100 } });
+  await page.mouse.click(16, 100);
   await expect(drawer).toBeHidden();
   await expect(page).toHaveURL(hasFilterWithoutDrawer);
 
@@ -38,7 +38,7 @@ test("软件包详情在关闭后可再次打开并保留项目和表格筛选",
 
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-  await page.getByRole("link", { name: "1001OTA", exact: true }).click();
+  await page.getByRole("link", { name: "查看 1001OTA 详情", exact: true }).click();
   await expect(heading).toBeVisible();
   await drawer.getByRole("button", { name: "关闭详情" }).click();
   await expect(drawer).toBeHidden();

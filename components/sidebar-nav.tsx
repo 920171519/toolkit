@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Boxes,
   ClipboardCheck,
@@ -19,8 +19,6 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
-import { workflowHref } from "@/lib/workflow-links";
-import { findWorkspaceProject } from "./workspace-project";
 
 export type SidebarItem = {
   href: string;
@@ -28,6 +26,8 @@ export type SidebarItem = {
   icon: string;
   count?: number;
 };
+
+export type SidebarGroup = { label: string; items: SidebarItem[] };
 
 const iconMap = {
   dashboard: Gauge,
@@ -48,45 +48,30 @@ const iconMap = {
   checks: ClipboardCheck,
 } as const;
 
-function Item({ item, pathname }: { item: SidebarItem; pathname: string }) {
+function Item({ item, pathname, onNavigate }: { item: SidebarItem; pathname: string; onNavigate?: () => void }) {
   const Icon = iconMap[item.icon as keyof typeof iconMap] ?? Boxes;
   const route = item.href.split("?", 1)[0];
   const active = pathname === route || (route !== "/" && pathname.startsWith(route + "/"));
   return (
-    <Link href={item.href} className="sidebar-link" data-active={active} aria-current={active ? "page" : undefined} prefetch={false}>
-      <Icon size={15} strokeWidth={1.8} />
+    <Link href={item.href} className="sidebar-link" data-active={active} aria-current={active ? pathname === route ? "page" : "location" : undefined} prefetch={false} onClick={onNavigate}>
+      <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
       <span>{item.label}</span>
       {item.count !== undefined && item.count > 0 && <span className="sidebar-link-count">{item.count}</span>}
     </Link>
   );
 }
 
-export function SidebarNav({
-  groups,
-  workflowProjects,
-}: {
-  groups: Array<{ label: string; items: SidebarItem[]; projectScoped?: boolean }>;
-  workflowProjects: Array<{ id: number; name: string }>;
-}) {
+export function SidebarNav({ groups, onNavigate }: { groups: SidebarGroup[]; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const search = useSearchParams();
-  const workflowPaths = groups.find((group) => group.projectScoped)?.items.map((item) => item.href) ?? [];
-  const project = findWorkspaceProject(pathname, search.getAll("project"), workflowPaths, workflowProjects);
-  const projectDetail = /^\/projects\/\d+$/.test(pathname);
   return (
     <>
-      {groups.map((group) => {
-        if (group.items.length === 0 || Boolean(group.projectScoped) !== Boolean(project) || (projectDetail && !project)) return null;
-        const label = project ? `${project.name} · 项目流程` : group.label;
-        const items = project
-          ? group.items.map((item) => ({ ...item, href: workflowHref(item.href, project.id) }))
-          : group.items;
+      {groups.filter((group) => group.items.length > 0).map((group, index) => {
         return (
-          <div key={group.label}>
-            <div className="sidebar-section-label">{label}</div>
-            <nav className="sidebar-nav" aria-label={label}>
-              {items.map((item) => (
-                <Item key={item.href} item={item} pathname={pathname} />
+          <div className="sidebar-group" key={group.label}>
+            {index > 0 && <div className="sidebar-section-label">{group.label}</div>}
+            <nav className="sidebar-nav" aria-label={group.label}>
+              {group.items.map((item) => (
+                <Item key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
               ))}
             </nav>
           </div>

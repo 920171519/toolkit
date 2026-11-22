@@ -1,20 +1,33 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 
-test("项目总览和项目工作区分别显示对应侧栏，退出和返回保留正确范围", async ({ page }) => {
+test("项目总览与独立项目工作区分别显示对应入口，流程保留项目范围", async ({ page }) => {
   await login(page, "ADMIN001");
   await page.goto("/overview");
   const sidebar = page.locator("aside.sidebar");
-  const mainMenu = ["我的工作台", "项目总览", "责任田", "项目配置", "软件包配置", "人员与角色"];
-  const projectMenu = ["软件版本总览", "待转测申请", "集成测试", "试制与绑定验证", "转正发布", "版本全链路"];
-  await expect(sidebar.locator("nav a")).toHaveText(mainMenu);
+  const sidebarDestinations = () => sidebar.locator("nav").getByRole("link").evaluateAll((links) => links.map((link) => [link.textContent?.trim(), link.getAttribute("href")]));
+  const globalLinks = [
+    ["我的工作台", "/dashboard"],
+    ["项目总览", "/overview"],
+    ["责任田", "/settings/areas"],
+    ["项目配置", "/settings/projects"],
+    ["软件包配置", "/settings/packages"],
+    ["人员与角色", "/settings/users"],
+  ];
+  expect(await sidebarDestinations()).toEqual(globalLinks);
   await page.getByRole("link", { name: "极光 M2", exact: true }).click();
   await expect(page.getByRole("heading", { name: "极光 M2", exact: true })).toBeVisible();
   const projectId = new URL(page.url()).pathname.split("/").at(-1);
-  const navigation = page.getByRole("navigation", { name: "极光 M2 · 项目流程" });
-  const projectNavigation = page.getByRole("navigation", { name: "项目导航", exact: true });
-  await expect(projectNavigation.locator("strong")).toHaveText("极光 M2");
-  await expect(sidebar.locator("nav a")).toHaveText(projectMenu);
+  const navigation = sidebar.getByRole("navigation", { name: "软件包流程" });
+  const workflowLinks = [
+    ["软件版本总览", "packages"],
+    ["待转测申请", "submissions"],
+    ["集成测试", "integration"],
+    ["试制与绑定验证", "trial"],
+    ["转正发布", "formal"],
+    ["版本全链路", "versions"],
+  ].map(([label, route]) => [label, `/${route}?project=${projectId}`]);
+  expect(await sidebarDestinations()).toEqual(workflowLinks);
 
   await navigation.getByRole("link", { name: "软件版本总览" }).click();
   await expect(page).toHaveURL(new RegExp(`/packages\\?project=${projectId}$`));
@@ -28,9 +41,9 @@ test("项目总览和项目工作区分别显示对应侧栏，退出和返回�
   await navigation.getByRole("link", { name: "集成测试" }).click();
   await expect(page.getByText("B121", { exact: true })).toBeVisible();
   await expect(page.getByText("B120", { exact: true })).toHaveCount(0);
-  await page.getByRole("link", { name: "查看批次并提交测试结论" }).click();
+  await page.locator("main").getByRole("link", { name: /查看批次进展|处理测试批次/ }).click();
   await expect(page).toHaveURL(new RegExp(`/integration/\\d+\\?project=${projectId}$`));
-  await page.getByRole("link", { name: "返回列表" }).click();
+  await page.getByRole("link", { name: "返回在测批次" }).click();
   await expect(page).toHaveURL(new RegExp(`/integration\\?project=${projectId}$`));
 
   await navigation.getByRole("link", { name: "试制与绑定验证" }).click();
@@ -38,14 +51,14 @@ test("项目总览和项目工作区分别显示对应侧栏，退出和返回�
   await navigation.getByRole("link", { name: "转正发布" }).click();
   await expect(page).toHaveURL(new RegExp(`/formal\\?project=${projectId}$`));
 
-  await expect(sidebar.locator("nav a")).toHaveText(projectMenu);
-  await expect(projectNavigation.getByRole("link", { name: "极光 M2" })).toHaveAttribute("href", "/projects/" + projectId);
-  await projectNavigation.getByRole("link", { name: "返回项目总览", exact: true }).click();
+  await page.locator(".topbar").getByRole("link", { name: "项目总览" }).click();
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(sidebar.locator("nav a")).toHaveText(mainMenu);
+  await expect(navigation).toHaveCount(0);
+  expect(await sidebarDestinations()).toEqual(globalLinks);
   await page.goBack();
-  await expect(page).toHaveURL(/\/formal\?project=2$/);
-  await expect(sidebar.locator("nav a")).toHaveText(projectMenu);
+  await expect(navigation).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/formal\\?project=${projectId}$`));
+  expect(await sidebarDestinations()).toEqual(workflowLinks);
 });
 
 test("可按列筛选版本全链路，项目追溯按项目范围展示证据", async ({ page }) => {
@@ -74,7 +87,7 @@ test("可按列筛选版本全链路，项目追溯按项目范围展示证据",
   await page.locator("main").getByRole("link", { name: "极光 M2", exact: true }).click();
   await expect(page).toHaveURL(/\/projects\/\d+$/);
   const projectId = new URL(page.url()).pathname.split("/").at(-1);
-  const navigation = page.getByRole("navigation", { name: "极光 M2 · 项目流程" });
+  const navigation = page.locator("aside.sidebar").getByRole("navigation", { name: "软件包流程" });
   await navigation.getByRole("link", { name: "版本全链路" }).click();
   await filterVersionTrace();
   await page.getByRole("link", { name: "全链路追溯", exact: true }).click();
@@ -98,7 +111,7 @@ test("登录后可看全部项目、按阶段筛选，未分配项目只展示�
   await login(page, "MGR001");
   await page.goto("/overview");
   const list = page.getByRole("region", { name: "项目列表", exact: true });
-  const stageFilter = list.getByRole("button", { name: "筛选阶段", exact: true });
+  const stageFilter = list.getByRole("button", { name: "筛选产品阶段", exact: true });
   await expect(stageFilter).toBeVisible();
   await expect(list.getByRole("columnheader", { name: "状态", exact: true })).toHaveCount(0);
   await expect(list.locator(".project-overview-name")).toHaveText(["星云 N1", "极光 M2", "磐石 T3", "远山 X0"]);
@@ -114,7 +127,7 @@ test("登录后可看全部项目、按阶段筛选，未分配项目只展示�
   await expect(list.getByRole("combobox", { name: "每页条数", exact: true })).toHaveValue("10");
   await list.getByRole("link", { name: "极光 M2", exact: true }).click();
   await expect(page.getByRole("heading", { name: "极光 M2", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "项目基本资料" })).toContainText("需要项目流程权限");
+  await expect(page.getByRole("region", { name: "项目访问范围" })).toContainText("项目流程需要分配权限");
   await expect(page.locator("aside.sidebar nav a")).toHaveCount(0);
   await expect(page.locator("#packages")).toHaveCount(0);
   await expect(page.locator("#batches")).toHaveCount(0);
@@ -146,9 +159,13 @@ test("项目列筛选可组合多位 PM，并从项目详情恢复列表条件",
   overviewParams.sort();
   await projects.first().click();
   await expect(page.getByRole("heading", { name: "极光 M2", exact: true })).toBeVisible();
-  const projectMenu = page.getByRole("navigation", { name: "极光 M2 · 项目流程" });
-  await expect(projectMenu.getByRole("link", { name: "软件版本总览" })).toHaveAttribute("href", "/packages?project=2");
-  await page.getByRole("link", { name: "返回项目总览", exact: true }).click();
+  const projectMenu = page.locator("aside.sidebar").getByRole("navigation", { name: "软件包流程" });
+  const packagesHref = await projectMenu.getByRole("link", { name: "软件版本总览" }).getAttribute("href");
+  const packagesUrl = new URL(packagesHref ?? "", page.url());
+  expect(packagesUrl.pathname).toBe("/packages");
+  expect(packagesUrl.searchParams.get("project")).toBe("2");
+  expect(packagesUrl.searchParams.get("returnTo")).toContain("f_pm=");
+  await page.locator(".topbar").getByRole("link", { name: "项目总览", exact: true }).click();
   await expect(page).toHaveURL((url) => {
     url.searchParams.sort();
     return url.pathname === "/overview" && url.searchParams.toString() === overviewParams.toString();
@@ -165,42 +182,81 @@ test("项目列筛选可组合多位 PM，并从项目详情恢复列表条件",
   await expect(projects).toHaveText(["星云 N1", "极光 M2"]);
   await expect(list.getByRole("combobox", { name: "每页条数" })).toHaveValue("10");
 
-  const crafted = new URLSearchParams({ overviewQuery: "//example.invalid&f_stage=TR1&f_unknown=1&project=4&flash=notice" });
+  const crafted = new URLSearchParams({ returnTo: "/overview?f_stage=TR1&f_unknown=1&project=4&flash=notice" });
   await page.goto(`/projects/2?${crafted}`);
-  await expect(page.getByRole("link", { name: "返回项目总览", exact: true })).toHaveAttribute("href", "/overview?f_stage=TR1");
+  const back = page.locator(".topbar").getByRole("link", { name: "项目总览", exact: true });
+  await expect(back).toHaveAttribute("href", "/overview?f_stage=TR1");
+  await page.goto(`/projects/2?${new URLSearchParams({ returnTo: "//example.invalid/overview?f_stage=TR1" })}`);
+  await expect(back).toHaveAttribute("href", "/overview");
 });
 
 test("项目经理在配置中保存本项目阶段，项目总览按该阶段筛选", async ({ page }) => {
   await login(page, "MGR001");
   await page.goto("/settings/projects");
   await expect(page.getByRole("heading", { name: "极光 M2", exact: true })).toHaveCount(0);
-  const card = page.locator("section.card").filter({ has: page.getByRole("heading", { name: "星云 N1", exact: true }) });
-  await card.getByText("编辑项目", { exact: true }).click();
-  const form = card.getByTestId("edit-project-form-1");
+  await page.getByRole("link", { name: "配置星云 N1", exact: true }).click();
+  await page.getByTestId("edit-project-trigger").click();
+  const form = page.getByTestId("edit-project-form-1");
   await form.getByRole("combobox", { name: "项目阶段", exact: true }).selectOption("TR4");
   await form.getByRole("button", { name: "保存项目配置" }).click();
   await expect(page.getByText("项目配置已更新。")).toBeVisible();
   await page.goto("/overview?stage=TR4");
   await expect(page.locator(".project-overview-name")).toHaveText(["星云 N1"]);
-  await page.goto("/settings/projects");
-  await card.getByText("编辑项目", { exact: true }).click();
+  await page.goto("/settings/projects/1");
+  await page.getByTestId("edit-project-trigger").click();
   await expect(form.locator("select[name=status]")).toHaveValue("ACTIVE");
   await form.getByRole("combobox", { name: "项目阶段", exact: true }).selectOption("TR1");
   await form.getByRole("button", { name: "保存项目配置" }).click();
   await expect(page.getByText("项目配置已更新。")).toBeVisible();
 });
 
-test("窄屏可进入项目流程并从顶部返回全部项目", async ({ page }) => {
+test("窄屏菜单随项目切换，支持键盘操作和返回项目总览", async ({ page }) => {
   await login(page, "ADMIN001");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/overview");
-  await page.getByRole("link", { name: "星云 N1", exact: true }).click();
-  const projectMenu = page.getByRole("navigation", { name: "星云 N1 · 项目流程" });
-  await expect(projectMenu.getByRole("link")).toHaveCount(6);
-  await projectMenu.getByRole("link", { name: "集成测试", exact: true }).click();
-  await expect(page).toHaveURL(/\/integration\?project=1$/);
-  await expect(page.locator(".project-breadcrumb-name")).toHaveText("星云 N1");
-  await page.getByRole("link", { name: "返回项目总览", exact: true }).click();
-  await expect(page).toHaveURL(/\/overview$/);
+  await page.locator("main").getByRole("link", { name: "极光 M2", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects\/2$/);
+  const menu = page.locator(".workspace-mobile-menu");
+  const menuButton = menu.getByLabel("主导航", { exact: true });
+  await menuButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu.getByRole("link", { name: "我的工作台" })).toHaveCount(0);
+  await expect(menu.getByRole("link")).toHaveCount(6);
+  await page.keyboard.press("Escape");
+  await expect(menuButton).toBeFocused();
+  await expect(menu).not.toHaveAttribute("open", "");
+  await menuButton.click();
+  await menu.getByRole("link", { name: "软件版本总览" }).click();
+  await expect(page).toHaveURL(/\/packages\?project=2$/);
+  await expect(menu).not.toHaveAttribute("open", "");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.locator(".topbar").getByRole("link", { name: "项目总览" }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(menu).not.toHaveAttribute("open", "");
+  await menuButton.click();
+  await expect(menu.getByRole("link", { name: "项目总览" })).toBeVisible();
+  await expect(menu.getByRole("link", { name: "集成测试" })).toHaveCount(0);
+});
+
+test("软件包空结果仍可清除筛选，关闭详情会回到同一列表", async ({ page }) => {
+  await login(page, "OWNER001");
+  await page.goto("/packages?project=1");
+  const search = page.getByRole("searchbox", { name: "搜索软件包" });
+  await search.fill("查无此包");
+  await expect(page.getByRole("heading", { name: "没有匹配的软件包" })).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await expect(search).toHaveValue("");
+  await page.getByRole("combobox", { name: "每页行数" }).selectOption("10");
+  await expect(page).toHaveURL(/pageSize=10$/);
+  await search.fill("1001OTA");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  const details = page.getByRole("link", { name: "查看 1001OTA 详情" });
+  await details.click();
+  await expect(page.getByRole("dialog", { name: "软件包详情" })).toBeVisible();
+  await expect(page.getByTestId("package-drawer")).toContainText("1001OTA");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "软件包详情" })).toHaveCount(0);
+  await expect(search).toHaveValue("1001OTA");
+  await expect(details).toBeFocused();
+  await expect(page).toHaveURL(/\/packages\?project=1&pageSize=10&q=1001OTA$/);
 });

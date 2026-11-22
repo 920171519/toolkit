@@ -8,6 +8,7 @@ import type { Role } from "./constants";
 import { one, run } from "./db";
 import { verifyPassword } from "./password";
 import type { SessionUser } from "./types";
+import { safeWorkspacePath } from "./return-to";
 
 export const SESSION_COOKIE = "toolkit_session";
 const SESSION_DAYS = 7;
@@ -92,7 +93,10 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    const next = safeWorkspacePath((await headers()).get("x-toolkit-workspace-path"));
+    redirect(next && next !== "/dashboard" ? `/login?next=${encodeURIComponent(next)}` : "/login");
+  }
   return user;
 }
 

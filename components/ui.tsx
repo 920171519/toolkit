@@ -56,21 +56,20 @@ export function Avatar({
 }
 
 export function PageHeader({
-  eyebrow,
   title,
   description,
+  help,
   actions,
 }: {
-  eyebrow?: string;
   title: string;
   description?: ReactNode;
+  help?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <header className="page-head">
       <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
+        <div className="page-head-title"><h1>{title}</h1>{help}</div>
         {description && <p>{description}</p>}
       </div>
       {actions && <div className="page-head-actions">{actions}</div>}
@@ -109,7 +108,7 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      <span className="empty-icon">
+      <span className="empty-icon" aria-hidden="true">
         <Inbox size={18} strokeWidth={1.7} />
       </span>
       <h3>{title}</h3>

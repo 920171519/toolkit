@@ -1,0 +1,98 @@
+/* Shared layout and navigation for signed-in pages. */
+html:has(dialog:modal) { overflow: hidden; }
+@media (min-width: 901px) { html { scrollbar-gutter: stable; } }
+.workspace { --workspace-padding: clamp(24px, 2.4vw, 32px); }
+.workspace-skip-link { position: fixed; z-index: 100; top: 12px; left: 12px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface); color: var(--brand); transform: translateY(-150%); }
+.workspace-skip-link:focus { transform: none; }
+.workspace-content { padding: 32px var(--workspace-padding) 56px; max-width: 1600px; }
+.workspace-content:focus { outline: none; }
+.workspace-navigation { position: sticky; top: 0; z-index: 35; background: var(--surface); }
+.workspace-navigation .topbar { position: static; min-height: 64px; padding-inline: var(--workspace-padding); gap: 16px; }
+.topbar-location { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.workspace-navigation .breadcrumb { min-width: 0; color: var(--muted); font-size: 13px; }
+.breadcrumb ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.breadcrumb li { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.breadcrumb a:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.topbar-project-back { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--brand); font-weight: 600; font-size: 13px; }
+.topbar-project-back:hover { text-decoration: underline; text-underline-offset: 3px; }
+.topbar-project-back + .breadcrumb { padding-inline-start: 12px; border-inline-start: 1px solid var(--line); }
+.workspace-navigation .topbar-link { font-size: 12px; white-space: nowrap; }
+.workspace-navigation .topbar-mobile-user .sidebar-logout { color: var(--muted); }
+.workspace-mobile-menu { display: none; }
+
+.workspace .sidebar-logout { min-width: 36px; min-height: 36px; align-items: center; justify-content: center; }
+.sidebar .brand + .sidebar-group { margin-top: 16px; }
+
+.project-switch-list { display: grid; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
+.project-switch-option { padding: 8px 12px; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: var(--radius-sm); color: var(--ink); }
+.project-switch-option small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+a.project-switch-option:hover { background: var(--surface-muted); }
+
+.workspace :is(a, button, input, select, summary, textarea):focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.workspace :is(.sidebar, .workspace-mobile-links) :is(a, button):focus-visible { outline-color: var(--navigation-mark); outline-offset: -2px; }
+
+dialog.workspace-dialog { position: fixed; inset: 0; padding: 0; margin: auto; max-height: calc(100dvh - 40px); width: min(560px, calc(100% - 32px)); overflow: auto; color: var(--ink); }
+dialog.workspace-dialog.modal-panel-wide { width: min(1100px, calc(100% - 32px)); }
+dialog.workspace-dialog::backdrop { background: var(--dialog-backdrop); }
+.workspace-dialog .modal-header { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.workspace-dialog-cancel { display: flex; justify-content: flex-end; margin-top: 12px; }
+.workspace-dialog-description { color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+.workspace-dialog-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.workspace-metric-link[href]:hover { border-color: var(--brand); }
+.workspace-section-anchor { scroll-margin-top: 80px; }
+.version-evidence-navigation { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 4px 0 16px; }
+.version-evidence-navigation a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.version-management { margin-top: 16px; }
+
+.package-index-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; }
+.workspace-search { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; max-width: 420px; min-width: 0; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--muted); background: var(--surface); }
+.workspace-search svg { flex: none; width: 16px; height: 16px; stroke-width: 1.5; }
+.workspace-search:focus-within { border-color: var(--brand); outline: 2px solid var(--brand); outline-offset: 1px; }
+.workspace-search input { outline: none !important; border: 0; min-width: 0; width: 100%; padding-block: 8px; color: var(--ink); background: transparent; }
+.package-index-filters { border-block: 1px solid var(--line); padding-inline: 16px; }
+.package-index-filters summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; min-height: 40px; color: var(--brand); font-size: 13px; }
+.package-index-filters summary::-webkit-details-marker { display: none; }
+.package-filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin: 4px 0 16px; }
+.package-index .data-table th.package-index-name { background: none; color: var(--ink); font-size: 14px; padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.package-index-pagination { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: 12px 16px; font-size: 13px; }
+.package-index-pagination label, .package-index-pagination nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.package-index-pagination .select { width: auto; min-height: 32px; padding-block: 4px; }
+.package-index .version-stack { gap: 4px; }
+.package-scope-projects { display: flex; flex-wrap: wrap; gap: 4px 8px; max-width: 310px; padding: 0; margin: 0; list-style: none; }
+.package-scope-projects li { overflow-wrap: anywhere; white-space: normal; }
+.package-scope-action { display: inline-block; margin-top: 4px; }
+dialog.workspace-package-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; padding: 0; width: min(660px, 100%); height: 100dvh; max-width: none; max-height: none; color: var(--ink); overflow: hidden; }
+dialog.workspace-package-drawer:not([open]) { display: none; }
+dialog.workspace-package-drawer::backdrop { background: var(--dialog-backdrop); }
+
+@media (max-width: 900px) {
+  .workspace .sidebar { display: none; }
+  .workspace-navigation .topbar { min-height: 60px; }
+  .workspace-mobile-menu { display: block; flex: none; }
+  .workspace-mobile-menu summary { cursor: pointer; display: grid; place-items: center; list-style: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+  .workspace-mobile-menu summary::-webkit-details-marker { display: none; }
+  .workspace-mobile-links { position: absolute; z-index: 2; top: calc(100% - 1px); left: var(--workspace-padding); width: min(288px, calc(100vw - var(--workspace-padding) * 2)); max-height: calc(100dvh - 80px); overflow: auto; padding: 8px 12px 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); background: var(--navigation-surface); }
+  .workspace-mobile-links .sidebar-section-label { display: block; }
+  .workspace-mobile-links .sidebar-nav { align-items: stretch; flex-direction: column; }
+  .workspace-mobile-links .sidebar-link { min-height: 44px; }
+  .workspace-navigation .topbar { position: relative; padding-block: 8px; flex-wrap: nowrap; }
+  .workspace-navigation .topbar-right { flex: none; }
+}
+
+@media (max-width: 520px) {
+  .workspace { --workspace-padding: 16px; }
+  .workspace-navigation .topbar-location { gap: 8px; }
+  .workspace-navigation .breadcrumb { font-size: 12px; }
+  .workspace-content { padding-top: 20px; }
+  .topbar-project-back { font-size: 12px; }
+  .topbar-project-back + .breadcrumb { padding-inline-start: 8px; }
+  .topbar-project-back + .breadcrumb li:nth-child(n+2) { display: none; }
+  .workspace-dialog .modal-header, .workspace-dialog .modal-body { padding-inline: 16px; }
+  .workspace-dialog .drawer-close { width: 44px; height: 44px; }
+  .workspace-search, .project-switch-option { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .workspace .button, .workspace .sidebar-link, .workspace-package-drawer, .package-drawer { animation: none; transition: none; }
+}

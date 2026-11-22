@@ -36,9 +36,8 @@
   --navigation-caption: #aebfb7;
   --navigation-mark: #9bc7b4;
   --dialog-backdrop: rgba(20, 26, 23, 0.48);
-  --font-sans: "Avenir Next", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-serif: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
-  --font-mono: "SFMono-Regular", "Roboto Mono", "Menlo", monospace;
+  --font-sans: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 @theme inline {
@@ -66,7 +65,7 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -87,6 +86,11 @@ button {
   cursor: pointer;
 }
 
+:where(a, button, input, select, summary, textarea):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
 ::selection {
   background: #cfe7dc;
   color: var(--brand-deep);
@@ -105,8 +109,8 @@ h2,
 h3,
 h4 {
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  letter-spacing: normal;
+  line-height: 1.35;
 }
 
 .container-wide {
@@ -128,10 +132,8 @@ h4 {
 }
 
 .display-title {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  letter-spacing: -0.035em;
-  line-height: 1.12;
+  font-weight: 650;
+  line-height: 1.22;
 }
 
 .muted {
@@ -139,7 +141,7 @@ h4 {
 }
 
 .small {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mono {
@@ -166,7 +168,6 @@ h4 {
 .button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-  transform: none;
 }
 
 .button-primary {
@@ -420,6 +421,7 @@ h4 {
 
 .form-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
@@ -552,8 +554,10 @@ h4 {
   margin-bottom: 24px;
 }
 
-.page-head .eyebrow + h1 {
-  margin-top: 4px;
+.page-head-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .page-head h1 {
@@ -574,12 +578,6 @@ h4 {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.page-footnote {
-  font-size: 12px;
-  color: var(--muted-light);
-  margin-top: 8px;
 }
 
 .section-heading {
@@ -652,7 +650,7 @@ h4 {
 
 .metric .metric-value {
   margin-top: 7px;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 31px;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -925,7 +923,7 @@ h4 {
 
 .hero h1 {
   margin-top: 17px;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(42px, 6.1vw, 76px);
   font-weight: 500;
   letter-spacing: -0.055em;
@@ -954,7 +952,7 @@ h4 {
 }
 
 .hero-stat-value {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 27px;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -1026,7 +1024,7 @@ h4 {
 }
 
 .section-intro h2 {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-weight: 500;
   font-size: clamp(28px, 4vw, 43px);
   letter-spacing: -0.045em;
@@ -1073,7 +1071,7 @@ h4 {
 }
 
 .project-name {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 25px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -1208,7 +1206,7 @@ h4 {
 }
 
 .public-callout h3 {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -1634,7 +1632,7 @@ h4 {
 }
 
 .stage-cell-count {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 24px;
   line-height: 1.1;
   margin-top: 8px;

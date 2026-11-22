@@ -1,0 +1,418 @@
+.directory,
+.panel {
+  overflow: clip;
+}
+
+.searchForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 20px 24px 16px;
+}
+
+.searchField,
+.filterField {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.searchField {
+  flex: 1 1 280px;
+  max-width: 460px;
+}
+
+.filterField {
+  flex: 0 1 108px;
+}
+
+.searchField input,
+.filterField select {
+  font-weight: 400;
+}
+
+.secondaryText {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.catalogTable :is(th, td) {
+  padding-inline: 16px;
+}
+
+.catalogProject {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.catalogProject svg {
+  flex: none;
+}
+
+.catalogProjectMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.catalogContact {
+  min-width: 92px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pagination nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.metricCard {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.metricCard + .metricCard {
+  border-inline-start: 1px solid var(--line);
+}
+
+.metricCard:hover,
+.metricCard:focus-visible {
+  background: var(--surface-muted);
+  outline-offset: -4px;
+}
+
+.metricCard[data-urgent="true"]::before {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--danger);
+  content: "";
+}
+
+.metricCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.metricCardHead svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.metricCard:hover .metricCardHead,
+.metricCard:focus-visible .metricCardHead {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.metricValue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.metricValue strong {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cardDetail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panelHead {
+  padding: 16px 20px 8px;
+}
+
+.panelHead > :global(.section-heading) {
+  margin: 0;
+}
+
+.panelHead :global(.section-heading) h2,
+.accessNotice h2 {
+  font-size: 16px;
+}
+
+.tableLink,
+.activityMain a {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.catalogProject:hover,
+.tableLink:hover,
+.activityMain a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.projectOverview {
+  min-width: 0;
+}
+
+.projectIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 16px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.projectIdentity dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.projectIdentity dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.projectIdentity:has(+ .projectDescription) {
+  margin-bottom: 4px;
+}
+
+.projectDescription {
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.projectDescription summary {
+  width: fit-content;
+  min-height: 32px;
+  padding-block: 6px;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.projectDescription p {
+  max-width: 72ch;
+  padding-block: 4px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.accessNotice {
+  max-width: 650px;
+  padding: 20px;
+}
+
+.accessNotice p {
+  margin: 8px 0 16px;
+  color: var(--muted);
+}
+
+.projectColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.activityList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activityItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 20px;
+}
+
+.activityItem + .activityItem {
+  border-top: 1px solid var(--line);
+}
+
+.activityItem:hover,
+.activityItem:focus-within {
+  background: var(--surface-muted);
+}
+
+.activityMain {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activityMain div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.activityMain p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.activityMeta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.emptyPanel {
+  padding: 8px 20px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.packageTable td {
+  vertical-align: top;
+}
+
+.packageScope {
+  min-width: 200px;
+  white-space: normal;
+}
+
+.packageScope span {
+  display: inline-block;
+  margin: 0 8px 4px 0;
+}
+
+.packageScope small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricCard:nth-child(3) {
+    border-inline-start: 0;
+  }
+
+  .metricCard:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 900px) {
+  .projectColumns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .searchForm,
+  .pagination {
+    padding-inline: 16px;
+  }
+
+  .searchField {
+    max-width: none;
+  }
+
+  .catalogTable :is(th, td) {
+    padding-inline: 8px;
+  }
+
+  .catalogTable th:first-child {
+    min-width: 112px;
+  }
+
+  .catalogContact {
+    min-width: 62px;
+  }
+}
+
+@media (max-width: 460px) {
+  .searchField {
+    flex-basis: 100%;
+  }
+
+  .searchField input {
+    font-size: 16px;
+  }
+
+  .filterField {
+    flex: 1 1 88px;
+  }
+
+  .searchForm :global(.button-ghost) {
+    min-height: 36px;
+  }
+
+  .metricCard {
+    padding: 12px;
+  }
+
+  .metricValue strong {
+    font-size: 20px;
+  }
+}

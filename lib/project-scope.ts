@@ -1,11 +1,14 @@
 import "server-only";
 
 import { notFound } from "next/navigation";
+import { getManagedProjectIdsForUser } from "./access";
 import type { SessionUser } from "./types";
 import { getProjectOptions, getWorkflowProjectScope } from "./workflow-queries";
 
 export function getWorkflowProjectOptions(user: SessionUser, includeArchived = false) {
-  const ids = getWorkflowProjectScope(user);
+  const ids = includeArchived && user.role === "SOFTWARE_MANAGER"
+    ? getManagedProjectIdsForUser(user.id)
+    : getWorkflowProjectScope(user);
   const projects = getProjectOptions(includeArchived);
   if (ids === null) return projects;
   const allowed = new Set(ids);

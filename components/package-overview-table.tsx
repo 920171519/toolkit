@@ -1,29 +1,42 @@
+"use client";
+
+import { type MouseEvent } from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
-import type { PackageOverviewRow } from "@/lib/queries";
-import { filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
-import { PACKAGE_STATUS_META } from "@/lib/constants";
-import { directoryHref, directoryValue, matchesDirectorySearch, type DirectoryParams } from "@/lib/settings-directory";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Search } from "lucide-react";
+import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
+import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
+import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
-import { DirectoryFilterBar } from "@/components/settings-directory";
-import { Badge, EmptyState, StatusPill } from "@/components/ui";
+import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { EmptyState } from "@/components/ui";
+import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
 
 const path = "/packages";
 const empty = "_empty";
+type DetailPanel = "overview" | "usage";
 
 function nodeOptionValue(name: string) {
-  return Buffer.from(name).toString("base64url");
+  const bytes = new TextEncoder().encode(name);
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 export function PackageOverviewTable({
-  packages,
-  params,
-  selectedProjectId,
+  packages, people, transferableIds, initialDetail = null, selectedProjectId,
 }: {
   packages: PackageOverviewRow[];
-  params: DirectoryParams;
+  people: PersonOption[];
+  transferableIds: number[];
+  initialDetail?: DrawerPayload | null;
   selectedProjectId?: number;
 }) {
+  const params = useSearchParams();
+  const query = params.get("q") ?? "";
+  const requestedId = Number(params.get("open"));
+  const openId = Number.isSafeInteger(requestedId) && requestedId > 0 ? requestedId : null;
+  const openPanel = params.get("panel") === "usage" ? "usage" : "overview";
   const usages = packages.flatMap((pkg) => pkg.usages);
   const fields = {
     name: { key: "name", label: "软件包名称", kind: "text" },
@@ -48,13 +61,13 @@ export function PackageOverviewTable({
     trial: { key: "trial", label: "试制版本", kind: "text" },
     current: { key: "current", label: "在途版本", kind: "text" },
     status: { key: "status", label: "状态", kind: "choices", options: filterOptions(packages.map((pkg) => ({
-      value: pkg.currentStatus ?? empty,
-      label: pkg.currentStatus ? PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : "已全量转正",
+      value: pkg.currentStatus ?? (pkg.formalVersion ? "FORMAL_ONLY" : empty),
+      label: pkg.currentStatus ? PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : pkg.formalVersion ? "无在途版本" : "暂无版本",
     }))) },
   } satisfies Record<string, ColumnFilterField>;
-  const filters = readColumnFilters(params, Object.values(fields));
-  const query = directoryValue(params.q);
-  const header = { path, params: { project: selectedProjectId?.toString(), ...filters, q: query || undefined } };
+  const filters = readColumnFilters(Object.fromEntries(params), Object.values(fields));
+  const filterSet = Boolean(query || Object.keys(filters).length);
+  const header = { path, params: { project: selectedProjectId?.toString(), ...filters, q: query || undefined, pageSize: params.get("pageSize") ?? undefined } };
   const filtered = packages.filter((pkg) => {
     const usageMatches = !(filters.f_usage_project || filters.f_usage_node) || pkg.usages.some((usage) =>
       matchesChoiceFilter(filters, "usage_project", [String(usage.projectId)]) &&
@@ -67,136 +80,125 @@ export function PackageOverviewTable({
       matchesTextFilter(filters, "formal", pkg.formalVersion) &&
       (!filters.f_trial || pkg.trialVersions.some((version) => matchesTextFilter(filters, "trial", version))) &&
       [pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion].some((version) => matchesTextFilter(filters, "current", version)) &&
-      matchesChoiceFilter(filters, "status", [pkg.currentStatus ?? empty]) &&
+      matchesChoiceFilter(filters, "status", [pkg.currentStatus ?? (pkg.formalVersion ? "FORMAL_ONLY" : empty)]) &&
       matchesDirectorySearch(query, pkg.name, pkg.code, pkg.ownerName, pkg.areaName, pkg.formalVersion,
-        ...pkg.usages.flatMap((usage) => [usage.projectName, ...usage.nodeNames]));
+        pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion, ...pkg.trialVersions,
+        ...pkg.usages.flatMap((usage) => [usage.projectName, usage.projectCode, ...usage.nodeNames]));
   });
+  const pageSize = getListPageSize(params.get("pageSize"));
+  const lastPage = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const requestedPage = Number(params.get("page"));
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, lastPage) : 1;
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  function urlWith(entries: Record<string, string | number | null>) {
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(entries)) {
+      if (value === "" || value === null) next.delete(key);
+      else next.set(key, String(value));
+    }
+    return next.size ? "/packages?" + next.toString() : "/packages";
+  }
+
+  function applyColumnFilter(columns: ColumnFilterField[], values: Record<string, string>) {
+    const cleared = Object.fromEntries(columns.flatMap(columnFilterKeys).map((key) => [key, null]));
+    window.history.pushState(null, "", urlWith({ ...cleared, ...values, page: null }));
+  }
+
+  function resetFilters() {
+    const cleared = Object.fromEntries(Object.values(fields).flatMap(columnFilterKeys).map((key) => [key, null]));
+    window.history.replaceState(null, "", urlWith({ ...cleared, q: null, page: null }));
+  }
+
+  function openPackage(event: MouseEvent<HTMLAnchorElement>, id: number, panel: DetailPanel = "overview") {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.history.pushState({ toolkitPackageDrawer: id }, "", urlWith({ open: id, panel: panel === "usage" ? panel : null }));
+  }
+
+  function closePackage() {
+    if (window.history.state?.toolkitPackageDrawer === openId) window.history.back();
+    else window.history.replaceState(null, "", urlWith({ open: null, panel: null }));
+  }
+
+  const column = (label: string, columns: ColumnFilterField[]) => (
+    <ColumnFilterHeader {...header} label={label} fields={columns} onFilterChange={(values) => applyColumnFilter(columns, values)} />
+  );
 
   return (
-    <div>
-      <section className="card" aria-labelledby="package-overview-list">
-        <div className="card-header">
-          <h2 id="package-overview-list">软件包列表</h2>
-          <DirectoryFilterBar {...header} />
+    <>
+      <section className="card package-index" aria-label="软件包列表">
+        <div className="package-index-toolbar">
+          <label className="workspace-search">
+            <Search size={16} aria-hidden="true" />
+            <input type="search" value={query} onChange={(event) => window.history.replaceState(null, "", urlWith({ q: event.target.value, page: null }))} aria-label="搜索软件包" placeholder="搜索软件包、版本或责任人" />
+          </label>
+          <span className="small muted" role="status">{filtered.length}{filterSet ? " / " + packages.length : ""} 个软件包</span>
+          {filterSet && <button type="button" className="button button-ghost button-sm" onClick={resetFilters}>清除筛选</button>}
         </div>
-        <div className="table-wrap" role="region" aria-label="软件版本总览表格" tabIndex={0}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <ColumnFilterHeader {...header} label="软件包" fields={[fields.name, fields.code]} />
-                <ColumnFilterHeader {...header} label="责任田 / 责任人" fields={[fields.area, fields.owner]} />
-                <ColumnFilterHeader {...header} label="使用范围" fields={[fields.project, fields.node]} />
-                <ColumnFilterHeader {...header} label="正式版" fields={[fields.formal]} />
-                <ColumnFilterHeader {...header} label="试制版" fields={[fields.trial]} />
-                <ColumnFilterHeader {...header} label="在途版本" fields={[fields.current]} />
-                <ColumnFilterHeader {...header} label="状态" fields={[fields.status]} />
-                <th scope="col" aria-label="操作" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((pkg) => {
-                const detailHref = directoryHref(path, { ...header.params, open: String(pkg.id) });
-                return (
-                  <tr key={pkg.id}>
-                    <td>
-                      <Link
-                        href={detailHref}
-                        className="link-button"
-                        style={{ fontWeight: 600, textAlign: "left" }}
-                        prefetch={false}
-                      >
-                        {pkg.name}
-                      </Link>
-                      <div className="toolbar" style={{ gap: 5, marginTop: 2 }}>
-                        <span className="small muted">{pkg.code}</span>
-                        {!pkg.isActive && <Badge tone="slate">已停用</Badge>}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: 12 }}>{pkg.areaName ?? "未归属"}</div>
-                      <div className="small muted">{pkg.ownerName ?? "责任人待指定"}</div>
-                    </td>
-                    <td className="usage-cell">
-                      {pkg.usages.length === 0 ? (
-                        <span className="small muted">未配置</span>
-                      ) : (
-                        <div className="usage-scope-list">
-                          {pkg.usages.map((usage) => (
-                            <div className="usage-scope-line" key={usage.projectId}>
-                              <span>{usage.projectName}</span>
-                              <span className="small muted">{usage.nodeNames.join(" / ")}</span>
-                              {usage.projectStatus === "ARCHIVED" && <Badge tone="slate">存档</Badge>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {pkg.formalVersion ? (
-                        <span className="version-badge" style={{ color: "var(--brand)" }}>
-                          {pkg.formalVersion}
-                        </span>
-                      ) : (
-                        <span className="muted small">暂无</span>
-                      )}
-                    </td>
-                    <td>
-                      {pkg.trialVersions.length > 0 ? (
-                        <div className="version-stack">
-                          {pkg.trialVersions.map((version) => (
-                            <span className="version-badge" style={{ color: "var(--teal)" }} key={version}>{version}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="muted small">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {pkg.currentVersion ? (
-                        <div>
-                          <span className="version-badge">{pkg.currentVersion}</span>
-                          {pkg.inTestVersion && pkg.inTestVersion !== pkg.currentVersion && (
-                            <div className="small muted">在测 {pkg.inTestVersion}</div>
-                          )}
-                          {pkg.pendingTransferVersion && pkg.pendingTransferVersion !== pkg.currentVersion && (
-                            <div className="small muted">待转测 {pkg.pendingTransferVersion}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="muted small">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {pkg.currentStatus ? (
-                        <StatusPill status={pkg.currentStatus} />
-                      ) : (
-                        <Badge tone="emerald" dot>
-                          已全量转正
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="cell-actions">
-                      <Link
-                        href={detailHref}
-                        className="archive-link"
-                        prefetch={false}
-                        aria-label={`查看 ${pkg.name} 详情`}
-                      >
-                        详情 <ArrowUpRight size={12} />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-wrap" role="region" aria-label="软件版本总览表格" tabIndex={0}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {column("软件包", [fields.name, fields.code])}
+                  {column("责任田 / 责任人", [fields.area, fields.owner])}
+                  {column("使用范围", [fields.project, fields.node])}
+                  {column("正式版", [fields.formal])}
+                  {column("试制 / 待转正", [fields.trial])}
+                  {column("在途版本", [fields.current])}
+                  {column("状态", [fields.status])}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((pkg) => {
+                  const href = urlWith({ open: pkg.id, panel: null });
+                  return (
+                    <tr key={pkg.id}>
+                      <th scope="row" className="package-index-name">
+                        <Link href={href} className="link-button" prefetch={false} onClick={(event) => openPackage(event, pkg.id)} aria-label={`查看 ${pkg.name} 详情`}>{pkg.name} <ArrowRight size={12} aria-hidden="true" /></Link>
+                        <div className="small muted">{pkg.code}{!pkg.isActive && " · 已停用"}</div>
+                      </th>
+                      <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "责任人待指定"}</div></td>
+                      <td className="usage-cell">
+                        {pkg.usages.length === 0 ? <span className="small muted">未配置</span> : (
+                          <>
+                            <ul className="package-scope-projects">
+                              {pkg.usages.map((usage) => <li key={usage.projectId}>{usage.projectName}</li>)}
+                            </ul>
+                            <Link href={urlWith({ open: pkg.id, panel: "usage" })} prefetch={false} className="archive-link package-scope-action"
+                              aria-label={`查看 ${pkg.name} 使用范围`} onClick={(event) => openPackage(event, pkg.id, "usage")}>查看节点</Link>
+                          </>
+                        )}
+                      </td>
+                      <td>{pkg.formalVersion ? <span className="version-badge">{pkg.formalVersion}</span> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.trialVersions.length ? <ul className="version-stack">{pkg.trialVersions.map((version) => <li className="version-badge" key={version}>{version}</li>)}</ul> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.currentVersion ? <><span className="version-badge">{pkg.currentVersion}</span>{pkg.inTestVersion && pkg.inTestVersion !== pkg.currentVersion && <div className="small muted">在测 {pkg.inTestVersion}</div>}{pkg.pendingTransferVersion && pkg.pendingTransferVersion !== pkg.currentVersion && <div className="small muted">待转测 {pkg.pendingTransferVersion}</div>}</> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.currentStatus ? (PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus) : <span className="muted small">{pkg.formalVersion ? "无在途版本" : "暂无版本"}</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        {visible.length === 0 && <EmptyState title={filterSet ? "没有匹配的软件包" : "暂无软件包"} />}
+        <div className="package-index-pagination">
+          <label>
+            <span>每页行数</span>
+            <select className="select" aria-label="每页行数" value={pageSize} onChange={(event) => {
+              const size = getListPageSize(event.target.value);
+              window.history.pushState(null, "", urlWith({ page: null, pageSize: size === DEFAULT_LIST_PAGE_SIZE ? null : size }));
+            }}>
+              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <nav aria-label="软件包分页">
+            {page > 1 && <Link href={urlWith({ page: page - 1 === 1 ? null : page - 1 })} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
+            <span>第 {page} / {lastPage} 页</span>
+            {page < lastPage && <Link href={urlWith({ page: page + 1 })} prefetch={false} className="button button-secondary button-sm">下一页</Link>}
+          </nav>
         </div>
-        {filtered.length === 0 && <EmptyState title="没有匹配的软件包" description="可继续调整各列筛选条件。" />}
-        {filtered.length > 0 && <p className="small muted" style={{ padding: "12px 16px" }} role="status">共 {filtered.length} 个软件包</p>}
       </section>
-      <p className="page-footnote">
-        “试制版本”会同时展示一个软件包当前所有处于试制验证或待转正的版本；使用范围只展示在行项目，已归档项目的软件包记录请到项目总览中查找已结束的项目。
-      </p>
-    </div>
+      {openId && <PackageDrawer key={`${openId}-${openPanel}`} packageId={openId} projectId={selectedProjectId} people={people} canSubmitTransfer={transferableIds.includes(openId)} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} initialPanel={openPanel} />}
+    </>
   );
 }

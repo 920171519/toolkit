@@ -3,8 +3,7 @@ import Link from "next/link";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
-import { SettingsTabs } from "@/components/settings-tabs";
-import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import { Avatar, Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import {
   filterOptions,
@@ -97,14 +96,12 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
 
   return (
     <div className={styles.stack}>
-      <PageHeader title="人员与角色" description="按姓名、工号、角色和责任田查找人员。" />
+      <PageHeader title="人员与角色" />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin />
-      <section className="card" aria-labelledby="user-list-title">
-        <div className="card-header"><h2 id="user-list-title">人员列表</h2></div>
+      <section className="card">
         <DirectoryFilterBar path={path} params={filters} />
         <div className={styles.tableScroll} role="region" aria-label="人员列表" tabIndex={0}>
-          <table className={styles.table} aria-labelledby="user-list-title">
+          <table className={styles.table} aria-label="人员列表">
             <thead><tr>
               <ColumnFilterHeader {...header} sortKey="name" label="姓名" fields={[fields.name, fields.title, fields.department]} />
               <ColumnFilterHeader {...header} sortKey="employeeId" label="工号" fields={[fields.employeeId]} />
@@ -112,24 +109,26 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
               <ColumnFilterHeader {...header} sortKey="area" label="责任田" fields={[fields.area]} />
               <ColumnFilterHeader {...header} sortKey="status" label="账号状态" fields={[fields.status]} />
               <ColumnFilterHeader {...header} sortKey="packages" label="软件包" fields={[fields.packages]} numeric />
+              <th scope="col">操作</th>
             </tr></thead>
             <tbody>
               {list.items.length ? list.items.map((member) => (
                 <tr key={member.id} data-testid={`user-row-${member.id}`}>
-                  <td>
+                  <th scope="row"><div className="toolbar"><Avatar name={member.name} /><div>
                     <Link href={directoryHref(`${path}/${member.id}`, filters)} className={styles.rowLink} prefetch={false}>{member.name}</Link>
-                    {member.id === user.id && <> <span className={styles.meta}>我</span></>}
+                    {member.id === user.id && <span className="small muted">（你）</span>}
                     <div className="small muted">{[member.title, member.department].filter(Boolean).join(" · ")}</div>
-                  </td>
+                  </div></div></th>
                   <td>{member.employeeId}</td>
                   <td><span className={styles.meta}>{ROLE_META[member.role].label}</span></td>
                   <td>{areaNames(member) || <span className="muted">未分配</span>}</td>
                   <td><Badge tone={member.isActive ? "emerald" : "slate"} dot>{member.isActive ? "启用" : "停用"}</Badge></td>
                   <td className={styles.number}>{member.ownedPackages}</td>
+                  <td className="cell-actions"><Link href={directoryHref(`${path}/${member.id}`, filters)} className="button button-secondary button-sm" aria-label={`管理${member.name}的账号`} prefetch={false}>管理账号</Link></td>
                 </tr>
-              )) : <tr><td colSpan={6}>
+              )) : <tr><td colSpan={7}>
                 <div className={styles.stickyContent}>
-                  <EmptyState title="没有匹配的人员" description="可以调整列筛选条件。" />
+                  <EmptyState title="没有匹配的人员" />
                 </div>
               </td></tr>}
             </tbody>

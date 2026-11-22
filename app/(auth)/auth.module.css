@@ -24,6 +24,9 @@
 }
 
 .heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 20px;
 }
 
@@ -33,11 +36,140 @@
   line-height: 40px;
 }
 
-.heading p {
-  margin: 8px 0 0;
-  color: var(--muted);
+.form,
+.field {
+  display: grid;
+}
+
+.form {
+  gap: 16px;
+}
+
+.field {
+  gap: 4px;
+}
+
+.field label {
   font-size: 14px;
+  font-weight: 500;
   line-height: 20px;
+}
+
+.field :global(.input) {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.field :global(.input)[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.fieldHint,
+.fieldError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.fieldHint {
+  color: var(--muted);
+}
+
+.fieldError {
+  color: var(--danger);
+}
+
+.formError svg {
+  flex: none;
+}
+
+.passwordControl {
+  position: relative;
+}
+
+.passwordControl :global(.input) {
+  padding-inline-end: 48px;
+}
+
+.passwordToggle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.passwordToggle > svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+}
+
+.passwordToggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.passwordToggle:hover {
+  color: var(--brand);
+}
+
+.form > :global(.button) {
+  min-height: 44px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.alternate {
+  justify-self: center;
+  font-size: 13px;
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  padding-inline: 8px;
+}
+
+.demo {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.demo summary {
+  min-height: 36px;
+  padding-block: 8px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.demoAccounts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.demoAccounts strong {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.spinner {
+  animation: auth-spin 1s linear infinite;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 640px) {
@@ -64,5 +196,15 @@
   .heading h1 {
     font-size: 28px;
     line-height: 36px;
+  }
+
+  .demo summary {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
   }
 }

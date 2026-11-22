@@ -33,8 +33,8 @@ export function ProjectContactPicker({
   return (
     <div className={`field ${className}`} role="group" aria-labelledby={labelId}>
       <span id={labelId} className="label">
-        {label} <span className="required-mark">*</span>
-        <span className="hint">可多选 · 已选 {selectedIds.size} 人</span>
+        {label} <span className="required-mark" aria-hidden="true">*</span>
+        <span className="sr-only">（必填）</span>
       </span>
       <label className="input package-search-input">
         <Search size={14} aria-hidden="true" />
@@ -42,7 +42,7 @@ export function ProjectContactPicker({
           type="search"
           autoComplete="off"
           aria-label={`搜索${label}`}
-          placeholder="输入姓名或工号"
+          placeholder="姓名或工号"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {

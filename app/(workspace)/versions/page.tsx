@@ -10,6 +10,7 @@ import { getTraceVersionPage, getTraceVersionTabs } from "@/lib/workflow-queries
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";
+import { WorkflowListSearch } from "@/components/workflow-list";
 import { VersionTraceTabs } from "./trace-tabs";
 import styles from "./versions.module.css";
 
@@ -44,10 +45,15 @@ export default async function VersionsPage({ searchParams }: {
     <>
       <PageHeader
         title="版本全链路"
-        actions={<Link href={workflowHref("/packages", project?.id, { open: state.packageId })} className="button button-secondary">软件版本总览</Link>}
+        actions={<Link href={workflowHref("/packages", project?.id, { open: state.packageId, returnTo: state.returnTo })} className="button button-secondary">软件版本总览</Link>}
       />
       <VersionTraceTabs state={state} tabs={tabs} projectId={project?.id} />
       <section className="card">
+        <div className="card-header">
+          <WorkflowListSearch action="/versions" label="软件包或版本" query={state.query} pageSize={state.pageSize} showPageSize={false} fields={{
+            project: project?.id, package: state.packageId, sort: state.sort, dir: state.direction, tabs: listParams.tabs, returnTo: state.returnTo, ...state.filters,
+          }} />
+        </div>
         {state.packageId && (
           <div className={styles.packageScope}>
             <Link href={traceHref({ ...state, page: 1, packageId: undefined }, project?.id)} className="button button-secondary button-sm" prefetch={false}>全部软件包</Link>
@@ -92,7 +98,7 @@ export default async function VersionsPage({ searchParams }: {
             </tbody>
           </table>
         </div>
-        {rows.length === 0 && <EmptyState title="未找到版本" description="可以调整表头筛选条件。" />}
+        {rows.length === 0 && <EmptyState title="未找到版本" />}
         <DirectoryPagination path="/versions" params={listParams} page={page} pages={pageCount} pageSize={state.pageSize} total={total} unit="条" label="版本列表分页" />
       </section>
     </>

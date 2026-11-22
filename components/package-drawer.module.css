@@ -1,0 +1,202 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.header h2 {
+  font-size: 23px;
+  color: var(--ink);
+}
+
+.header p {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.tabs {
+  display: flex;
+  gap: 18px;
+  flex: none;
+  padding-inline: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  min-height: 44px;
+  padding-inline: 5px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 550;
+}
+
+.tabs button[aria-selected="true"] {
+  border-color: var(--brand);
+  color: var(--brand);
+  font-weight: 650;
+}
+
+.tabs button:hover {
+  color: var(--brand);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px 28px;
+}
+
+.body [role="tabpanel"]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.summary div {
+  padding: 12px 14px;
+  background: var(--surface-muted);
+  min-width: 0;
+}
+
+.summary dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.summary dd {
+  color: var(--ink);
+  font: 650 18px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.section {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.section h3, .editor h3 {
+  font-size: 15px;
+}
+
+.person, .rowHeader, .versionMeta, .versionLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.description {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.versionList, .usageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.version, .usageList > div {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.usageList dt, .rowHeader h4 {
+  font-weight: 650;
+}
+
+.usageList dd {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.rowHeader > a {
+  margin-left: auto;
+}
+
+.version p {
+  margin-top: 4px;
+}
+
+.versionMeta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.versionLinks {
+  margin-top: 4px;
+}
+
+.pagination, .pagination nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination {
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  border-top: 1px solid var(--line);
+  padding: 12px 24px;
+}
+
+.editor {
+  display: grid;
+  gap: 16px;
+}
+
+.disableNote {
+  display: none;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.activeField:has(input:not(:checked)) .disableNote {
+  display: block;
+}
+
+@media (max-width: 520px) {
+  .header, .tabs, .body, .footer {
+    padding-inline: 16px;
+  }
+  .summary div {
+    padding: 9px;
+  }
+  .summary dd {
+    font-size: 15px;
+  }
+}

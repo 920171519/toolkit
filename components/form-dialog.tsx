@@ -1,7 +1,54 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
+
+export function DialogSurface({ title, description, children, onClose, returnFocus, wide = false, alert = false }: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  onClose: () => void;
+  returnFocus?: RefObject<HTMLElement | null>;
+  wide?: boolean;
+  alert?: boolean;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = returnFocus?.current ?? document.activeElement;
+    dialog.showModal();
+    dialog.querySelector<HTMLElement>("[data-dialog-autofocus]")?.focus();
+    return () => {
+      dialog.close();
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [returnFocus]);
+
+  return (
+    <dialog ref={dialogRef} className={`workspace-dialog modal-panel ${wide ? "modal-panel-wide" : ""}`}
+      role={alert ? "alertdialog" : undefined} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+      onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}>
+      <header className="modal-header">
+        <h2 id={titleId}>{title}</h2>
+        <button type="button" className="drawer-close" aria-label="关闭弹窗" onClick={onClose}><X size={18} aria-hidden="true" /></button>
+      </header>
+      <div className="modal-body">
+        {description && <p id={descriptionId} className="workspace-dialog-description">{description}</p>}
+        {children}
+      </div>
+    </dialog>
+  );
+}
 
 export function FormDialog({
   label,
@@ -25,54 +72,35 @@ export function FormDialog({
   cancelLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const invoker = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  function show(trigger: HTMLElement) {
+    invoker.current = trigger;
+    setOpen(true);
+  }
 
   return (
     <>
       {fallbackHref ? (
-        <a href={fallbackHref} className={triggerClassName} onClick={(event) => { event.preventDefault(); setOpen(true); }} data-testid={testId}>
+        <a href={fallbackHref} className={triggerClassName} aria-haspopup="dialog" onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          show(event.currentTarget);
+        }} data-testid={testId}>
           {label}
         </a>
       ) : (
-        <button type="button" className={triggerClassName} onClick={() => setOpen(true)} data-testid={testId}>
+        <button type="button" className={triggerClassName} aria-haspopup="dialog" onClick={(event) => show(event.currentTarget)} data-testid={testId}>
           {label}
         </button>
       )}
       {open && (
-        <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
-          <div className={`modal-panel ${wide ? "modal-panel-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
-            <header className="modal-header">
-              <div>
-                <h2>{title}</h2>
-                {description && <p className="small muted">{description}</p>}
-              </div>
-              <button type="button" className="drawer-close" aria-label="关闭弹窗" onClick={() => setOpen(false)}>
-                <X size={18} />
-              </button>
-            </header>
-            <div className="modal-body">
-              {children}
-              {cancelLabel && (
-                <div className="toolbar" style={{ justifyContent: "flex-end", marginTop: 8 }}>
-                  <button type="button" className="button button-secondary button-sm" onClick={() => setOpen(false)}>{cancelLabel}</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <DialogSurface title={title} description={description} wide={wide} returnFocus={invoker} onClose={() => setOpen(false)}>
+          {children}
+          {cancelLabel && <div className="workspace-dialog-cancel">
+            <button type="button" className="button button-secondary" onClick={() => setOpen(false)}>{cancelLabel}</button>
+          </div>}
+        </DialogSurface>
       )}
     </>
   );

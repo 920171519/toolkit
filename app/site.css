@@ -229,16 +229,6 @@ details[open] > summary .when-closed { display: none; }
 }
 
 /* Package drawer */
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: var(--dialog-backdrop);
-  display: flex;
-  justify-content: flex-end;
-  animation: drawer-fade 160ms ease-out;
-}
-
 .package-drawer {
   width: min(680px, 100vw);
   height: 100%;
@@ -250,35 +240,9 @@ details[open] > summary .when-closed { display: none; }
   animation: drawer-slide 220ms var(--ui-ease);
 }
 
-@keyframes drawer-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @keyframes drawer-slide {
   from { transform: translateX(12px); opacity: 0.8; }
   to { transform: translateX(0); opacity: 1; }
-}
-
-.drawer-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(120deg, #fffdf8, #faf8f1);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-.drawer-header h2 {
-  font-family: var(--font-serif);
-  font-size: 26px;
-  font-weight: 500;
-  letter-spacing: -0.035em;
-  margin-top: 5px;
 }
 
 .drawer-close {
@@ -299,12 +263,6 @@ details[open] > summary .when-closed { display: none; }
   background: var(--surface-muted);
 }
 
-.drawer-body {
-  padding: 20px 24px 34px;
-  overflow-y: auto;
-  flex: 1;
-}
-
 .drawer-loading {
   display: flex;
   align-items: center;
@@ -315,99 +273,12 @@ details[open] > summary .when-closed { display: none; }
   padding: 80px 20px;
 }
 
-.drawer-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 14px;
-  background: var(--surface-muted);
-  border: 1px solid #e9e6dc;
-  border-radius: 11px;
-}
-
-.drawer-section {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.drawer-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.drawer-section-head h3 { font-size: 14px; }
-
-.drawer-section-head p {
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 3px;
-}
-
-.drawer-responsibility {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 13px 14px;
-  background: #fffefa;
-}
-
-.drawer-usage-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.drawer-usage-project {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 10px 12px;
-  background: var(--surface-muted);
-}
-
-.drawer-version-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.drawer-version {
-  padding: 12px 0;
-  border-bottom: 1px solid #ece9e0;
-}
-
-.drawer-version:last-child { border-bottom: 0; }
-
-.drawer-edit-form {
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 14px;
-  background: var(--surface-muted);
-}
-
-.drawer-edit-form .form-footer { padding-top: 12px; }
-
-.drawer-footer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
 @media (max-width: 1100px) {
   .project-contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
   .package-drawer { width: 100vw; }
-  .drawer-body { padding: 16px; }
-  .drawer-header { padding: 17px 16px 14px; }
-  .drawer-usage-list { grid-template-columns: 1fr; }
   .project-view-contacts { flex-wrap: wrap; gap: 10px; }
   .project-lead-row { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
@@ -523,10 +394,8 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 
 /* Static loading structure for workspace pages. */
 .workspace-loading { display: grid; gap: 24px; padding-block: 4px 24px; }
-.workspace-loading-heading { display: grid; gap: 8px; }
 .skeleton-line { background: var(--bg-deep); border-radius: 4px; }
 .skeleton-title { width: min(224px, 64%); height: 32px; }
-.skeleton-desc { width: min(480px, 88%); height: 16px; }
 .skeleton-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .skeleton-row { min-height: 48px; padding: 12px 16px; display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--line); }
 .skeleton-row:first-child { min-height: 40px; border-top: 0; background: var(--surface-muted); }

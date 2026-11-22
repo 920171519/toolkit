@@ -12,11 +12,12 @@ const stageLabel: Record<RiskTrialEntryStage, string> = {
   PASSED_NO_EVIDENCE: "缺少正式验收记录",
 };
 
-export function RiskTrialEntryAction({ entry, packageName, version, projectName }: {
+export function RiskTrialEntryAction({ entry, packageName, version, projectName, returnTo }: {
   entry: RiskTrialEntry;
   packageName: string;
   version: string;
   projectName: string;
+  returnTo?: string;
 }) {
   if (entry.registered) return <Badge tone="amber">已登记风险原因</Badge>;
   return (
@@ -29,7 +30,7 @@ export function RiskTrialEntryAction({ entry, packageName, version, projectName 
     >
       <ActionForm
         action={admitRiskTrialAction}
-        hidden={{ requestId: entry.requestId, stage: entry.stage, batchId: entry.batchId }}
+        hidden={{ requestId: entry.requestId, stage: entry.stage, batchId: entry.batchId, returnTo }}
         submitText="纳入待发布试制"
       >
         <label className="field">
@@ -41,10 +42,9 @@ export function RiskTrialEntryAction({ entry, packageName, version, projectName 
             minLength={5}
             maxLength={1000}
             rows={4}
-            placeholder="说明已完成的验证、尚未验证的范围、已知问题及风险判断。"
+            placeholder="未完成的验证、已知问题及风险判断"
           />
         </label>
-        <p className="small muted" style={{ marginTop: 8 }}>登记后可在试制与绑定验证中发布。转测与集成测试继续按当前状态办理。</p>
       </ActionForm>
     </FormDialog>
   );

@@ -35,6 +35,15 @@ export function directoryHref(path: string, params: Record<string, string | unde
   return search ? `${path}?${search}` : path;
 }
 
+export function areaDirectoryListParams(params: DirectoryParams) {
+  return directoryFilters("areas", { ...params, q: params.listQ, page: params.listPage, pageSize: params.listPageSize });
+}
+
+export function areaDirectoryDetailParams(params: DirectoryParams) {
+  const { q, page, pageSize, ...filters } = directoryFilters("areas", params);
+  return { ...filters, listQ: q, listPage: page, listPageSize: pageSize };
+}
+
 export function directoryActionHref(directory: Directory, formData: FormData, id?: number) {
   const filters = directoryFilters(directory, Object.fromEntries(
     [...sharedKeys, ...filterKeys[directory]].map((key) => {

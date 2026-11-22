@@ -2,33 +2,29 @@ import Link from "next/link";
 import { ArrowRight, LogIn } from "lucide-react";
 import { Brand } from "./brand";
 import type { SessionUser } from "@/lib/types";
+import styles from "@/app/public-contacts.module.css";
 
 export function PublicHeader({ user }: { user: SessionUser | null }) {
   return (
     <header className="public-header">
-      <div className="container-wide public-nav">
+      <div className={`container-wide public-nav ${styles.navigation}`}>
         <Brand />
-        <nav className="public-nav-links" aria-label="公开页面导航">
-          <Link className="public-nav-link" href="/#project-contacts">
-            项目联系人
-          </Link>
-        </nav>
-        <div className="toolbar" style={{ gap: 8 }}>
+        <nav className={styles.accountLinks} aria-label="工作台账号">
           {user ? (
-            <Link href="/dashboard" className="button button-primary button-sm">
-              进入工作台 <ArrowRight size={13} />
+            <Link href="/dashboard" className="button button-primary button-sm" prefetch={false}>
+              进入工作台 <ArrowRight size={13} aria-hidden="true" />
             </Link>
           ) : (
             <>
-              <Link href="/login" className="button button-ghost button-sm">
-                <LogIn size={13} /> 内部登录
+              <Link href="/login" className="button button-primary button-sm" prefetch={false}>
+                <LogIn size={13} aria-hidden="true" /> 内部登录
               </Link>
-              <Link href="/register" className="button button-primary button-sm">
+              <Link href="/register" className="button button-ghost button-sm" prefetch={false}>
                 注册账号
               </Link>
             </>
           )}
-        </div>
+        </nav>
       </div>
     </header>
   );

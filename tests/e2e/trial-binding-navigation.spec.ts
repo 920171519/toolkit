@@ -9,11 +9,14 @@ test("从试制页跳到绑定验证列表，聚焦并保留项目和筛选条�
   const heading = queue.getByRole("heading", { name: "试制版本绑定验证" });
   await expect(heading).not.toBeInViewport();
 
-  const jumpLink = page.getByRole("link", { name: "跳到绑定验证列表" });
+  const jumpLink = page.getByRole("navigation", { name: "试制与绑定队列" }).getByRole("link", { name: /^节点绑定/ });
   await jumpLink.focus();
   await jumpLink.press("Enter");
 
-  await expect(page).toHaveURL(/project=1&binding_q=1001OTA#binding-queue$/);
+  await expect(page).toHaveURL((url) => url.searchParams.get("project") === "1"
+    && url.searchParams.get("binding_q") === "1001OTA"
+    && url.searchParams.get("view") === "binding"
+    && url.hash === "#binding-queue");
   await expect(queue).toBeFocused();
   await expect(heading).toBeInViewport();
   await expect(queue.getByRole("link", { name: "清除搜索条件 1001OTA" })).toBeVisible();

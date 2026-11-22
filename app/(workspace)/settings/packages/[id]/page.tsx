@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ArrowLeft, Boxes, CheckSquare2, ShieldAlert } from "lucide-react";
+import { notFound, redirect } from "next/navigation";
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
-import { redirect } from "next/navigation";
+import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
-import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
-import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
-import styles from "@/components/settings-directory.module.css";
-import { SettingsTabs } from "@/components/settings-tabs";
+import { InfoTooltip } from "@/components/info-tooltip";
+import { FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import { PackageUsagePicker } from "@/components/package-usage-picker";
+import { SettingsSelect } from "@/components/settings-select";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "软件包配置详情" };
@@ -29,7 +29,7 @@ export default async function PackageSettingsDetailPage({
   const ledAreaIds = getLedAreaIds(user.id);
   const { id } = await params;
   const packageId = Number(id);
-  if (!Number.isInteger(packageId)) notFound();
+  if (!Number.isSafeInteger(packageId) || packageId < 1) notFound();
   const data = getPackageDetail(packageId, true);
   if (!data) notFound();
   if (!isAdmin && (data.package.areaId === null || !ledAreaIds.includes(data.package.areaId))) {
@@ -45,80 +45,67 @@ export default async function PackageSettingsDetailPage({
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));
-  const bindingActive = pkg.currentStatus === "TRIAL" || pkg.currentStatus === "PENDING_FORMAL";
+  const bindingActive = data.versions.some((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
 
   return (
     <>
       <PageHeader
         title={identity.name}
-        description={identity.code + " · 维护责任信息与项目节点使用范围。"}
+        description={<>{identity.code} · {pkg.areaName ?? "未归属责任田"} · {pkg.isActive ? "启用" : "停用"}</>}
         actions={
-          <Link href={directoryHref("/settings/packages", listParams)} className="button button-secondary" prefetch={false}>
-            <ArrowLeft size={14} /> 返回软件包配置
-          </Link>
+          <><Link href={directoryHref("/settings/packages", listParams)} className="button button-secondary" prefetch={false}><ArrowLeft size={14} aria-hidden="true" /> 返回软件包配置</Link>
+            <Link href={directoryHref("/settings/packages/import", { ...listParams, package: String(pkg.id) })} className="button button-secondary" prefetch={false}>导入历史版本</Link></>
         }
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} />
 
       <div className="two-col">
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="settings-card-stack">
           <section className="card">
-            <div className="card-header">
-              <div>
-                <h2 style={{ fontSize: 18 }}>责任信息</h2>
-                <p className="small muted" style={{ marginTop: 3 }}>
-                  新增或修改编码时使用 5 位数字和 3 位字母。
-                </p>
-              </div>
-              <Boxes size={17} style={{ color: "var(--brand)" }} />
-            </div>
+            <div className="card-header"><h2>责任信息</h2></div>
             <div className="card-body" style={{ paddingTop: 14 }}>
-              <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id }} submitText="保存责任信息">
+              <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
                 <div className="form-grid">
-                  <label className="field">
-                    <span className="label">软件包编码</span>
-                    <input className="input" name="code" defaultValue={identity.code} placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} required />
-                  </label>
                   <label className="field">
                     <span className="label">软件包名称</span>
                     <input className="input" name="name" defaultValue={identity.name} required />
                   </label>
-                  <label className="field">
-                    <span className="label">责任人</span>
-                    <select className="select" name="ownerId" defaultValue={pkg.ownerId ?? ""} required>
-                      <option value="" disabled>选择责任人</option>
-                      {people.map((person) => (
-                        <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
+                  <div className="field">
+                    <span className="settings-label-help">
+                      <label className="label" htmlFor="settings-package-code">软件包编码</label>
+                      <InfoTooltip label="软件包编码格式">已有编码可继续使用。新编码须为 5 位数字加 3 位字母。</InfoTooltip>
+                    </span>
+                    <input className="input" id="settings-package-code" name="code" defaultValue={identity.code} placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} required />
+                  </div>
+                  <SettingsSelect name="ownerId" label="责任人" options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} defaultValue={pkg.ownerId ?? ""} />
+                  {isAdmin ? <label className="field">
                     <span className="label">责任田</span>
                     <select className="select" name="areaId" defaultValue={pkg.areaId ?? ""}>
                       <option value="">暂不归属</option>
-                      {areas.map((area) => (
-                        <option key={area.id} value={area.id}>{area.name}</option>
-                      ))}
+                      {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
                     </select>
-                  </label>
+                  </label> : <div className="field">
+                    <span className="settings-label-help">
+                      <label className="label" htmlFor="settings-package-area">责任田</label>
+                      <InfoTooltip label="责任田变更权限">由管理员调整软件包所属责任田。</InfoTooltip>
+                    </span>
+                    <input className="input" id="settings-package-area" value={pkg.areaName ?? "未归属"} readOnly />
+                  </div>}
                   <label className="field span-2">
                     <span className="label">说明</span>
                     <textarea className="textarea" name="description" defaultValue={pkg.description} />
                   </label>
                   <label className="field">
-                    <span className="label">试制超期天数 <span className="required-mark">*</span></span>
+                    <span className="label">试制超期天数 <span className="required-mark" aria-hidden="true">*</span></span>
                     <input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={pkg.trialOverdueDays} required />
                   </label>
-                  <label className="check-item span-2" style={{ maxWidth: 280 }}>
-                    <input type="checkbox" name="isActive" defaultChecked={pkg.isActive} />
-                    <span>
-                      启用此软件包
-                      <span className="small muted" style={{ display: "block" }}>
-                        停用后不可提交新版本，但历史版本仍会保留。
-                      </span>
-                    </span>
-                  </label>
+                  <div className="field span-2">
+                    <label className="check-item" style={{ maxWidth: 280 }}>
+                      <input type="checkbox" name="isActive" defaultChecked={pkg.isActive} aria-describedby="settings-package-disable-effect" />
+                      启用软件包
+                    </label>
+                    <span id="settings-package-disable-effect" className="small muted">停用后禁止提交新版本，历史版本保留。</span>
+                  </div>
                 </div>
               </ActionForm>
             </div>
@@ -126,84 +113,36 @@ export default async function PackageSettingsDetailPage({
 
           <section className="card">
             <div className="card-header">
-              <div>
-                <h2 style={{ fontSize: 18 }}>项目节点使用范围</h2>
-                <p className="small muted" style={{ marginTop: 3 }}>
-                  勾选代表该项目测试节点会加载此软件包。发布试制时，系统会为全部勾选节点生成绑定验证任务。
-                </p>
+              <div className="settings-label-help">
+                <h2>项目节点使用范围</h2>
+                <InfoTooltip label="使用范围变更说明">范围变更从下一次转测和试制生效，历史批次和绑定任务保留原范围。</InfoTooltip>
               </div>
-              <span className={styles.meta}>{usedNodeIds.size} 个节点</span>
+              {bindingActive && <span className="settings-meta">{usedNodeIds.size} 个节点</span>}
             </div>
             <div className="card-body" style={{ paddingTop: 14 }}>
               {bindingActive ? (
                 <div>
                   <div className="workflow-banner" data-tone="warning" style={{ marginBottom: 14 }}>
-                    <ShieldAlert size={17} style={{ color: "var(--warning)", flex: "none" }} />
-                    <div>
-                      <h3>当前版本正在绑定验证，使用范围已冻结</h3>
-                      <p>
-                        为避免覆盖证据丢失，在全部节点验证完成前不能调整使用范围。完成转正后可以修改。
-                      </p>
-                    </div>
+                    <ShieldAlert size={17} style={{ color: "var(--warning)", flex: "none" }} aria-hidden="true" />
+                    <h3>试制和待转正版本处理完毕后可编辑使用范围</h3>
                   </div>
-                  <div className="check-grid">
-                    {projects.flatMap((project) =>
-                      project.nodes.map((node) => (
-                        <label className="check-item" key={node.id}>
-                          <input type="checkbox" checked={usedNodeIds.has(node.id)} readOnly disabled />
-                          <span>
-                            {project.name} / {node.name}
-                            <span className="small muted" style={{ display: "block" }}>{node.description}</span>
-                          </span>
-                        </label>
-                      )),
-                    )}
-                  </div>
+                  {usages.length ? <dl className="detail-list">{usages.map((usage) => (
+                    <div className="detail-row" key={usage.projectId}><dt>{usage.projectName}{usage.projectStatus === "ARCHIVED" ? "（已归档）" : ""}</dt><dd>{usage.nodes.map((node) => node.nodeName).join("、")}</dd></div>
+                  ))}</dl> : <p className="small muted">暂无使用节点。</p>}
                 </div>
               ) : (
                 <ActionForm action={savePackageUsagesAction} testId="package-usage-form" hidden={{ ...listParams, packageId: pkg.id }} submitText="保存使用范围">
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    {projects.map((project) => (
-                      <div key={project.id}>
-                        <div className="toolbar" style={{ gap: 8, marginBottom: 7 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</span>
-                          <span className="chip">{project.code}</span>
-                          {project.status === "ARCHIVED" && <Badge tone="slate">存档项目</Badge>}
-                          <span className="small muted">
-                            {project.status === "ARCHIVED" ? "存档项目不参与新的绑定验证" : `${project.nodes.length} 个测试节点`}
-                          </span>
-                        </div>
-                        <div className="check-grid">
-                          {project.nodes.map((node) => (
-                            <label className="check-item" key={node.id}>
-                              <input
-                                type="checkbox"
-                                name="nodeIds"
-                                value={node.id}
-                                defaultChecked={usedNodeIds.has(node.id)}
-                              />
-                              <span>
-                                {node.name}
-                                <span className="small muted" style={{ display: "block" }}>
-                                  {node.description || "测试节点"}
-                                </span>
-                              </span>
-                            </label>
-                          ))}
-                          {project.nodes.length === 0 && (
-                            <span className="small muted">该项目尚未配置测试节点。</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <PackageUsagePicker projects={projects.map((project) => ({
+                    id: project.id, name: project.name, code: project.code, status: project.status,
+                    nodes: project.nodes.map(({ id, name, description }) => ({ id, name, description })),
+                  }))} defaultNodeIds={[...usedNodeIds]} />
                 </ActionForm>
               )}
             </div>
           </section>
         </div>
 
-        <aside style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <aside className="settings-card-stack">
           <section className="card">
             <div className="card-header">
               <div>
@@ -228,18 +167,9 @@ export default async function PackageSettingsDetailPage({
                   </dd>
                 </div>
               </dl>
-              <p className="page-footnote">
-                {bindingActive
-                  ? "绑定验证完成后会自动进入待转正。"
-                  : "在途版本流程完成后，才能提交下一个版本。"}
-              </p>
             </div>
           </section>
-          <div className="muted-panel">
-            <CheckSquare2 size={14} style={{ display: "inline", marginRight: 4, verticalAlign: -2 }} />
-            建议在发起转测前完成使用范围配置，避免试制发布后才发现覆盖节点不完整。
-          </div>
-          <Link href={`/packages?open=${pkg.id}`} className="button button-secondary">
+          <Link href={`/packages?open=${pkg.id}`} className="button button-secondary" prefetch={false}>
             在版本总览中查看
           </Link>
         </aside>

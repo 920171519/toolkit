@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { PROJECT_STAGE_COLUMN, SCHEMA_SQL } from "./schema";
+import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
@@ -35,13 +35,13 @@ function migrateSchema(database: DatabaseSync) {
   const projectColumns = database
     .prepare("PRAGMA table_info(projects)")
     .all() as Array<{ name: string }>;
-  if (!projectColumns.some((column) => column.name === "stage")) {
-    database.exec(`ALTER TABLE projects ADD COLUMN stage ${PROJECT_STAGE_COLUMN}`);
-  }
   if (!projectColumns.some((column) => column.name === "software_manager_id")) {
     database.exec(
       "ALTER TABLE projects ADD COLUMN software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
     );
+  }
+  if (!projectColumns.some((column) => column.name === "stage")) {
+    database.exec(`ALTER TABLE projects ADD COLUMN ${PROJECT_STAGE_COLUMN_SQL}`);
   }
   database.exec(
     `UPDATE projects

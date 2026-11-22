@@ -1451,5 +1451,6 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
       anchor.package_id,
       `${anchor.package_name} ${anchor.version} 全项目绑定完成，按共享版本发布正式版本，覆盖 ${requests.length} 个项目，转正电子流：${flowNo.trim()}`,
     );
+    return anchor.package_version_id;
   });
 }

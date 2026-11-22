@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
-import { ActionForm } from "@/components/action-form";
-import { AreaPersonPicker, type AreaPersonOption } from "@/components/area-person-picker";
-import { FormDialog } from "@/components/form-dialog";
-import styles from "@/components/settings-directory.module.css";
-import { SettingsTabs } from "@/components/settings-tabs";
-import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
-import { getLedAreaIds } from "@/lib/access";
+import { requireUser } from "@/lib/auth";
+import { getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref } from "@/lib/settings-directory";
+import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
+import { getProjectOptions, type ProjectOption } from "@/lib/workflow-queries";
 import {
   addAreaLeaderAction,
   assignAreaProjectLeadAction,
@@ -19,46 +17,49 @@ import {
   removeAreaProjectMemberAction,
   saveAreaAction,
 } from "@/lib/actions/settings";
-import { requireUser } from "@/lib/auth";
-import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
-import { directoryFilters, directoryHref, type DirectoryParams } from "@/lib/settings-directory";
-import { getProjectOptions, type ProjectOption } from "@/lib/workflow-queries";
+import { ActionForm } from "@/components/action-form";
+import { FormDialog } from "@/components/form-dialog";
+import { InfoTooltip } from "@/components/info-tooltip";
+import { SettingsPersonPicker, type SettingsPerson } from "@/components/settings-person-picker";
+import { matchesSearch, searchValue, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
+import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "责任田详情" };
 
-const secondary = "button button-secondary button-sm";
+const secondaryTrigger = "button button-secondary button-sm";
 
-function ProjectRow({ project, lead, members, people, areaId, manageLead, manageMembers, filters }: {
+function AreaProjectRow({ project, lead, members, people, areaId, manageLead, manageMembers, filters }: {
   project: ProjectOption;
   lead?: AreaProjectLead;
   members: AreaProjectMember[];
-  people: AreaPersonOption[];
+  people: SettingsPerson[];
   areaId: number;
   manageLead: boolean;
   manageMembers: boolean;
   filters: Record<string, string>;
 }) {
   const memberIds = new Set(members.map((member) => member.userId));
-  const eligibleMembers = manageMembers ? people.filter(({ id }) => !memberIds.has(id)) : [];
-  const memberKey = members.map(({ id }) => id).join(".");
-  const formFields = { ...filters, areaId, projectId: project.id };
+  const availableMembers = manageMembers ? people.filter(({ id }) => !memberIds.has(id)) : [];
+  const availableLeads = manageLead ? people.filter(({ id }) => id !== lead?.userId) : [];
+  const leadActionLabel = lead ? "更换负责人" : "添加负责人";
+  const memberKey = members.map((member) => member.id).join("-");
   return (
-    <li className={styles.record} data-testid={`area-project-${project.id}`}>
-      <div className={styles.recordName}>
+    <li className="settings-record settings-area-record area-project-row" data-testid={`area-project-${project.id}`}>
+      <div className="settings-record-name">
         <strong>{project.name}</strong>
         <div className="small muted">{project.code}{project.status === "ARCHIVED" ? " · 已归档" : ""}</div>
       </div>
-      <dl>
-        <div><dt>项目负责人</dt><dd>{lead?.userName ?? <span className="muted">待指定</span>}</dd></div>
-        <div><dt>项目成员</dt><dd>
-          {members.length > 0 ? (
-            <FormDialog key={memberKey} label={`${members.length} 人`} title={`${project.name} · 项目成员`} triggerClassName={secondary}>
-              <ul className={styles.memberList}>
+      <dl className="settings-record-facts">
+        <div><dt>负责人</dt><dd>{lead?.userName ?? <span className="muted">待指定</span>}</dd></div>
+        <div><dt>成员</dt><dd>
+          {members.length ? (
+            <FormDialog key={memberKey} label={`${members.length} 人`} title={`${project.name} · 成员`} triggerClassName="button button-ghost button-sm settings-member-count">
+              <ul className="settings-people-list">
                 {members.map((member) => (
                   <li key={member.id}>
                     <span>{member.userName} <small className="muted">{member.userEmployeeId}</small></span>
-                    {manageMembers && <ActionForm action={removeAreaProjectMemberAction} hidden={{ ...filters, memberId: member.id }} submitText={`移除 ${member.userName}`} submitVariant="ghost" submitClassName="button-sm" confirmMessage={`移除 ${project.name} 的成员 ${member.userName}？`} />}
+                    {manageMembers && <ActionForm action={removeAreaProjectMemberAction} hidden={{ ...filters, memberId: member.id }} submitText={`移除 ${member.userName}`} submitVariant="ghost" submitClassName="button-sm" confirmMessage={`将取消 ${member.userName} 在本责任田的 ${project.name} 成员资格。`} />}
                   </li>
                 ))}
               </ul>
@@ -66,101 +67,126 @@ function ProjectRow({ project, lead, members, people, areaId, manageLead, manage
           ) : <span className="muted">暂无成员</span>}
         </dd></div>
       </dl>
-      <div className={styles.recordActions}>
-        {manageLead && (lead ? (
-          <ActionForm action={removeAreaProjectLeadAction} hidden={{ ...filters, assignmentId: lead.id }} submitText="移除负责人" submitVariant="ghost" submitClassName="button-sm" confirmMessage={`移除 ${project.name} 的负责人 ${lead.userName}？`} />
-        ) : people.length > 0 && (
-          <FormDialog label="添加负责人" title={`${project.name} · 添加负责人`} triggerClassName={secondary} cancelLabel="取消">
-            <ActionForm action={assignAreaProjectLeadAction} hidden={formFields} submitText="设置项目负责人">
-              <AreaPersonPicker label="项目负责人" people={people} />
-            </ActionForm>
-          </FormDialog>
-        ))}
-        {eligibleMembers.length > 0 && (
-          <FormDialog key={`add-${memberKey}`} label={<><Plus size={13} aria-hidden="true" /> 添加成员</>} title={`${project.name} · 添加成员`} triggerClassName={secondary} cancelLabel="取消">
-            <ActionForm action={assignAreaProjectMemberAction} hidden={formFields} submitText="添加项目成员">
-              <AreaPersonPicker label="项目成员" people={eligibleMembers} />
-            </ActionForm>
-          </FormDialog>
-        )}
-      </div>
+      {(availableLeads.length > 0 || (manageLead && lead) || availableMembers.length > 0) && (
+        <div className="settings-record-actions">
+          {manageLead && (availableLeads.length > 0 || lead) && (
+            <FormDialog key={lead?.userId ?? "new"} label={leadActionLabel} title={`${project.name} · ${leadActionLabel}`} triggerClassName={secondaryTrigger} cancelLabel="取消">
+              {availableLeads.length > 0 && <ActionForm action={assignAreaProjectLeadAction} hidden={{ ...filters, areaId, projectId: project.id, assignmentId: lead?.id, oldUserId: lead?.userId }} submitText={lead ? "更换项目负责人" : "设置项目负责人"}>
+                <SettingsPersonPicker name="userId" label="项目负责人" options={availableLeads} />
+              </ActionForm>}
+              {lead && <div className="settings-dialog-secondary">
+                <ActionForm action={removeAreaProjectLeadAction} hidden={{ ...filters, assignmentId: lead.id }} submitText="移除负责人" submitVariant="outline-danger" submitClassName="button-sm" confirmMessage={`将取消 ${lead.userName} 在本责任田的 ${project.name} 负责人资格。`} />
+              </div>}
+            </FormDialog>
+          )}
+          {availableMembers.length > 0 && (
+            <FormDialog key={`add-${memberKey}`} label={<><Plus size={13} aria-hidden="true" /> 添加成员</>} title={`${project.name} · 添加成员`} triggerClassName={secondaryTrigger} cancelLabel="取消">
+              <ActionForm action={assignAreaProjectMemberAction} hidden={{ ...filters, areaId, projectId: project.id }} submitText="添加项目成员">
+                <SettingsPersonPicker name="userId" label="项目成员" options={availableMembers} />
+              </ActionForm>
+            </FormDialog>
+          )}
+        </div>
+      )}
     </li>
   );
 }
 
 export default async function AreaSettingsDetailPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<DirectoryParams>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id < 1) notFound();
   const [area] = getAreaConfigs(id);
   if (!area) notFound();
+
   const search = await searchParams;
-  const filters = directoryFilters("areas", search);
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const isAdmin = user.role === "ADMIN";
   const manageArea = isAdmin || area.leaders.some((leader) => leader.userId === user.id);
-  const people = manageArea || area.projectLeads.some((lead) => lead.userId === user.id) ? getPeople() : [];
+  const people = manageArea || area.projectLeads.some((lead) => lead.userId === user.id)
+    ? getPeople().map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))
+    : [];
   const leaderIds = new Set(area.leaders.map(({ userId }) => userId));
-  const eligibleLeaders = isAdmin ? people.filter(({ id: personId }) => !leaderIds.has(personId)) : [];
-  const leads = new Map(area.projectLeads.map((lead) => [lead.projectId, lead]));
-  const members = Map.groupBy(area.projectMembers, (member) => member.projectId);
-  const projects = getProjectOptions(true).filter((project) => manageArea || leads.has(project.id));
+  const availableLeaders = people.filter(({ id }) => !leaderIds.has(id));
+  const leadsByProject = new Map(area.projectLeads.map((lead) => [lead.projectId, lead]));
+  const membersByProject = Map.groupBy(area.projectMembers, (member) => member.projectId);
+  const query = searchValue(search.q);
+  const pageSize = getListPageSize(search.pageSize);
+  const url = `/settings/areas/${area.id}`;
+  const relevantProjects = getProjectOptions(true).filter((project) => {
+    const lead = leadsByProject.get(project.id);
+    const members = membersByProject.get(project.id) ?? [];
+    return (manageArea || lead || members.length > 0) && matchesSearch(query, project.name, project.code, lead?.userName, lead?.userEmployeeId, ...members.flatMap((member) => [member.userName, member.userEmployeeId]));
+  });
+  const list = settingsPage(relevantProjects, search.page, pageSize);
+  const listParams = areaDirectoryListParams(search);
+  const returnParams = areaDirectoryDetailParams(listParams);
+  const filters = { ...returnParams, q: query, pageSize: String(pageSize), page: String(list.page) };
   return (
-    <div className={styles.stack}>
+    <div className="settings-card-stack">
       <PageHeader
         title={area.name}
         description={area.description || undefined}
         actions={<>
-          <Link href={directoryHref("/settings/areas", filters)} className="button button-secondary" prefetch={false}><ArrowLeft size={15} aria-hidden="true" /> 返回责任田列表</Link>
-          {manageArea && <FormDialog key={notice?.message ?? ""} label="编辑责任田" title="编辑责任田资料" cancelLabel="取消">
-            <ActionForm action={saveAreaAction} hidden={{ ...filters, id }} submitText="保存责任田">
-              <div className={styles.stack}>
+          <Link href={directoryHref("/settings/areas", listParams)} className="button button-secondary" prefetch={false}><ArrowLeft size={15} aria-hidden="true" /> 返回责任田列表</Link>
+          {manageArea && <FormDialog key={`${area.name}-${area.description}-${notice?.message}`} label="编辑责任田" title="编辑责任田资料" cancelLabel="取消">
+            <ActionForm action={saveAreaAction} hidden={{ ...filters, id: area.id }} submitText="保存责任田">
+              <div className="settings-card-stack">
                 <label className="field"><span className="label">责任田名称</span><input className="input" name="name" defaultValue={area.name} minLength={2} maxLength={30} required /></label>
-                <label className="field"><span className="label">责任田说明</span><textarea className="textarea" name="description" defaultValue={area.description} /></label>
+                <label className="field"><span className="label">说明</span><textarea className="textarea" name="description" defaultValue={area.description} /></label>
               </div>
             </ActionForm>
           </FormDialog>}
         </>}
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs
-        isAdmin={isAdmin}
-        canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"}
-        canManagePackages={isAdmin || getLedAreaIds(user.id).length > 0}
-      />
       <section className="card" aria-labelledby="area-leaders">
-        <div className="card-header">
-          <div><h2 id="area-leaders">责任田主管</h2>{area.isIntegration && <span className={styles.meta}>集成测试责任田</span>}</div>
-          {eligibleLeaders.length > 0 && <FormDialog key={area.leaders.map(({ id: leaderId }) => leaderId).join(".")} label={<><Plus size={13} aria-hidden="true" /> 添加主管</>} title="添加责任田主管" triggerClassName={secondary} cancelLabel="取消">
-            <ActionForm action={addAreaLeaderAction} hidden={{ ...filters, areaId: id }} submitText="设置主管">
-              <AreaPersonPicker label="责任田主管" people={eligibleLeaders} />
+        <div className="card-header"><div><h2 id="area-leaders">责任田主管</h2>{area.isIntegration && <span className="settings-meta">集成测试责任田</span>}</div>
+          {isAdmin && availableLeaders.length > 0 && <FormDialog key={area.leaders.length} label={<><Plus size={13} aria-hidden="true" /> 添加主管</>} title="添加责任田主管" triggerClassName={secondaryTrigger} cancelLabel="取消">
+            <ActionForm action={addAreaLeaderAction} hidden={{ ...filters, areaId: area.id }} submitText="设置主管">
+              <SettingsPersonPicker name="userId" label="责任田主管" options={availableLeaders} />
             </ActionForm>
           </FormDialog>}
         </div>
-        <div className={`card-body ${styles.people}`}>
-          {area.leaders.length ? area.leaders.map((leader) => (
-            <div className={styles.areaSupervisor} key={leader.id}>
-              {leader.userName} <span className="small muted">{leader.userEmployeeId}</span>
-              {isAdmin && <ActionForm action={removeAreaLeaderAction} hidden={{ ...filters, leaderId: leader.id }} submitText={`移除 ${leader.userName}`} submitVariant="ghost" submitClassName="button-sm" confirmMessage={`移除主管 ${leader.userName}？`} />}
-            </div>
-          )) : <p className="small muted">尚未指定主管。</p>}
+        <div className="card-body settings-area-tools">
+            {area.leaders.length ? area.leaders.map((leader) => (
+              <span className="person-chip" key={leader.id}>
+                {leader.userName} <span className="small muted">{leader.userEmployeeId}</span>
+                {isAdmin && <ActionForm action={removeAreaLeaderAction} hidden={{ ...filters, leaderId: leader.id }} submitText={`移除 ${leader.userName}`} submitVariant="ghost" submitClassName="button-sm settings-remove-button" confirmMessage={`将取消 ${leader.userName} 在“${area.name}”的责任田主管资格。`} />}
+              </span>
+            )) : <p className="small muted">尚未指定主管。</p>}
         </div>
       </section>
       <section className="card" aria-labelledby="area-projects">
-        <div className="card-header"><div><h2 id="area-projects">项目负责人和成员</h2><p className="small muted">各项目负责人可维护本项目的成员。</p></div></div>
-        {projects.length ? <ul className={styles.recordList}>
-          {projects.map((project) => {
-            const lead = leads.get(project.id);
-            return <ProjectRow key={project.id} project={project} lead={lead} members={members.get(project.id) ?? []} people={people} areaId={id} manageLead={manageArea} manageMembers={manageArea || lead?.userId === user.id} filters={filters} />;
+        <div className="card-header">
+          <div className="settings-label-help">
+            <h2 id="area-projects">项目负责人和成员</h2>
+            <InfoTooltip label="项目成员维护权限">管理员、责任田主管和本项目负责人可维护项目成员。</InfoTooltip>
+          </div>
+        </div>
+        <SettingsFilters action={url} search={query} placeholder="项目、编码、人员姓名或工号" hasFilters={Boolean(query)} clearHref={directoryHref(url, { ...returnParams, pageSize: String(pageSize) })}>
+          {Object.entries(returnParams).filter(([, value]) => value).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
+          <div className="field">
+            <label className="label" htmlFor="area-project-page-size">每页条数</label>
+            <select className="select" id="area-project-page-size" name="pageSize" defaultValue={pageSize}>
+              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </div>
+        </SettingsFilters>
+        {list.items.length ? <ul className="settings-record-list">
+          {list.items.map((project) => {
+            const lead = leadsByProject.get(project.id);
+            return <AreaProjectRow key={project.id} project={project} lead={lead} members={membersByProject.get(project.id) ?? []} people={people} areaId={area.id} manageLead={manageArea} manageMembers={manageArea || lead?.userId === user.id} filters={filters} />;
           })}
-        </ul> : <EmptyState title="暂无项目分工" />}
+        </ul> : <EmptyState title={query ? "没有匹配的项目" : "暂无项目分工"} />}
+        <SettingsPagination action={url} page={list.page} pageCount={list.pageCount} filters={filters} range={`共 ${list.total} 个项目`} />
       </section>
       {isAdmin && <section className="card">
         <div className="card-body">
-          <ActionForm action={deleteAreaAction} hidden={{ ...filters, id }} submitText="删除责任田" submitVariant="outline-danger" submitClassName="button-sm" disabled={area.packageCount > 0} footerNote={area.packageCount > 0 ? "责任田下仍有软件包，不能删除。" : undefined} confirmMessage={`确认删除责任田“${area.name}”？`} />
+          <ActionForm action={deleteAreaAction} hidden={{ ...returnParams, id: area.id }} submitText="删除责任田" submitVariant="outline-danger" submitClassName="button-sm" disabled={area.packageCount > 0} footerNote={area.packageCount > 0 ? "请先在软件包配置中调整此责任田的软件包归属。" : undefined} confirmMessage={`将永久删除责任田“${area.name}”及其主管和项目分工。`} />
         </div>
       </section>}
     </div>

@@ -9,16 +9,17 @@ export function BindingFlowForm({
   approvers,
   currentUserId,
   scopeProjectId,
-  trialQuery,
+  listState,
 }: {
   requirementId: number;
   requestId: number;
   approvers: ApproverOption[];
   currentUserId: number;
   scopeProjectId?: number;
-  trialQuery: Record<string, string>;
+  listState?: Record<string, string | number | undefined>;
 }) {
   const selectableApprovers = approvers.filter((approver) => approver.userId !== currentUserId);
+  const barcodeId = `binding-barcodes-${requirementId}`;
   if (selectableApprovers.length === 0) {
     return <div className="muted-panel">该节点审批人范围为空，请联系软件经理在项目配置中维护审批人。</div>;
   }
@@ -26,10 +27,9 @@ export function BindingFlowForm({
   return (
     <ActionForm
       action={submitBindingFlowAction}
-      hidden={{ ...trialQuery, requirementId, requestId, scopeProjectId }}
+      hidden={{ requirementId, requestId, scopeProjectId, ...listState }}
       submitText="提交绑定电子流"
       submitClassName="button-sm"
-      footerNote="设备条码每行一个，支持扫码枪连续录入或一次粘贴多个条码。"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label className="field">
@@ -42,13 +42,16 @@ export function BindingFlowForm({
             ))}
           </select>
         </label>
+        <div className="field">
+          <div className="label">
+            <label htmlFor={barcodeId}>设备条码 <span className="required-mark" aria-hidden="true">*</span></label>
+            <span className="hint" id={`${barcodeId}-format`}>每行一个</span>
+          </div>
+          <textarea className="textarea barcode-textarea" id={barcodeId} name="barcodes" rows={4} required aria-describedby={`${barcodeId}-format`} />
+        </div>
         <label className="field">
-          <span className="label">设备条码 <span className="required-mark">*</span><span className="hint">每行一个</span></span>
-          <textarea className="textarea barcode-textarea" name="barcodes" rows={4} required placeholder="每行一个设备条码，例如 SN0001" />
-        </label>
-        <label className="field">
-          <span className="label">网页电子流地址 <span className="required-mark">*</span><span className="hint">审批人可打开核验</span></span>
-          <input className="input" name="webUrl" type="url" required placeholder="https://eflow.example.com/binding/..." />
+          <span className="label">网页电子流地址 <span className="required-mark" aria-hidden="true">*</span></span>
+          <input className="input" name="webUrl" type="url" required />
         </label>
       </div>
     </ActionForm>

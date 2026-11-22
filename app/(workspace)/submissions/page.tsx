@@ -1,40 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Boxes, ClipboardList } from "lucide-react";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canCancelVersion, canManageWorkflow } from "@/lib/permissions";
+import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
+import { batchSelectionKey } from "@/lib/batch-preparation";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
+import { getWorkflowListState, getWorkflowPage, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import {
-  getBatchCandidatesForProject,
+  getBatchCount,
   getBatches,
   getPendingTransferGroups,
   getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
-import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
-import {
-  deleteDraftBatchAction,
-  sendBatchAction,
-} from "@/lib/actions/workflow";
-import { ActionForm } from "@/components/action-form";
-import { FormDialog } from "@/components/form-dialog";
-import { PendingTransferTable } from "@/components/pending-transfer-table";
-import { TransferRequestForm } from "@/components/transfer-request-form";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
+import { PendingTransferTable } from "@/components/pending-transfer-table";
+import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
+import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
+import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "待转测申请" };
-
-function nextBatchCode(batches: Array<{ code: string }>): string {
-  const highest = batches.reduce((max, batch) => {
-    const match = /^B(\d+)$/i.exec(batch.code);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 120);
-  return `B${String(highest + 1).padStart(3, "0")}`;
-}
 
 export default async function SubmissionsPage({
   searchParams,
@@ -43,112 +33,136 @@ export default async function SubmissionsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
+  const { returnTo } = getWorkflowListState(params);
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
+  const archived = project?.status === "ARCHIVED";
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
   const groups = getPendingTransferGroups(scope);
-  const availablePackages = getTransferPackageOptions(user, project?.id);
-  const manager = canManageWorkflow(user);
-  const scopedBatches = getBatches(300, scope);
-  const allBatches = getBatches(300);
-  const draftBatches = manager ? scopedBatches.filter((batch) => batch.status === "DRAFT") : [];
-  const defaultCode = nextBatchCode(allBatches);
-  const candidatesByProject = new Map(
-    manager
-      ? groups.filter((group) => canManageProjectWorkflowForProject(user, group.projectId)).map((group, index) => [
-          group.projectId,
-          { candidates: getBatchCandidatesForProject(group.projectId), code: `B${String(Number(defaultCode.slice(1)) + index).padStart(3, "0")}` },
-        ] as const)
-      : [],
-  );
+  const canRequest = getTransferPackageOptions(user, project?.id).length > 0;
+  const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER");
+  const showDrafts = canPrepare && params.view === "drafts";
+  const query = getWorkflowSearch(params.q);
+  const pageSize = getListPageSize(params.pageSize);
+  const matches = workflowSearchMatcher(query);
   const requestCount = groups.reduce((total, group) => total + group.items.length, 0);
-  const riskEntries = getRiskTrialEntries(groups.flatMap((group) =>
-    candidatesByProject.has(group.projectId) ? group.items.map((item) => item.requestId) : [],
+  const visibleGroups = showDrafts ? [] : groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => matches(item.packageName, item.packageCode, item.version, group.projectName, group.projectCode, item.ownerName, item.submittedByName)),
+  })).filter((group) => group.items.length > 0);
+  const riskEntries = getRiskTrialEntries(visibleGroups.flatMap((group) =>
+    !archived && canManageProjectWorkflowForProject(user, group.projectId) ? group.items.map((item) => item.requestId) : [],
   ));
-
-  const transferDialog = availablePackages.length > 0 ? (
-    <FormDialog
-      label={<><ClipboardList size={14} /> 提交转测申请</>}
-      title="提交转测申请"
-      description="选择所属责任田的软件包。提交后会同步发送到该软件包涉及的全部在行项目。"
-      triggerClassName="button button-primary"
-      testId="submit-transfer-trigger"
-      fallbackHref={workflowHref("/submissions/transfer", project?.id)}
-    >
-      <TransferRequestForm packages={availablePackages} scopeProjectId={project?.id} />
-    </FormDialog>
-  ) : null;
+  const draftFilters = { statuses: ["DRAFT"] as ["DRAFT"], activeProjectsOnly: true };
+  const draftsCount = canPrepare ? getBatchCount(scope, draftFilters) : 0;
+  const matchingDrafts = showDrafts && query ? getBatchCount(scope, { ...draftFilters, query }) : draftsCount;
+  const page = getWorkflowPage(matchingDrafts, pageSize, params.page);
+  const drafts = showDrafts ? getBatches(pageSize, scope, { ...draftFilters, query, offset: page.offset }) : [];
+  const queueHref = (draft: boolean, searchTerm = query, nextPage = 1) => workflowHref("/submissions", project?.id, {
+    view: draft ? "drafts" : undefined,
+    q: searchTerm || undefined,
+    page: nextPage > 1 ? nextPage : undefined,
+    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    returnTo,
+  });
+  const requestsHref = queueHref(false, showDrafts ? "" : query);
+  const draftsHref = queueHref(true, showDrafts ? query : "");
+  const integrationHref = workflowHref("/integration", project?.id, { view: archived ? "history" : undefined, returnTo });
+  const returnState = {
+    q: query || undefined,
+    page: page.current > 1 ? page.current : undefined,
+    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    returnTo,
+  };
+  const requestsByProject = new Map(groups.map((group) => [group.projectId, group.items]));
 
   return (
     <>
       <PageHeader
-        eyebrow="Transfer request / By project"
-        title="待转测申请"
-        description="转测申请按项目分发。在这里选择本轮软件包、查看待发起批次快照并确认发起。"
-        actions={<><Link href={workflowHref("/integration", project?.id)} className="button button-secondary"><Boxes size={14} /> 当前集成测试</Link>{transferDialog}</>}
+        title="转测申请"
+        description={archived ? "项目已归档" : undefined}
+        actions={<>
+          <Link href={integrationHref} prefetch={false} className="button button-secondary">{archived ? "查看历史批次" : "查看在测批次"} <ArrowRight size={14} /></Link>
+          {canRequest && <Link href={workflowHref("/submissions/transfer", project?.id, { returnTo })} prefetch={false} className="button button-primary" data-testid="submit-transfer-trigger"><ClipboardList size={14} /> 提交转测申请</Link>}
+        </>}
       />
       <FlashMessage notice={notice} />
 
-      <div className="info-strip" style={{ marginBottom: 16 }}>
-        <span><strong>{requestCount}</strong> 个项目转测申请</span>
-        <span>覆盖 <strong>{groups.length}</strong> 个项目</span>
-        <span><strong>{draftBatches.length}</strong> 个待发起批次</span>
-        <span style={{ marginLeft: "auto" }}>同一软件包可继续提交新版本</span>
-      </div>
+      {canPrepare && <WorkflowQueueNav label="转测工作队列" views={[
+        { label: "待安排申请", href: requestsHref, count: requestCount, current: !showDrafts },
+        { label: "待发起批次", href: draftsHref, count: draftsCount, current: showDrafts },
+      ]} />}
 
-      {manager && draftBatches.length > 0 && (
-        <section className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header"><div><h2 style={{ fontSize: 18 }}>待发起转测批次</h2><p className="small muted" style={{ marginTop: 3 }}>查看本轮配套快照，确认软件包和版本后发起集成测试。</p></div><Badge tone="amber">{draftBatches.length}</Badge></div>
-          <div className="card-body" style={{ padding: 0, marginTop: 12 }}>
-            <div className="table-wrap">
+      {showDrafts ? (
+        <section className="card" aria-label="待发起转测批次">
+          <div className={`card-header ${styles.listHeader}`}>
+            <h2 className={styles.tableHeading}>待发起批次</h2>
+            <WorkflowListSearch action="/submissions" label="批次号、标题或项目" query={query} pageSize={pageSize} fields={{ project: project?.id, view: "drafts", returnTo }} />
+          </div>
+          {drafts.length === 0 ? (query
+            ? <EmptyState title="没有匹配的批次" action={<Link href={queueHref(true, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} />
+            : <EmptyState title="没有待发起的批次" action={<Link href={requestsHref} prefetch={false} className="button button-secondary">查看待安排申请</Link>} />) : (
+            <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="待发起转测批次表格" tabIndex={0}>
               <table className="data-table">
-                <thead><tr><th>批次</th><th>项目</th><th>配套 / 变更</th><th>创建时间</th><th aria-label="操作" /></tr></thead>
+                <thead><tr><th>批次</th><th>项目</th><th>配套与变更</th><th>创建时间</th><th aria-label="操作" /></tr></thead>
                 <tbody>
-                  {draftBatches.map((batch) => (
+                  {drafts.map((batch) => (
                     <tr key={batch.id}>
-                      <td><span className="mono" style={{ fontWeight: 600 }}>{batch.code}</span><div className="small muted">{batch.title}</div></td>
+                      <td><strong className="mono">{batch.code}</strong><div className="small muted">{batch.title}</div></td>
                       <td><span className="chip">{batch.projectName}</span></td>
-                      <td><span className="mono small">{batch.itemCount} / {batch.changedCount}</span><div className="small muted">配套 / 变更</div></td>
+                      <td>{batch.itemCount} 个包 · {batch.changedCount} 个变更</td>
                       <td className="small muted">{formatDateTime(batch.createdAt)}</td>
-                      <td className="cell-actions">
-                        <div className="toolbar" style={{ justifyContent: "flex-end", gap: 6, flexWrap: "nowrap" }}>
-                          <Link href={workflowHref(`/integration/${batch.id}`, project?.id)} className="button button-secondary button-sm" aria-label={`查看 ${batch.code} 配套`}>查看配套</Link>
-                          <ActionForm action={sendBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="发起转测" submitClassName="button-sm" className="inline-action-form" confirmMessage={`确认发起 ${batch.code}？`} />
-                          <ActionForm action={deleteDraftBatchAction} hidden={{ batchId: batch.id, scopeProjectId: project?.id }} submitText="删除" submitVariant="ghost" submitClassName="button-sm" className="inline-action-form" confirmMessage="确认删除这个转测草稿？" />
-                        </div>
-                      </td>
+                      <td className="cell-actions"><Link href={workflowHref(`/integration/${batch.id}`, project?.id, returnState)} prefetch={false} className="button button-secondary button-sm" aria-label={`核对 ${batch.code} 配套`}>核对并发起 <ArrowRight size={12} /></Link></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          )}
+          <WorkflowListPagination label="草稿列表分页" current={page.current} pages={page.pages} href={(nextPage) => queueHref(true, query, nextPage)} />
         </section>
-      )}
-
+      ) : (
       <section className="card">
-        <div className="card-header"><div><h2 style={{ fontSize: 18 }}>按项目查看申请</h2><p className="small muted" style={{ marginTop: 3 }}>各项目独立安排转测。未选中的软件包申请保留到下轮。</p></div><Badge tone="amber">{groups.length} 个项目</Badge></div>
-        <div className="card-body" style={{ paddingTop: 14 }}>
-          {groups.length === 0 ? (
-            <EmptyState title="没有待转测的申请" description="责任人提交后，申请会按项目出现在这里。" />
+        <div className={`card-header ${styles.listHeader}`}>
+          <h2 className={styles.tableHeading}>待安排申请</h2>
+          {!canPrepare && <Badge tone="slate">{requestCount} 个</Badge>}
+          <WorkflowListSearch action="/submissions" label="软件包、版本、项目或人员" query={query} pageSize={pageSize} fields={{ project: project?.id, returnTo }} />
+        </div>
+        <div className="card-body">
+          {visibleGroups.length === 0 ? (
+            query ? <EmptyState title="没有匹配的申请" action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} />
+              : <EmptyState title="没有待转测的申请" />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {groups.map((group) => (
-                <PendingTransferTable
+            <div className={styles.stack}>
+              {visibleGroups.map((group) => {
+                const managesGroup = canManageProjectWorkflowForProject(user, group.projectId);
+                const defaults: Record<number, number> = {};
+                const versionPackages: Record<number, number> = {};
+                if (managesGroup) {
+                  for (const item of requestsByProject.get(group.projectId) ?? []) {
+                    if (!item.canInclude) continue;
+                    defaults[item.packageId] ??= item.versionId;
+                    versionPackages[item.versionId] = item.packageId;
+                  }
+                }
+                return <PendingTransferTable
                   key={group.projectId}
                   group={{ ...group, items: group.items.map((item) => ({
                     ...item,
-                    canCancel: item.versionStatus === "PENDING_TRANSFER" && canCancelVersion(user, item.submittedById),
                     riskEntry: riskEntries[item.requestId],
+                    canCancel: item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
                   })) }}
                   scopeProjectId={project?.id}
-                  batch={candidatesByProject.get(group.projectId)}
-                />
-              ))}
+                  pageSize={pageSize}
+                  selection={Object.keys(defaults).length > 0 ? { key: batchSelectionKey(user.id, group.projectId), defaults, versionPackages } : undefined}
+                  returnState={returnState}
+                />;
+              })}
             </div>
           )}
         </div>
       </section>
+      )}
     </>
   );
 }

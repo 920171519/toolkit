@@ -37,7 +37,7 @@ import {
   updateUserRole,
 } from "@/lib/settings";
 import { ROLES, type Role } from "@/lib/constants";
-import { directoryActionHref } from "@/lib/settings-directory";
+import { areaDirectoryDetailParams, areaDirectoryListParams, directoryActionHref, directoryFilters, directoryHref } from "@/lib/settings-directory";
 
 async function actionUser() {
   const user = await getCurrentUser();
@@ -47,6 +47,17 @@ async function actionUser() {
 
 function refreshAll() {
   revalidatePath("/", "layout");
+}
+
+function areaFormFilters(formData: FormData) {
+  return Object.fromEntries([...formData.entries()].flatMap(([key, value]) => typeof value === "string" ? [[key, value]] : []));
+}
+
+function areaDetailHref(formData: FormData, areaId: number, isNew = false) {
+  const params = areaFormFilters(formData);
+  const list = areaDirectoryDetailParams(isNew ? params : areaDirectoryListParams(params));
+  const { q, page, pageSize } = directoryFilters("areas", params);
+  return directoryHref(`/settings/areas/${areaId}`, { ...list, ...(!isNew && { q, page, pageSize }) });
 }
 
 export async function saveAreaAction(
@@ -66,7 +77,7 @@ export async function saveAreaAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), id ? "责任田配置已更新。" : "责任田已创建。");
+  successRedirect(areaDetailHref(formData, areaId, !id), id ? "责任田配置已更新。" : "责任田已创建，可继续设置主管。");
 }
 
 export async function addAreaLeaderAction(
@@ -83,7 +94,7 @@ export async function addAreaLeaderAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "责任田主管已设置。");
+  successRedirect(areaDetailHref(formData, areaId), "责任田主管已设置。");
 }
 
 export async function removeAreaLeaderAction(
@@ -100,7 +111,7 @@ export async function removeAreaLeaderAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "责任田主管已移除。");
+  successRedirect(areaDetailHref(formData, areaId), "责任田主管已移除。");
 }
 
 export async function assignAreaProjectMemberAction(
@@ -118,7 +129,7 @@ export async function assignAreaProjectMemberAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "项目成员已添加。");
+  successRedirect(areaDetailHref(formData, areaId), "项目成员已添加。");
 }
 
 export async function removeAreaProjectMemberAction(
@@ -135,7 +146,7 @@ export async function removeAreaProjectMemberAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "项目成员已移除。");
+  successRedirect(areaDetailHref(formData, areaId), "项目成员已移除。");
 }
 
 export async function assignAreaProjectLeadAction(
@@ -146,14 +157,15 @@ export async function assignAreaProjectLeadAction(
   const areaId = numberValue(formData, "areaId");
   const projectId = numberValue(formData, "projectId");
   const userId = numberValue(formData, "userId");
+  const assignmentId = numberValue(formData, "assignmentId");
   if (!areaId || !projectId || !userId) return { error: "请选择项目负责人和人员。" };
   try {
-    assignAreaProjectLead(user, areaId, projectId, userId);
+    assignAreaProjectLead(user, areaId, projectId, userId, assignmentId ?? undefined, numberValue(formData, "oldUserId") ?? undefined);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "项目负责人已设置。");
+  successRedirect(areaDetailHref(formData, areaId), assignmentId ? "项目负责人已更换。" : "项目负责人已设置。");
 }
 
 export async function removeAreaProjectLeadAction(
@@ -170,7 +182,7 @@ export async function removeAreaProjectLeadAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData, areaId), "项目负责人已移除。");
+  successRedirect(areaDetailHref(formData, areaId), "项目负责人已移除。");
 }
 
 export async function deleteAreaAction(
@@ -186,7 +198,7 @@ export async function deleteAreaAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("areas", formData), "责任田已删除。");
+  successRedirect(directoryHref("/settings/areas", areaDirectoryListParams(areaFormFilters(formData))), "责任田已删除。");
 }
 
 export async function saveProjectAction(
@@ -196,14 +208,16 @@ export async function saveProjectAction(
   const user = await actionUser();
   const id = numberValue(formData, "id");
   const status = text(formData, "status") as "ACTIVE" | "PAUSED" | "ARCHIVED";
+  const softwareManagerIds = idList(formData, "softwareManagerIds");
+  let projectId: number;
   try {
-    saveProject(user, {
+    projectId = saveProject(user, {
       id: id ?? undefined,
       name: text(formData, "name"),
       code: text(formData, "code"),
       description: text(formData, "description"),
-      pmUserIds: formData.getAll("pmUserIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
-      softwareManagerIds: formData.getAll("softwareManagerIds").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0),
+      pmUserIds: idList(formData, "pmUserIds"),
+      softwareManagerIds,
       status: status || "ACTIVE",
       stage: formData.has("stage") ? text(formData, "stage") : undefined,
       sortOrder: undefined,
@@ -212,7 +226,10 @@ export async function saveProjectAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", id ? "项目配置已更新。" : "项目已创建，可继续添加测试节点。");
+  if (user.role === "SOFTWARE_MANAGER" && !softwareManagerIds.includes(user.id)) {
+    successRedirect("/settings/projects", "项目配置已更新。你已不负责该项目。");
+  }
+  successRedirect(`/settings/projects/${projectId}`, id ? "项目配置已更新。" : "项目已创建，可继续添加测试节点。");
 }
 
 export async function addProjectNodeAction(
@@ -238,7 +255,7 @@ export async function addProjectNodeAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "项目测试节点已添加。");
+  successRedirect(`/settings/projects/${projectId}`, "项目测试节点已添加。");
 }
 
 export async function addProjectNodeApproverAction(
@@ -249,13 +266,14 @@ export async function addProjectNodeApproverAction(
   const nodeId = numberValue(formData, "nodeId");
   const userId = numberValue(formData, "userId");
   if (!nodeId || !userId) return { error: "请选择审批人。" };
+  let projectId: number;
   try {
-    addProjectNodeApprover(user, nodeId, userId);
+    projectId = addProjectNodeApprover(user, nodeId, userId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "节点审批人范围已更新。");
+  successRedirect(`/settings/projects/${projectId}/nodes/${nodeId}`, "节点审批人范围已更新。");
 }
 
 export async function removeProjectNodeApproverAction(
@@ -265,13 +283,14 @@ export async function removeProjectNodeApproverAction(
   const user = await actionUser();
   const assignmentId = numberValue(formData, "assignmentId");
   if (!assignmentId) return { error: "审批人参数无效。" };
+  let scope: ReturnType<typeof removeProjectNodeApprover>;
   try {
-    removeProjectNodeApprover(user, assignmentId);
+    scope = removeProjectNodeApprover(user, assignmentId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "节点审批人已移除。");
+  successRedirect(`/settings/projects/${scope.projectId}/nodes/${scope.nodeId}`, "节点审批人已移除。");
 }
 
 export async function updateProjectNodeAction(
@@ -281,8 +300,9 @@ export async function updateProjectNodeAction(
   const user = await actionUser();
   const nodeId = numberValue(formData, "nodeId");
   if (!nodeId) return { error: "项目节点参数无效。" };
+  let projectId: number;
   try {
-    updateProjectNode(
+    projectId = updateProjectNode(
       user,
       nodeId,
       text(formData, "name"),
@@ -297,7 +317,7 @@ export async function updateProjectNodeAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "项目节点绑定配置已更新。");
+  successRedirect(`/settings/projects/${projectId}/nodes/${nodeId}`, "项目节点绑定配置已更新。");
 }
 
 export async function deleteProjectNodeAction(
@@ -307,13 +327,14 @@ export async function deleteProjectNodeAction(
   const user = await actionUser();
   const nodeId = numberValue(formData, "nodeId");
   if (!nodeId) return { error: "项目节点参数无效。" };
+  let projectId: number;
   try {
-    deleteProjectNode(user, nodeId);
+    projectId = deleteProjectNode(user, nodeId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "项目测试节点已删除。");
+  successRedirect(`/settings/projects/${projectId}`, "项目测试节点已删除。");
 }
 
 export async function deleteProjectAction(

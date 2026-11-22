@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { expectFlash, login, selectOptionContaining } from "./helpers";
+import { confirmAction, expectFlash, login, selectOptionContaining } from "./helpers";
 
 async function viewRiskEntry(row: Locator, stage: string) {
   await row.getByRole("button", { name: "登记风险原因", exact: true }).click();
@@ -41,7 +41,6 @@ test("在测、未通过和缺少验收证据的风险入口按当前项目权�
 });
 
 test("在测风险登记后遇到未通过结论，重新登记时按本次结论说明风险", async ({ page }) => {
-  page.on("dialog", (dialog) => dialog.accept());
   const packageName = "项目验收回归组件";
   const version = "1.0.17";
 
@@ -51,12 +50,15 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   const packageForm = page.getByTestId("new-package-form");
   await packageForm.getByRole("textbox", { name: "软件包名称" }).fill(packageName);
   await packageForm.getByRole("textbox", { name: "软件包编码" }).fill("90017RQA");
-  await selectOptionContaining(packageForm.getByLabel("责任人"), "OWNER001");
+  await selectOptionContaining(packageForm.locator('select[name="areaId"]'), "系统底座");
+  await selectOptionContaining(packageForm.locator('select[name="ownerId"]'), "OWNER001");
   await packageForm.getByRole("button", { name: "创建并配置使用范围" }).click();
   await expectFlash(page, "软件包已创建");
   const packageSettings = new URL(page.url()).pathname;
   const usageForm = page.getByTestId("package-usage-form");
-  const n1Usage = usageForm.locator(".check-grid").first().getByRole("checkbox").first();
+  const n1Project = usageForm.locator("details").filter({ hasText: "星云 N1" });
+  await n1Project.locator("summary").click();
+  const n1Usage = n1Project.getByRole("checkbox").first();
   await n1Usage.check();
   await usageForm.getByRole("button", { name: "保存使用范围" }).click();
   await expectFlash(page, "项目使用范围已更新");
@@ -77,16 +79,17 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await page.goto("/submissions?project=1");
   await page.getByTestId("open-batch-1").click();
   const builder = page.getByTestId("batch-builder-form");
+  await expect(builder.getByRole("checkbox", { name: "本轮转测 " + packageName, exact: true })).toBeChecked();
   for (const checkbox of await builder.getByRole("checkbox").all()) {
-    if (!((await checkbox.getAttribute("aria-label")) ?? "").endsWith(packageName)) await checkbox.uncheck();
+    if ((await checkbox.getAttribute("aria-label")) !== "本轮转测 " + packageName) await checkbox.uncheck();
   }
+  await expect(builder.getByRole("checkbox", { checked: true })).toHaveCount(1);
   await builder.getByLabel("批次号").fill("B117");
-  await builder.getByRole("button", { name: "创建整套配套批次" }).click();
-  await expectFlash(page, "整套配套转测草稿已创建");
-  const draft = page.getByRole("row").filter({ hasText: "B117" });
-  const batchUrl = await draft.getByRole("link", { name: "查看 B117 配套" }).getAttribute("href");
-  expect(batchUrl).toBeTruthy();
-  await draft.getByRole("button", { name: "发起转测" }).click();
+  await builder.getByRole("button", { name: "保存草稿并核对" }).click();
+  await expectFlash(page, "转测草稿已保存");
+  const batchUrl = new URL(page.url()).pathname + "?project=1";
+  await page.getByRole("button", { name: "发起转测", exact: true }).click();
+  await confirmAction(page);
   await expectFlash(page, "B117 已发起集成测试");
   await page.goto(batchUrl!);
 
@@ -107,6 +110,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
 
   await login(page, "TEST001");
   await page.goto(batchUrl!);
+  await page.getByRole("button", { name: "提交测试结论", exact: true }).click();
   const conclusion = page.getByTestId("complete-test-form");
   await conclusion.getByLabel("测试结论").selectOption("FAIL");
   await conclusion.getByLabel("问题归属").selectOption("NOT_PACKAGE_RELATED");
@@ -138,6 +142,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   const abandonDialog = ready.getByRole("dialog", { name: /^放弃/ });
   await abandonDialog.getByRole("textbox", { name: "放弃发布试制结论" }).fill("本次回归验证完成，关闭测试版本的登记。");
   await abandonDialog.getByRole("button", { name: "提交结论并放弃试制" }).click();
+  await confirmAction(page);
   await expect(ready).toHaveCount(0);
 
   await login(page, "ADMIN001");

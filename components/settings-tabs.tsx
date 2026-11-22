@@ -12,31 +12,24 @@ const items = [
 
 export function SettingsTabs({
   isAdmin,
-  showManagementTabs = true,
-  canManageProjects = true,
-  canManagePackages = true,
+  canManageProjects,
+  canManagePackages,
 }: {
   isAdmin: boolean;
-  showManagementTabs?: boolean;
-  canManageProjects?: boolean;
-  canManagePackages?: boolean;
+  canManageProjects: boolean;
+  canManagePackages: boolean;
 }) {
   const pathname = usePathname();
+  const permittedItems = items.filter((item) => !item.adminOnly || isAdmin)
+    .filter((item) => item.href !== "/settings/projects" || canManageProjects)
+    .filter((item) => item.href !== "/settings/packages" || canManagePackages);
+  if (permittedItems.length === 1) return null;
   return (
-    <nav className="settings-tabs" aria-label="基础配置">
-      {items
-        .filter((item) => !item.adminOnly || isAdmin)
-        .filter((item) => showManagementTabs || item.href === "/settings/areas")
-        .filter((item) => item.href !== "/settings/projects" || canManageProjects)
-        .filter((item) => item.href !== "/settings/packages" || canManagePackages)
-        .map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link key={item.href} className="settings-tab" href={item.href} data-active={active}>
-              {item.label}
-            </Link>
-          );
-        })}
+    <nav className="settings-tabs" aria-label="配置分类">
+      {permittedItems.map((item) => {
+        const active = pathname === item.href || pathname.startsWith(item.href + "/");
+        return <Link key={item.href} className="settings-tab" href={item.href} prefetch={false} data-active={active} aria-current={active ? "page" : undefined}>{item.label}</Link>;
+      })}
     </nav>
   );
 }

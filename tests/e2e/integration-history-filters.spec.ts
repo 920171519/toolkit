@@ -40,7 +40,7 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       const active = page.getByText("B120", { exact: true });
       await expect(active).toBeVisible();
       const history = page.locator("#integration-history");
-      await history.locator("summary").click();
+      await page.getByRole("navigation", { name: "集成测试队列" }).getByRole("link", { name: /历史批次/ }).click();
       const table = page.getByRole("region", { name: "历史批次表格" });
       const rows = table.locator("tbody tr");
       await expect(rows).toHaveCount(10);
@@ -58,15 +58,15 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       await dateFilter.getByRole("button", { name: "应用", exact: true }).click();
       await expect(history.getByRole("status")).toContainText("共 11 个批次");
       await expect(rows).toHaveCount(10);
-      await expect(active).toBeVisible();
+      await expect(active).toHaveCount(0);
       await expect(table.getByText(target + "OTHER-PROJECT", { exact: true })).toHaveCount(0);
 
       await history.getByRole("link", { name: "下一页", exact: true }).click();
       await expect(page).toHaveURL((url) => url.searchParams.get("page") === "2");
       await expect(rows).toHaveCount(1);
       await table.getByRole("link", { name: target + "1", exact: true }).click();
-      await expect(page.getByRole("heading", { level: 1, name: target + "1 · 星云 N1" })).toBeVisible();
-      await page.getByRole("link", { name: "返回列表", exact: true }).click();
+      await expect(page.getByRole("heading", { level: 1, name: target + "1 · 旧历史批次" })).toBeVisible();
+      await page.getByRole("link", { name: "返回历史批次", exact: true }).click();
       await expect(page).toHaveURL((url) =>
         url.searchParams.get("project") === "1" &&
         url.searchParams.get("page") === "2" &&

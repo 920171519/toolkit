@@ -1,6 +1,7 @@
 import { readColumnFilters, type ColumnFilterField } from "./column-filters";
 import { PACKAGE_STATUSES, PACKAGE_STATUS_META } from "./constants";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "./list-pagination";
+import { safeOverviewReturnPath } from "./return-to";
 import { workflowHref } from "./workflow-links";
 
 export const TRACE_SORT_FIELDS = ["package", "version", "status", "submitted"] as const;
@@ -30,6 +31,7 @@ export type TraceListState = {
   page: number;
   pageSize: number;
   tabs: number[];
+  returnTo?: string;
 };
 
 function textValue(value: unknown) {
@@ -70,6 +72,7 @@ export function readTraceListState(params: Record<string, unknown>): TraceListSt
     page: positiveInteger(params.page) ?? 1,
     pageSize: getListPageSize(typeof params.pageSize === "string" ? params.pageSize : undefined),
     tabs: [...new Set(tabs)].slice(0, MAX_TRACE_TABS),
+    returnTo: safeOverviewReturnPath(params.returnTo),
   };
 }
 
@@ -88,6 +91,7 @@ export function traceListParams(state: TraceListState) {
     page: state.page > 1 ? String(state.page) : undefined,
     pageSize: state.pageSize === DEFAULT_LIST_PAGE_SIZE ? undefined : String(state.pageSize),
     tabs: state.tabs.length > 0 ? state.tabs.join(",") : undefined,
+    returnTo: state.returnTo,
   };
 }
 

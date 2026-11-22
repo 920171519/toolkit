@@ -1,10 +1,10 @@
-import type { ProjectStage } from "./project-stage";
 import "server-only";
 
 import { all, one } from "./db";
 import { getTransferAreaIds } from "./access";
 import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageStatus, Role } from "./constants";
+import type { ProjectStage } from "./project-stage";
 import type {
   BatchItemSummary,
   BatchSummary,

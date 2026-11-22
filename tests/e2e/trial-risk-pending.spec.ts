@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectFlash, login } from "./helpers";
+import { confirmAction, expectFlash, login } from "./helpers";
 
 test("待转测版本经软件经理登记才进入风险试制，放弃后仍能转测", async ({ page }) => {
   await login(page, "MGR001");
@@ -25,8 +25,8 @@ test("待转测版本经软件经理登记才进入风险试制，放弃后仍�
   await release.getByRole("button", { name: "放弃", exact: true }).click();
   const abandon = page.getByRole("dialog");
   await abandon.locator('textarea[name="conclusion"]').fill("联调改期，等待当前版本完成集成测试。");
-  page.once("dialog", (dialog) => dialog.accept());
   await abandon.getByRole("button", { name: "提交结论并放弃试制" }).click();
+  await confirmAction(page);
   await expectFlash(page, "已放弃本次风险试制");
   await expect(page).toHaveURL(/\/trial\?project=1&release_q=2\.1\.0/);
   await expect(release).toHaveCount(0);

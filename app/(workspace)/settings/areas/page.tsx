@@ -6,7 +6,6 @@ import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { FormDialog } from "@/components/form-dialog";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
-import { SettingsTabs } from "@/components/settings-tabs";
 import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { saveAreaAction } from "@/lib/actions/settings";
 import { requireUser } from "@/lib/auth";
@@ -21,6 +20,7 @@ import {
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAreaDirectory, getAreaMemberships, parseFlash } from "@/lib/queries";
 import {
+  areaDirectoryDetailParams,
   directoryHref,
   directoryOrder,
   directoryPage,
@@ -89,12 +89,12 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
   const list = directoryPage(sorted, search.page, pageSize);
   const filters = { ...selected, q: query, scope, sort, order, pageSize: String(pageSize), page: String(list.page) };
   const header = { path, params: filters };
+  const detailParams = areaDirectoryDetailParams(filters);
 
   return (
     <>
       <PageHeader
         title="责任田配置"
-        description="查看责任田、主管和项目分工。"
         actions={isAdmin && (
           <FormDialog label={<><Plus size={14} aria-hidden="true" /> 新建责任田</>} title="新建责任田" testId="new-area-trigger" cancelLabel="取消">
             <ActionForm action={saveAreaAction} hidden={filters} submitText="创建责任田" testId="new-area-form">
@@ -107,14 +107,8 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
         )}
       />
       <FlashMessage notice={notice} />
-      <SettingsTabs
-        isAdmin={isAdmin}
-        canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"}
-        canManagePackages={isAdmin || areas.some((area) => area.leaders.some((leader) => leader.userId === user.id))}
-      />
-      <section className="card" aria-labelledby="area-list-title">
-        <div className="card-header">
-          <h2 id="area-list-title">责任田列表</h2>
+      <section className="card">
+        <div className="settings-directory-actions">
           <Link
             href={directoryHref(path, { ...filters, scope: scope ? undefined : "mine", page: undefined })}
             className="button button-secondary button-sm"
@@ -122,10 +116,10 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
           >
             {scope ? "显示全部责任田" : "只看我的责任田"}
           </Link>
+          <DirectoryFilterBar path={path} params={filters} />
         </div>
-        <DirectoryFilterBar path={path} params={filters} />
         <div className={styles.tableScroll} role="region" aria-label="责任田列表" tabIndex={0}>
-          <table className={styles.table} aria-labelledby="area-list-title">
+          <table className={styles.table} aria-label="责任田列表">
             <thead>
               <tr>
                 <ColumnFilterHeader {...header} sortKey="name" label="责任田" fields={[fields.name, fields.description]} />
@@ -133,23 +127,25 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
                 <ColumnFilterHeader {...header} sortKey="leaders" label="主管" fields={[fields.leaders]} />
                 <ColumnFilterHeader {...header} sortKey="projects" label="已设负责人的项目" fields={[fields.projects]} numeric />
                 <ColumnFilterHeader {...header} sortKey="packages" label="软件包" fields={[fields.packages]} numeric />
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody>
               {list.items.length ? list.items.map((area) => (
                 <tr key={area.id}>
                   <td>
-                    <Link href={directoryHref(`${path}/${area.id}`, filters)} className={styles.rowLink} prefetch={false}>{area.name}</Link>
+                    <Link href={directoryHref(`${path}/${area.id}`, detailParams)} className={styles.rowLink} prefetch={false}>{area.name}</Link>
                     {area.description && <div className={`small muted ${styles.rowDescription}`} title={area.description}>{area.description}</div>}
                   </td>
                   <td><span className={styles.meta}>{area.isIntegration ? "集成测试" : "普通"}</span></td>
                   <td>{supervisors(area) || <span className="muted">未指定</span>}</td>
                   <td className={styles.number}>{area.projectCount}</td>
                   <td className={styles.number}>{area.packageCount}</td>
+                  <td className="cell-actions"><Link href={directoryHref(`${path}/${area.id}`, detailParams)} className="button button-secondary button-sm" aria-label={`查看${area.name}`} prefetch={false}>查看详情</Link></td>
                 </tr>
-              )) : <tr><td colSpan={5}>
+              )) : <tr><td colSpan={6}>
                 <div className={styles.stickyContent}>
-                  <EmptyState title="没有匹配的责任田" description="可以调整搜索词或筛选条件。" />
+                  <EmptyState title="没有匹配的责任田" />
                 </div>
               </td></tr>}
             </tbody>

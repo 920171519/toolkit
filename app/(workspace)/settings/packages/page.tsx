@@ -16,7 +16,7 @@ import { Badge, EmptyState, FlashMessage, PageHeader, StatusPill } from "@/compo
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import directoryStyles from "@/components/settings-directory.module.css";
-import { SettingsTabs } from "@/components/settings-tabs";
+import { SettingsSelect } from "@/components/settings-select";
 import { FormDialog } from "@/components/form-dialog";
 import styles from "./package-settings.module.css";
 
@@ -70,7 +70,8 @@ export default async function PackagesSettingsPage({
 
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
   const oldArea = areas.find((area) => String(area.id) === params.area);
-  const oldState = params.state === "active" || params.state === "inactive" ? params.state : undefined;
+  const legacyState = params.state ?? params.status;
+  const oldState = legacyState === "active" || legacyState === "inactive" ? legacyState : undefined;
   const filters = readColumnFilters({
     ...params,
     f_area: params.f_area ?? (oldArea ? String(oldArea.id) : undefined),
@@ -104,25 +105,21 @@ export default async function PackagesSettingsPage({
                 <input className="input" name="code" placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} pattern={PACKAGE_CODE_PATTERN} title="5 位数字加 3 位字母" required />
               </label>
               <label className="field"><span className="label">软件包名称</span><input className="input" name="name" placeholder="例如 OTA 升级服务" required /></label>
-              <label className="field"><span className="label">责任田</span><select className="select" name="areaId" required defaultValue={areas[0]?.id ?? ""}><option value="" disabled>选择责任田</option>{areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-              <label className="field"><span className="label">责任人</span><select className="select" name="ownerId" required defaultValue=""><option value="" disabled>选择责任人</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeId}</option>)}</select></label>
+              <SettingsSelect name="areaId" label="责任田" options={areas.map(({ id, name }) => ({ id, label: name }))} defaultValue={areas.length === 1 ? areas[0].id : ""} />
+              <SettingsSelect name="ownerId" label="责任人" options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} />
               <label className="field span-2"><span className="label">说明</span><textarea className="textarea" name="description" /></label>
-              <label className="field"><span className="label">试制超期天数</span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
+              <label className="field"><span className="label">试制超期天数 <span className="required-mark" aria-hidden="true">*</span></span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
               <input type="hidden" name="isActive" value="on" />
             </div>
           </ActionForm>
         </FormDialog>
       </>} />
       <FlashMessage notice={notice} />
-      <SettingsTabs isAdmin={isAdmin} canManageProjects={isAdmin || user.role === "SOFTWARE_MANAGER"} />
 
-      <section className="card" aria-labelledby="settings-package-list">
-        <div className="card-header">
-          <h2 id="settings-package-list">软件包列表</h2>
-          <DirectoryFilterBar {...headerProps} />
-        </div>
+      <section className="card" aria-label="软件包列表">
+        <DirectoryFilterBar {...headerProps} />
         <div className="table-wrap" role="region" aria-label="软件包配置表格" tabIndex={0}>
-          <table className="data-table">
+          <table className="data-table" aria-label="软件包列表">
             <thead>
               <tr>
                 <ColumnFilterHeader {...headerProps} label="软件包编码" fields={[fields.code]} />

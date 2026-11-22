@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RegisterForm } from "@/components/auth-forms";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { getCurrentUser } from "@/lib/auth";
 import styles from "../auth.module.css";
 
@@ -14,8 +15,8 @@ export default async function RegisterPage() {
   return (
     <section className={`card ${styles.panel}`} aria-labelledby="register-title">
       <header className={styles.heading}>
-        <h1 id="register-title">创建协作账号</h1>
-        <p>填写姓名、工号与密码。账号默认属于软件工程部，后续由管理员配置角色与责任田。</p>
+        <h1 id="register-title">注册账号</h1>
+        <InfoTooltip label="账号权限说明">新账号默认是部门成员，角色和责任田由管理员分配。</InfoTooltip>
       </header>
       <RegisterForm />
     </section>

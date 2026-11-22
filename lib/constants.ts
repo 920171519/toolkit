@@ -23,7 +23,7 @@ export const ROLE_META: Record<Role, { label: string; short: string; description
   SOFTWARE_MANAGER: {
     label: "软件经理",
     short: "软件经理",
-    description: "组织转测、发试制与转正，维护项目、责任田和软件包。",
+    description: "维护所负责的项目和节点，组织项目转测、试制与转正。",
     tone: "amber",
   },
   INTEGRATION_TESTER: {
@@ -41,7 +41,7 @@ export const ROLE_META: Record<Role, { label: string; short: string; description
   PACKAGE_OWNER: {
     label: "软件包责任人",
     short: "责任人",
-    description: "提交所负责软件包的转测申请与版本信息。",
+    description: "按责任田分工提交软件包的转测申请和版本信息。",
     tone: "emerald",
   },
   TEST_VALIDATOR: {

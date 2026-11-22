@@ -8,6 +8,7 @@ import { DEPARTMENT_NAME } from "@/lib/constants";
 import type { ActionState } from "@/lib/action-state";
 import { text } from "@/lib/action-helpers";
 import { failure } from "@/lib/action-helpers";
+import { safeWorkspacePath } from "@/lib/return-to";
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const name = text(formData, "name");
@@ -41,7 +42,7 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   } catch (error) {
     return failure(error);
   }
-  redirect("/dashboard?flash=" + encodeURIComponent("注册成功，欢迎加入工程协同台。"));
+  redirect("/dashboard?flash=" + encodeURIComponent("账号已创建"));
 }
 
 export async function loginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -52,8 +53,7 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   const user = await verifyLogin(employeeId, password);
   if (!user) return { error: "工号或密码不正确，或账号已停用。" };
   await createSession(user.id);
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
-  redirect(safeNext);
+  redirect(safeWorkspacePath(next) ?? "/dashboard");
 }
 
 export async function logoutAction(): Promise<void> {

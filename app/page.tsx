@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
-import { DEPARTMENT_NAME } from "@/lib/constants";
 import { getPublicProjects } from "@/lib/queries";
 import { PublicHeader } from "@/components/public-header";
 import { ProjectContacts } from "@/components/project-contacts";
+import styles from "./public-contacts.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -18,26 +18,12 @@ export default async function HomePage() {
   return (
     <>
       <PublicHeader user={user} />
-      <main>
-        <section className="contact-hero">
-          <div className="container-wide">
-            <h1>项目联系人</h1>
-            <p>每个项目可以配置多位 PM 和软件经理。需要跨部门协作时，请联系对应项目的 PM 或软件经理。</p>
-          </div>
-        </section>
-
-        <section className="public-section-tight">
-          <div className="container-wide">
-            <ProjectContacts projects={projects} />
-          </div>
-        </section>
+      <main className={`container-wide ${styles.page}`}>
+        <header className={styles.heading}>
+          <h1>在行项目联系人</h1>
+        </header>
+        <ProjectContacts projects={projects} />
       </main>
-      <footer className="public-footer">
-        <div className="container-wide public-footer-inner">
-          <span>工程协同台 · {DEPARTMENT_NAME}</span>
-          <span>项目接口请联系对应 PM 或软件经理</span>
-        </div>
-      </footer>
     </>
   );
 }

@@ -7,6 +7,7 @@ import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { requireWorkflowProject } from "@/lib/project-scope";
+import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTrialReadyVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
@@ -37,8 +38,8 @@ export default async function TrialReadyDetailPage({
     <>
       <PageHeader
         title={row.packageName + " " + row.version}
-        description={row.projectName + " · 待发布试制"}
-        actions={<Link href={workflowHref("/trial", projectId, trialQueueParams(search))} className="button button-secondary" prefetch={false}>
+        description={row.projectName}
+        actions={<Link href={workflowHref("/trial", projectId, { ...trialQueueParams(search), returnTo: getWorkflowListState(search).returnTo })} className="button button-secondary" prefetch={false}>
           <ArrowLeft size={14} />返回试制队列
         </Link>}
       />
@@ -51,7 +52,7 @@ export default async function TrialReadyDetailPage({
           {risk ? (
             <>
               <p style={{ whiteSpace: "pre-wrap" }}>{row.riskConclusion}</p>
-              {row.ongoingTestCount > 0 && <p className="small muted" style={{ marginTop: 6 }}>已有 {row.ongoingTestCount} 个测试批次安排测试，完成前无法转正。</p>}
+              {row.ongoingTestCount > 0 && <p className="small muted" style={{ marginTop: 6 }}>仍有 {row.ongoingTestCount} 个待发起或在测批次，完成前无法转正。</p>}
             </>
           ) : (
             <>

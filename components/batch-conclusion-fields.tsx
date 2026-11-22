@@ -10,8 +10,8 @@ type TestedVersion = {
 };
 
 export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
-  const [conclusion, setConclusion] = useState("PASS");
-  const [attribution, setAttribution] = useState("NONE");
+  const [conclusion, setConclusion] = useState("");
+  const [attribution, setAttribution] = useState("");
   const showAffectedVersions =
     conclusion === "FAIL" && attribution === "PACKAGE_RELATED" && items.some((item) => item.parallelRiskTrial);
 
@@ -19,28 +19,31 @@ export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
     <>
       <label className="field">
         <span className="label">测试结论</span>
-        <select className="select" name="conclusion" value={conclusion} onChange={(event) => setConclusion(event.target.value)}>
+        <select className="select" name="conclusion" value={conclusion} required onChange={(event) => {
+          setConclusion(event.target.value);
+          setAttribution("");
+        }}>
+          <option value="" disabled>请选择</option>
           <option value="PASS">测试通过</option>
           <option value="FAIL">测试不通过</option>
           <option value="BLOCKED">无法完成验证</option>
         </select>
       </label>
-      <label className="field">
+      {conclusion === "FAIL" ? <label className="field">
         <span className="label">问题归属</span>
-        <select className="select" name="issueAttribution" value={attribution} onChange={(event) => setAttribution(event.target.value)}>
-          <option value="NONE">未发现问题</option>
+        <select className="select" name="issueAttribution" value={attribution} required onChange={(event) => setAttribution(event.target.value)}>
+          <option value="" disabled>请选择</option>
           <option value="PACKAGE_RELATED">问题与软件包相关</option>
           <option value="NOT_PACKAGE_RELATED">问题与软件包无关</option>
-          <option value="UNKNOWN">原因待定位 / 无测试条件</option>
         </select>
-      </label>
+      </label> : <input type="hidden" name="issueAttribution" value={conclusion === "BLOCKED" ? "UNKNOWN" : "NONE"} />}
       {showAffectedVersions && (
         <fieldset className="field">
           <legend className="label">受影响的软件包版本</legend>
-          <p className="note">请选择导致测试不通过的版本。所选的风险试制版本将同步作废。</p>
+          <p className="risk-callout">提交后，选中的风险试制版本会被作废，相关绑定电子流需要撤销。</p>
           {items.map((item) => (
             <label key={item.versionId} className="toolbar" style={{ gap: 7 }}>
-              <input type="checkbox" name="affectedVersionId" value={item.versionId} defaultChecked={items.length === 1} />
+              <input type="checkbox" name="affectedVersionId" value={item.versionId} />
               <span>{item.packageName} {item.version}{item.parallelRiskTrial ? " · 风险试制中" : ""}</span>
             </label>
           ))}
