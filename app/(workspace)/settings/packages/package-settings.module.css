@@ -11,3 +11,49 @@
   align-items: center;
   gap: 8px;
 }
+
+.name {
+  display: block;
+  max-inline-size: 18rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.nameExcerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.formGrid {
+  align-items: start;
+}
+
+.formGrid :global(.field),
+.formGrid :global(.input),
+.formGrid :global(.select) {
+  min-width: 0;
+}
+
+.detail :global(.page-head) > div:first-child,
+.detail :global(.detail-row) > :is(dt, dd) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.detail :global(.page-head-actions) {
+  flex-shrink: 0;
+}
+
+.detail :global(.settings-usage-project) strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .formGrid :global(.input),
+  .formGrid :global(.select) {
+    min-height: 44px;
+  }
+}

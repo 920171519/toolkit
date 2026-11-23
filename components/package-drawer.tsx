@@ -7,6 +7,7 @@ import { ArrowUpRight, LoaderCircle, Pencil, Search, X } from "lucide-react";
 import type { PackageDetailData, PersonOption } from "@/lib/queries";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
@@ -254,6 +255,7 @@ export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer 
   }
 
   const pkg = detail?.package;
+  const identity = pkg && packageIdentity(pkg);
   const currentTabId = `${id}-tab-${panel}`;
 
   return (
@@ -273,8 +275,8 @@ export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer 
       }}>
       <header className={styles.header}>
         <div>
-          <h2>{pkg?.name ?? "软件包详情"}</h2>
-          {pkg && <p className="small muted">{[pkg.code, pkg.areaName || "未归属责任田", !pkg.isActive && "已停用"].filter(Boolean).join(" · ")}</p>}
+          <h2 className={identity ? "mono" : undefined}>{identity?.code ?? "软件包详情"}</h2>
+          {pkg && <p className="small muted">{pkg.areaName || "未归属责任田"}{!pkg.isActive && " · 已停用"}</p>}
         </div>
         <button type="button" className="drawer-close" onClick={onClose} aria-label="关闭详情" disabled={pending}><X size={18} aria-hidden="true" /></button>
       </header>
@@ -288,6 +290,7 @@ export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer 
       </div>}
 
       <div ref={body} className={styles.body}>
+        {identity && identity.name !== identity.code && <p className={styles.packageName}>{identity.name}</p>}
         {loadError && <div className="form-error" role="alert"><span>{loadError}</span><button type="button" className="button button-secondary button-sm" onClick={() => void loadDetail()}>重试</button></div>}
         {!detail && !loadError && <div className="drawer-loading" role="status"><LoaderCircle size={20} className="animate-spin" aria-hidden="true" />正在加载软件包详情…</div>}
 

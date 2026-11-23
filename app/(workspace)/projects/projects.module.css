@@ -295,6 +295,7 @@
 }
 
 .activityMain {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -310,6 +311,12 @@
   margin-top: 2px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.activityPackageName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .activityMeta {
@@ -329,13 +336,31 @@
   font-size: 13px;
 }
 
-.packageTable td {
+.packageTable td,
+.packageTable tbody th {
   vertical-align: top;
+}
+
+.packageTable tbody th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.packageTable tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.packageVersion {
+  white-space: nowrap;
 }
 
 .packageScope {
   min-width: 200px;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .packageScope span {

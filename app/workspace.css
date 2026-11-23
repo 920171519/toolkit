@@ -31,10 +31,11 @@ a.project-switch-option:hover { background: var(--surface-muted); }
 .workspace :is(a, button, input, select, summary, textarea):focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 .workspace :is(.sidebar, .workspace-mobile-links) :is(a, button):focus-visible { outline-color: var(--navigation-mark); outline-offset: -2px; }
 
-dialog.workspace-dialog { position: fixed; inset: 0; padding: 0; margin: auto; max-height: calc(100dvh - 40px); width: min(560px, calc(100% - 32px)); overflow: auto; color: var(--ink); }
+dialog.workspace-dialog { position: fixed; inset: 0; padding: 0; margin: auto; max-height: calc(100dvh - 40px); width: min(560px, calc(100% - 32px)); overflow: auto; color: var(--ink); text-align: start; white-space: normal; }
 dialog.workspace-dialog.modal-panel-wide { width: min(1100px, calc(100% - 32px)); }
 dialog.workspace-dialog::backdrop { background: var(--dialog-backdrop); }
 .workspace-dialog .modal-header { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.workspace-dialog .modal-header h2 { min-width: 0; overflow-wrap: anywhere; }
 .workspace-dialog-cancel { display: flex; justify-content: flex-end; margin-top: 12px; }
 .workspace-dialog-description { color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
 .workspace-dialog-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }

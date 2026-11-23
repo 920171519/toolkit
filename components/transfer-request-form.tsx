@@ -59,8 +59,8 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
           <span className="label" id={packageLabelId}>软件包 <span className="required-mark" aria-hidden="true">*</span></span>
           {selected ? (
             <div className="package-picked">
-              <span><strong>{selected.name}</strong> · {selected.code}{selected.ownerName ? ` · 责任人 ${selected.ownerName}` : ""}</span>
-              <button type="button" className="button button-ghost button-sm" aria-label="更换软件包" onClick={() => setPackageId(null)}>更换</button>
+              <span className={styles.packageChoiceLabel}><strong>{selected.name}</strong> · {selected.code}{selected.ownerName ? ` · 责任人 ${selected.ownerName}` : ""}</span>
+              <button type="button" className={`button button-ghost button-sm ${styles.packageChoiceAside}`} aria-label="更换软件包" onClick={() => setPackageId(null)}>更换</button>
             </div>
           ) : (
             <>
@@ -78,8 +78,8 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
               <div className="package-pick-list">
                 {filtered.length === 0 ? <span className="small muted">没有匹配的软件包</span> : visible.map((pkg) => (
                   <button type="button" className="package-pick-item" key={pkg.id} onClick={() => setPackageId(pkg.id)} data-testid={`transfer-package-${pkg.id}`}>
-                    <span><strong>{pkg.name}</strong> · {pkg.code}</span>
-                    <span className="small muted">{pkg.ownerName ?? "待指定责任人"}</span>
+                    <span className={styles.packageChoiceLabel}><strong>{pkg.name}</strong> · {pkg.code}</span>
+                    <span className={`small muted ${styles.packageChoiceAside}`}>{pkg.ownerName ?? "待指定责任人"}</span>
                   </button>
                 ))}
               </div>

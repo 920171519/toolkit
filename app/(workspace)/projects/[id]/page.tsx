@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
 import { CONCLUSION_META, PACKAGE_STATUS_META, PROJECT_STATUS_META, TRANSFER_REQUEST_STATUS_META, type PackageStatus } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
+import identityStyles from "@/components/package-identity.module.css";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
@@ -193,12 +195,14 @@ export default async function ProjectOverviewPage({
             <ul className={styles.activityList}>
               {projectVersions.map((version) => {
                 const status = projectVersionStatus(version.status);
+                const { code, name } = packageIdentity({ code: version.packageCode, name: version.packageName });
                 return (
                   <li key={version.requestId} className={styles.activityItem}>
                     <div className={styles.activityMain}>
                       <div>
-                        <Link href={scopedHref(`/versions/${version.versionId}`)} prefetch={false}>{version.packageName} <span className="mono">{version.version}</span></Link>
+                        <Link href={scopedHref(`/versions/${version.versionId}`)} className="mono" prefetch={false}>{code} {version.version}</Link>
                       </div>
+                      {name !== code && <p className={styles.activityPackageName} title={name}>{name}</p>}
                       {version.batchCode && <p>集成批次 <span className="mono">{version.batchCode}</span></p>}
                     </div>
                     <div className={styles.activityMeta}>
@@ -226,18 +230,21 @@ export default async function ProjectOverviewPage({
         ) : (
           <div className="table-wrap" tabIndex={0} role="region" aria-label="项目软件包表，可横向滚动">
             <table className={`data-table ${styles.packageTable}`}>
-              <thead><tr><th scope="col">软件包</th><th scope="col">正式版</th><th scope="col">试制版</th><th scope="col">本项目节点</th><th scope="col">全部项目使用范围</th></tr></thead>
+              <thead><tr><th scope="col">软件包编码</th><th scope="col">正式版</th><th scope="col">试制版</th><th scope="col">本项目节点</th><th scope="col">全部项目使用范围</th></tr></thead>
               <tbody>
                 {packageRows.slice(0, previewLength).map((pkg) => {
                   const localUsage = pkg.usages.find((usage) => usage.projectId === projectId);
+                  const { code, name } = packageIdentity(pkg);
                   return (
                     <tr key={pkg.id}>
-                      <td>
-                        <Link href={scopedHref("/packages", { open: pkg.id })} className={styles.tableLink} prefetch={false}>{pkg.name}</Link>
-                        <div className={styles.secondaryText}>{pkg.code} · {pkg.areaName ?? "未归属"}</div>
+                      <th scope="row">
+                        <Link href={scopedHref("/packages", { open: pkg.id })} className={`mono ${styles.tableLink} ${identityStyles.code}`} prefetch={false} title={name === code ? undefined : name}>{code}</Link>
+                        <div className={styles.secondaryText}>{pkg.areaName ?? "未归属"}</div>
+                      </th>
+                      <td className={`mono ${styles.packageVersion}`}>{pkg.formalVersion ?? "—"}</td>
+                      <td className={`mono ${styles.packageVersion}`}>
+                        {pkg.trialVersions.length ? <ul className="version-stack">{pkg.trialVersions.map((version) => <li key={version}>{version}</li>)}</ul> : "—"}
                       </td>
-                      <td className="mono">{pkg.formalVersion ?? "—"}</td>
-                      <td className="mono">{pkg.trialVersions.join(" / ") || "—"}</td>
                       <td>{localUsage?.nodeNames.join("、") || "—"}</td>
                       <td className={styles.packageScope}>
                         {pkg.usages.map((usage) => (

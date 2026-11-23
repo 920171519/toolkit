@@ -10,8 +10,10 @@ import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
 import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
+import identityStyles from "./package-identity.module.css";
 
 const path = "/packages";
 const empty = "_empty";
@@ -68,13 +70,13 @@ export function PackageOverviewTable({
   const filters = readColumnFilters(Object.fromEntries(params), Object.values(fields));
   const filterSet = Boolean(query || Object.keys(filters).length);
   const header = { path, params: { project: selectedProjectId?.toString(), ...filters, q: query || undefined, pageSize: params.get("pageSize") ?? undefined } };
-  const filtered = packages.filter((pkg) => {
+  const filtered = packages.map((pkg) => ({ pkg, identity: packageIdentity(pkg) })).filter(({ pkg, identity }) => {
     const usageMatches = !(filters.f_usage_project || filters.f_usage_node) || pkg.usages.some((usage) =>
       matchesChoiceFilter(filters, "usage_project", [String(usage.projectId)]) &&
       matchesChoiceFilter(filters, "usage_node", usage.nodeNames.map(nodeOptionValue)));
     return usageMatches &&
-      matchesTextFilter(filters, "name", pkg.name) &&
-      matchesTextFilter(filters, "code", pkg.code) &&
+      (matchesTextFilter(filters, "name", identity.name) || matchesTextFilter(filters, "name", pkg.name)) &&
+      (matchesTextFilter(filters, "code", identity.code) || matchesTextFilter(filters, "code", pkg.code)) &&
       matchesChoiceFilter(filters, "area", [String(pkg.areaId ?? empty)]) &&
       matchesChoiceFilter(filters, "owner", [String(pkg.ownerId ?? empty)]) &&
       matchesTextFilter(filters, "formal", pkg.formalVersion) &&
@@ -150,13 +152,14 @@ export function PackageOverviewTable({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((pkg) => {
+                {visible.map(({ pkg, identity: { code, name } }) => {
                   const href = urlWith({ open: pkg.id, panel: null });
                   return (
                     <tr key={pkg.id}>
                       <th scope="row" className="package-index-name">
-                        <Link href={href} className="link-button" prefetch={false} onClick={(event) => openPackage(event, pkg.id)} aria-label={`查看 ${pkg.name} 详情`}>{pkg.name} <ArrowRight size={12} aria-hidden="true" /></Link>
-                        <div className="small muted">{pkg.code}{!pkg.isActive && " · 已停用"}</div>
+                        <Link href={href} className={`mono link-button ${identityStyles.code}`} prefetch={false} onClick={(event) => openPackage(event, pkg.id)} aria-label={`查看 ${code} 详情`}>{code}<ArrowRight size={12} aria-hidden="true" /></Link>
+                        {name !== code && <div className={identityStyles.tableName} title={name}>{name}</div>}
+                        {!pkg.isActive && <div className="small muted">已停用</div>}
                       </th>
                       <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "责任人待指定"}</div></td>
                       <td className="usage-cell">
@@ -166,7 +169,7 @@ export function PackageOverviewTable({
                               {pkg.usages.map((usage) => <li key={usage.projectId}>{usage.projectName}</li>)}
                             </ul>
                             <Link href={urlWith({ open: pkg.id, panel: "usage" })} prefetch={false} className="archive-link package-scope-action"
-                              aria-label={`查看 ${pkg.name} 使用范围`} onClick={(event) => openPackage(event, pkg.id, "usage")}>查看节点</Link>
+                              aria-label={`查看 ${code} 使用范围`} onClick={(event) => openPackage(event, pkg.id, "usage")}>查看节点</Link>
                           </>
                         )}
                       </td>

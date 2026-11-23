@@ -127,8 +127,8 @@ export function BatchBuilder({
                     />
                   </td>
                   <td>
-                    <span style={{ fontWeight: 600 }}>{candidate.packageName}</span>
-                    <div className="small muted">{candidate.packageCode} · {candidate.ownerName ?? "责任人待定"}</div>
+                    <strong className={styles.packageName}>{candidate.packageName}</strong>
+                    <div className={`small muted ${styles.packageName}`}>{candidate.packageCode} · {candidate.ownerName ?? "责任人待定"}</div>
                   </td>
                   <td className={styles.snapshotColumn}>
                     <div className="small muted">正式 <span className="mono">{candidate.formalVersion ?? "—"}</span></div>

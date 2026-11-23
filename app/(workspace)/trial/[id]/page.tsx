@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-r
 import { requireUser } from "@/lib/auth";
 import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
@@ -65,6 +66,7 @@ export default async function TrialDetailPage({
   const pendingDecision = !archived && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
   const riskTestVoided = request.voidKind === "RISK_TEST_FAILURE";
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
+  const identity = packageIdentity({ name: request.packageName, code: request.packageCode });
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
   const transferStatusMeta = TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? {
     label: request.status === "TRIAL" ? "试制中" : request.status === "PENDING_FORMAL" ? "待转正" : request.status === "FORMAL" ? "已转正" : request.status === "VOID" ? "已作废" : request.status,
@@ -74,8 +76,9 @@ export default async function TrialDetailPage({
   return (
     <>
       <PageHeader
-        title={`${request.packageName} ${request.version} · 绑定验证`}
+        title={`${identity.code} ${request.version} · 绑定验证`}
         description={<>
+          {identity.name !== identity.code && `${identity.name} · `}
           {request.projectName} · {releaseFlowUrl(request.trialFormNo)
             ? <ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />
             : <>试制电子流 {request.trialFormNo ?? "—"}</>} · 发布于 {formatDateTime(request.trialReleasedAt)}

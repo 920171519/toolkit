@@ -6,6 +6,7 @@ import { Badge, ExternalLink, PageHeader } from "@/components/ui";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
+import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
@@ -33,12 +34,13 @@ export default async function TrialReadyDetailPage({
   if (!row || !canManageProjectWorkflowForProject(user, row.projectId)) notFound();
   const risk = row.riskProjectCount > 0;
   const conclusion = row.batchConclusion ? CONCLUSION_META[row.batchConclusion as BatchConclusion] : null;
+  const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
 
   return (
     <>
       <PageHeader
-        title={row.packageName + " " + row.version}
-        description={row.projectName}
+        title={`${identity.code} ${row.version}`}
+        description={identity.name !== identity.code ? `${identity.name} · ${row.projectName}` : row.projectName}
         actions={<Link href={workflowHref("/trial", projectId, { ...trialQueueParams(search), returnTo: getWorkflowListState(search).returnTo })} className="button button-secondary" prefetch={false}>
           <ArrowLeft size={14} />返回试制队列
         </Link>}

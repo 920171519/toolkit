@@ -8,17 +8,20 @@ import { TrialQueueTable, type TrialTableColumn } from "@/components/trial-queue
 import { Badge, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/trial-queue-table.module.css";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
+import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { abandonTrialReleaseAction, releaseTrialAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
+import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTrialReadyVersions, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
+import workflowStyles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "试制与绑定验证" };
@@ -80,7 +83,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const trials = getTrialVersions(scope).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
-    <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className="archive-link">{row.packageName}</Link>
+    <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
   );
 
   const identityColumns: TrialTableColumn<TrialReadyVersion | TrialVersionRow>[] = [
@@ -173,13 +176,15 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
         emptyTitle="没有待发试制的项目版本"
         actions={(row) => {
           const risk = riskRelease(row);
-          const title = row.packageName + " " + row.version;
+          const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
+          const title = `${identity.code} ${row.version}`;
           return (
             <div className={styles.actions}>
               {canRelease(row) && <>
                 <FormDialog label="发布" title={"发布 " + title + " 试制"}
                   description={"发布后同步到全部 " + row.versionProjectCount + " 个使用项目。"}
                   triggerClassName="button button-secondary button-sm" cancelLabel="取消">
+                  <WorkflowPackageName {...identity} />
                   <section aria-label="验收依据">
                     <h3>验收依据</h3>
                     {row.records.map((record) => {
@@ -216,6 +221,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                 <FormDialog label="放弃" title={"放弃发布 " + title + " 试制"}
                   description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
                   triggerClassName="button button-ghost button-sm" cancelLabel="取消">
+                  <WorkflowPackageName {...identity} />
                   <ActionForm action={abandonTrialReleaseAction} hidden={{ ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
                     submitText="提交结论并放弃试制" submitVariant="danger" submitClassName="button-sm"
                     confirmMessage={risk ? `${title} 将退出风险试制队列，转测与测试继续。` : `${title} 将在全部使用项目中作废。`}>

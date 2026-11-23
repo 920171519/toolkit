@@ -18,6 +18,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { BAD_CONCLUSION_LABEL, BATCH_STATUS_META, BINDING_FLOW_STATUS_META, CONCLUSION_META, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
@@ -57,6 +58,7 @@ export default async function VersionTracePage({
   const trace = getVersionTrace(versionId, projectId);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
+  const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
   const requested = withTraceTab(readTraceListState(search), versionId);
   const tabs = getTraceVersionTabs(requested.tabs, projectId);
   const state = { ...requested, tabs: tabs.map((tab) => tab.id) };
@@ -72,8 +74,11 @@ export default async function VersionTracePage({
   return (
     <>
       <PageHeader
-        title={`${version.packageName} ${version.version}`}
-        description={`${project ? `${project.name} · ` : ""}${version.packageCode} · 提交人 ${version.submittedByName ?? "系统"} · ${formatDateTime(version.submittedAt)}`}
+        title={`${identity.code} ${version.version}`}
+        description={<>
+          {identity.name !== identity.code && <>{identity.name}<br /></>}
+          {project && `${project.name} · `}提交人 {version.submittedByName ?? "系统"} · {formatDateTime(version.submittedAt)}
+        </>}
         actions={<>
           {fromFormal && <Link href={workflowHref("/formal", projectId, formalState)} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回待转正列表</Link>}
           <Link href={workflowHref("/packages", projectId, { open: version.packageId })} prefetch={false} className="button button-secondary">查看软件包</Link>
@@ -129,7 +134,7 @@ export default async function VersionTracePage({
                   <td><ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />{request.riskConclusion && request.riskConclusion !== version.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
                   <td>{total > 0 ? <><ProgressBar value={passed} max={total} /><span className="small muted">{passed}/{total}</span></> : <span className="small muted">—</span>}</td>
                   <td><ReleaseFlowEvidence value={request.formFlowNo} label="查看转正电子流" /></td>
-                  <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && <RiskTrialEntryAction entry={riskEntry} packageName={version.packageName} version={version.version} projectName={request.projectName} returnTo={state.returnTo} />}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, request.projectId)} prefetch={false} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
+                  <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && <RiskTrialEntryAction entry={riskEntry} packageName={version.packageName} packageCode={version.packageCode} version={version.version} projectName={request.projectName} returnTo={state.returnTo} />}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, request.projectId)} prefetch={false} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
                 </tr>
               );
             })}</tbody>
@@ -212,7 +217,7 @@ export default async function VersionTracePage({
       {canVoid && (
         <section className="card version-management" aria-label="版本管理">
           <div className="card-body">
-            <FormDialog label="作废版本" title={`作废 ${version.packageName} ${version.version}`} description="该版本将在所有使用项目中失效。转测、绑定和发布记录会保留。" triggerClassName="button button-outline-danger" cancelLabel="取消">
+            <FormDialog label="作废版本" title={`作废 ${identity.code} ${version.version}`} description="该版本将在所有使用项目中失效。转测、绑定和发布记录会保留。" triggerClassName="button button-outline-danger" cancelLabel="取消">
               <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id, scopeProjectId: projectId, ...traceListParams(state), from: fromFormal ? "formal" : undefined }} submitText="确认作废该版本" submitVariant="danger">
                 <label className="field"><span className="label">作废原因 <span className="required-mark" aria-hidden="true">*</span></span><textarea className="textarea" name="reason" required minLength={5} /></label>
               </ActionForm>

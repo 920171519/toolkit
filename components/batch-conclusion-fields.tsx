@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import styles from "./workflow-queue.module.css";
 
 type TestedVersion = {
   versionId: number;
@@ -42,9 +43,9 @@ export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
           <legend className="label">受影响的软件包版本</legend>
           <p className="risk-callout">提交后，选中的风险试制版本会被作废，相关绑定电子流需要撤销。</p>
           {items.map((item) => (
-            <label key={item.versionId} className="toolbar" style={{ gap: 7 }}>
+            <label key={item.versionId} className={styles.affectedVersion}>
               <input type="checkbox" name="affectedVersionId" value={item.versionId} />
-              <span>{item.packageName} {item.version}{item.parallelRiskTrial ? " · 风险试制中" : ""}</span>
+              <span className={styles.packageChoiceLabel}>{item.packageName} {item.version}{item.parallelRiskTrial ? " · 风险试制中" : ""}</span>
             </label>
           ))}
         </fieldset>

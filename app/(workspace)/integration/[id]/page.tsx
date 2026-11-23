@@ -127,7 +127,7 @@ export default async function BatchDetailPage({
                       const entry = item.transferRequestId ? riskEntries[item.transferRequestId] : undefined;
                       const riskEntry = entry?.stage === riskStage && entry.batchId === batch.id ? entry : undefined;
                       return <tr key={item.id}>
-                        <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} prefetch={false} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className="small muted">{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
+                        <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} prefetch={false} className={styles.packageName} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className={`small muted ${styles.packageName}`}>{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
                         <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
                         <td><span className="mono small">{item.trialVersions || "—"}</span></td>
                         <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
@@ -138,7 +138,7 @@ export default async function BatchDetailPage({
                           {item.parallelRiskTrial && <div><Badge tone="amber">并行风险试制</Badge></div>}
                           {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
                         </td>
-                        {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} version={item.version} projectName={batch.projectName ?? "未指定项目"} returnTo={listState.returnTo} />}</td>}
+                        {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={batch.projectName ?? "未指定项目"} returnTo={listState.returnTo} />}</td>}
                       </tr>;
                     })}
                   </tbody>

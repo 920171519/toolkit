@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { X } from "lucide-react";
+import { packageIdentity } from "@/lib/package-identity";
 import type { TraceVersionRow } from "@/lib/workflow-queries";
 import { traceHref, type TraceListState } from "@/lib/version-trace-list";
 import styles from "./versions.module.css";
@@ -22,7 +23,8 @@ export function VersionTraceTabs({ state, tabs, projectId, activeId }: {
         版本列表
       </Link>
       {tabs.map((tab) => {
-        const name = `${tab.packageName} ${tab.version}`;
+        const identity = packageIdentity({ name: tab.packageName, code: tab.packageCode });
+        const name = `${identity.code} ${tab.version}`;
         const remaining = { ...state, tabs: state.tabs.filter((id) => id !== tab.id) };
         return (
           <div key={tab.id} className={styles.tabWithClose}>
@@ -31,7 +33,7 @@ export function VersionTraceTabs({ state, tabs, projectId, activeId }: {
               href={traceHref(state, projectId, tab.id)}
               prefetch={false}
               aria-current={tab.id === activeId ? "page" : undefined}
-              title={name}
+              title={identity.name !== identity.code ? `${name} · ${identity.name}` : name}
             >
               {name}
             </Link>

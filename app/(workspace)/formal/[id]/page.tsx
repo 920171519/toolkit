@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { Badge, ExternalLink, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
@@ -12,6 +13,7 @@ import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -36,6 +38,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   if (records.length === 0) notFound();
   const manageable = records.find((record) => canManageProjectWorkflowForProject(user, record.projectId));
   const version = manageable ?? records[0];
+  const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
   const evidence = getVersionRequestIds(version.versionId)
     .map((requestId) => getTrialDetail(requestId))
     .filter((detail): detail is NonNullable<ReturnType<typeof getTrialDetail>> => detail !== null);
@@ -47,10 +50,12 @@ export default async function FormalDetailPage({ params, searchParams }: {
   return (
     <>
       <PageHeader
-        title={`${version.packageName} ${version.version} · 转正核对`}
+        title={`${identity.code} ${version.version} · 转正核对`}
+        description={identity.name !== identity.code ? identity.name : undefined}
         actions={<>
           <Link href={returnHref} prefetch={false} className="button button-secondary"><ArrowLeft size={14} aria-hidden="true" />返回待转正列表</Link>
-          {manageable && <FormDialog label="发布正式版本" title={`转正 ${version.packageName} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
+          {manageable && <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
+            <WorkflowPackageName {...identity} />
             <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...getWorkflowListState(search) }} submitText="提交转正电子流并发布">
               <label className="field">
                 <span className="label">转正电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>

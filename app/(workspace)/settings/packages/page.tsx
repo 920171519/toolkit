@@ -99,14 +99,15 @@ export default async function PackagesSettingsPage({
         <Link href={directoryHref(`${path}/import`, listParams)} className="button button-secondary" prefetch={false}>导入历史版本</Link>
         <FormDialog label={<><Plus size={15} aria-hidden="true" />新建软件包</>} title="新建软件包" testId="new-package-trigger">
           <ActionForm action={savePackageAction} hidden={listParams} submitText="创建并配置使用范围" testId="new-package-form">
-            <div className="form-grid">
+            <div className={`form-grid ${styles.formGrid}`}>
               <label className="field">
                 <span className="label">软件包编码</span>
                 <input className="input" name="code" placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} pattern={PACKAGE_CODE_PATTERN} title="5 位数字加 3 位字母" required />
               </label>
               <label className="field"><span className="label">软件包名称</span><input className="input" name="name" placeholder="例如 OTA 升级服务" required /></label>
               <SettingsSelect name="areaId" label="责任田" options={areas.map(({ id, name }) => ({ id, label: name }))} defaultValue={areas.length === 1 ? areas[0].id : ""} />
-              <SettingsSelect name="ownerId" label="责任人" options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} />
+              <SettingsSelect name="ownerId" label="责任人" dialogSearchPlaceholder="姓名或工号"
+                options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} />
               <label className="field span-2"><span className="label">说明</span><textarea className="textarea" name="description" /></label>
               <label className="field"><span className="label">试制超期天数 <span className="required-mark" aria-hidden="true">*</span></span><input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={7} required /></label>
               <input type="hidden" name="isActive" value="on" />
@@ -137,8 +138,11 @@ export default async function PackagesSettingsPage({
                 return (
                   <tr key={pkg.id}>
                     <th scope="row" className={styles.code}><Link href={detailHref} className="archive-link" prefetch={false}>{identity.code}</Link></th>
-                    <td>{identity.name}</td>
-                    <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "待指定"}</div></td>
+                    <td><span className={`${styles.name} ${styles.nameExcerpt}`} title={identity.name}>{identity.name}</span></td>
+                    <td>
+                      <span className={styles.name}>{pkg.areaName ?? "未归属"}</span>
+                      <span className={`small muted ${styles.name}`}>{pkg.ownerName ?? "待指定"}</span>
+                    </td>
                     <td className={directoryStyles.number}>{pkg.versionCount}</td>
                     <td className={directoryStyles.number}>{pkg.usageCount} 个</td>
                     <td>

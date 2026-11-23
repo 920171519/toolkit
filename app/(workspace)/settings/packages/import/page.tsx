@@ -12,6 +12,7 @@ import { ActionForm } from "@/components/action-form";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { SettingsSelect } from "@/components/settings-select";
+import styles from "../package-settings.module.css";
 import { LegacyReleaseFields } from "@/components/legacy-release-fields";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +45,8 @@ export default async function ImportLegacyVersionPage({ searchParams }: {
         <section className="card" style={{ maxWidth: 860 }}>
           <div className="card-body">
             <ActionForm action={importLegacyVersionAction} hidden={listParams} submitText="导入历史版本" footerNote="补录已试制或转正的版本，导入后只新增历史记录。">
-              <div className="form-grid">
-                <SettingsSelect name="packageId" label="软件包" options={packages.map((pkg) => {
+              <div className={`form-grid ${styles.formGrid}`}>
+                <SettingsSelect name="packageId" label="软件包" dialogSearchPlaceholder="软件包编码或名称" options={packages.map((pkg) => {
                   const { code, name } = packageIdentity(pkg);
                   return { id: pkg.id, label: `${code} · ${name}` };
                 })} defaultValue={chosen?.id ?? ""} />

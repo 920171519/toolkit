@@ -123,6 +123,49 @@
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.packageName {
+  display: block;
+  max-inline-size: 20rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.packageNameNote {
+  margin-block: 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.packageNameNote summary {
+  width: fit-content;
+  min-block-size: 28px;
+  padding-block: 4px;
+  cursor: pointer;
+}
+
+.packageChoiceLabel {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.packageChoiceAside {
+  flex: none;
+  max-inline-size: 40%;
+  overflow-wrap: anywhere;
+}
+
+.affectedVersion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.affectedVersion input {
+  flex: none;
+  margin-block-start: 4px;
 }
 
 .nowrap {

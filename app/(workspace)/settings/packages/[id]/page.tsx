@@ -13,6 +13,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { PackageUsagePicker } from "@/components/package-usage-picker";
 import { SettingsSelect } from "@/components/settings-select";
+import styles from "../package-settings.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "软件包配置详情" };
@@ -48,7 +49,7 @@ export default async function PackageSettingsDetailPage({
   const bindingActive = data.versions.some((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
 
   return (
-    <>
+    <div className={styles.detail}>
       <PageHeader
         title={identity.name}
         description={<>{identity.code} · {pkg.areaName ?? "未归属责任田"} · {pkg.isActive ? "启用" : "停用"}</>}
@@ -65,7 +66,7 @@ export default async function PackageSettingsDetailPage({
             <div className="card-header"><h2>责任信息</h2></div>
             <div className="card-body" style={{ paddingTop: 14 }}>
               <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
-                <div className="form-grid">
+                <div className={`form-grid ${styles.formGrid}`}>
                   <label className="field">
                     <span className="label">软件包名称</span>
                     <input className="input" name="name" defaultValue={identity.name} required />
@@ -77,7 +78,8 @@ export default async function PackageSettingsDetailPage({
                     </span>
                     <input className="input" id="settings-package-code" name="code" defaultValue={identity.code} placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} required />
                   </div>
-                  <SettingsSelect name="ownerId" label="责任人" options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} defaultValue={pkg.ownerId ?? ""} />
+                  <SettingsSelect name="ownerId" label="责任人" dialogSearchPlaceholder="姓名或工号"
+                    options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} defaultValue={pkg.ownerId ?? ""} />
                   {isAdmin ? <label className="field">
                     <span className="label">责任田</span>
                     <select className="select" name="areaId" defaultValue={pkg.areaId ?? ""}>
@@ -89,7 +91,7 @@ export default async function PackageSettingsDetailPage({
                       <label className="label" htmlFor="settings-package-area">责任田</label>
                       <InfoTooltip label="责任田变更权限">由管理员调整软件包所属责任田。</InfoTooltip>
                     </span>
-                    <input className="input" id="settings-package-area" value={pkg.areaName ?? "未归属"} readOnly />
+                    <input className="input" id="settings-package-area" value={pkg.areaName ?? "未归属"} title={pkg.areaName ?? undefined} readOnly />
                   </div>}
                   <label className="field span-2">
                     <span className="label">说明</span>
@@ -174,6 +176,6 @@ export default async function PackageSettingsDetailPage({
           </Link>
         </aside>
       </div>
-    </>
+    </div>
   );
 }

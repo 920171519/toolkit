@@ -9,6 +9,7 @@ import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { rememberPendingReview, usePendingBatchChoices } from "@/components/pending-batch-choices";
 import { Badge, EmptyState, ExternalLink } from "@/components/ui";
 import { cancelTransferAction } from "@/lib/actions/workflow";
@@ -169,8 +170,9 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
                     detailTrigger.current = event.currentTarget;
                     setActivePackage(item.packageId);
                   }}>详情</Link>
-                {item.riskEntry?.stage === "PENDING" && <RiskTrialEntryAction entry={item.riskEntry} packageName={item.packageName} version={item.version} projectName={projectName} returnTo={returnState.returnTo} />}
-                {item.canCancel && <FormDialog label="撤回申请" title={`撤回 ${item.packageName} ${item.version}`} description="将永久删除此版本记录及其在所有使用项目中的转测申请。" triggerClassName="button button-ghost button-sm" cancelLabel="取消">
+                {item.riskEntry?.stage === "PENDING" && <RiskTrialEntryAction entry={item.riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={projectName} returnTo={returnState.returnTo} />}
+                {item.canCancel && <FormDialog label="撤回申请" title={`撤回 ${identity.code} ${item.version}`} description="将永久删除此版本记录及其在所有使用项目中的转测申请。" triggerClassName="button button-ghost button-sm" cancelLabel="取消">
+                  <WorkflowPackageName {...identity} />
                   <ActionForm action={cancelTransferAction} hidden={{ versionId: item.versionId, scopeProjectId, ...returnState }}
                     submitText="确认撤回" submitVariant="outline-danger" submitClassName="button-sm" />
                 </FormDialog>}

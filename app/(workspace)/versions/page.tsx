@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { readTraceListState, traceColumnFields, traceHref, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { workflowHref } from "@/lib/workflow-links";
@@ -85,9 +86,13 @@ export default async function VersionsPage({ searchParams }: {
             <tbody>
               {rows.map((row) => {
                 const href = traceHref(withTraceTab(state, row.id), project?.id, row.id);
+                const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
                 return (
                   <tr key={row.id}>
-                    <td><strong>{row.packageName}</strong><div className="small muted">{row.packageCode}</div></td>
+                    <td>
+                      <strong className="mono">{identity.code}</strong>
+                      {identity.name !== identity.code && <span className={`small muted ${styles.packageName}`} title={identity.name}>{identity.name}</span>}
+                    </td>
                     <td><Link href={href} className="version-badge" prefetch={false}>{row.version}</Link></td>
                     <td><StatusPill status={row.status} /></td>
                     <td className="small muted">{formatDateTime(row.submittedAt)}</td>

@@ -56,6 +56,14 @@
   overflow-x: auto;
 }
 
+.packageName {
+  display: block;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .evidenceHeader {
   align-items: flex-start;
 }

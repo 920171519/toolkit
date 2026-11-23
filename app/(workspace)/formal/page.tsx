@@ -85,7 +85,7 @@ export default async function FormalPage({ searchParams }: {
                 const href = workflowHref(`/formal/${version.versionId}`, project?.id, listState);
                 return <tr key={version.versionId}>
                   <th scope="row">
-                    <Link href={href} className="archive-link" prefetch={false}>{version.packageName} <strong className="mono">{version.version}</strong></Link>
+                    <Link href={href} className={`archive-link ${styles.packageName}`} prefetch={false}>{version.packageName} <strong className="mono">{version.version}</strong></Link>
                     <p className={styles.tableExcerpt} title={version.changeSummary}>{version.changeSummary}</p>
                   </th>
                   <td><Badge tone={skipped ? "slate" : "emerald"}>{skipped ? "无需绑定" : `${passed}/${total} 节点通过`}</Badge>{waived > 0 && <div className="small muted">{waived} 个节点免绑</div>}</td>
