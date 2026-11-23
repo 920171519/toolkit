@@ -15,8 +15,10 @@ import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
 import { FormDialog } from "@/components/form-dialog";
+import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
+import { releaseFlowUrl } from "@/lib/release-flow";
 import { BAD_CONCLUSION_LABEL, BATCH_STATUS_META, BINDING_FLOW_STATUS_META, CONCLUSION_META, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar, StatusPill } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
@@ -88,8 +90,12 @@ export default async function VersionTracePage({
         {version.status !== "VOID" && <span><StatusPill status={version.status as "PENDING_TRANSFER" | "IN_TEST" | "PENDING_TRIAL" | "TRIAL" | "PENDING_FORMAL" | "FORMAL"} /></span>}
         <span><strong>{details.reduce((total, detail) => total + detail.requirements.filter((requirement) => requirement.status === "PASSED").length, 0)}</strong> 个通过节点</span>
         {version.releaseMode === "RISK" && <Badge tone="rose">风险发布</Badge>}
-        {requests.length === 0 && version.trialFormNo && <span>试制电子流 {version.trialFormNo}</span>}
-        {requests.length === 0 && version.formFlowNo && <span>转正电子流 {version.formFlowNo}</span>}
+        {requests.length === 0 && version.trialFormNo && (releaseFlowUrl(version.trialFormNo)
+          ? <ReleaseFlowEvidence value={version.trialFormNo} label="查看试制电子流" />
+          : <span>试制电子流 {version.trialFormNo}</span>)}
+        {requests.length === 0 && version.formFlowNo && (releaseFlowUrl(version.formFlowNo)
+          ? <ReleaseFlowEvidence value={version.formFlowNo} label="查看转正电子流" />
+          : <span>转正电子流 {version.formFlowNo}</span>)}
         <ExternalLink href={version.archiveUrl}>归档包</ExternalLink>
         {version.buildUrl && <ExternalLink href={version.buildUrl}>构建地址</ExternalLink>}
       </div>
@@ -118,9 +124,9 @@ export default async function VersionTracePage({
                   <td>{linked ? <Link href={`/projects/${request.projectId}`} style={{ fontWeight: 600 }}>{request.projectName}</Link> : <strong>{request.projectName}</strong>}<div className="small muted">{request.projectCode}</div></td>
                   <td><Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? request.status}</Badge>{testMeta && testMeta.label !== meta?.label && <div className="small muted">验收：{testMeta.label}</div>}{request.status === "FAILED" || request.status === "BLOCKED" ? <div className="small muted">{BAD_CONCLUSION_LABEL[request.status]}</div> : null}</td>
                   <td>{request.batchId ? <>{linked ? <Link href={workflowHref(`/integration/${request.batchId}`, request.projectId)} prefetch={false} className="archive-link">{request.batchCode} <ArrowRight size={11} /></Link> : <span className="mono small">{request.batchCode}</span>}<div className="small muted">{conclusion ?? "待提交结论"}{request.batchReportUrl ? <> · <a href={request.batchReportUrl} className="archive-link">验证报告</a></> : null}</div></> : <span className="small muted">无关联批次</span>}</td>
-                  <td>{request.trialFormNo ? <span className="mono small">{request.trialFormNo}</span> : <span className="small muted">—</span>}{request.riskConclusion && request.riskConclusion !== version.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
+                  <td><ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />{request.riskConclusion && request.riskConclusion !== version.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
                   <td>{total > 0 ? <><ProgressBar value={passed} max={total} /><span className="small muted">{passed}/{total}</span></> : <span className="small muted">—</span>}</td>
-                  <td>{request.formFlowNo ? <span className="mono small">{request.formFlowNo}</span> : <span className="small muted">—</span>}</td>
+                  <td><ReleaseFlowEvidence value={request.formFlowNo} label="查看转正电子流" /></td>
                   <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && <RiskTrialEntryAction entry={riskEntry} packageName={version.packageName} version={version.version} projectName={request.projectName} returnTo={state.returnTo} />}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, request.projectId)} prefetch={false} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
                 </tr>
               );
@@ -152,11 +158,12 @@ export default async function VersionTracePage({
           {details.length === 0 ? <div className="muted-panel">该版本尚未发布试制，暂无绑定验证记录。</div> : <div className={styles.nodeList}>{details.map((detail) => (
             <details className="binding-table-item" key={detail.request.id}>
               <summary className={styles.nodeHeading}>
-                <span><strong>{detail.request.projectName}</strong><span className="small muted">{detail.request.trialFormNo ?? "无试制电子流"}</span></span>
+                <span><strong>{detail.request.projectName}</strong><span className="small muted">{releaseFlowUrl(detail.request.trialFormNo) ? "已登记试制电子流" : detail.request.trialFormNo ?? "无试制电子流"}</span></span>
                 <Badge tone={detail.request.releaseMode === "RISK" ? "rose" : "violet"}>{detail.request.releaseMode === "RISK" ? "风险发布" : "验收发布"}</Badge>
                 <ChevronDown size={16} aria-hidden="true" />
               </summary>
               <div className="binding-table-body">
+              {releaseFlowUrl(detail.request.trialFormNo) && <ReleaseFlowEvidence value={detail.request.trialFormNo} label="查看试制电子流" />}
               {linkedProjects.has(detail.request.projectId) && <Link href={workflowHref(`/trial/${detail.request.id}`, detail.request.projectId)} prefetch={false} className="archive-link">查看绑定验证 <ArrowRight size={11} /></Link>}
               {detail.request.bindingMode === "SKIPPED" && <p className="note">无需绑定原因：{detail.request.bindingReason ?? "—"}</p>}
               {detail.requirements.length === 0 && <p className="note">暂无节点绑定记录。</p>}

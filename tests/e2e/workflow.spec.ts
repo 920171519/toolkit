@@ -480,7 +480,14 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(readyRow).toContainText("待发试制");
     await readyRow.getByRole("button", { name: "发布", exact: true }).click();
     const publication = page.getByRole("dialog", { name: "发布 1001OTA 1.6.0 试制" });
-    await publication.locator('input[name="trialFormNo"]').fill("EF-TRIAL-N1-OTA-160");
+    const trialFlowUrl = "https://eflow.example.com/trial/n1-ota-160";
+    const trialFlowField = publication.getByRole("textbox", { name: "试制电子流网址", exact: true });
+    await trialFlowField.fill("ftp://eflow.example.com/trial/n1-ota-160");
+    await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
+    await confirmAction(page);
+    await expect(publication.getByRole("alert")).toContainText(/https?/i);
+    await expect(page).toHaveURL(/\/trial$/);
+    await trialFlowField.fill(trialFlowUrl);
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
@@ -552,10 +559,18 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(bindingDetails.locator("a").filter({ hasText: "网页电子流" }).first()).toBeVisible();
     await page.getByRole("button", { name: "发布正式版本" }).click();
     const formalDialog = page.getByRole("dialog", { name: /转正 1001OTA 1.6.0/ });
-    await formalDialog.locator('input[name="flowNo"]').fill("EF-OTA-160");
+    const formalFlowUrl = "https://eflow.example.com/formal/ota-160";
+    const formalFlowField = formalDialog.getByRole("textbox", { name: "转正电子流网址", exact: true });
+    await formalFlowField.fill("ftp://eflow.example.com/formal/ota-160");
+    await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
+    await expect(formalDialog.getByRole("alert")).toContainText(/https?/i);
+    await formalFlowField.fill(formalFlowUrl);
     await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
     await expectFlash(page, "同步发布正式版本");
     await expect(page).toHaveURL(/\/versions\/\d+/);
+    for (const href of [trialFlowUrl, formalFlowUrl]) {
+      await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible();
+    }
 
     await page.goto("/packages?project=1");
     const otaRow = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).first();
@@ -695,7 +710,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(publication).toBeHidden();
     await risk.getByRole("button", { name: "发布", exact: true }).click();
     await expect(publication.locator('textarea[name="riskConclusion"]')).toHaveCount(0);
-    await publication.locator('input[name="trialFormNo"]').fill("EF-TRIAL-M2-OTA-161");
+    await publication.locator('input[name="trialFormNo"]').fill("https://eflow.example.com/trial/m2-ota-161");
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
@@ -703,7 +718,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page).toHaveURL(url => url.pathname === "/trial" && url.searchParams.get("view") === "binding");
     const trialRow = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).filter({ hasText: "1.6.1" }).filter({ hasText: "极光 M2" }).first();
     await expect(trialRow).toContainText("风险发布");
-    await expect(trialRow).toContainText("EF-TRIAL-M2-OTA-161");
+    await expect(trialRow.locator('a[href="https://eflow.example.com/trial/m2-ota-161"]')).toBeVisible();
   });
 
   test("集成测试中可风险试制，节点免绑后仍保留测试，失败时作废并提醒撤销", async ({ page }) => {
@@ -745,7 +760,7 @@ test.describe("工程协同台项目维度流程", () => {
     await pending.getByRole("button", { name: "发布", exact: true }).click();
     const publish = page.getByRole("dialog", { name: /发布 1001OTA/ });
     await expect(publish.getByRole("link", { name: /B953/ })).toBeVisible();
-    await publish.locator('input[name="trialFormNo"]').fill("EF-TRIAL-PARALLEL-E2E");
+    await publish.locator('input[name="trialFormNo"]').fill("https://eflow.example.com/trial/parallel-e2e");
     await publish.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
@@ -877,7 +892,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByText(/无需绑定原因/).first()).toBeVisible();
     await page.getByRole("button", { name: "发布正式版本" }).click();
     const formalDialog = page.getByRole("dialog", { name: /转正 1001OTA 1.6.1/ });
-    await formalDialog.locator('input[name="flowNo"]').fill("EF-OTA-161");
+    await formalDialog.locator('input[name="flowNo"]').fill("https://eflow.example.com/formal/ota-161");
     await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
     await expectFlash(page, "同步发布正式版本");
 

@@ -14,6 +14,7 @@ import { trialReleaseStateKey } from "./trial-release-state";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 import { reportArchivePath, resolveReportPath } from "./report-storage";
+import { releaseFlowUrl } from "./release-flow";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
   run(
@@ -709,7 +710,8 @@ export function admitRiskTrial(
 }
 
 export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, eligibility: string) {
-  assert(trialFormNo.trim().length >= 3, "请填写发布试制电子流。");
+  const trialUrl = releaseFlowUrl(trialFormNo);
+  assert(trialUrl, "请输入有效的试制电子流网址（http 或 https）。");
   return transaction(() => {
     const anchor = one<{
       id: number;
@@ -832,7 +834,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
            risk_conclusion = ?, binding_mode = 'PENDING', binding_reason = NULL,
            binding_decided_at = NULL, binding_decided_by = NULL, updated_at = ?
        WHERE id = ?`,
-      trialFormNo.trim(),
+      trialUrl,
       timestamp,
       riskRequired ? "RISK" : "INTEGRATION",
       riskConclusion ?? null,
@@ -845,7 +847,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
          SET integration_status = status, status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?,
              release_mode = ?, risk_conclusion = ?, updated_at = ?
          WHERE id = ?`,
-        trialFormNo.trim(),
+        trialUrl,
         timestamp,
         actor.id,
         riskRequired ? "RISK" : "INTEGRATION",
@@ -885,7 +887,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       "RELEASE_TRIAL",
       "PACKAGE",
       anchor.package_id,
-      `按全项目共享发布 ${anchor.package_name} ${anchor.version} 试制版本，覆盖 ${requests.length} 个项目、${requirementsToCreate.length} 个节点绑定任务，电子流 ${trialFormNo.trim()}${riskRequired ? "（风险发布）" : ""}`,
+      `按全项目共享发布 ${anchor.package_name} ${anchor.version} 试制版本，覆盖 ${requests.length} 个项目、${requirementsToCreate.length} 个节点绑定任务，电子流 ${trialUrl}${riskRequired ? "（风险发布）" : ""}`,
     );
     return requirementsToCreate.length;
   });
@@ -1377,7 +1379,8 @@ export function decideBindingFlow(
 }
 
 export function releaseFormal(actor: SessionUser, requestId: number, flowNo: string) {
-  assert(flowNo.trim().length >= 3, "请填写转正电子流。");
+  const formalUrl = releaseFlowUrl(flowNo);
+  assert(formalUrl, "请输入有效的转正电子流网址（http 或 https）。");
   return transaction(() => {
     const anchor = one<{
       id: number;
@@ -1433,7 +1436,7 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
     run(
       `UPDATE package_versions SET status = 'FORMAL', formal_released_at = ?, form_flow_no = ?, updated_at = ? WHERE id = ?`,
       timestamp,
-      flowNo.trim(),
+      formalUrl,
       timestamp,
       anchor.package_version_id,
     );
@@ -1444,7 +1447,7 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
          WHERE id = ?`,
         timestamp,
         actor.id,
-        flowNo.trim(),
+        formalUrl,
         timestamp,
         request.id,
       );
@@ -1455,7 +1458,7 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
       "RELEASE_FORMAL",
       "PACKAGE",
       anchor.package_id,
-      `${anchor.package_name} ${anchor.version} 全项目绑定完成，按共享版本发布正式版本，覆盖 ${requests.length} 个项目，转正电子流：${flowNo.trim()}`,
+      `${anchor.package_name} ${anchor.version} 全项目绑定完成，按共享版本发布正式版本，覆盖 ${requests.length} 个项目，转正电子流：${formalUrl}`,
     );
     return anchor.package_version_id;
   });

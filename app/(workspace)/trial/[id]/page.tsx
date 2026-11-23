@@ -28,6 +28,8 @@ import {
   voidTrialAction,
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
+import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { releaseFlowUrl } from "@/lib/release-flow";
 import { BindingFlowForm } from "@/components/binding-flow-form";
 import { FormDialog } from "@/components/form-dialog";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
@@ -73,7 +75,11 @@ export default async function TrialDetailPage({
     <>
       <PageHeader
         title={`${request.packageName} ${request.version} · 绑定验证`}
-        description={<>{request.projectName} · 试制电子流 {request.trialFormNo ?? "—"} · 发布于 {formatDateTime(request.trialReleasedAt)}</>}
+        description={<>
+          {request.projectName} · {releaseFlowUrl(request.trialFormNo)
+            ? <ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />
+            : <>试制电子流 {request.trialFormNo ?? "—"}</>} · 发布于 {formatDateTime(request.trialReleasedAt)}
+        </>}
         actions={<><Link href={workflowHref("/trial", scopeProjectId, listState) + "#binding-queue"} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回节点绑定</Link><Link href={workflowHref(`/versions/${request.versionId}`, scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-secondary">版本全链路</Link><Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge></>}
       />
       <FlashMessage notice={notice} />

@@ -11,6 +11,8 @@ import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
+import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { releaseFlowUrl } from "@/lib/release-flow";
 import styles from "./package-drawer.module.css";
 
 export type DrawerPayload = PackageDetailData & { canEdit: boolean };
@@ -97,7 +99,9 @@ function VersionRows({ versions, projectId }: { versions: PackageVersion[]; proj
             <span>{version.submittedByName ?? "系统"} 提交 · {formatDateTime(version.submittedAt)}</span>
             {version.trialReleasedAt && <span>试制 {formatDateTime(version.trialReleasedAt)}</span>}
             {version.formalReleasedAt && <span>转正 {formatDateTime(version.formalReleasedAt)}</span>}
-            {version.formFlowNo && <span>电子流 {version.formFlowNo}</span>}
+            {version.formFlowNo && (releaseFlowUrl(version.formFlowNo)
+              ? <ReleaseFlowEvidence value={version.formFlowNo} label="查看转正电子流" />
+              : <span>电子流 {version.formFlowNo}</span>)}
             {version.bindingTotal > 0 && <span>绑定验证 {version.bindingPassed}/{version.bindingTotal}</span>}
           </div>
           <div className={styles.versionLinks}>

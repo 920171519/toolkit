@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { Badge, ExternalLink, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
@@ -11,6 +12,7 @@ import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
@@ -49,7 +51,10 @@ export default async function FormalDetailPage({ params, searchParams }: {
           <Link href={returnHref} prefetch={false} className="button button-secondary"><ArrowLeft size={14} aria-hidden="true" />返回待转正列表</Link>
           {manageable && <FormDialog label="发布正式版本" title={`转正 ${version.packageName} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
             <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...getWorkflowListState(search) }} submitText="提交转正电子流并发布">
-              <label className="field"><span className="label">转正电子流编号 <span className="required-mark">*</span></span><input className="input" name="flowNo" required minLength={3} placeholder="例如 EF-OTA-152" /></label>
+              <label className="field">
+                <span className="label">转正电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
+                <input className="input" name="flowNo" type="url" required placeholder="https://eflow.example.com/releases/152" />
+              </label>
             </ActionForm>
           </FormDialog>}
         </>}
@@ -64,14 +69,16 @@ export default async function FormalDetailPage({ params, searchParams }: {
                 const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
                 const waived = requirements.filter((requirement) => requirement.waivedAt).length;
                 const canInspect = canAccessProjectPage(user, request.projectId);
+                const trialUrl = releaseFlowUrl(request.trialFormNo);
                 return <details className="binding-table-item" key={request.id} open={project ? request.projectId === project.id : index === 0}>
                   <summary className={styles.nodeHeading}>
-                    <span><strong>{request.projectName}</strong><span className="small muted">{request.trialFormNo ?? "无试制电子流"}</span></span>
+                    <span><strong>{request.projectName}</strong><span className="small muted">{trialUrl ? "已登记试制电子流" : request.trialFormNo ?? "无试制电子流"}</span></span>
                     {request.bindingMode === "SKIPPED" ? <Badge tone="slate">无需绑定</Badge> : <Badge tone="teal">{passed + waived}/{requirements.length} 节点已完成</Badge>}
                     <ChevronDown size={16} aria-hidden="true" />
                   </summary>
                   <div className="binding-table-body">
                     <div className={styles.rowActions}>
+                      {trialUrl && <ReleaseFlowEvidence value={trialUrl} label="查看试制电子流" />}
                       {request.releaseMode === "RISK" && <Badge tone="amber">风险发布</Badge>}
                       {request.batchId && (canInspect
                         ? <Link href={workflowHref(`/integration/${request.batchId}`, request.projectId)} prefetch={false} className="archive-link">转测批次 {request.batchCode} · {conclusion?.label ?? "已提交"}</Link>

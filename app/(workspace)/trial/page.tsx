@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { TrialQueueTable, type TrialTableColumn } from "@/components/trial-queue-table";
 import { Badge, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/trial-queue-table.module.css";
@@ -136,7 +137,12 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
         {Boolean(row.isOverdue) && <Badge tone="rose">已超期</Badge>}
       </div>,
     },
-    { key: "form", label: "试制电子流", value: (row) => row.trialFormNo ?? "—" },
+    {
+      key: "form",
+      label: "试制电子流",
+      value: (row) => row.trialFormNo ?? "—",
+      cell: (row) => <ReleaseFlowEvidence value={row.trialFormNo} label="查看试制电子流" />,
+    },
     {
       key: "progress",
       label: "完成节点",
@@ -198,8 +204,8 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                     submitText="发布全项目共享试制版本" submitClassName="button-sm"
                     confirmMessage={`全部 ${row.versionProjectCount} 个使用项目将同步使用 ${title} 试制版本。`}>
                     <label className="field">
-                      <span className="label">发布试制电子流 <span className="required-mark">*</span></span>
-                      <input className="input" name="trialFormNo" required minLength={3} placeholder="例如 EF-TRIAL-N1-OTA-160" />
+                      <span className="label">试制电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
+                      <input className="input" name="trialFormNo" type="url" required placeholder="https://eflow.example.com/trials/160" />
                     </label>
                   </ActionForm>
                 </FormDialog>
