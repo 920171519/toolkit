@@ -137,6 +137,11 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
       </div>
       <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label={`${projectName}待转测申请表格`} tabIndex={0}>
         <table className="data-table">
+          <colgroup>
+            <col className={styles.transferCompactColumn} span={selection ? 2 : 1} />
+            <col />
+            <col className={styles.transferCompactColumn} span={4} />
+          </colgroup>
           <thead>
             <tr>
               {selection && filterHeader("本轮转测", [fields.selection])}

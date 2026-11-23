@@ -162,7 +162,7 @@ export function PackageOverviewTable({
                         {!pkg.isActive && <div className="small muted">已停用</div>}
                       </th>
                       <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "责任人待指定"}</div></td>
-                      <td className="usage-cell">
+                      <td className="package-index-usage">
                         {pkg.usages.length === 0 ? <span className="small muted">未配置</span> : (
                           <>
                             <ul className="package-scope-projects">
@@ -173,9 +173,9 @@ export function PackageOverviewTable({
                           </>
                         )}
                       </td>
-                      <td>{pkg.formalVersion ? <span className="version-badge">{pkg.formalVersion}</span> : <span className="muted small">—</span>}</td>
-                      <td>{pkg.trialVersions.length ? <ul className="version-stack">{pkg.trialVersions.map((version) => <li className="version-badge" key={version}>{version}</li>)}</ul> : <span className="muted small">—</span>}</td>
-                      <td>{pkg.currentVersion ? <><span className="version-badge">{pkg.currentVersion}</span>{pkg.inTestVersion && pkg.inTestVersion !== pkg.currentVersion && <div className="small muted">在测 {pkg.inTestVersion}</div>}{pkg.pendingTransferVersion && pkg.pendingTransferVersion !== pkg.currentVersion && <div className="small muted">待转测 {pkg.pendingTransferVersion}</div>}</> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.formalVersion ? <span className="version-badge whitespace-nowrap">{pkg.formalVersion}</span> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.trialVersions.length ? <ul className="version-stack whitespace-nowrap">{pkg.trialVersions.map((version) => <li className="version-badge" key={version}>{version}</li>)}</ul> : <span className="muted small">—</span>}</td>
+                      <td>{pkg.currentVersion ? <><span className="version-badge whitespace-nowrap">{pkg.currentVersion}</span>{pkg.inTestVersion && pkg.inTestVersion !== pkg.currentVersion && <div className="small muted">在测 {pkg.inTestVersion}</div>}{pkg.pendingTransferVersion && pkg.pendingTransferVersion !== pkg.currentVersion && <div className="small muted">待转测 {pkg.pendingTransferVersion}</div>}</> : <span className="muted small">—</span>}</td>
                       <td>{pkg.currentStatus ? (PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus) : <span className="muted small">{pkg.formalVersion ? "无在途版本" : "暂无版本"}</span>}</td>
                     </tr>
                   );

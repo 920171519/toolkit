@@ -69,6 +69,54 @@
   font-variant-numeric: tabular-nums;
 }
 
+.settings-project-table-scroll:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.settings-project-table.data-table {
+  min-inline-size: 42rem;
+  table-layout: fixed;
+}
+
+.settings-project-stage-column {
+  width: 5rem;
+}
+
+.settings-project-status-column {
+  width: 6.5rem;
+}
+
+.settings-project-node-column {
+  width: 6rem;
+}
+
+.settings-project-actions-column {
+  width: 7.5rem;
+}
+
+.settings-project-table :is(.settings-project-identity, .settings-project-contacts) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.settings-project-identity .archive-link {
+  display: inline;
+}
+
+.settings-project-editor {
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.settings-project-editor .form-grid {
+  align-items: start;
+}
+
+.settings-project-editor .form-grid .field {
+  min-width: 0;
+}
+
 .settings-pagination {
   display: flex;
   justify-content: space-between;
@@ -313,6 +361,11 @@
   .settings-content .data-table .cell-actions .button,
   .settings-content :is(.person-chip, .member-pill) .form-footer button.settings-remove-button {
     min-height: 40px;
+  }
+
+  .settings-project-editor .form-grid :is(.input, .select),
+  .settings-project-editor .form-footer .button {
+    min-height: 44px;
   }
 
   .settings-inline-form {

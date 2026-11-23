@@ -45,7 +45,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
         </>}
       />
       <FlashMessage notice={notice} />
-      <section className="card" id="project-profile" aria-labelledby="project-profile-title">
+      <section className={editing ? "card workspace-edit-form settings-project-editor" : "card"} id="project-profile" aria-labelledby="project-profile-title">
         <div className="card-header">
           <div><h2 id="project-profile-title">项目资料</h2>{editing && <p className="small muted">变更软件经理会同步调整该项目的流程访问权限。</p>}</div>
           {editing

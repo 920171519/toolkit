@@ -65,7 +65,7 @@ export default async function PackageSettingsDetailPage({
           <section className="card">
             <div className="card-header"><h2>责任信息</h2></div>
             <div className="card-body" style={{ paddingTop: 14 }}>
-              <ActionForm action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
+              <ActionForm className="workspace-edit-form" action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
                 <div className={`form-grid ${styles.formGrid}`}>
                   <label className="field">
                     <span className="label">软件包名称</span>

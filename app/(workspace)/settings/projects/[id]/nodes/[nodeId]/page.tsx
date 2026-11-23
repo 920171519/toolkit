@@ -37,7 +37,7 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
   const projectPath = `/settings/projects/${projectId}`;
 
   return (
-    <div className="settings-card-stack">
+    <div className="settings-card-stack workspace-edit-form settings-project-editor">
       <PageHeader title={`配置节点 ${node.name}`} description={`${project.name} · ${project.code}`}
         actions={<Link href={`${projectPath}#nodes`} className="button button-secondary" prefetch={false}><ArrowLeft size={15} aria-hidden="true" /> 返回测试节点</Link>} />
       <FlashMessage notice={notice} />

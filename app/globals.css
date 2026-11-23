@@ -1595,12 +1595,6 @@ h4 {
   gap: 4px;
 }
 
-.workspace-content {
-  padding: 32px 32px 56px;
-  width: 100%;
-  max-width: 1500px;
-}
-
 .workspace-footer {
   margin-top: auto;
   padding: 16px 32px 28px;
@@ -2209,9 +2203,6 @@ h4 {
   .sidebar-user-role {
     grid-column: 1 / -1;
   }
-  .workspace-content {
-    padding-inline: 24px;
-  }
   .topbar {
     padding-inline: 24px;
   }
@@ -2292,9 +2283,6 @@ h4 {
   }
   .sidebar-link-count {
     display: none;
-  }
-  .workspace-content {
-    padding: 22px 20px 48px;
   }
   .topbar {
     position: relative;
@@ -2415,9 +2403,6 @@ h4 {
   }
   .demo-grid {
     grid-template-columns: 1fr;
-  }
-  .workspace-content {
-    padding: 18px 14px 42px;
   }
   .topbar {
     padding: 10px 14px;

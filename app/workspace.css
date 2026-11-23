@@ -4,8 +4,9 @@ html:has(dialog:modal) { overflow: hidden; }
 .workspace { --workspace-padding: clamp(24px, 2.4vw, 32px); }
 .workspace-skip-link { position: fixed; z-index: 100; top: 12px; left: 12px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface); color: var(--brand); transform: translateY(-150%); }
 .workspace-skip-link:focus { transform: none; }
-.workspace-content { padding: 32px var(--workspace-padding) 56px; max-width: 1600px; }
+.workspace-content { width: 100%; min-width: 0; padding: 32px var(--workspace-padding) 56px; }
 .workspace-content:focus { outline: none; }
+.workspace-edit-form { max-inline-size: 48rem; }
 .workspace-navigation { position: sticky; top: 0; z-index: 35; background: var(--surface); }
 .workspace-navigation .topbar { position: static; min-height: 64px; padding-inline: var(--workspace-padding); gap: 16px; }
 .topbar-location { min-width: 0; display: flex; align-items: center; gap: 12px; }
@@ -55,11 +56,15 @@ dialog.workspace-dialog::backdrop { background: var(--dialog-backdrop); }
 .package-index-filters summary::-webkit-details-marker { display: none; }
 .package-filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin: 4px 0 16px; }
 .package-index .data-table th.package-index-name { background: none; color: var(--ink); font-size: 14px; padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.package-index .data-table :is(th, td):first-child { width: 24%; }
+.package-index .data-table :is(th, td):nth-child(2) { width: 10rem; overflow-wrap: anywhere; }
+.package-index .data-table :is(th, td):nth-child(n + 4) { width: 1%; white-space: nowrap; }
+.package-index-usage { min-width: 10rem; }
 .package-index-pagination { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: 12px 16px; font-size: 13px; }
 .package-index-pagination label, .package-index-pagination nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .package-index-pagination .select { width: auto; min-height: 32px; padding-block: 4px; }
 .package-index .version-stack { gap: 4px; }
-.package-scope-projects { display: flex; flex-wrap: wrap; gap: 4px 8px; max-width: 310px; padding: 0; margin: 0; list-style: none; }
+.package-scope-projects { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 0; margin: 0; list-style: none; }
 .package-scope-projects li { overflow-wrap: anywhere; white-space: normal; }
 .package-scope-action { display: inline-block; margin-top: 4px; }
 dialog.workspace-package-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; padding: 0; width: min(660px, 100%); height: 100dvh; max-width: none; max-height: none; color: var(--ink); overflow: hidden; }

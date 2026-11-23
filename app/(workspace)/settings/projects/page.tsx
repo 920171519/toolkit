@@ -51,17 +51,25 @@ export default async function ProjectsSettingsPage({ searchParams }: {
           </select></div>
         </SettingsFilters>
         {list.items.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
+          <div className="table-wrap settings-project-table-scroll" role="region" aria-label="项目配置表格" tabIndex={0}>
+            <table className="data-table settings-project-table">
+              <colgroup>
+                <col />
+                <col className="settings-project-stage-column" />
+                <col className="settings-project-status-column" />
+                <col />
+                <col className="settings-project-node-column" />
+                <col className="settings-project-actions-column" />
+              </colgroup>
               <thead><tr><th scope="col">项目</th><th scope="col">阶段</th><th scope="col">流程状态</th><th scope="col">联系人</th><th scope="col" className="settings-number">测试节点</th><th scope="col">操作</th></tr></thead>
               <tbody>{list.items.map((project) => {
                 const projectStatus = PROJECT_STATUS_META[project.status];
                 const stage = PROJECT_STAGE_META[getProjectStage(project.status, project.stage)];
                 return <tr key={project.id}>
-                  <th scope="row"><Link href={`${listPath}/${project.id}`} className="archive-link" prefetch={false}>{project.name}</Link><div className="small muted">{project.code}</div></th>
+                  <th scope="row" className="settings-project-identity"><Link href={`${listPath}/${project.id}`} className="archive-link" prefetch={false}>{project.name}</Link><div className="small muted">{project.code}</div></th>
                   <td><span className="settings-stage">{stage.label}</span></td>
                   <td><Badge tone={projectStatus.tone} dot>{projectStatus.label}</Badge></td>
-                  <td><span className="small">PM {project.pmName ?? "待指定"}</span><div className="small muted">软件经理 {project.softwareManagerName ?? "待指定"}</div></td>
+                  <td className="settings-project-contacts"><span className="small">PM {project.pmName ?? "待指定"}</span><div className="small muted">软件经理 {project.softwareManagerName ?? "待指定"}</div></td>
                   <td className="settings-number">{project.nodes.length} 个</td>
                   <td className="cell-actions"><Link href={`${listPath}/${project.id}`} aria-label={`配置${project.name}`} className="button button-secondary button-sm" prefetch={false}>配置项目</Link></td>
                 </tr>;

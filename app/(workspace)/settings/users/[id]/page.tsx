@@ -41,7 +41,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
       <section className="card">
         <div className="card-header"><div><h2>人员资料</h2></div></div>
         <div className="card-body">
-          <ActionForm action={saveUserProfileAction} hidden={{ ...listParams, userId }} submitText="保存资料">
+          <ActionForm className="workspace-edit-form" action={saveUserProfileAction} hidden={{ ...listParams, userId }} submitText="保存资料">
             <div className="form-grid">
               <label className="field"><span className="label">姓名</span><input className="input" name="name" defaultValue={member.name} minLength={2} maxLength={30} required /></label>
               <label className="field"><span className="label">职位</span><input className="input" name="title" defaultValue={member.title} /></label>
@@ -64,7 +64,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
         </div>
         <div className="card-body">
           {isSelf ? <p className="small muted">自己的角色由其他管理员维护。</p> : (
-            <ActionForm action={updateUserRoleAction} testId={`user-role-form-${member.id}`} hidden={{ ...listParams, userId }} submitText="更新角色" footerNote="角色变更立即生效。">
+            <ActionForm className="workspace-edit-form" action={updateUserRoleAction} testId={`user-role-form-${member.id}`} hidden={{ ...listParams, userId }} submitText="更新角色" footerNote="角色变更立即生效。">
               <div className="field"><label className="label" htmlFor="settings-role-edit">系统角色</label><select id="settings-role-edit" className="select" name="role" defaultValue={member.role}>
                 {ROLES.map((role) => <option value={role} key={role}>{ROLE_META[role].label}</option>)}
               </select></div>

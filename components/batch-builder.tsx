@@ -74,7 +74,7 @@ export function BatchBuilder({
       disabled={changedCount === 0}
       footerNote={changedCount > 0 ? <>{items.length} 个软件包 · {changedCount} 个待测版本</> : "请至少纳入一个待测版本。"}
     >
-      <section className={styles.section} aria-label="批次信息">
+      <section className={`${styles.section} workspace-edit-form`} aria-label="批次信息">
         <div className="form-grid">
           <label className="field"><span className="label">批次号</span><input className="input" name="code" defaultValue={defaultCode} required pattern="[Bb][0-9]{3,}" /></label>
           <label className="field"><span className="label">批次说明 <span className="muted">（选填）</span></span><input className="input" name="title" placeholder={`${project.name} ${defaultCode} 配套转测`} maxLength={80} /></label>

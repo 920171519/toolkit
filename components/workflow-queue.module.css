@@ -82,6 +82,14 @@
   padding: 0;
 }
 
+.transferCompactColumn {
+  width: 1%;
+}
+
+.transferGroup .tableExcerpt {
+  max-inline-size: none;
+}
+
 .transferHead {
   display: flex;
   justify-content: space-between;
@@ -372,6 +380,12 @@
 .testUpload {
   width: 100%;
   min-width: 0;
+}
+
+@media (min-width: 1440px) {
+  .transferGroup .queueTable .cardActions {
+    flex-wrap: nowrap;
+  }
 }
 
 @media (max-width: 940px) {
