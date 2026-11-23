@@ -18,6 +18,7 @@ import {
   addProjectNodeApprover,
   updateProjectNode,
   assignAreaProjectLead,
+  correctLegacyVersion,
   deleteArea,
   deleteProject,
   deleteProjectNode,
@@ -408,6 +409,30 @@ export async function importLegacyVersionAction(
   }
   refreshAll();
   successRedirect(directoryActionHref("packages", formData, packageId), "历史版本已导入，可在软件包详情中查看。");
+}
+
+export async function correctLegacyVersionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const packageId = numberValue(formData, "packageId");
+  const versionId = numberValue(formData, "versionId");
+  if (!packageId || !versionId) return { error: "历史版本参数无效。" };
+  try {
+    correctLegacyVersion(user, packageId, versionId, {
+      expectedUpdatedAt: text(formData, "expectedUpdatedAt"),
+      reason: text(formData, "reason"),
+      changeSummary: text(formData, "changeSummary"),
+      archiveUrl: text(formData, "archiveUrl"),
+      buildUrl: text(formData, "buildUrl"),
+      trialFormNo: text(formData, "trialFormNo"),
+      trialReleasedAt: text(formData, "trialReleasedAt"),
+      formFlowNo: text(formData, "formFlowNo"),
+      formalReleasedAt: text(formData, "formalReleasedAt"),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  successRedirect(directoryActionHref("packages", formData, packageId), "历史版本已更正。");
 }
 
 export async function updatePackageResponsibilityAction(

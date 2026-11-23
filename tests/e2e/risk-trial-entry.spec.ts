@@ -138,10 +138,10 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await expect(page.getByText(earlyReason, { exact: true })).toHaveCount(0);
 
   await page.getByRole("link", { name: "返回试制队列" }).click();
-  await ready.getByRole("button", { name: "放弃", exact: true }).click();
-  const abandonDialog = ready.getByRole("dialog", { name: /^放弃/ });
-  await abandonDialog.getByRole("textbox", { name: "放弃发布试制结论" }).fill("本次回归验证完成，关闭测试版本的登记。");
-  await abandonDialog.getByRole("button", { name: "提交结论并放弃试制" }).click();
+  await ready.getByRole("button", { name: "撤回风险试制", exact: true }).click();
+  const abandonDialog = ready.getByRole("dialog", { name: /^撤回/ });
+  await abandonDialog.getByRole("textbox", { name: "撤回原因" }).fill("本次回归验证完成，关闭测试版本的登记。");
+  await abandonDialog.getByRole("button", { name: "确认撤回风险试制" }).click();
   await confirmAction(page);
   await expect(ready).toHaveCount(0);
 

@@ -9,6 +9,7 @@ import { Badge, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/trial-queue-table.module.css";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
@@ -35,7 +36,9 @@ function readyStatus(row: TrialReadyVersion) {
 }
 
 function bindingStatusOptions(row: TrialVersionRow) {
-  const statuses: Array<keyof typeof trialBindingStatuses> = [row.bindingMode];
+  const statuses: Array<keyof typeof trialBindingStatuses> = [
+    row.status === "PENDING_FORMAL" ? "PENDING_FORMAL" : row.bindingMode,
+  ];
   if (row.releaseMode === "RISK" || !row.batchId) statuses.push("RISK");
   if (row.isOverdue) statuses.push("OVERDUE");
   return statuses.map((value) => ({ value, label: trialBindingStatuses[value] }));
@@ -80,7 +83,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     ...(records.find((row) => canManageProjectWorkflowForProject(user, row.projectId)) ?? records[0]),
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
-  const trials = getTrialVersions(scope).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
+  const trials = getTrialVersions(scope, true).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
@@ -135,7 +138,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       value: (row) => bindingStatusOptions(row).map((option) => option.label).join(" · "),
       choices: bindingStatusOptions,
       cell: (row) => <div className={styles.bindingStatus}>
-        <span>{trialBindingStatuses[row.bindingMode]}</span>
+        <span>{trialBindingStatuses[row.status === "PENDING_FORMAL" ? "PENDING_FORMAL" : row.bindingMode]}</span>
         {(row.releaseMode === "RISK" || !row.batchId) && <Badge tone="amber">风险发布</Badge>}
         {Boolean(row.isOverdue) && <Badge tone="rose">已超期</Badge>}
       </div>,
@@ -178,6 +181,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
           const risk = riskRelease(row);
           const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
           const title = `${identity.code} ${row.version}`;
+          const releaseFields = { ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) };
           return (
             <div className={styles.actions}>
               {canRelease(row) && <>
@@ -205,7 +209,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                     {row.ongoingTestCount > 0 && <p className="note">已有 {row.ongoingTestCount} 个待发起或在测批次，完成前无法转正。</p>}
                   </section>
                   {risk && <p className="risk-callout" style={{ marginBottom: 10 }}>风险发布原因 · {row.riskConclusion}</p>}
-                  <ActionForm action={releaseTrialAction} hidden={{ ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
+                  <ActionForm action={releaseTrialAction} hidden={releaseFields}
                     submitText="发布全项目共享试制版本" submitClassName="button-sm"
                     confirmMessage={`全部 ${row.versionProjectCount} 个使用项目将同步使用 ${title} 试制版本。`}>
                     <label className="field">
@@ -218,19 +222,21 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                     </label>
                   </ActionForm>
                 </FormDialog>
-                <FormDialog label="放弃" title={"放弃发布 " + title + " 试制"}
+                <FormDialog label={risk ? "撤回风险试制" : "放弃"} title={risk ? `撤回 ${title} 风险试制` : `放弃发布 ${title} 试制`}
                   description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
                   triggerClassName="button button-ghost button-sm" cancelLabel="取消">
                   <WorkflowPackageName {...identity} />
-                  <ActionForm action={abandonTrialReleaseAction} hidden={{ ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
-                    submitText="提交结论并放弃试制" submitVariant="danger" submitClassName="button-sm"
+                  <ActionForm action={abandonTrialReleaseAction} hidden={releaseFields}
+                    submitText={risk ? "确认撤回风险试制" : "提交结论并放弃试制"} submitVariant={risk ? "secondary" : "danger"} submitClassName="button-sm"
                     confirmMessage={risk ? `${title} 将退出风险试制队列，转测与测试继续。` : `${title} 将在全部使用项目中作废。`}>
                     <label className="field">
-                      <span className="label">放弃发布试制结论 <span className="required-mark">*</span></span>
+                      <span className="label">{risk ? "撤回原因" : "放弃发布试制结论"} <span className="required-mark" aria-hidden="true">*</span></span>
                       <textarea className="textarea" name="conclusion" required minLength={5} />
                     </label>
                   </ActionForm>
                 </FormDialog>
+                {risk && <VersionVoidDialog versionId={row.versionId} code={identity.code} version={row.version}
+                  returnFields={{ ...releaseFields, voidFrom: "trial-queue" }} triggerClassName="button button-outline-danger button-sm" />}
               </>}
               <Link href={workflowHref("/trial/ready/" + row.requestId, projectId, query)} className="button button-ghost button-sm" prefetch={false}>详情</Link>
             </div>

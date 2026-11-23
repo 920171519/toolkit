@@ -100,10 +100,12 @@ test("两个队列各自筛选时保留条件及项目范围，绑定详情返�
     url.searchParams.get("f_binding_status") === "RISK,PUSHED",
   );
   const bindingRows = binding.locator("tbody tr");
-  await expect(bindingRows).toHaveCount(1);
-  await expect(bindingRows.getByRole("cell", { name: "赵敏", exact: true })).toBeVisible();
-  await expect(bindingRows.getByRole("cell", { name: "未关联转测批次", exact: true })).toBeVisible();
-  await bindingRows.getByRole("link", { name: "查看节点与审批" }).click();
+  await expect(bindingRows).toHaveCount(2);
+  await expect(bindingRows.filter({ hasText: "1004NET" })).toContainText("待转正");
+  const validatingRow = bindingRows.filter({ hasText: "1006KEY" });
+  await expect(validatingRow.getByRole("cell", { name: "赵敏", exact: true })).toBeVisible();
+  await expect(validatingRow.getByRole("cell", { name: "未关联转测批次", exact: true })).toBeVisible();
+  await validatingRow.getByRole("link", { name: "查看节点与审批" }).click();
   await page.getByRole("link", { name: "返回节点绑定" }).click();
 
   await expect(page).toHaveURL(/\/trial\?project=1/);
@@ -119,7 +121,7 @@ test("两个队列各自筛选时保留条件及项目范围，绑定详情返�
   await pendingMenu.getByRole("button", { name: "应用", exact: true }).click();
   await expect(binding.getByText("没有匹配的版本", { exact: true })).toBeVisible();
   await binding.getByRole("link", { name: "清除全部筛选", exact: true }).click();
-  await expect(bindingRows).toHaveCount(1);
+  await expect(bindingRows).toHaveCount(2);
   await tabs.getByRole("link", { name: /待发布试制/ }).click();
   await expect(page).toHaveURL(/f_release_version=1\.6\.0/);
   await expect(release.locator("tbody tr")).toHaveCount(1);

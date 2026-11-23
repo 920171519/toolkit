@@ -5,14 +5,16 @@ import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
-import { directoryFilters, directoryHref } from "@/lib/settings-directory";
+import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
+import { getImportedPackageVersions, getPackageUsageBlockingVersion } from "@/lib/settings";
 import { ActionForm } from "@/components/action-form";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { PackageUsagePicker } from "@/components/package-usage-picker";
 import { SettingsSelect } from "@/components/settings-select";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import styles from "../package-settings.module.css";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +48,11 @@ export default async function PackageSettingsDetailPage({
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));
-  const bindingActive = data.versions.some((version) => version.status === "TRIAL" || version.status === "PENDING_FORMAL");
+  const bindingActive = Boolean(getPackageUsageBlockingVersion(pkg.id));
+  const history = directoryPage(getImportedPackageVersions(pkg.id), listParams.historyPage, 10);
+  const packagePath = `/settings/packages/${pkg.id}`;
+  const historyParams = { ...listParams, historyPage: history.page > 1 ? String(history.page) : undefined };
+  const historyHref = (page: number) => `${directoryHref(packagePath, { ...historyParams, historyPage: page > 1 ? String(page) : undefined })}#imported-version-history`;
 
   return (
     <div className={styles.detail}>
@@ -176,6 +182,39 @@ export default async function PackageSettingsDetailPage({
           </Link>
         </aside>
       </div>
+      {history.total > 0 && <section className="card" id="imported-version-history" aria-labelledby="imported-version-history-title">
+        <div className="card-header"><h2 id="imported-version-history-title">历史补录版本</h2></div>
+        <div className="table-wrap" role="region" aria-label="历史补录版本表格" tabIndex={0}>
+          <table className="data-table">
+            <thead><tr><th scope="col">版本</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead>
+            <tbody>{history.items.map((version) => (
+              <tr key={version.id}>
+                <th scope="row" className={styles.code}>{version.version}</th>
+                <td>{version.status === "TRIAL" ? <Badge tone="teal">试制记录</Badge>
+                  : version.status === "VOID" ? <Badge tone="slate">已作废</Badge>
+                  : <StatusPill status={version.status} />}</td>
+                <td><div className={styles.historyActions}>
+                  <Link href={`/versions/${version.id}`} className="button button-ghost button-sm" prefetch={false}>全链路追溯</Link>
+                  {isAdmin && Boolean(version.canCorrect) && (
+                    <Link href={directoryHref(`${packagePath}/history/${version.id}`, historyParams)} className="button button-secondary button-sm" prefetch={false}>更正补录</Link>
+                  )}
+                  {isAdmin && (version.status === "TRIAL" || version.status === "FORMAL") && (
+                    <VersionVoidDialog versionId={version.id} code={identity.code} version={version.version}
+                      returnFields={{ ...historyParams, voidFrom: "package-settings" }} triggerClassName="button button-outline-danger button-sm" />
+                  )}
+                </div></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {history.pages > 1 && <nav className="settings-pagination" aria-label="历史补录版本分页">
+          <span className="small muted">第 {history.page} / {history.pages} 页</span>
+          <div className={styles.historyActions}>
+            {history.page > 1 && <Link href={historyHref(history.page - 1)} className="button button-secondary button-sm" prefetch={false}>上一页</Link>}
+            {history.page < history.pages && <Link href={historyHref(history.page + 1)} className="button button-secondary button-sm" prefetch={false}>下一页</Link>}
+          </div>
+        </nav>}
+      </section>}
     </div>
   );
 }

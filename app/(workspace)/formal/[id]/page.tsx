@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { Badge, ExternalLink, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
@@ -18,7 +19,7 @@ import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { getPendingFormalVersions, getTrialDetail, getVersionRequestIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "转正核对" };
@@ -38,6 +39,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   if (records.length === 0) notFound();
   const manageable = records.find((record) => canManageProjectWorkflowForProject(user, record.projectId));
   const version = manageable ?? records[0];
+  const pendingBindingFlows = getPendingBindingFlowCount(versionId);
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
   const evidence = getVersionRequestIds(version.versionId)
     .map((requestId) => getTrialDetail(requestId))
@@ -54,7 +56,9 @@ export default async function FormalDetailPage({ params, searchParams }: {
         description={identity.name !== identity.code ? identity.name : undefined}
         actions={<>
           <Link href={returnHref} prefetch={false} className="button button-secondary"><ArrowLeft size={14} aria-hidden="true" />返回待转正列表</Link>
-          {manageable && <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
+          {manageable && <VersionVoidDialog versionId={versionId} code={identity.code} version={version.version}
+            returnFields={{ ...getWorkflowListState(search), scopeProjectId: project?.id, from: "formal" }} />}
+          {manageable && pendingBindingFlows === 0 && <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
             <WorkflowPackageName {...identity} />
             <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...getWorkflowListState(search) }} submitText="提交转正电子流并发布">
               <label className="field">
@@ -69,6 +73,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
           </FormDialog>}
         </>}
       />
+      {pendingBindingFlows > 0 && <p className="risk-callout">还有 {pendingBindingFlows} 条绑定电子流待审批。请在下方打开绑定验证，完成审批或撤销后再转正。</p>}
       <div className={styles.detailColumns}>
         <section className="card" aria-label="项目验收与绑定证据">
           <div className="card-header"><h2 className={styles.tableHeading}>验收与绑定证据</h2><Badge tone="emerald" dot>{manageable ? "待转正" : "待软件经理发布"}</Badge></div>

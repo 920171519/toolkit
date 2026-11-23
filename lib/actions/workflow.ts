@@ -14,6 +14,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { readTraceListState, traceListParams } from "@/lib/version-trace-list";
+import { directoryActionHref } from "@/lib/settings-directory";
 import {
   addBatchProgress,
   admitRiskTrial,
@@ -34,7 +35,6 @@ import {
   pushBindingTasks,
   skipBindingAndEnterFormal,
   voidPackageVersion,
-  voidTrial,
   waiveBindingRequirement,
 } from "@/lib/workflow";
 
@@ -322,7 +322,7 @@ export async function abandonTrialReleaseAction(_prev: ActionState, formData: Fo
   }
   refreshAll();
   workflowSuccessRedirect(formData, "/trial", withdrawnRisk
-    ? "已放弃本次风险试制，转测和集成测试继续。"
+    ? "已撤回本次风险试制，转测和集成测试继续。"
     : "已提交放弃发布试制结论，该版本将不再发布试制。", actionListState(formData));
 }
 
@@ -330,38 +330,39 @@ export async function voidPackageVersionAction(_prev: ActionState, formData: For
   const user = await actionUser();
   const versionId = numberValue(formData, "versionId");
   if (!versionId) return { error: "版本参数无效。" };
+  const from = text(formData, "voidFrom");
+  const requestId = numberValue(formData, "requestId");
+  if (from === "trial-queue" && !requestId) return { error: "项目版本参数无效。" };
+  let packageId: number;
   try {
-    voidPackageVersion(user, versionId, text(formData, "reason"));
+    packageId = voidPackageVersion(user, versionId, text(formData, "reason"),
+      from === "trial-queue" && requestId ? { requestId, eligibility: text(formData, "eligibility") } : undefined);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
+  const message = "该软件包版本已作废，不再作为可用版本。";
+  if (from === "package-settings") {
+    successRedirect(directoryActionHref("packages", formData, packageId), message);
+  }
+  if (from === "trial-queue") {
+    workflowSuccessRedirect(formData, "/trial", "该软件包版本及各项目转测申请已作废。", actionListState(formData));
+  }
+  if (from === "trial" && requestId && one("SELECT id FROM version_transfer_requests WHERE id = ? AND package_version_id = ?", requestId, versionId)) {
+    workflowSuccessRedirect(formData, `/trial/${requestId}`, "共享试制版本已作废。", actionListState(formData));
+  }
   const state = readTraceListState(Object.fromEntries(formData));
-  workflowSuccessRedirect(formData, `/versions/${versionId}`, "该软件包版本已作废，不再作为可用版本。", {
+  workflowSuccessRedirect(formData, `/versions/${versionId}`, message, {
     ...traceListParams(state),
     from: text(formData, "from") === "formal" ? "formal" : undefined,
   });
 }
 
-export async function voidTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await actionUser();
-  const requestId = numberValue(formData, "requestId");
-  if (!requestId) return { error: "项目版本参数无效。" };
-  try {
-    voidTrial(user, requestId, text(formData, "reason"));
-  } catch (error) {
-    return failure(error);
-  }
-  refreshAll();
-  workflowSuccessRedirect(formData, `/trial/${requestId}`, "共享试制版本已作废，全部项目相关绑定电子流提交人已收到撤回提醒。", actionListState(formData));
-}
-
 export async function submitBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requirementId = numberValue(formData, "requirementId");
-  const requestId = numberValue(formData, "requestId");
   const approverId = numberValue(formData, "approverId");
-  if (!requirementId || !requestId) return { error: "绑定任务参数无效。" };
+  if (!requirementId) return { error: "绑定任务参数无效。" };
   if (!approverId) return { error: "请选择绑定电子流审批人。" };
   const rawBarcodes = formData.getAll("barcodes").filter((item): item is string => typeof item === "string").join("\n");
   const barcodes = rawBarcodes.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean);
@@ -369,8 +370,9 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
     return { error: "请至少添加一个有效设备条码。" };
   }
   const webUrl = text(formData, "webUrl");
+  let requestId: number;
   try {
-    submitBindingFlow(user, requirementId, barcodes, approverId, webUrl);
+    ({ requestId } = submitBindingFlow(user, requirementId, barcodes, approverId, webUrl));
   } catch (error) {
     return failure(error);
   }
@@ -381,37 +383,37 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
 export async function cancelBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const flowId = numberValue(formData, "flowId");
-  const requestId = numberValue(formData, "requestId");
-  if (!flowId || !requestId) return { error: "绑定电子流参数无效。" };
+  if (!flowId) return { error: "绑定电子流参数无效。" };
+  let result: ReturnType<typeof cancelBindingFlow>;
   try {
-    cancelBindingFlow(user, flowId, text(formData, "reason"));
+    result = cancelBindingFlow(user, flowId, text(formData, "reason"));
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/trial/${requestId}`, "绑定电子流已撤销。", actionListState(formData));
+  workflowSuccessRedirect(formData, `/trial/${result.requestId}`,
+    result.returnedToBinding ? "绑定电子流已撤销，条码数量未达要求，版本已回到绑定验证。" : "绑定电子流已撤销。",
+    actionListState(formData));
 }
 
 export async function decideBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const flowId = numberValue(formData, "flowId");
-  const requestId = numberValue(formData, "requestId");
   const decision = text(formData, "decision");
-  if (!flowId || !requestId) return { error: "绑定电子流参数无效。" };
+  if (!flowId) return { error: "绑定电子流参数无效。" };
   if (decision !== "APPROVED" && decision !== "REJECTED") return { error: "请选择审批结论。" };
-  let enteredFormal = false;
+  let result: ReturnType<typeof decideBindingFlow>;
   try {
-    const result = decideBindingFlow(user, flowId, decision, text(formData, "comment"));
-    enteredFormal = result.enteredFormal;
+    result = decideBindingFlow(user, flowId, decision, text(formData, "comment"));
   } catch (error) {
     return failure(error);
   }
   refreshAll();
   workflowSuccessRedirect(
     formData,
-    `/trial/${requestId}`,
-    enteredFormal
-      ? "绑定电子流已通过，该软件包全部项目节点绑定数量已满足，版本进入待转正。"
+    `/trial/${result.requestId}`,
+    result.enteredFormal
+      ? "绑定电子流已通过，该软件包全部项目节点绑定数量已满足。"
       : decision === "APPROVED"
         ? "绑定电子流审批通过。"
         : "绑定电子流已驳回，提交人将收到通知。",

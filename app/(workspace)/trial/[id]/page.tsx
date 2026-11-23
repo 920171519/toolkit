@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
+import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "@/lib/permissions";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -11,7 +11,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { parseFlash } from "@/lib/queries";
-import { getTrialDetail } from "@/lib/workflow-queries";
+import { getPendingBindingFlowCount, getTrialDetail } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import {
   BINDING_FLOW_STATUS_META,
@@ -26,13 +26,13 @@ import {
   pushBindingTasksAction,
   skipBindingAction,
   waiveBindingRequirementAction,
-  voidTrialAction,
 } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { BindingFlowForm } from "@/components/binding-flow-form";
 import { FormDialog } from "@/components/form-dialog";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
 
@@ -61,10 +61,11 @@ export default async function TrialDetailPage({
   const actionFields = { requestId, scopeProjectId, ...listState };
   const archived = request.projectStatus === "ARCHIVED";
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
+  const canEditFlows = !archived && isBindingOpen(request.status);
+  const pendingReviews = request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
   const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
   const waived = requirements.filter((requirement) => requirement.waivedAt !== null).length;
   const pendingDecision = !archived && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
-  const riskTestVoided = request.voidKind === "RISK_TEST_FAILURE";
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
   const identity = packageIdentity({ name: request.packageName, code: request.packageCode });
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
@@ -83,14 +84,21 @@ export default async function TrialDetailPage({
             ? <ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />
             : <>试制电子流 {request.trialFormNo ?? "—"}</>} · 发布于 {formatDateTime(request.trialReleasedAt)}
         </>}
-        actions={<><Link href={workflowHref("/trial", scopeProjectId, listState) + "#binding-queue"} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回节点绑定</Link><Link href={workflowHref(`/versions/${request.versionId}`, scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-secondary">版本全链路</Link><Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge></>}
+        actions={<>
+          <Link href={workflowHref("/trial", scopeProjectId, listState) + "#binding-queue"} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回节点绑定</Link>
+          <Link href={workflowHref(`/versions/${request.versionId}`, scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-secondary">版本全链路</Link>
+          {manager && canEditFlows && <VersionVoidDialog versionId={request.versionId} code={identity.code} version={request.version}
+            buttonLabel="作废试制版本" returnFields={{ ...actionFields, voidFrom: "trial" }}
+            description="该版本将在所有关联项目中失效。待审批或已通过的绑定电子流提交人会收到撤销提醒。批次、报告和电子流记录会保留。" />}
+          <Badge tone={transferStatusMeta.tone} dot>{transferStatusMeta.label}</Badge>
+        </>}
       />
       <FlashMessage notice={notice} />
 
       {request.status === "VOID" && (
         <div className="workflow-banner" data-tone="danger" style={{ marginBottom: 16 }}>
           <ShieldAlert size={18} style={{ color: "var(--danger)", flex: "none" }} />
-          <div><h3>本项目试制版本已作废</h3><p>{request.voidReason ?? "该试制版本被判定为绑定不通过。"} 作废时间：{formatDateTime(request.voidedAt)}。{riskTestVoided ? "待审批或已通过的绑定电子流提交人会收到撤销提醒。" : "待审批的绑定电子流提交人会收到撤销提醒。"}</p></div>
+          <div><h3>本项目试制版本已作废</h3><p>{request.voidReason ?? "该版本已失效。"} 作废时间：{formatDateTime(request.voidedAt)}。待审批或已通过的绑定电子流提交人会收到撤销提醒。</p></div>
         </div>
       )}
 
@@ -120,8 +128,9 @@ export default async function TrialDetailPage({
       </section>}
 
       {!archived && request.status === "PENDING_FORMAL" && <section className={styles.nextAction}>
-        <h2>已满足转正条件</h2>
-        {manager ? <Link href={workflowHref("/formal", scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="small muted">待软件经理发布</span>}
+        <h2>{pendingReviews > 0 ? "绑定条码已达标" : "已满足转正条件"}</h2>
+        {pendingReviews > 0 ? <span className="small muted">还有 {pendingReviews} 条绑定电子流待审批，处理后可转正。</span>
+          : manager ? <Link href={workflowHref("/formal", scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="small muted">待软件经理发布</span>}
       </section>}
 
       <div className={styles.detailColumns}>
@@ -132,12 +141,15 @@ export default async function TrialDetailPage({
               {requirements.length > 0 && <div style={{ marginBottom: 12 }}><ProgressBar value={passed + waived} max={requirements.length} /></div>}
               {requirements.length === 0 ? <EmptyState title="该版本没有节点绑定记录" /> : <div className={styles.nodeList}>
                 {requirements.map((requirement) => {
-                  const pending = !archived && requirement.status === "PENDING" && requirement.pushedAt !== null && request.status === "TRIAL";
-                  const canSubmit = pending && canSubmitBindingFlow(user, requirement.bindingOwnerId);
-                  const canWaive = pending && (manager || requirement.bindingOwnerId === user.id);
-                  const needsWithdrawal = (status: string) => status === "PENDING" || (riskTestVoided && status === "APPROVED");
-                  const canReview = (flow: typeof requirement.flows[number]) => !archived && request.status === "TRIAL" && requirement.waivedAt === null && flow.status === "PENDING" && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
-                  const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || (!archived && request.status === "TRIAL")) && needsWithdrawal(flow.status) && (flow.submittedById === user.id || manager);
+                  const open = canEditFlows && requirement.pushedAt !== null && requirement.waivedAt === null
+                    && (requirement.status === "PENDING" || requirement.status === "PASSED");
+                  const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
+                  const canWaive = open && request.status === "TRIAL" && requirement.status === "PENDING" && (manager || requirement.bindingOwnerId === user.id);
+                  const needsWithdrawal = (status: string) => status === "PENDING" || status === "APPROVED";
+                  const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
+                    && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
+                  const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
+                    && needsWithdrawal(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
                   const pendingOpen = canSubmit || canWaive || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
                   return (
                     <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen}>
@@ -186,9 +198,11 @@ export default async function TrialDetailPage({
                                   </details>
                                 )}
                                 <div className="small muted" style={{ marginTop: 4 }}>
-                                  {flow.submittedByName ?? "—"} 提交 · 审批人 {flow.approverName ?? "—"} · {formatDateTime(flow.submittedAt)}
+                                  {flow.submittedByName ?? "—"} 提交 · 指定审批人 {flow.approverName ?? "—"} · {formatDateTime(flow.submittedAt)}
+                                  {flow.reviewedByName && <> · 实际审批人 {flow.reviewedByName}</>}
                                   {flow.reviewComment ? ` · ${flow.reviewComment}` : ""}
                                 </div>
+                                {flow.cancelReason && <p className="small muted">撤销原因：{flow.cancelReason}</p>}
                                 {(canApprove || canCancel) && (
                                   <div className="binding-flow-actions">
                                     {canApprove && (
@@ -204,7 +218,17 @@ export default async function TrialDetailPage({
                                       </FormDialog>
                                     )}
                                     {canCancel && (
-                                      <ActionForm action={cancelBindingFlowAction} hidden={{ ...actionFields, flowId: flow.id, reason: "提交人撤销绑定电子流" }} submitText="撤销电子流" submitVariant="ghost" submitClassName="button-sm" confirmMessage={`${flow.flowNo} 将标记为已撤销。请先在原网页撤销电子流。`} />
+                                      <FormDialog label="撤销电子流" title={`撤销 ${flow.flowNo}`}
+                                        description={flow.status === "APPROVED" && canEditFlows
+                                          ? "请先在原网页撤销电子流。登记后，本次条码将移出有效数量，低于要求时版本将回到绑定验证。"
+                                          : "请先在原网页撤销电子流。登记后，本条电子流将标记为已撤销。"}
+                                        triggerClassName="button button-ghost button-sm" cancelLabel="取消">
+                                        <ActionForm action={cancelBindingFlowAction} hidden={{ ...actionFields, flowId: flow.id }} submitText="确认撤销电子流" submitVariant="danger" submitClassName="button-sm">
+                                          <label className="field"><span className="label">撤销原因 <span className="required-mark" aria-hidden="true">*</span></span>
+                                            <textarea className="textarea" name="reason" required minLength={5} maxLength={2000} />
+                                          </label>
+                                        </ActionForm>
+                                      </FormDialog>
                                     )}
                                   </div>
                                 )}
@@ -246,16 +270,6 @@ export default async function TrialDetailPage({
 
           {request.status !== "VOID" && request.bindingMode === "SKIPPED" && (
             <section className="card"><div className="card-body"><h2 className={styles.tableHeading}>整版免绑</h2><p className="note" style={{ marginTop: 6 }}>{request.bindingReason ?? "未记录免绑原因"}</p></div></section>
-          )}
-
-          {manager && request.status === "TRIAL" && (
-            <section className="card"><div className="card-body">
-              <FormDialog label="作废试制版本" title="作废共享试制版本" description="该版本将在所有使用项目中失效。待审批电子流的提交人会收到撤销提醒。" triggerClassName="button button-outline-danger button-sm" cancelLabel="取消">
-                <ActionForm action={voidTrialAction} hidden={actionFields} submitText="确认作废共享试制版本" submitVariant="danger">
-                  <label className="field"><span className="label">作废原因</span><textarea className="textarea" name="reason" required minLength={5} /></label>
-                </ActionForm>
-              </FormDialog>
-            </div></section>
           )}
 
         </aside>

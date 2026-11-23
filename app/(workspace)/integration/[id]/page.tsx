@@ -131,7 +131,7 @@ export default async function BatchDetailPage({
                         <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
                         <td><span className="mono small">{item.trialVersions || "—"}</span></td>
                         <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
-                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} prefetch={false} className="version-badge" aria-label={`查看 ${item.packageName} ${item.version} 版本全链路`}>{item.version}</Link>{item.isChanged && <div><Badge tone="amber">本轮变更</Badge></div>}</td>
+                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} prefetch={false} className="version-badge" aria-label={`查看 ${item.packageName} ${item.version} 版本全链路`}>{item.version}</Link>{item.requestStatus === "VOID" && <div><Badge tone="rose">已作废</Badge></div>}{item.isChanged && <div><Badge tone="amber">本轮变更</Badge></div>}</td>
                         <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
                         <td>
                           {!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}

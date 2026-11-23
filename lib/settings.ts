@@ -1,13 +1,14 @@
 import "server-only";
 
 import { all, one, run, transaction } from "./db";
-import { ROLES, type Role } from "./constants";
+import { ROLES, type PackageStatus, type Role } from "./constants";
 import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
 import { canManagePackageArea, canManageProjectWorkflowForProject, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { assert } from "./services";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
+import { LEGACY_VERSION_IMPORT_SQL, STANDALONE_IMPORTED_VERSION_SQL } from "./version-scope";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
   run(
@@ -735,18 +736,54 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
 }
 
 
-export type ImportLegacyVersionInput = {
-  packageId: number;
-  version: string;
+type LegacyVersionMetadataInput = {
   changeSummary: string;
   archiveUrl: string;
   buildUrl: string;
-  status: "TRIAL" | "FORMAL";
   trialFormNo: string;
   trialReleasedAt: string;
   formFlowNo: string;
   formalReleasedAt: string;
 };
+
+export type ImportLegacyVersionInput = LegacyVersionMetadataInput & {
+  packageId: number;
+  version: string;
+  status: "TRIAL" | "FORMAL";
+};
+
+function legacyVersionMetadata(input: LegacyVersionMetadataInput, status: ImportLegacyVersionInput["status"]) {
+  const changeSummary = input.changeSummary.trim();
+  const archiveUrl = input.archiveUrl.trim();
+  const buildUrl = input.buildUrl.trim();
+  const trialFormNo = input.trialFormNo.trim() || null;
+  const formFlowNo = input.formFlowNo.trim() || null;
+  assert(changeSummary.length >= 2, "请填写版本说明/修复内容。");
+  assert(/^https?:\/\//i.test(archiveUrl), "归档链接必须以 http:// 或 https:// 开头。");
+  assert(/^https?:\/\//i.test(buildUrl), "构建地址必须以 http:// 或 https:// 开头。");
+  const toIso = (value: string, label: string) => {
+    const parsed = value ? new Date(value) : null;
+    assert(parsed && !Number.isNaN(parsed.getTime()), `请填写有效的${label}。`);
+    return parsed.toISOString();
+  };
+  let formalReleasedAt: string | null = null;
+  if (status === "FORMAL") {
+    assert(formFlowNo && formFlowNo.length >= 3, "请填写转正电子流。");
+    formalReleasedAt = toIso(input.formalReleasedAt, "转正日期");
+  } else {
+    assert(trialFormNo && trialFormNo.length >= 3, "请填写试制电子流。");
+  }
+
+  return {
+    changeSummary,
+    archiveUrl,
+    buildUrl,
+    trialFormNo,
+    trialReleasedAt: trialFormNo ? toIso(input.trialReleasedAt, "试制发布日期") : null,
+    formFlowNo,
+    formalReleasedAt,
+  };
+}
 
 export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersionInput): number {
   const pkg = one<{ id: number; name: string; code: string; area_id: number | null }>(
@@ -767,24 +804,7 @@ export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersi
     version,
   );
   assert(!duplicate, "该软件包已存在相同版本号。");
-  assert(input.changeSummary.trim().length >= 2, "请填写版本说明/修复内容。");
-  assert(/^https?:\/\//i.test(input.archiveUrl.trim()), "归档链接必须以 http:// 或 https:// 开头。");
-  assert(/^https?:\/\//i.test(input.buildUrl.trim()), "构建地址必须以 http:// 或 https:// 开头。");
-  const toIso = (value: string, label: string) => {
-    const parsed = value ? new Date(value) : null;
-    assert(parsed && !Number.isNaN(parsed.getTime()), `请填写有效的${label}。`);
-    return parsed.toISOString();
-  };
-  let trialReleasedAt: string | null = null;
-  let formalReleasedAt: string | null = null;
-  if (input.status === "FORMAL") {
-    assert(input.formFlowNo.trim().length >= 3, "请填写转正电子流。");
-    formalReleasedAt = toIso(input.formalReleasedAt, "转正日期");
-    if (input.trialFormNo.trim()) trialReleasedAt = toIso(input.trialReleasedAt, "试制发布日期");
-  } else {
-    assert(input.trialFormNo.trim().length >= 3, "请填写试制电子流。");
-    trialReleasedAt = toIso(input.trialReleasedAt, "试制发布日期");
-  }
+  const metadata = legacyVersionMetadata(input, input.status);
   const timestamp = new Date().toISOString();
   return transaction(() => {
     const result = run(
@@ -795,16 +815,16 @@ export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersi
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INTEGRATION', 'SKIPPED', ?)`,
       input.packageId,
       version,
-      input.changeSummary.trim(),
-      input.archiveUrl.trim(),
-      input.buildUrl.trim(),
+      metadata.changeSummary,
+      metadata.archiveUrl,
+      metadata.buildUrl,
       input.status,
       actor.id,
       timestamp,
-      input.trialFormNo.trim() || null,
-      trialReleasedAt,
-      formalReleasedAt,
-      input.formFlowNo.trim() || null,
+      metadata.trialFormNo,
+      metadata.trialReleasedAt,
+      metadata.formalReleasedAt,
+      metadata.formFlowNo,
       timestamp,
     );
     const versionId = Number(result.lastInsertRowid);
@@ -816,6 +836,99 @@ export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersi
       `导入历史版本：${pkg.name} ${version}（${input.status === "FORMAL" ? "已转正" : "试制中"}）`,
     );
     return versionId;
+  });
+}
+
+// A referenced version may already be in a batch snapshot or binding history.
+const CORRECTABLE_LEGACY_VERSION_SQL = `
+  pv.status IN ('TRIAL', 'FORMAL')
+  AND NOT EXISTS (SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM batch_items bi WHERE bi.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM binding_tasks bt WHERE bt.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM binding_flows bf WHERE bf.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM trial_risk_admissions a WHERE a.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM risk_reviews rr WHERE rr.package_version_id = pv.id)
+  AND NOT EXISTS (SELECT 1 FROM formal_reviews fr WHERE fr.package_version_id = pv.id)
+`;
+
+export function getImportedPackageVersions(packageId: number) {
+  return all<{ id: number; version: string; status: PackageStatus; canCorrect: number }>(
+    `SELECT pv.id, pv.version, pv.status, (${CORRECTABLE_LEGACY_VERSION_SQL}) AS canCorrect
+     FROM package_versions pv
+     WHERE pv.package_id = ? AND ${LEGACY_VERSION_IMPORT_SQL}
+     ORDER BY pv.submitted_at DESC, pv.id DESC`,
+    packageId,
+  );
+}
+
+type CorrectableLegacyVersion = ReturnType<typeof legacyVersionMetadata> & {
+  id: number;
+  version: string;
+  status: ImportLegacyVersionInput["status"];
+  packageCode: string;
+  packageName: string;
+  updatedAt: string;
+};
+
+export function getLegacyVersionForCorrection(packageId: number, versionId: number) {
+  return one<CorrectableLegacyVersion>(
+    `SELECT pv.id, pv.version, pv.status, p.code AS packageCode, p.name AS packageName,
+            pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl, pv.build_url AS buildUrl,
+            pv.trial_form_no AS trialFormNo, pv.trial_released_at AS trialReleasedAt,
+            pv.form_flow_no AS formFlowNo, pv.formal_released_at AS formalReleasedAt, pv.updated_at AS updatedAt
+     FROM package_versions pv JOIN packages p ON p.id = pv.package_id
+     WHERE pv.id = ? AND pv.package_id = ? AND ${LEGACY_VERSION_IMPORT_SQL} AND ${CORRECTABLE_LEGACY_VERSION_SQL}`,
+    versionId,
+    packageId,
+  );
+}
+
+export function correctLegacyVersion(
+  actor: SessionUser,
+  packageId: number,
+  versionId: number,
+  input: LegacyVersionMetadataInput & { expectedUpdatedAt: string; reason: string },
+) {
+  assert(isAdmin(actor), "只有系统管理员可以更正历史版本。", "FORBIDDEN");
+  const reason = input.reason.trim();
+  assert(reason.length >= 5 && reason.length <= 1000, "更正原因需为 5–1000 个字符。");
+
+  transaction(() => {
+    const current = getLegacyVersionForCorrection(packageId, versionId);
+    assert(current, "当前版本无法更正。仅支持尚未被流程引用的历史补录版本。");
+    assert(input.expectedUpdatedAt === current.updatedAt, "版本资料已更新，请刷新后再提交。");
+    const before = {
+      changeSummary: current.changeSummary,
+      archiveUrl: current.archiveUrl,
+      buildUrl: current.buildUrl,
+      trialFormNo: current.trialFormNo,
+      trialReleasedAt: current.trialReleasedAt,
+      formFlowNo: current.formFlowNo,
+      formalReleasedAt: current.formalReleasedAt,
+    };
+    const after = legacyVersionMetadata(input, current.status);
+    if (current.status === "TRIAL") after.formFlowNo = current.formFlowNo;
+    assert(JSON.stringify(before) !== JSON.stringify(after), "版本资料没有变化。");
+    const previousTimestamp = Date.parse(current.updatedAt);
+    const timestamp = new Date(Math.max(Date.now(), Number.isFinite(previousTimestamp) ? previousTimestamp + 1 : 0)).toISOString();
+    run(
+      `UPDATE package_versions
+       SET change_summary = ?, archive_url = ?, build_url = ?, trial_form_no = ?, trial_released_at = ?,
+           form_flow_no = ?, formal_released_at = ?, updated_at = ?
+       WHERE id = ?`,
+      after.changeSummary,
+      after.archiveUrl,
+      after.buildUrl,
+      after.trialFormNo,
+      after.trialReleasedAt,
+      after.formFlowNo,
+      after.formalReleasedAt,
+      timestamp,
+      versionId,
+    );
+    audit(actor.id, "CORRECT_LEGACY_VERSION", "PACKAGE_VERSION", versionId,
+      JSON.stringify({ packageId, version: current.version, status: current.status, reason, before, after }));
   });
 }
 
@@ -877,6 +990,16 @@ export function updatePackageResponsibility(
   });
 }
 
+export function getPackageUsageBlockingVersion(packageId: number) {
+  return one<{ version: string }>(
+    `SELECT pv.version FROM package_versions pv
+     WHERE pv.package_id = ? AND pv.status IN ('TRIAL', 'PENDING_FORMAL')
+       AND NOT ${STANDALONE_IMPORTED_VERSION_SQL}
+     LIMIT 1`,
+    packageId,
+  );
+}
+
 export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds: number[]) {
   const pkg = one<{ id: number; name: string; area_id: number | null }>(
     "SELECT id, name, area_id FROM packages WHERE id = ?",
@@ -884,14 +1007,6 @@ export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds
   );
   assert(pkg, "软件包不存在。", "NOT_FOUND");
   assert(canManagePackageArea(actor, pkg.area_id), "只有责任田主管或系统管理员可以维护该软件包使用范围。", "FORBIDDEN");
-  const bindingActive = one<{ version: string }>(
-    "SELECT version FROM package_versions WHERE package_id = ? AND status IN ('TRIAL','PENDING_FORMAL') LIMIT 1",
-    packageId,
-  );
-  assert(
-    !bindingActive,
-    `该软件包 ${bindingActive?.version ?? ""} 正在绑定验证中，暂不能调整项目节点范围。`,
-  );
   const uniqueNodeIds = [...new Set(nodeIds)];
   if (uniqueNodeIds.length > 0) {
     const nodes = all<{ id: number }>(
@@ -901,6 +1016,8 @@ export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds
     assert(nodes.length === uniqueNodeIds.length, "选择的项目节点中包含无效数据。");
   }
   transaction(() => {
+    const blockingVersion = getPackageUsageBlockingVersion(packageId);
+    assert(!blockingVersion, `该软件包 ${blockingVersion?.version ?? ""} 正在绑定验证中，暂不能调整项目节点范围。`);
     run("DELETE FROM package_usages WHERE package_id = ?", packageId);
     for (const nodeId of uniqueNodeIds) {
       const node = one<{ project_id: number }>("SELECT project_id FROM project_nodes WHERE id = ?", nodeId);

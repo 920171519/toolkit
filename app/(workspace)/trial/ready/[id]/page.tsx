@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Badge, ExternalLink, PageHeader } from "@/components/ui";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
@@ -10,6 +11,7 @@ import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
+import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTrialReadyVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
 
@@ -35,15 +37,20 @@ export default async function TrialReadyDetailPage({
   const risk = row.riskProjectCount > 0;
   const conclusion = row.batchConclusion ? CONCLUSION_META[row.batchConclusion as BatchConclusion] : null;
   const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
+  const queue = { ...trialQueueParams(search), returnTo: getWorkflowListState(search).returnTo };
 
   return (
     <>
       <PageHeader
         title={`${identity.code} ${row.version}`}
         description={identity.name !== identity.code ? `${identity.name} · ${row.projectName}` : row.projectName}
-        actions={<Link href={workflowHref("/trial", projectId, { ...trialQueueParams(search), returnTo: getWorkflowListState(search).returnTo })} className="button button-secondary" prefetch={false}>
-          <ArrowLeft size={14} />返回试制队列
-        </Link>}
+        actions={<>
+          <Link href={workflowHref("/trial", projectId, queue)} className="button button-secondary" prefetch={false}>
+            <ArrowLeft size={14} />返回试制队列
+          </Link>
+          <VersionVoidDialog versionId={row.versionId} code={identity.code} version={row.version}
+            returnFields={{ ...queue, requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row), voidFrom: "trial-queue" }} />
+        </>}
       />
       <section className="card" aria-labelledby="trial-ready-evidence">
         <div className="card-header">

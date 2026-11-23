@@ -3,7 +3,7 @@ import { getIntegrationManagedProjectIds } from "./access";
 import type { BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
 import type { SessionUser } from "./types";
-import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
+import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
 
@@ -89,7 +89,7 @@ export function getPendingTransferGroups(projectIds: number[] | null = null): Pe
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
-     WHERE r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
+     WHERE pv.status != 'VOID' AND r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
        AND pr.status != 'ARCHIVED'
        AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
        AND NOT EXISTS (
@@ -459,7 +459,8 @@ export function getBatchDetail(batchId: number, projectIds: number[] | null): Ba
     `SELECT bi.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
             bi.package_version_id AS versionId, bi.version, bi.archive_url AS archiveUrl,
             bi.change_summary AS changeSummary, bi.is_changed AS isChanged,
-            bi.transfer_request_id AS transferRequestId, COALESCE(r.integration_status, r.status) AS requestStatus,
+            bi.transfer_request_id AS transferRequestId,
+            CASE WHEN pv.status = 'VOID' THEN 'VOID' ELSE COALESCE(r.integration_status, r.status) END AS requestStatus,
             bi.formal_version AS formalVersion, bi.trial_versions AS trialVersions,
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
             u.name AS ownerName, bi.issue_affected AS issueAffected,
@@ -595,6 +596,7 @@ export function getTrialReadyVersions(
 
 export type TrialVersionRow = {
   requestId: number;
+  status: "TRIAL" | "PENDING_FORMAL";
   versionId: number;
   projectId: number;
   projectName: string;
@@ -626,10 +628,10 @@ export type TrialVersionRow = {
   pendingFlowCount: number;
 };
 
-export function getTrialVersions(projectIds: number[] | null = null): TrialVersionRow[] {
+export function getTrialVersions(projectIds: number[] | null = null, includePendingFormal = false): TrialVersionRow[] {
   return filterByProject(
     all<TrialVersionRow>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+      `SELECT r.id AS requestId, r.status, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
               su.name AS submittedByName, pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
@@ -655,8 +657,14 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE r.status = 'TRIAL' AND pr.status != 'ARCHIVED'
+       WHERE pr.status != 'ARCHIVED' AND (r.status = 'TRIAL' OR (
+         ? = 1 AND r.status = 'PENDING_FORMAL'
+         AND EXISTS (SELECT 1 FROM binding_requirements br
+           WHERE br.request_id = r.id AND br.status = 'PASSED'
+             AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL)
+       ))
        ORDER BY r.trial_released_at DESC, r.id DESC`,
+      includePendingFormal ? 1 : 0,
     ),
     projectIds,
   ).map((version) => ({
@@ -680,11 +688,21 @@ export type BindingFlowRow = {
   submittedAt: string;
   approverName: string | null;
   approverId: number | null;
+  reviewedByName: string | null;
   reviewedAt: string | null;
   reviewComment: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
+
+export function getPendingBindingFlowCount(versionId: number): number {
+  return one<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM binding_flows f
+     JOIN projects pr ON pr.id = f.project_id
+     WHERE f.package_version_id = ? AND f.status = 'PENDING' AND pr.status != 'ARCHIVED'`,
+    versionId,
+  )?.count ?? 0;
+}
 
 export type BindingRequirementRow = {
   id: number;
@@ -798,11 +816,12 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     const flowRows = all<Omit<BindingFlowRow, "barcodes">>(
       `SELECT f.id, f.flow_no AS flowNo, f.requirement_id AS requirementId, f.status,
               f.web_url AS webUrl, su.name AS submittedByName, f.submitted_by AS submittedById, f.submitted_at AS submittedAt,
-              ap.name AS approverName, f.approver_id AS approverId, f.reviewed_at AS reviewedAt,
+              ap.name AS approverName, f.approver_id AS approverId, rv.name AS reviewedByName, f.reviewed_at AS reviewedAt,
               f.review_comment AS reviewComment, f.cancelled_at AS cancelledAt, f.cancel_reason AS cancelReason
        FROM binding_flows f
        LEFT JOIN users su ON su.id = f.submitted_by
        LEFT JOIN users ap ON ap.id = f.approver_id
+       LEFT JOIN users rv ON rv.id = f.reviewed_by
        WHERE f.requirement_id = ? ORDER BY f.submitted_at DESC, f.id DESC`,
       requirement.id,
     );
@@ -827,7 +846,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     if (approverOptions.length === 0 && requirement.approverId && requirement.approverName) {
       approverOptions.push({ userId: requirement.approverId, userName: requirement.approverName, userEmployeeId: "" });
     }
-    const approvedCount = flows.filter((flow) => flow.status === "APPROVED").reduce((total, flow) => total + flow.barcodes.length, 0);
+    const approvedCount = new Set(flows.filter((flow) => flow.status === "APPROVED").flatMap((flow) => flow.barcodes)).size;
     return {
       ...requirement,
       approvedCount,
@@ -978,8 +997,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE pv.submitted_by = ? AND COALESCE(r.integration_status, r.status) IN ('FAILED','BLOCKED')
-       AND COALESCE(pv.void_kind, '') != 'RISK_TEST_FAILURE'
+     WHERE pv.submitted_by = ? AND pv.status != 'VOID' AND COALESCE(r.integration_status, r.status) IN ('FAILED','BLOCKED')
      ORDER BY r.updated_at DESC`,
     user.id,
   );
@@ -1082,8 +1100,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = f.project_id
      JOIN project_nodes n ON n.id = f.node_id
-     WHERE f.submitted_by = ? AND r.status = 'VOID'
-       AND (f.status = 'PENDING' OR (f.status = 'APPROVED' AND pv.void_kind = 'RISK_TEST_FAILURE'))
+     WHERE f.submitted_by = ? AND pv.status = 'VOID' AND f.status IN ('PENDING','APPROVED')
      ORDER BY f.submitted_at DESC`,
     user.id,
   );
@@ -1132,18 +1149,19 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     });
   }
 
-  const approvals = all<{
+  const approvals = filterByProject(all<{
     id: number;
     flowNo: string;
     packageName: string;
     version: string;
     requestId: number;
+    projectId: number;
     projectName: string;
     nodeName: string;
     submittedByName: string | null;
     barcodeCount: number;
   }>(
-    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId,
+    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId, pr.id AS projectId,
             pr.name AS projectName, n.name AS nodeName, su.name AS submittedByName,
             (SELECT COUNT(*) FROM binding_flow_barcodes b WHERE b.flow_id = f.id) AS barcodeCount
      FROM binding_flows f
@@ -1154,10 +1172,14 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN projects pr ON pr.id = f.project_id
      JOIN project_nodes n ON n.id = f.node_id
      LEFT JOIN users su ON su.id = f.submitted_by
-     WHERE f.approver_id = ? AND pr.status != 'ARCHIVED' AND f.status = 'PENDING' AND br.status = 'PENDING' AND r.status = 'TRIAL'
+     WHERE (? = 1 OR f.approver_id = ?) AND f.submitted_by IS NOT ? AND pr.status != 'ARCHIVED'
+       AND f.status = 'PENDING' AND br.status IN ('PENDING','PASSED') AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL
+       AND r.status IN ('TRIAL','PENDING_FORMAL') AND pv.status IN ('TRIAL','PENDING_FORMAL')
      ORDER BY f.submitted_at`,
+    user.role === "ADMIN" ? 1 : 0,
     user.id,
-  );
+    user.id,
+  ), getWorkflowProjectScope(user));
   for (const approval of approvals) {
     tasks.push({
       key: `approval-${approval.id}`,
@@ -1450,7 +1472,7 @@ export function getVersionTrace(versionId: number, projectId?: number): VersionT
   );
   if (projectId && requests.length === 0 && batches.length === 0) {
     const standalone = one<{ id: number }>(
-      `SELECT pv.id FROM package_versions pv WHERE pv.id = ? AND ${STANDALONE_VERSION_IN_PROJECT_SQL}`,
+      `SELECT pv.id FROM package_versions pv WHERE pv.id = ? AND ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL}`,
       versionId,
       projectId,
     );
@@ -1531,7 +1553,7 @@ function traceProjectScope(projectId?: number) {
     ) OR EXISTS (
       SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
       WHERE bi.package_version_id = pv.id AND b.project_id = ?
-    ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))`,
+    ) OR (${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL}))`,
     values: [projectId, projectId, projectId],
   };
 }

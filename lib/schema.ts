@@ -323,6 +323,7 @@ CREATE TABLE IF NOT EXISTS binding_flows (
   web_url TEXT,
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
   submitted_at TEXT NOT NULL,
   reviewed_at TEXT,

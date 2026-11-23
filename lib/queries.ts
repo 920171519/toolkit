@@ -2,7 +2,7 @@ import "server-only";
 
 import { all, one } from "./db";
 import { getTransferAreaIds } from "./access";
-import { STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
+import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageStatus, Role } from "./constants";
 import type { ProjectStage } from "./project-stage";
 import type {
@@ -95,15 +95,18 @@ const PACKAGE_SUMMARY_SQL = `
           WHERE v.package_id = p.id AND v.trial_released_at IS NOT NULL
             AND v.status IN ('TRIAL','PENDING_FORMAL')
           ORDER BY v.trial_released_at DESC, v.id DESC LIMIT 1) AS trialVersion,
-         (SELECT v.version FROM package_versions v
-          WHERE v.package_id = p.id AND v.status NOT IN ('FORMAL','VOID')
-          ORDER BY v.updated_at DESC, v.id DESC LIMIT 1) AS currentVersion,
-         (SELECT v.status FROM package_versions v
-          WHERE v.package_id = p.id AND v.status NOT IN ('FORMAL','VOID')
-          ORDER BY v.updated_at DESC, v.id DESC LIMIT 1) AS currentStatus,
-         (SELECT v.id FROM package_versions v
-          WHERE v.package_id = p.id AND v.status NOT IN ('FORMAL','VOID')
-          ORDER BY v.updated_at DESC, v.id DESC LIMIT 1) AS currentVersionId,
+         (SELECT pv.version FROM package_versions pv
+          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
+            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
+          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentVersion,
+         (SELECT pv.status FROM package_versions pv
+          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
+            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
+          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentStatus,
+         (SELECT pv.id FROM package_versions pv
+          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
+            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
+          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentVersionId,
          (SELECT v.version FROM package_versions v
           WHERE v.package_id = p.id AND v.status = 'IN_TEST'
           ORDER BY v.updated_at DESC, v.id DESC LIMIT 1) AS inTestVersion,
@@ -1194,7 +1197,7 @@ export function getPackageDetail(packageId: number, includeInactive = false, pro
       WHERE pv.package_id = ?
         AND (? IS NULL OR bi.id IS NOT NULL OR EXISTS (
           SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
-        ) OR (${STANDALONE_VERSION_IN_PROJECT_SQL}))
+        ) OR (${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL}))
      ORDER BY pv.submitted_at DESC, pv.id DESC`,
     projectId ?? null, projectId ?? null,
     projectId ?? null, projectId ?? null,

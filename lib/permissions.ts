@@ -31,6 +31,10 @@ export function canValidateBinding(user: SessionUser | null): boolean {
   return !!user && BINDING_ROLES.includes(user.role);
 }
 
+export function isBindingOpen(status: string): boolean {
+  return status === "TRIAL" || status === "PENDING_FORMAL";
+}
+
 export function canSubmitBindingFlow(
   user: SessionUser | null,
   bindingOwnerId: number | null,

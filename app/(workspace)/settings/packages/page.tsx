@@ -12,7 +12,7 @@ import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/l
 import { savePackageAction } from "@/lib/actions/settings";
 import { directoryHref, directoryPage, matchesDirectorySearch } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
-import { Badge, EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
+import { EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import directoryStyles from "@/components/settings-directory.module.css";
@@ -146,10 +146,7 @@ export default async function PackagesSettingsPage({
                     <td className={directoryStyles.number}>{pkg.versionCount}</td>
                     <td className={directoryStyles.number}>{pkg.usageCount} 个</td>
                     <td>
-                      <div className={styles.statuses}>
-                        <Badge tone={pkg.isActive ? "emerald" : "slate"} dot>{pkg.isActive ? "启用" : "停用"}</Badge>
-                        {pkg.currentStatus && <StatusPill status={pkg.currentStatus} />}
-                      </div>
+                      {pkg.currentStatus ? <StatusPill status={pkg.currentStatus} /> : <span className="muted" aria-label="无在途流程">—</span>}
                     </td>
                     <td className="cell-actions"><Link href={detailHref} className="button button-secondary button-sm" aria-label={`配置 ${identity.code}`} prefetch={false}>配置 <ArrowUpRight size={12} aria-hidden="true" /></Link></td>
                   </tr>

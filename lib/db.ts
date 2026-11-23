@@ -69,6 +69,9 @@ function migrateSchema(database: DatabaseSync) {
   if (!flowColumns.some((column) => column.name === "web_url")) {
     database.exec("ALTER TABLE binding_flows ADD COLUMN web_url TEXT");
   }
+  if (!flowColumns.some((column) => column.name === "reviewed_by")) {
+    database.exec("ALTER TABLE binding_flows ADD COLUMN reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL");
+  }
   const requestColumns = database
     .prepare("PRAGMA table_info(version_transfer_requests)")
     .all() as Array<{ name: string }>;

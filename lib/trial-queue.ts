@@ -20,6 +20,7 @@ export const trialReleaseStatuses = {
 export const trialBindingStatuses = {
   PENDING: "待推送绑定",
   PUSHED: "绑定中",
+  PENDING_FORMAL: "待转正",
   SKIPPED: "跳过绑定",
   RISK: "风险发布",
   OVERDUE: "已超期",

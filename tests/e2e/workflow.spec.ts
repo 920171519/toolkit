@@ -53,6 +53,14 @@ async function approveAllBindingFlows(page: Page) {
   }
 }
 
+async function withdrawBindingFlow(page: Page, scope: Locator) {
+  await scope.getByRole("button", { name: "撤销电子流", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: /^撤销 BF-/ });
+  await dialog.getByLabel("撤销原因").fill("已在原电子流网页撤销，现登记处理结果。");
+  await dialog.getByRole("button", { name: "确认撤销电子流", exact: true }).click();
+  await expectFlash(page, "电子流已撤销");
+}
+
 async function submitBindingFlow(page: Page, nodeName: string, barcodes: string[], approverName?: string) {
   const requirement = page.locator(".binding-requirement").filter({ hasText: nodeName }).first();
   await requirement.getByRole("button", { name: "新增绑定电子流" }).click();
@@ -625,15 +633,14 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("link", { name: "返回转测申请" }).click();
 
     await login(page, "VALID001");
-    const voidAlert = page.locator(".personal-alert").filter({ hasText: "试制版本已作废" }).first();
-    await expect(voidAlert).toContainText("1006KEY");
-    await voidAlert.click();
-    await page.getByRole("button", { name: "撤销电子流" }).first().click();
-    await confirmAction(page);
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(300);
+    const notices = page.locator(".personal-alert").filter({ hasText: "试制版本已作废" }).filter({ hasText: "1006KEY" });
+    await expect(notices).toHaveCount(2);
+    await notices.first().click();
+    for (const flowNumber of ["BF-2026-0004", "BF-2026-0005"]) {
+      await withdrawBindingFlow(page, page.locator(".binding-flow-row").filter({ hasText: flowNumber }));
+    }
     await page.goto("/dashboard");
-    await expect(page.locator(".personal-alert").filter({ hasText: "试制版本已作废" })).toHaveCount(0);
+    await expect(notices).toHaveCount(0);
   });
 
   test("软件包使用范围跨项目展示，项目总览进入项目工作区和归档记录", async ({ page }) => {
@@ -843,8 +850,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByRole("heading", { name: "本项目试制版本已作废" })).toBeVisible();
     await expect(page.getByRole("button", { name: "撤销电子流" })).toHaveCount(2);
     await expect(dvt).toContainText("已关闭");
-    await dvt.getByRole("button", { name: "撤销电子流" }).click();
-    await confirmAction(page);
+    await withdrawBindingFlow(page, dvt);
     await expect(dvt.getByRole("button", { name: "撤销电子流" })).toHaveCount(0);
     await expect(dvt).toContainText("已核对设备条码和网页电子流");
   });

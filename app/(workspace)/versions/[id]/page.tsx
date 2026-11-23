@@ -8,15 +8,14 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { voidPackageVersionAction } from "@/lib/actions/workflow";
-import { ActionForm } from "@/components/action-form";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
-import { FormDialog } from "@/components/form-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
+import { canVoidPackageVersion } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { releaseFlowUrl } from "@/lib/release-flow";
@@ -67,7 +66,7 @@ export default async function VersionTracePage({
   const linkedProjects = new Set([...projectIds].filter((id) => canAccessProjectPage(user, id)));
   const managedRequests = project?.status === "ARCHIVED" ? [] : requests.filter((request) => canManageProjectWorkflowForProject(user, request.projectId));
   const riskEntries = getRiskTrialEntries(managedRequests.filter((request) => request.status === "PASSED").map((request) => request.requestId));
-  const canVoid = managedRequests.length > 0 && ["TRIAL", "PENDING_FORMAL", "FORMAL"].includes(version.status);
+  const canVoid = project?.status !== "ARCHIVED" && canVoidPackageVersion(user, versionId);
   const fromFormal = search.from === "formal";
   const formalState = getWorkflowListState(search);
 
@@ -83,6 +82,8 @@ export default async function VersionTracePage({
           {fromFormal && <Link href={workflowHref("/formal", projectId, formalState)} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回待转正列表</Link>}
           <Link href={workflowHref("/packages", projectId, { open: version.packageId })} prefetch={false} className="button button-secondary">查看软件包</Link>
           {project && <Link href={workflowHref(`/versions/${versionId}`, undefined, { returnTo: state.returnTo })} prefetch={false} className="button button-secondary">查看跨项目版本证据</Link>}
+          {canVoid && <VersionVoidDialog versionId={versionId} code={identity.code} version={version.version}
+            returnFields={{ ...traceListParams(state), scopeProjectId: projectId, from: fromFormal ? "formal" : undefined }} />}
         </>}
       />
 
@@ -214,17 +215,6 @@ export default async function VersionTracePage({
           ))}</div>}
         </div>
       </section>
-      {canVoid && (
-        <section className="card version-management" aria-label="版本管理">
-          <div className="card-body">
-            <FormDialog label="作废版本" title={`作废 ${identity.code} ${version.version}`} description="该版本将在所有使用项目中失效。转测、绑定和发布记录会保留。" triggerClassName="button button-outline-danger" cancelLabel="取消">
-              <ActionForm action={voidPackageVersionAction} hidden={{ versionId: version.id, scopeProjectId: projectId, ...traceListParams(state), from: fromFormal ? "formal" : undefined }} submitText="确认作废该版本" submitVariant="danger">
-                <label className="field"><span className="label">作废原因 <span className="required-mark" aria-hidden="true">*</span></span><textarea className="textarea" name="reason" required minLength={5} /></label>
-              </ActionForm>
-            </FormDialog>
-          </div>
-        </section>
-      )}
     </>
   );
 }

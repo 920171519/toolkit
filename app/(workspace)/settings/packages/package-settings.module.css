@@ -5,13 +5,6 @@
   font-size: 13px;
   letter-spacing: normal;
 }
-.statuses {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
 .name {
   display: block;
   max-inline-size: 18rem;
@@ -24,6 +17,13 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+.historyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .formGrid {

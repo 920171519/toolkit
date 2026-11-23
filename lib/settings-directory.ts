@@ -4,7 +4,7 @@ export type Directory = "areas" | "packages" | "users";
 const sharedKeys = ["q", "sort", "order", "page", "pageSize"];
 const filterKeys = {
   areas: ["type", "scope", "f_name", "f_name_mode", "f_description", "f_description_mode", "f_type", "f_leaders", "f_projects_min", "f_projects_max", "f_packages_min", "f_packages_max"],
-  packages: ["area", "state", "f_code", "f_code_mode", "f_name", "f_name_mode", "f_area", "f_owner", "f_enabled", "f_progress", "f_versions_min", "f_versions_max", "f_nodes_min", "f_nodes_max"],
+  packages: ["area", "state", "f_code", "f_code_mode", "f_name", "f_name_mode", "f_area", "f_owner", "f_enabled", "f_progress", "f_versions_min", "f_versions_max", "f_nodes_min", "f_nodes_max", "historyPage"],
   users: ["area", "status", "f_name", "f_name_mode", "f_title", "f_title_mode", "f_department", "f_department_mode", "f_employeeId", "f_employeeId_mode", "f_role", "f_area", "f_status", "f_packages_min", "f_packages_max"],
 };
 
