@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { ArrowRight, LogIn } from "lucide-react";
 import { Brand } from "./brand";
+import { getAccountAreaLabel } from "@/lib/queries";
 import type { SessionUser } from "@/lib/types";
 import styles from "@/app/public-contacts.module.css";
 
 export function PublicHeader({ user }: { user: SessionUser | null }) {
   return (
     <header className="public-header">
-      <div className={`container-wide public-nav ${styles.navigation}`}>
-        <Brand />
+      <div className={`container-wide public-nav ${styles.navigation}`} data-signed-in={Boolean(user)}>
+        <Brand subtitle={user ? getAccountAreaLabel(user.id) : undefined} />
         <nav className={styles.accountLinks} aria-label="工作台账号">
           {user ? (
             <Link href="/dashboard" className="button button-primary button-sm" prefetch={false}>

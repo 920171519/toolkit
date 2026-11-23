@@ -3,6 +3,7 @@ import { KeyRound, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
 import { getLedAreaIds } from "@/lib/access";
+import { getAccountAreaLabel } from "@/lib/queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { getProjectOptions } from "@/lib/workflow-queries";
 import { Avatar } from "@/components/ui";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const areaLabel = getAccountAreaLabel(user.id);
   const accountLabel = `${ROLE_META[user.role].label} · ${user.employeeId}`;
   const canConfigure = user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const isAdmin = user.role === "ADMIN";
@@ -67,7 +69,8 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       workflow={workflowItems}
       projects={getWorkflowProjectOptions(user, true)}
       catalogProjects={getProjectOptions(true).map(({ id, name }) => ({ id, name }))}
-      brand={<Brand href="/dashboard" />}
+      brand={<Brand href="/dashboard" subtitle={areaLabel} />}
+      areaLabel={areaLabel}
       sidebarFooter={
         <div className="sidebar-user">
           <div className="sidebar-user-card">

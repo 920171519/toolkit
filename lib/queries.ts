@@ -844,6 +844,10 @@ export function getAreaMemberships(userId?: number) {
   );
 }
 
+export function getAccountAreaLabel(userId: number): string {
+  return getAreaMemberships(userId).map(({ name }) => name).join("、") || "未分配责任田";
+}
+
 export function getResponsibilityAreaOptions() {
   return all<{ id: number; name: string }>("SELECT id, name FROM areas ORDER BY name, id");
 }

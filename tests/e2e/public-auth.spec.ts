@@ -4,6 +4,7 @@ import { login } from "./helpers";
 test.describe("公开项目联系人与账号", () => {
   test("未登录可以访问公开首页，只展示项目 PM 与软件经理", async ({ page }) => {
     await page.goto("/");
+    await expect(page.locator(".public-header .brand-sub")).toHaveText("软件工程部");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("项目联系人");
     await expect(page.getByText("星云 N1", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("王磊", { exact: true }).first()).toBeVisible();
@@ -122,6 +123,29 @@ test.describe("公开项目联系人与账号", () => {
     await expect(page.getByRole("link", { name: /进入工作台/ }).first()).toBeVisible();
     await page.getByRole("link", { name: /进入工作台/ }).first().click();
     await expect(page).toHaveURL(/\/dashboard/);
+  });
+
+  test("登录后品牌副标题显示当前账号的责任田，切换项目不改变", async ({ page }) => {
+    const subtitle = page.locator(".sidebar .brand-sub");
+    await login(page, "OWNER001");
+    await expect(subtitle).toHaveText("安全可信、系统底座");
+    await expect(subtitle).toHaveAttribute("title", "安全可信、系统底座");
+    await page.goto("/projects/1");
+    await expect(subtitle).toHaveText("安全可信、系统底座");
+    await page.goto("/");
+    await expect(page.locator(".public-header .brand-sub")).toHaveText("安全可信、系统底座");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator(".public-header .brand-sub")).toBeVisible();
+    await page.goto("/dashboard");
+    const menu = page.locator(".workspace-mobile-menu");
+    await menu.locator("summary").click();
+    await expect(menu.locator(".workspace-mobile-area")).toHaveText("安全可信、系统底座");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    await login(page, "VALID001");
+    await expect(subtitle).toHaveText("系统底座");
+    await login(page, "MGR001");
+    await expect(subtitle).toHaveText("未分配责任田");
   });
 
   test("桌面侧栏在一行内完整显示角色和账号编号", async ({ page }) => {

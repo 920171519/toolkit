@@ -72,6 +72,7 @@ dialog.workspace-package-drawer::backdrop { background: var(--dialog-backdrop); 
   .workspace-mobile-menu summary { cursor: pointer; display: grid; place-items: center; list-style: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
   .workspace-mobile-menu summary::-webkit-details-marker { display: none; }
   .workspace-mobile-links { position: absolute; z-index: 2; top: calc(100% - 1px); left: var(--workspace-padding); width: min(288px, calc(100vw - var(--workspace-padding) * 2)); max-height: calc(100dvh - 80px); overflow: auto; padding: 8px 12px 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); background: var(--navigation-surface); }
+  .workspace-mobile-area { margin: 0; padding: 8px; color: var(--navigation-caption); font-size: 12px; overflow-wrap: anywhere; }
   .workspace-mobile-links .sidebar-section-label { display: block; }
   .workspace-mobile-links .sidebar-nav { align-items: stretch; flex-direction: column; }
   .workspace-mobile-links .sidebar-link { min-height: 44px; }

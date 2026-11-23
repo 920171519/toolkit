@@ -42,7 +42,7 @@ function Breadcrumb({ items }: { items: Crumb[] }) {
   );
 }
 
-function MobileWorkspaceMenu({ groups }: { groups: SidebarGroup[] }) {
+function MobileWorkspaceMenu({ groups, areaLabel }: { groups: SidebarGroup[]; areaLabel: string }) {
   const details = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement>(null);
   const close = () => { if (details.current) details.current.open = false; };
@@ -61,7 +61,10 @@ function MobileWorkspaceMenu({ groups }: { groups: SidebarGroup[] }) {
       }
     }}>
       <summary ref={trigger} aria-label="主导航"><Menu size={19} aria-hidden="true" /></summary>
-      <div className="workspace-mobile-links"><SidebarNav groups={groups} onNavigate={close} /></div>
+      <div className="workspace-mobile-links">
+        <p className="workspace-mobile-area">{areaLabel}</p>
+        <SidebarNav groups={groups} onNavigate={close} />
+      </div>
     </details>
   );
 }
@@ -99,12 +102,13 @@ function ProjectChoices({ projects, section, filters }: { projects: Project[]; s
   );
 }
 
-export function WorkspaceNavigation({ groups, workflow, projects, catalogProjects, brand, sidebarFooter, actions, children }: {
+export function WorkspaceNavigation({ groups, workflow, projects, catalogProjects, brand, areaLabel, sidebarFooter, actions, children }: {
   groups: SidebarGroup[];
   workflow: SidebarItem[];
   projects: Project[];
   catalogProjects: Array<Pick<Project, "id" | "name">>;
   brand: ReactNode;
+  areaLabel: string;
   sidebarFooter: ReactNode;
   actions: ReactNode;
   children: ReactNode;
@@ -164,7 +168,7 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
         <header className="workspace-navigation">
           <div className="topbar">
             <div className="topbar-location">
-              {visibleGroups.length > 0 && <MobileWorkspaceMenu key={project?.id ?? "global"} groups={visibleGroups} />}
+              {visibleGroups.length > 0 && <MobileWorkspaceMenu key={project?.id ?? "global"} groups={visibleGroups} areaLabel={areaLabel} />}
               {(detailId || project) && <Link href={returnPath ?? "/overview"} prefetch={false} className="topbar-project-back" onClick={(event) => {
                 if (returnPath || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 let previous: string | undefined;
