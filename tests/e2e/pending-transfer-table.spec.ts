@@ -19,14 +19,23 @@ test("待转测表头筛选保留互斥选择和暂缓项，核对完整配套�
   await page.goto("/submissions?project=1");
   const pending = page.getByRole("region", { name: "星云 N1待转测申请表格" });
   await expect(pending.getByRole("columnheader")).toHaveCount(7);
-  for (const label of ["本轮转测", "软件包编码", "版本", "提交人", "提交时间", "固定地址"]) {
+  for (const label of ["本轮转测", "软件包编码", "版本", "提交人", "提交时间", "归档地址"]) {
     await expect(pending.getByRole("button", { name: "筛选" + label, exact: true })).toBeVisible();
   }
   const oldRequest = pending.getByRole("row").filter({ hasText: "1003COM" }).filter({ hasText: "2.1.0" });
   const newRequest = pending.getByRole("row").filter({ hasText: "1003COM" }).filter({ hasText: "2.9.70" });
   await expect(oldRequest.getByRole("cell", { name: "陈曦", exact: true })).toBeVisible();
   await expect(oldRequest.locator("time")).toHaveAttribute("datetime", /2026-11-12/);
-  await expect(oldRequest.getByRole("link").first()).toHaveAttribute("href", /^https?:\/\//);
+  await expect(oldRequest.getByRole("rowheader")).toHaveText("1003COM");
+  await expect(oldRequest.getByRole("link", { name: "归档包", exact: true })).toHaveAttribute("href", /^https?:\/\//);
+  const archiveUrl = "https://packages.example.com/issue7/com-2.9.70.tar.gz";
+  const archiveLink = newRequest.getByRole("link", { name: "归档包", exact: true });
+  await expect(archiveLink).toHaveAttribute("href", archiveUrl);
+  await expect(newRequest.getByRole("cell").filter({ hasText: archiveUrl })).toHaveCount(0);
+  await page.context().route(archiveUrl, (route) => route.fulfill({ contentType: "text/plain", body: "归档包" }));
+  const [archivePage] = await Promise.all([page.waitForEvent("popup"), archiveLink.click()]);
+  await expect(archivePage).toHaveURL(archiveUrl);
+  await archivePage.close();
 
   const oldChoice = oldRequest.getByRole("checkbox", { name: "本轮转测 1003COM 2.1.0" });
   const newChoice = newRequest.getByRole("checkbox", { name: "本轮转测 1003COM 2.9.70" });

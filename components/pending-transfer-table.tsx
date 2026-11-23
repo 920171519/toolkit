@@ -31,7 +31,7 @@ const fields = {
   packageName: { key: "package_name", label: "软件包名称", kind: "text" },
   version: { key: "version", label: "版本号", kind: "text" },
   submitted: { key: "submitted", label: "提交时间", kind: "date" },
-  archive: { key: "archive", label: "固定地址", kind: "text" },
+  archive: { key: "archive", label: "归档地址", kind: "text" },
 } satisfies Record<string, ColumnFilterField>;
 
 function submitterValue(item: PendingTransferItem) {
@@ -143,7 +143,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
               {filterHeader("版本", [fields.version])}
               {filterHeader("提交人", [submitterField])}
               {filterHeader("提交时间", [fields.submitted])}
-              {filterHeader("固定地址", [fields.archive])}
+              {filterHeader("归档地址", [fields.archive])}
               <th scope="col">操作</th>
             </tr>
           </thead>
@@ -155,13 +155,11 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
                 onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : <span className="muted">—</span>}</td>}
               <th scope="row">
                 <strong className="mono">{identity.code}</strong>
-                {identity.name !== identity.code && <div className="small muted">{identity.name}</div>}
-                {item.ownerName && <div className="small muted">责任人 {item.ownerName}</div>}
               </th>
               <td><Badge tone="slate">{item.version}</Badge><p className={styles.tableExcerpt} title={item.changeSummary}>{item.changeSummary}</p></td>
               <td>{item.submittedByName ?? "未知申请人"}</td>
               <td className={styles.nowrap}><time dateTime={item.submittedAt}>{formatDateTime(item.submittedAt)}</time></td>
-              <td><ExternalLink href={item.archiveUrl}><span className={styles.archiveAddress} title={item.archiveUrl}>{item.archiveUrl}</span></ExternalLink></td>
+              <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
               <td className="cell-actions"><div className={styles.cardActions}>
                 <Link href={workflowHref("/packages", projectId, { open: item.packageId })} prefetch={false} className="button button-secondary button-sm"
                   aria-label={`查看 ${item.packageName} 详情`}

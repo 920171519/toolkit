@@ -125,15 +125,6 @@
   font-size: 12px;
 }
 
-.archiveAddress {
-  display: inline-block;
-  max-width: 11rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
 .nowrap {
   white-space: nowrap;
 }
