@@ -84,6 +84,42 @@
   min-width: 0;
 }
 
+.settings-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 24px;
+  border-radius: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-disclosure > summary:hover {
+  background: var(--surface-muted);
+}
+
+.settings-disclosure > summary:focus-visible {
+  outline-offset: -3px;
+}
+
+.settings-disclosure > summary svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.settings-disclosure[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.settings-disclosure > .card-body {
+  padding-top: 0;
+}
+
 .settings-inline-form {
   padding: 16px;
   margin-top: 12px;

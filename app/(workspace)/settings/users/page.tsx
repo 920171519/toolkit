@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
@@ -136,8 +137,8 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
         </div>
         <DirectoryPagination path={path} params={filters} page={list.page} pages={list.pages} total={list.total} unit="人" pageSize={pageSize} />
       </section>
-      <details className="card">
-        <summary className="card-header">角色权限说明</summary>
+      <details className="card settings-disclosure">
+        <summary><ChevronRight size={16} aria-hidden="true" />角色权限说明</summary>
         <dl className={`card-body ${styles.stack}`}>
           {ROLES.map((value) => (
             <div key={value}>

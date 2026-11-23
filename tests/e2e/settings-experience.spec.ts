@@ -1,6 +1,38 @@
 import { expect, test } from "@playwright/test";
 import { confirmAction, expectFlash, login } from "./helpers";
 
+test("设置页的角色权限和项目删除可用鼠标与键盘展开", async ({ page }) => {
+  await login(page, "ADMIN001");
+  await page.goto("/settings/users");
+  const roles = page.locator("summary").filter({ hasText: "角色权限说明" });
+  const permissions = roles.locator("..").locator("dl");
+  const indicator = roles.locator('svg[aria-hidden="true"]');
+  await expect(roles).toHaveCSS("cursor", "pointer", { timeout: 2_000 });
+  await expect(indicator).toBeVisible();
+  const collapsedIcon = await indicator.evaluate((icon) => getComputedStyle(icon).transform);
+  await expect(permissions).toBeHidden();
+  await roles.click();
+  await expect(permissions.getByText("系统管理员", { exact: true })).toBeVisible();
+  await expect(indicator).not.toHaveCSS("transform", collapsedIcon);
+  await roles.press("Enter");
+  await expect(permissions).toBeHidden();
+  await expect(roles).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings/projects/1");
+  const deletion = page.locator("summary").filter({ hasText: "项目删除" });
+  const deleteButton = page.getByRole("button", { name: "删除项目", exact: true });
+  await expect(deletion).toHaveCSS("cursor", "pointer");
+  await expect(deletion.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await expect(deleteButton).toBeHidden();
+  await deletion.press("Space");
+  await expect(deleteButton).toBeVisible();
+  await expect(deleteButton).toBeDisabled();
+  await deletion.press("Enter");
+  await expect(deleteButton).toBeHidden();
+  await expect(deletion).toBeFocused();
+});
+
 test("项目配置列出负责的项目，并保留归档配置入口", async ({ page }) => {
   await login(page, "MGR001");
   await page.goto("/settings/projects");

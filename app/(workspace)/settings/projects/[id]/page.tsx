@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowDown, Plus } from "lucide-react";
+import { ArrowLeft, ArrowDown, ChevronRight, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
@@ -97,16 +97,14 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
           </ul>
         ) : <EmptyState title="尚未配置测试节点" />}
       </section>
-      <section className="card">
+      <details className="card settings-disclosure">
+        <summary><ChevronRight size={16} aria-hidden="true" />项目删除</summary>
         <div className="card-body">
-          <details>
-            <summary className="archive-link">项目删除</summary>
-            <div className="settings-inline-form">
-              <ActionForm action={deleteProjectAction} hidden={{ id: project.id }} submitText="删除项目" submitVariant="outline-danger" disabled={project.packageCount > 0} footerNote={project.packageCount > 0 ? "项目仍关联软件包。可在项目资料中归档。" : undefined} confirmMessage={`将永久删除项目“${project.name}”及其联系人、分工和测试节点。`} />
-            </div>
-          </details>
+          <div className="settings-inline-form">
+            <ActionForm action={deleteProjectAction} hidden={{ id: project.id }} submitText="删除项目" submitVariant="outline-danger" disabled={project.packageCount > 0} footerNote={project.packageCount > 0 ? "项目仍关联软件包。可在项目资料中归档。" : undefined} confirmMessage={`将永久删除项目“${project.name}”及其联系人、分工和测试节点。`} />
+          </div>
         </div>
-      </section>
+      </details>
     </div>
   );
 }
