@@ -21,6 +21,7 @@ type Props = {
   footerNote?: ReactNode;
   hideSubmit?: boolean;
   disabled?: boolean;
+  preserveValuesOnSubmit?: boolean;
   title?: string;
   submitName?: string;
   submitValue?: string;
@@ -50,6 +51,7 @@ export function ActionForm({
   footerNote,
   hideSubmit = false,
   disabled = false,
+  preserveValuesOnSubmit = false,
   title,
   submitName,
   submitValue,
@@ -79,6 +81,7 @@ export function ActionForm({
       action={formAction}
       className={className}
       data-testid={testId}
+      onReset={preserveValuesOnSubmit ? (event) => event.preventDefault() : undefined}
       onSubmit={(event) => {
         if (!confirmMessage || confirmed.current) return;
         event.preventDefault();
