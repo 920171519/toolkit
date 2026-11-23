@@ -40,6 +40,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
     .map((requestId) => getTrialDetail(requestId))
     .filter((detail): detail is NonNullable<ReturnType<typeof getTrialDetail>> => detail !== null);
   const projects = evidence.map(({ request }) => request.projectName);
+  const trialReviewMinutes = evidence[0]?.request.trialReviewMinutes;
   const returnHref = workflowHref("/formal", project?.id, getWorkflowListState(search));
   const traceHref = workflowHref(`/versions/${version.versionId}`, project?.id);
 
@@ -54,6 +55,10 @@ export default async function FormalDetailPage({ params, searchParams }: {
               <label className="field">
                 <span className="label">转正电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
                 <input className="input" name="flowNo" type="url" required placeholder="https://eflow.example.com/releases/152" />
+              </label>
+              <label className="field">
+                <span className="label">转正评审纪要 <span className="required-mark" aria-hidden="true">*</span></span>
+                <textarea className="textarea" name="reviewMinutes" required maxLength={2000} />
               </label>
             </ActionForm>
           </FormDialog>}
@@ -111,13 +116,21 @@ export default async function FormalDetailPage({ params, searchParams }: {
             </div>
           </div>
         </section>
-        <aside className="card" aria-label="版本资料">
-          <div className="card-header"><h2 className={styles.tableHeading}>版本资料</h2></div>
-          <div className="card-body">
-            <p className="change-copy">{version.changeSummary}</p>
-            <p className="note">试制发布于 {formatDateTime(version.trialReleasedAt)}</p>
-            <div className={styles.rowActions}><ExternalLink href={version.archiveUrl}>归档包</ExternalLink><Link href={traceHref} prefetch={false} className="archive-link">版本全链路</Link></div>
-          </div>
+        <aside className={styles.stack} aria-label="版本资料">
+          <section className="card">
+            <div className="card-header"><h2 className={styles.tableHeading}>版本资料</h2></div>
+            <div className="card-body">
+              <p className="change-copy">{version.changeSummary}</p>
+              <p className="note">试制发布于 {formatDateTime(version.trialReleasedAt)}</p>
+              <div className={styles.rowActions}><ExternalLink href={version.archiveUrl}>归档包</ExternalLink><Link href={traceHref} prefetch={false} className="archive-link">版本全链路</Link></div>
+            </div>
+          </section>
+          {trialReviewMinutes && (
+            <section className="card" aria-labelledby="formal-trial-review-minutes-heading">
+              <div className="card-header"><h2 className={styles.tableHeading} id="formal-trial-review-minutes-heading">试制评审纪要</h2></div>
+              <div className="card-body"><p className={styles.reviewMinutesText}>{trialReviewMinutes}</p></div>
+            </section>
+          )}
         </aside>
       </div>
     </>

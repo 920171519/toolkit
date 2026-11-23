@@ -102,7 +102,9 @@ export default async function VersionTracePage({
       <p className={styles.versionSummary}>{version.changeSummary}</p>
       {version.riskConclusion && <div className="risk-callout" style={{ marginBottom: 16 }}><strong>风险结论</strong><p>{version.riskConclusion}</p></div>}
       <nav className="version-evidence-navigation" aria-label="版本证据目录">
-        <a href="#version-projects">项目与发布状态</a><a href="#version-tests">测试批次与报告</a><a href="#version-binding">绑定证据</a>
+        <a href="#version-projects">项目与发布状态</a>
+        {(version.trialReviewMinutes || version.formalReviewMinutes) && <a href="#version-review-minutes">评审纪要</a>}
+        <a href="#version-tests">测试批次与报告</a><a href="#version-binding">绑定证据</a>
       </nav>
 
       <section id="version-projects" className="card workspace-section-anchor" style={{ marginBottom: 16 }}>
@@ -134,6 +136,26 @@ export default async function VersionTracePage({
           </table></div>}
         </div>
       </section>
+
+      {(version.trialReviewMinutes || version.formalReviewMinutes) && (
+        <section id="version-review-minutes" className="card workspace-section-anchor" aria-labelledby="version-review-minutes-heading" style={{ marginBottom: 16 }}>
+          <div className="card-header"><h2 className={styles.tableHeading} id="version-review-minutes-heading">评审纪要</h2></div>
+          <div className={`card-body ${styles.stack}`}>
+            {version.trialReviewMinutes && (
+              <section aria-labelledby="version-trial-review-minutes-heading">
+                <h3 className={styles.reviewMinutesHeading} id="version-trial-review-minutes-heading">试制评审纪要</h3>
+                <p className={styles.reviewMinutesText}>{version.trialReviewMinutes}</p>
+              </section>
+            )}
+            {version.formalReviewMinutes && (
+              <section aria-labelledby="version-formal-review-minutes-heading">
+                <h3 className={styles.reviewMinutesHeading} id="version-formal-review-minutes-heading">转正评审纪要</h3>
+                <p className={styles.reviewMinutesText}>{version.formalReviewMinutes}</p>
+              </section>
+            )}
+          </div>
+        </section>
+      )}
 
       <section id="version-tests" className="card workspace-section-anchor" style={{ marginBottom: 16 }}>
         <div className="card-header"><h2 className={styles.tableHeading}>测试批次与报告</h2><span className={styles.count}>{batches.length} 个批次</span></div>

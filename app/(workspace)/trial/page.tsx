@@ -207,6 +207,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
                       <span className="label">试制电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
                       <input className="input" name="trialFormNo" type="url" required placeholder="https://eflow.example.com/trials/160" />
                     </label>
+                    <label className="field">
+                      <span className="label">试制评审纪要 <span className="required-mark" aria-hidden="true">*</span></span>
+                      <textarea className="textarea" name="reviewMinutes" required maxLength={2000} />
+                    </label>
                   </ActionForm>
                 </FormDialog>
                 <FormDialog label="放弃" title={"放弃发布 " + title + " 试制"}

@@ -106,6 +106,8 @@ function migrateSchema(database: DatabaseSync) {
     ["binding_decided_by", "ALTER TABLE package_versions ADD COLUMN binding_decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
     ["void_kind", "ALTER TABLE package_versions ADD COLUMN void_kind TEXT"],
     ["voided_by", "ALTER TABLE package_versions ADD COLUMN voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["trial_review_minutes", "ALTER TABLE package_versions ADD COLUMN trial_review_minutes TEXT"],
+    ["formal_review_minutes", "ALTER TABLE package_versions ADD COLUMN formal_review_minutes TEXT"],
   ]) {
     if (!versionColumns.some((column) => column.name === name)) database.exec(sql);
   }

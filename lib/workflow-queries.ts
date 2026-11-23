@@ -727,6 +727,7 @@ export type TrialDetail = {
     changeSummary: string;
     archiveUrl: string;
     trialFormNo: string | null;
+    trialReviewMinutes: string | null;
     trialReleasedAt: string | null;
     releaseMode: "INTEGRATION" | "RISK";
     riskConclusion: string | null;
@@ -753,7 +754,8 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.id AS versionId,
             pv.version, r.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             r.integration_status AS integrationStatus, ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
-            r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
+            r.trial_form_no AS trialFormNo, pv.trial_review_minutes AS trialReviewMinutes,
+            r.trial_released_at AS trialReleasedAt,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
             pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
             p.trial_overdue_days AS trialOverdueDays,
@@ -1350,9 +1352,11 @@ export type VersionTrace = {
     submittedByName: string | null;
     submittedAt: string;
     trialFormNo: string | null;
+    trialReviewMinutes: string | null;
     trialReleasedAt: string | null;
     formalReleasedAt: string | null;
     formFlowNo: string | null;
+    formalReviewMinutes: string | null;
     releaseMode: "INTEGRATION" | "RISK";
     riskConclusion: string | null;
     voidReason: string | null;
@@ -1399,8 +1403,9 @@ export function getVersionTrace(versionId: number, projectId?: number): VersionT
     `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version,
             pv.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             pv.build_url AS buildUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
-            pv.trial_form_no AS trialFormNo, pv.trial_released_at AS trialReleasedAt,
-            pv.formal_released_at AS formalReleasedAt, pv.form_flow_no AS formFlowNo,
+            pv.trial_form_no AS trialFormNo, pv.trial_review_minutes AS trialReviewMinutes,
+            pv.trial_released_at AS trialReleasedAt, pv.formal_released_at AS formalReleasedAt,
+            pv.form_flow_no AS formFlowNo, pv.formal_review_minutes AS formalReviewMinutes,
             pv.release_mode AS releaseMode, pv.risk_conclusion AS riskConclusion,
             pv.void_reason AS voidReason, pv.voided_at AS voidedAt
      FROM package_versions pv

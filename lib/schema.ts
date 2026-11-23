@@ -1,6 +1,6 @@
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES } from "./project-stage";
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const PROJECT_STAGE_COLUMN_SQL =
   `stage TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${PROJECT_STAGES.map((stage) => `'${stage}'`).join(",")}))`;
@@ -126,9 +126,11 @@ CREATE TABLE IF NOT EXISTS package_versions (
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   submitted_at TEXT NOT NULL,
   trial_form_no TEXT,
+  trial_review_minutes TEXT,
   trial_released_at TEXT,
   formal_released_at TEXT,
   form_flow_no TEXT,
+  formal_review_minutes TEXT,
   release_mode TEXT NOT NULL DEFAULT 'INTEGRATION',
   risk_conclusion TEXT,
   binding_mode TEXT NOT NULL DEFAULT 'PENDING',

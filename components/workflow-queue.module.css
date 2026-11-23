@@ -152,8 +152,18 @@
   margin: -4px 0 16px;
   max-width: 72ch;
   color: var(--muted);
+}
+
+.versionSummary,
+.reviewMinutesText {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.reviewMinutesHeading {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .grow {

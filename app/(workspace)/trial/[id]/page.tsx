@@ -234,6 +234,13 @@ export default async function TrialDetailPage({
             <p className="note">{request.changeSummary}</p>
           </div></section>
 
+          {request.trialReviewMinutes && (
+            <section className="card" aria-labelledby="trial-review-minutes-heading">
+              <div className="card-header"><h2 className={styles.tableHeading} id="trial-review-minutes-heading">试制评审纪要</h2></div>
+              <div className="card-body"><p className={styles.reviewMinutesText}>{request.trialReviewMinutes}</p></div>
+            </section>
+          )}
+
           {request.status !== "VOID" && request.bindingMode === "SKIPPED" && (
             <section className="card"><div className="card-body"><h2 className={styles.tableHeading}>整版免绑</h2><p className="note" style={{ marginTop: 6 }}>{request.bindingReason ?? "未记录免绑原因"}</p></div></section>
           )}

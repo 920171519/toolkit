@@ -709,9 +709,11 @@ export function admitRiskTrial(
   });
 }
 
-export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, eligibility: string) {
+export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo: string, eligibility: string, reviewMinutes: string) {
   const trialUrl = releaseFlowUrl(trialFormNo);
   assert(trialUrl, "请输入有效的试制电子流网址（http 或 https）。");
+  const minutes = reviewMinutes.trim();
+  assert(minutes.length >= 1 && minutes.length <= 2000, "请输入试制评审纪要（1–2000 个字符）。");
   return transaction(() => {
     const anchor = one<{
       id: number;
@@ -830,11 +832,12 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
     const timestamp = now();
     run(
       `UPDATE package_versions
-       SET status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, release_mode = ?,
+       SET status = 'TRIAL', trial_form_no = ?, trial_review_minutes = ?, trial_released_at = ?, release_mode = ?,
            risk_conclusion = ?, binding_mode = 'PENDING', binding_reason = NULL,
            binding_decided_at = NULL, binding_decided_by = NULL, updated_at = ?
        WHERE id = ?`,
       trialUrl,
+      minutes,
       timestamp,
       riskRequired ? "RISK" : "INTEGRATION",
       riskConclusion ?? null,
@@ -1378,9 +1381,11 @@ export function decideBindingFlow(
   });
 }
 
-export function releaseFormal(actor: SessionUser, requestId: number, flowNo: string) {
+export function releaseFormal(actor: SessionUser, requestId: number, flowNo: string, reviewMinutes: string) {
   const formalUrl = releaseFlowUrl(flowNo);
   assert(formalUrl, "请输入有效的转正电子流网址（http 或 https）。");
+  const minutes = reviewMinutes.trim();
+  assert(minutes.length >= 1 && minutes.length <= 2000, "请输入转正评审纪要（1–2000 个字符）。");
   return transaction(() => {
     const anchor = one<{
       id: number;
@@ -1434,9 +1439,10 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
     }
     const timestamp = now();
     run(
-      `UPDATE package_versions SET status = 'FORMAL', formal_released_at = ?, form_flow_no = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE package_versions SET status = 'FORMAL', formal_released_at = ?, form_flow_no = ?, formal_review_minutes = ?, updated_at = ? WHERE id = ?`,
       timestamp,
       formalUrl,
+      minutes,
       timestamp,
       anchor.package_version_id,
     );

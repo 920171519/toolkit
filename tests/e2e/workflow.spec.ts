@@ -481,16 +481,27 @@ test.describe("工程协同台项目维度流程", () => {
     await readyRow.getByRole("button", { name: "发布", exact: true }).click();
     const publication = page.getByRole("dialog", { name: "发布 1001OTA 1.6.0 试制" });
     const trialFlowUrl = "https://eflow.example.com/trial/n1-ota-160";
+    const trialMinutes = "核对了 N1 与 M2 的验收报告。\n双方同意发布本次试制。";
+    const trialMinutesField = publication.getByRole("textbox", { name: "试制评审纪要", exact: true });
     const trialFlowField = publication.getByRole("textbox", { name: "试制电子流网址", exact: true });
     await trialFlowField.fill("ftp://eflow.example.com/trial/n1-ota-160");
+    await trialMinutesField.fill(trialMinutes);
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expect(publication.getByRole("alert")).toContainText(/https?/i);
     await expect(page).toHaveURL(/\/trial$/);
     await trialFlowField.fill(trialFlowUrl);
+    await trialMinutesField.fill("   ");
+    await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
+    await confirmAction(page);
+    await expect(publication.getByRole("alert")).toContainText("评审纪要");
+    await expect(page).toHaveURL(/\/trial$/);
+    await trialFlowField.fill(trialFlowUrl);
+    await trialMinutesField.fill(trialMinutes);
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
+    await expect(page.getByText("核对了 N1 与 M2 的验收报告。", { exact: false }).first()).toBeVisible();
     otaTrialUrl = page.url().split("?")[0];
     expect(otaTrialUrl).toMatch(/\/trial\/\d+$/);
     await expect(page.locator(".binding-requirement")).toHaveCount(3);
@@ -560,16 +571,31 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("button", { name: "发布正式版本" }).click();
     const formalDialog = page.getByRole("dialog", { name: /转正 1001OTA 1.6.0/ });
     const formalFlowUrl = "https://eflow.example.com/formal/ota-160";
+    const formalMinutes = "核对项目验收、绑定条码和电子流。\n本次评审同意转正。";
+    const formalMinutesField = formalDialog.getByRole("textbox", { name: "转正评审纪要", exact: true });
     const formalFlowField = formalDialog.getByRole("textbox", { name: "转正电子流网址", exact: true });
     await formalFlowField.fill("ftp://eflow.example.com/formal/ota-160");
+    await formalMinutesField.fill(formalMinutes);
     await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
     await expect(formalDialog.getByRole("alert")).toContainText(/https?/i);
     await formalFlowField.fill(formalFlowUrl);
+    await formalMinutesField.fill("   ");
+    await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
+    await expect(formalDialog.getByRole("alert")).toContainText("评审纪要");
+    await expect(page).toHaveURL(/\/formal\/\d+/);
+    await formalFlowField.fill(formalFlowUrl);
+    await formalMinutesField.fill(formalMinutes);
     await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
     await expectFlash(page, "同步发布正式版本");
     await expect(page).toHaveURL(/\/versions\/\d+/);
     for (const href of [trialFlowUrl, formalFlowUrl]) {
       await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible();
+    }
+    for (const minutes of [trialMinutes, formalMinutes]) {
+      const record = page.getByText(minutes, { exact: true });
+      await expect(record).toBeVisible();
+      await expect(record).toHaveCSS("white-space", "pre-wrap");
+      expect((await record.textContent())?.replaceAll("\r\n", "\n")).toBe(minutes);
     }
 
     await page.goto("/packages?project=1");
@@ -711,6 +737,7 @@ test.describe("工程协同台项目维度流程", () => {
     await risk.getByRole("button", { name: "发布", exact: true }).click();
     await expect(publication.locator('textarea[name="riskConclusion"]')).toHaveCount(0);
     await publication.locator('input[name="trialFormNo"]').fill("https://eflow.example.com/trial/m2-ota-161");
+    await publication.locator("textarea[name=reviewMinutes]").fill("评审同意在已登记的风险条件下发布共享试制。");
     await publication.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
@@ -761,6 +788,7 @@ test.describe("工程协同台项目维度流程", () => {
     const publish = page.getByRole("dialog", { name: /发布 1001OTA/ });
     await expect(publish.getByRole("link", { name: /B953/ })).toBeVisible();
     await publish.locator('input[name="trialFormNo"]').fill("https://eflow.example.com/trial/parallel-e2e");
+    await publish.locator("textarea[name=reviewMinutes]").fill("评审同意先行试制，集成测试继续进行。");
     await publish.getByRole("button", { name: "发布全项目共享试制版本" }).click();
     await confirmAction(page);
     await expectFlash(page, "试制版本已发布");
@@ -893,6 +921,7 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("button", { name: "发布正式版本" }).click();
     const formalDialog = page.getByRole("dialog", { name: /转正 1001OTA 1.6.1/ });
     await formalDialog.locator('input[name="flowNo"]').fill("https://eflow.example.com/formal/ota-161");
+    await formalDialog.locator("textarea[name=reviewMinutes]").fill("核对免绑结论与转正条件，评审同意正式发布。");
     await formalDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
     await expectFlash(page, "同步发布正式版本");
 
