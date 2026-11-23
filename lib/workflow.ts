@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, extname } from "node:path";
 
 import { all, one, run, transaction } from "./db";
 import {
@@ -14,6 +13,7 @@ import { getRiskTrialEntries } from "./trial-risk-entry";
 import { trialReleaseStateKey } from "./trial-release-state";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
+import { reportArchivePath, resolveReportPath } from "./report-storage";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
   run(
@@ -498,12 +498,12 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
 const REPORT_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".docx", ".xlsx", ".txt", ".zip"]);
 const MAX_REPORT_BYTES = 15 * 1024 * 1024;
 
-function reportStoragePath(file: File) {
+function reportExtension(file: File) {
   assert(file.size > 0, "请选择验证报告文件。");
   assert(file.size <= MAX_REPORT_BYTES, "验证报告不能超过 15MB。");
   const extension = extname(file.name).toLowerCase();
   assert(REPORT_EXTENSIONS.has(extension), "验证报告仅支持 PDF、图片、Word、Excel、TXT 或 ZIP 文件。");
-  return join("data", "uploads", "reports", `report-${Date.now()}-${randomUUID()}${extension}`);
+  return extension;
 }
 
 export function addBatchProgress(actor: SessionUser, batchId: number, content: string) {
@@ -561,8 +561,9 @@ export async function completeBatchTest(
   if (input.conclusion === "BLOCKED") assert(input.issueAttribution === "UNKNOWN", "无法完成验证时问题归属应为“原因待定位”。");
   assert(input.reportFile, "请上传验证报告。");
   const file = input.reportFile;
-  const relativePath = reportStoragePath(file);
-  const absolutePath = join(process.cwd(), relativePath);
+  const relativePath = reportArchivePath(batch, file.name, reportExtension(file));
+  const absolutePath = resolveReportPath(relativePath);
+  assert(absolutePath, "验证报告归档路径无效。");
   const bytes = Buffer.from(await file.arrayBuffer());
   let reportWritten = false;
   try {
@@ -592,9 +593,14 @@ export async function completeBatchTest(
       assert([...affected].every((id) => items.some((item) => item.version_id === id)), "问题影响的软件包必须属于当前批次。");
 
       const timestamp = now();
-      mkdirSync(join(process.cwd(), "data", "uploads", "reports"), { recursive: true });
+      mkdirSync(dirname(absolutePath), { recursive: true });
+      const handle = openSync(absolutePath, "wx");
       reportWritten = true;
-      writeFileSync(absolutePath, bytes);
+      try {
+        writeFileSync(handle, bytes);
+      } finally {
+        closeSync(handle);
+      }
       const report = run(
         `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, uploaded_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,

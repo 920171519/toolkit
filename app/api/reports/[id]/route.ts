@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { one } from "@/lib/db";
+import { resolveReportPath } from "@/lib/report-storage";
 
 export async function GET(
   _request: Request,
@@ -18,9 +18,8 @@ export async function GET(
     reportId,
   );
   if (!report) return new NextResponse("Not found", { status: 404 });
-  const reportsRoot = join(process.cwd(), "data", "uploads", "reports");
-  const storagePath = join(/* turbopackIgnore: true */ process.cwd(), report.stored_path);
-  if (!storagePath.startsWith(reportsRoot)) return new NextResponse("Not found", { status: 404 });
+  const storagePath = resolveReportPath(report.stored_path);
+  if (!storagePath) return new NextResponse("Not found", { status: 404 });
   try {
     const data = await readFile(storagePath);
     return new NextResponse(data, {

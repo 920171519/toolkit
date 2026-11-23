@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   confirmAction,
@@ -398,7 +402,7 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(pageSize).toHaveValue("10");
   });
 
-  test("集成测试责任田负责人提交结论并上传验证报告", async ({ page }) => {
+  test("集成测试责任田负责人提交结论并按项目批次归档报告", async ({ page, request }) => {
     test.setTimeout(120_000);
     await login(page, "MGR001");
     await page.goto("/integration/4");
@@ -432,9 +436,39 @@ test.describe("工程协同台项目维度流程", () => {
     await expectFlash(page, "验证报告已上传");
     const reportLink = page.getByRole("link", { name: "B120-verification-report.txt" });
     await expect(reportLink).toBeVisible();
-    const report = await page.request.get((await reportLink.getAttribute("href"))!);
+    const reportPath = (await reportLink.getAttribute("href"))!;
+    const report = await page.request.get(reportPath);
     expect(report.ok()).toBe(true);
-    expect((await report.body()).byteLength).toBe(reportContents.byteLength);
+    expect(await report.body()).toEqual(reportContents);
+    expect((await request.get(reportPath)).status()).toBe(401);
+
+    const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+    try {
+      const stored = db.prepare("SELECT stored_path FROM report_files WHERE id = ?")
+        .get(Number(reportPath.split("/").at(-1))) as { stored_path: string };
+      expect(dirname(stored.stored_path).replaceAll("\\", "/")).toBe("data/uploads/reports/1-星云 N1/B120");
+      expect(await readFile(resolve(stored.stored_path))).toEqual(reportContents);
+
+      const legacyName = `legacy-${randomUUID()}.txt`;
+      const legacyPath = join("data", "uploads", "reports", legacyName);
+      await writeFile(legacyPath, "旧验证报告", { flag: "wx" });
+      try {
+        const legacy = db.prepare(
+          "INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at) VALUES (?, ?, ?, ?, ?)",
+        ).run(legacyName, legacyPath.replaceAll("/", "\\"), "text/plain; charset=utf-8", Buffer.byteLength("旧验证报告"), new Date().toISOString());
+        try {
+          const legacyDownload = await page.request.get(`/api/reports/${legacy.lastInsertRowid}`);
+          expect(legacyDownload.ok()).toBe(true);
+          expect(await legacyDownload.text()).toBe("旧验证报告");
+        } finally {
+          db.prepare("DELETE FROM report_files WHERE id = ?").run(legacy.lastInsertRowid);
+        }
+      } finally {
+        await rm(legacyPath, { force: true });
+      }
+    } finally {
+      db.close();
+    }
   });
 
   test("项目试制、多个设备条码电子流审批与项目转正", async ({ page }) => {
