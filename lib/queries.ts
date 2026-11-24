@@ -3,7 +3,8 @@ import "server-only";
 import { all, one } from "./db";
 import { getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
-import type { PackageStatus, Role } from "./constants";
+import type { PackageProgressStatus, PackageStatus, Role } from "./constants";
+import { getTrialProgress } from "./trial-eligibility";
 import type { ProjectStage } from "./project-stage";
 import type {
   BatchItemSummary,
@@ -118,7 +119,7 @@ const PACKAGE_SUMMARY_SQL = `
   LEFT JOIN users o ON o.id = p.owner_id
 `;
 
-export function getPackagesOverview(includeInactive = false): PackageSummary[] {
+function readPackagesOverview(includeInactive: boolean): PackageSummary[] {
   const packages = all<Omit<PackageSummary, "isActive" | "trialVersions"> & { isActive: number }>(
     `${PACKAGE_SUMMARY_SQL} ${includeInactive ? "" : "WHERE p.is_active = 1"} ORDER BY p.name`,
   ).map((row) => ({
@@ -140,6 +141,27 @@ export function getPackagesOverview(includeInactive = false): PackageSummary[] {
     ...pkg,
     trialVersions: trialMap.get(pkg.id) ?? [],
   }));
+}
+
+function withTrialProgress<T extends PackageSummary>(packages: T[], projectId?: number): T[] {
+  const progress = getTrialProgress(packages.flatMap((pkg) => pkg.currentVersionId === null ? [] : [pkg.currentVersionId]), projectId);
+  return packages.map((pkg) => {
+    const trial = pkg.currentVersionId === null ? undefined : progress.get(pkg.currentVersionId);
+    const status = pkg.currentStatus;
+    if (projectId !== undefined && !trial?.inProjectScope) return pkg;
+    if (trial?.missingRequestCount) return { ...pkg, currentStatus: "MISSING_TRANSFER_REQUEST" };
+    if (trial?.releaseMode === "INTEGRATION") return { ...pkg, currentStatus: "PENDING_TRIAL" };
+    if (trial?.releaseMode === "RISK") return { ...pkg, currentStatus: "RISK_TRIAL_READY" };
+    if (trial?.passedInProject) return { ...pkg, currentStatus: "WAITING_OTHER_ACCEPTANCE" };
+    if (status === "PENDING_TRIAL" || (trial && status === "TEST_PASSED")) {
+      return { ...pkg, currentStatus: "WAITING_ACCEPTANCE" };
+    }
+    return pkg;
+  });
+}
+
+export function getPackagesOverview(includeInactive = false): PackageSummary[] {
+  return withTrialProgress(readPackagesOverview(includeInactive));
 }
 
 export function getTransferPackageOptions(user: SessionUser, projectId?: number) {
@@ -174,7 +196,7 @@ export type PackageOverviewRow = PackageSummary & {
 };
 
 export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
-  let packages = getPackagesOverview(true);
+  let packages = readPackagesOverview(true);
   const usageRows = all<{
     packageId: number;
     projectId: number;
@@ -246,18 +268,18 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
     list.push(row);
     byPackage.set(row.packageId, list);
   }
-  const projectStatusMap: Record<string, PackageStatus> = {
+  const projectStatusMap: Record<string, PackageProgressStatus> = {
     PENDING: "PENDING_TRANSFER",
     IN_TEST: "IN_TEST",
-    PASSED: "PENDING_TRIAL",
-    FAILED: "PENDING_TRIAL",
-    BLOCKED: "PENDING_TRIAL",
+    PASSED: "TEST_PASSED",
+    FAILED: "TEST_FAILED",
+    BLOCKED: "TEST_BLOCKED",
     TRIAL: "TRIAL",
     PENDING_FORMAL: "PENDING_FORMAL",
     FORMAL: "FORMAL",
     VOID: "VOID",
   };
-  return packages.map((pkg) => {
+  const rows = packages.map((pkg) => {
     const requests = byPackage.get(pkg.id) ?? [];
     const formalRequests = requests.filter((request) => request.status === "FORMAL");
     const trialRequests = requests.filter((request) => request.status === "TRIAL" || request.status === "PENDING_FORMAL");
@@ -285,6 +307,7 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
       usages: usageMap.get(pkg.id) ?? [],
     };
   });
+  return withTrialProgress(rows, projectId);
 }
 
 export type DirectoryStats = {

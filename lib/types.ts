@@ -4,6 +4,7 @@ import type {
   Role,
   IssueAttribution,
   PackageStatus,
+  PackageProgressStatus,
 } from "./constants";
 
 export type SessionUser = {
@@ -41,7 +42,7 @@ export type PackageSummary = {
   trialVersion: string | null;
   trialVersions: string[];
   currentVersion: string | null;
-  currentStatus: PackageStatus | null;
+  currentStatus: PackageProgressStatus | null;
   currentVersionId: number | null;
   inTestVersion: string | null;
   pendingTransferVersion: string | null;

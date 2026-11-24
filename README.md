@@ -534,3 +534,13 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 - 数据库升级或清空演示数据前先备份 `data/toolkit.db` 与 `data/uploads/`。
 - 试制和转正使用用户填写的 HTTP(S) 电子流网址，已有电子流编号仍可查阅。新发布的试制和正式版本需分别填写评审纪要，可从版本全链路查看。绑定电子流在本系统生成编号并完成审批，尚未对接企业 OA/BPM。
 - 个人工作台通知为系统内派生展示，暂未接入邮件、短信或即时通讯推送。
+
+### 补齐在途版本的转测申请
+
+旧数据可能在扩大使用范围后缺少个别在行项目的转测申请。使用现有 SQLite 文件的路径先预览。命令会列出受影响的软件包、版本和项目。
+
+```bash
+pnpm exec tsx scripts/backfill-trial-transfer-requests.ts --database /path/to/toolkit.db
+```
+
+备份并核对预览清单后，可用同一命令加 `--apply` 补齐。补建的申请处于待转测，已有结论和报告保留。再次运行可核对是否仍有缺项。

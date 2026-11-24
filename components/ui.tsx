@@ -5,10 +5,10 @@ import {
   BATCH_STATUS_META,
   BINDING_STATUS_META,
   BATCH_STATUSES,
-  PACKAGE_STATUS_META,
+  PACKAGE_PROGRESS_META,
   REVIEW_STATUS_META,
   type BatchStatus,
-  type PackageStatus,
+  type PackageProgressStatus,
 } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import type { Notice } from "@/lib/queries";
@@ -146,7 +146,7 @@ export function ProgressBar({
 }
 
 export function StatusPill({ status }: { status: string }) {
-  const meta = PACKAGE_STATUS_META[status as PackageStatus];
+  const meta = PACKAGE_PROGRESS_META[status as PackageProgressStatus];
   if (!meta) {
     return <Badge tone="slate">{status}</Badge>;
   }

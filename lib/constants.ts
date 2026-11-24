@@ -118,6 +118,19 @@ export const PACKAGE_STATUS_META: Record<
   },
 };
 
+export const PACKAGE_PROGRESS_META = {
+  ...PACKAGE_STATUS_META,
+  WAITING_OTHER_ACCEPTANCE: { label: "待其他项目验收", tone: "amber" },
+  WAITING_ACCEPTANCE: { label: "待验收确认", tone: "amber" },
+  MISSING_TRANSFER_REQUEST: { label: "待补转测申请", tone: "amber" },
+  RISK_TRIAL_READY: { label: "风险发布", tone: "rose" },
+  TEST_PASSED: { label: "测试通过", tone: "emerald" },
+  TEST_FAILED: { label: "测试不通过", tone: "rose" },
+  TEST_BLOCKED: { label: "无法验证", tone: "amber" },
+};
+
+export type PackageProgressStatus = keyof typeof PACKAGE_PROGRESS_META;
+
 export const BATCH_STATUSES = ["DRAFT", "IN_TEST", "COMPLETED", "TERMINATED"] as const;
 export type BatchStatus = (typeof BATCH_STATUSES)[number];
 
@@ -129,7 +142,7 @@ export const BATCH_STATUS_META: Record<BatchStatus, { label: string; tone: strin
 };
 
 export const CONCLUSION_META = {
-  PASS: { label: "测试通过", tone: "emerald", description: "验证无问题，配套内的变更包可正常发布试制。" },
+  PASS: { label: "测试通过", tone: "emerald", description: "本项目验证通过。受影响的在行项目全部通过后，变更版本进入普通待发试制。" },
   FAIL: { label: "测试不通过", tone: "rose", description: "发现问题，变更包必须完成风险评审后才能发试制。" },
   BLOCKED: { label: "无法完成验证", tone: "amber", description: "缺少测试条件或测试未完成，变更包需风险评审。" },
 } as const;

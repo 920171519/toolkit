@@ -8,7 +8,7 @@ import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
-import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
@@ -64,7 +64,7 @@ export function PackageOverviewTable({
     current: { key: "current", label: "在途版本", kind: "text" },
     status: { key: "status", label: "状态", kind: "choices", options: filterOptions(packages.map((pkg) => ({
       value: pkg.currentStatus ?? (pkg.formalVersion ? "FORMAL_ONLY" : empty),
-      label: pkg.currentStatus ? PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : pkg.formalVersion ? "无在途版本" : "暂无版本",
+      label: pkg.currentStatus ? PACKAGE_PROGRESS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : pkg.formalVersion ? "无在途版本" : "暂无版本",
     }))) },
   } satisfies Record<string, ColumnFilterField>;
   const filters = readColumnFilters(Object.fromEntries(params), Object.values(fields));
@@ -176,7 +176,7 @@ export function PackageOverviewTable({
                       <td>{pkg.formalVersion ? <span className="version-badge whitespace-nowrap">{pkg.formalVersion}</span> : <span className="muted small">—</span>}</td>
                       <td>{pkg.trialVersions.length ? <ul className="version-stack whitespace-nowrap">{pkg.trialVersions.map((version) => <li className="version-badge" key={version}>{version}</li>)}</ul> : <span className="muted small">—</span>}</td>
                       <td>{pkg.currentVersion ? <><span className="version-badge whitespace-nowrap">{pkg.currentVersion}</span>{pkg.inTestVersion && pkg.inTestVersion !== pkg.currentVersion && <div className="small muted">在测 {pkg.inTestVersion}</div>}{pkg.pendingTransferVersion && pkg.pendingTransferVersion !== pkg.currentVersion && <div className="small muted">待转测 {pkg.pendingTransferVersion}</div>}</> : <span className="muted small">—</span>}</td>
-                      <td>{pkg.currentStatus ? (PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus) : <span className="muted small">{pkg.formalVersion ? "无在途版本" : "暂无版本"}</span>}</td>
+                      <td>{pkg.currentStatus ? (PACKAGE_PROGRESS_META[pkg.currentStatus]?.label ?? pkg.currentStatus) : <span className="muted small">{pkg.formalVersion ? "无在途版本" : "暂无版本"}</span>}</td>
                     </tr>
                   );
                 })}

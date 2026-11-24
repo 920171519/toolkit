@@ -123,7 +123,7 @@ export default async function PackageSettingsDetailPage({
             <div className="card-header">
               <div className="settings-label-help">
                 <h2>项目节点使用范围</h2>
-                <InfoTooltip label="使用范围变更说明">范围变更从下一次转测和试制生效，历史批次和绑定任务保留原范围。</InfoTooltip>
+                <InfoTooltip label="使用范围变更说明">新增在行项目会为尚未发布试制的转测版本补建申请。历史批次和绑定任务保留原范围。</InfoTooltip>
               </div>
               {bindingActive && <span className="settings-meta">{usedNodeIds.size} 个节点</span>}
             </div>

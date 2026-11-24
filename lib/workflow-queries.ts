@@ -6,6 +6,8 @@ import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
+import { trialEligibilityCtes } from "./trial-eligibility";
+import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 
 export type ProjectOption = { id: number; name: string; code: string; status: string };
 
@@ -519,6 +521,7 @@ export type TrialReadyVersion = {
   versionProjectCount: number;
   riskProjectCount: number;
   riskAdmissionId: number | null;
+  evidenceKey: string;
   ongoingTestCount: number;
 };
 
@@ -534,63 +537,39 @@ export function getTrialReadyVersions(
   projectIds: number[] | null = null,
   options: { requestId?: number; includeUnregisteredRisk?: boolean } = {},
 ): TrialReadyVersion[] {
-  return filterByProject(
-    all<TrialReadyVersion>(
-      `SELECT ready.*, CASE WHEN riskProjectCount > 0 THEN 'RISK' ELSE 'INTEGRATION' END AS releaseMode FROM (
-       SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
-              pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-              pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
-              pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
-              o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
-              admission.reason AS riskConclusion, admission.id AS riskAdmissionId,
-              b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
-              b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
-              ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
-              (SELECT COUNT(*) FROM version_transfer_requests rr
-               JOIN projects pp ON pp.id = rr.project_id
-               WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED'
-                 AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pp.id)) AS versionProjectCount,
-              (SELECT COUNT(*) FROM version_transfer_requests rr
-               JOIN projects pp ON pp.id = rr.project_id
-               WHERE rr.package_version_id = r.package_version_id AND pp.status != 'ARCHIVED'
-                 AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pp.id)
-                 AND (rr.status != 'PASSED' OR NOT EXISTS (
-                   SELECT 1 FROM batch_items bi2 JOIN integration_batches b2 ON b2.id = bi2.batch_id
-                   WHERE bi2.id = (SELECT id FROM batch_items WHERE transfer_request_id = rr.id ORDER BY id DESC LIMIT 1)
-                     AND b2.status = 'COMPLETED' AND b2.conclusion = 'PASS'
-                 ))) AS riskProjectCount
-       FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
-       JOIN packages p ON p.id = pv.package_id
-       JOIN projects pr ON pr.id = r.project_id
-       LEFT JOIN users su ON su.id = pv.submitted_by
-       LEFT JOIN users o ON o.id = p.owner_id
-       LEFT JOIN users sm ON sm.id = pr.software_manager_id
-       LEFT JOIN integration_batches b ON b.id = (
-         SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-       )
-       LEFT JOIN trial_risk_admissions admission ON admission.package_version_id = pv.id AND admission.invalidated_at IS NULL
-       WHERE (? IS NULL OR r.id = ?)
-         AND pr.status != 'ARCHIVED' AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')
-         AND r.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
-         AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = pr.id)
-         AND NOT EXISTS (
-           SELECT 1 FROM package_usages u2
-           JOIN projects p2 ON p2.id = u2.project_id
-           WHERE u2.package_id = p.id AND p2.status != 'ARCHIVED'
-             AND NOT EXISTS (
-               SELECT 1 FROM version_transfer_requests r2
-               WHERE r2.package_version_id = r.package_version_id
-                 AND r2.project_id = p2.id
-                 AND r2.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
-             )
-         )
-       ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC
-      ) ready WHERE (? OR riskProjectCount = 0 OR riskConclusion IS NOT NULL)`,
-      options.requestId ?? null, options.requestId ?? null,
-      options.includeUnregisteredRisk ? 1 : 0,
-    ),
-    projectIds,
+  if (projectIds?.length === 0) return [];
+  const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
+  const projectsScope = projectIds === null ? "" : "AND pr.id IN (SELECT value FROM json_each(?))";
+  return all<TrialReadyVersion>(
+    `WITH ${trialEligibilityCtes(`SELECT id, package_id FROM package_versions
+       WHERE status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} ${requestScope}`)}
+     SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+            pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
+            pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
+            pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
+            o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
+            CASE WHEN q.riskProjectCount = 0 THEN 'INTEGRATION' ELSE 'RISK' END AS releaseMode,
+            q.riskConclusion, q.riskAdmissionId, q.evidenceKey, q.versionProjectCount, q.riskProjectCount,
+            b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
+            b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
+            ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount
+     FROM trial_eligibility q
+     JOIN trial_project_evidence e ON e.versionId = q.versionId
+     JOIN version_transfer_requests r ON r.id = e.requestId
+     JOIN package_versions pv ON pv.id = q.versionId
+     JOIN packages p ON p.id = pv.package_id
+     JOIN projects pr ON pr.id = e.projectId
+     LEFT JOIN users su ON su.id = pv.submitted_by
+     LEFT JOIN users o ON o.id = p.owner_id
+     LEFT JOIN users sm ON sm.id = pr.software_manager_id
+     LEFT JOIN integration_batches b ON b.id = e.batchId
+     WHERE q.unavailableRequestCount = 0 AND (q.releaseMode IS NOT NULL OR ?)
+       ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectsScope}
+     ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
+    ...(options.requestId === undefined ? [] : [options.requestId]),
+    options.includeUnregisteredRisk ? 1 : 0,
+    ...(options.requestId === undefined ? [] : [options.requestId]),
+    ...(projectIds === null ? [] : [JSON.stringify(projectIds)]),
   );
 }
 

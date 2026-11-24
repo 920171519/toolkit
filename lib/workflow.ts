@@ -17,6 +17,7 @@ import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 import { reportArchivePath, resolveReportPath } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
+import { insertTransferRequest, refreshVersionAggregate } from "./transfer-requests";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
   run(
@@ -68,60 +69,36 @@ function activeProjectsForPackage(packageId: number) {
   );
 }
 
-function refreshVersionAggregate(versionId: number) {
-  const version = one<{ status: string }>("SELECT status FROM package_versions WHERE id = ?", versionId);
-  if (!version || version.status === "VOID") return;
-  if (version.status === "FORMAL") {
-    const requests = all<{ status: string }>(
-      "SELECT status FROM version_transfer_requests WHERE package_version_id = ?",
-      versionId,
-    );
-    if (requests.length === 0 || !requests.every((request) => request.status === "FORMAL")) return;
-  }
-  const requests = all<{ status: string }>(
-    "SELECT status FROM version_transfer_requests WHERE package_version_id = ?",
-    versionId,
-  );
-  if (requests.length === 0) return;
-  let status = "PENDING_TRANSFER";
-  if (requests.every((request) => request.status === "FORMAL")) status = "FORMAL";
-  else if (requests.some((request) => request.status === "TRIAL")) status = "TRIAL";
-  else if (requests.some((request) => request.status === "PENDING_FORMAL")) status = "PENDING_FORMAL";
-  else if (requests.some((request) => request.status === "IN_TEST")) status = "IN_TEST";
-  else if (requests.every((request) => ["PASSED", "FAILED", "BLOCKED", "VOID", "CANCELLED"].includes(request.status))) status = "PENDING_TRIAL";
-  else if (requests.some((request) => ["PASSED", "FAILED", "BLOCKED"].includes(request.status))) status = "IN_TEST";
-  run("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?", status, now(), versionId);
-}
-
 export function submitTransfer(
   actor: SessionUser,
   input: { packageId: number; version: string; changeSummary: string; archiveUrl: string; buildUrl: string; scopeProjectId?: number },
 ) {
-  const pkg = one<{ id: number; name: string; area_id: number | null; is_active: number }>(
-    "SELECT id, name, area_id, is_active FROM packages WHERE id = ?",
-    input.packageId,
-  );
-  assert(pkg, "软件包不存在。", "NOT_FOUND");
-  assert(pkg.is_active === 1, "该软件包已停用，不能提交转测申请。");
-  const areaIds = getTransferAreaIds(actor);
-  assert(areaIds === null || (pkg.area_id !== null && areaIds.includes(pkg.area_id)), "只能提交所属责任田的软件包转测。", "FORBIDDEN");
   assert(input.version.trim().length > 0, "请填写版本号。");
   assert(input.changeSummary.trim().length >= 5, "请填写版本变更说明（至少 5 个字符）。");
   assert(/^https?:\/\//i.test(input.archiveUrl.trim()), "归档链接必须以 http:// 或 https:// 开头。");
   assert(/^https?:\/\//i.test(input.buildUrl.trim()), "构建地址必须以 http:// 或 https:// 开头。");
-  const duplicate = one<{ id: number }>(
-    "SELECT id FROM package_versions WHERE package_id = ? AND LOWER(version) = LOWER(?)",
-    input.packageId,
-    input.version.trim(),
-  );
-  assert(!duplicate, "该版本号已存在，请填写新的版本号。");
-  const projects = activeProjectsForPackage(input.packageId);
-  assert(projects.length > 0, "该软件包尚未关联任何在行项目的测试节点，无法提交转测。");
-  if (input.scopeProjectId !== undefined) {
-    assert(projects.some((project) => project.id === input.scopeProjectId), "所选软件包不在当前项目的使用范围内。");
-  }
 
   return transaction(() => {
+    const pkg = one<{ id: number; name: string; area_id: number | null; is_active: number }>(
+      "SELECT id, name, area_id, is_active FROM packages WHERE id = ?",
+      input.packageId,
+    );
+    assert(pkg, "软件包不存在。", "NOT_FOUND");
+    assert(pkg.is_active === 1, "该软件包已停用，不能提交转测申请。");
+    const areaIds = getTransferAreaIds(actor);
+    assert(areaIds === null || (pkg.area_id !== null && areaIds.includes(pkg.area_id)), "只能提交所属责任田的软件包转测。", "FORBIDDEN");
+    const duplicate = one<{ id: number }>(
+      "SELECT id FROM package_versions WHERE package_id = ? AND LOWER(version) = LOWER(?)",
+      input.packageId,
+      input.version.trim(),
+    );
+    assert(!duplicate, "该版本号已存在，请填写新的版本号。");
+    const projects = activeProjectsForPackage(input.packageId);
+    assert(projects.length > 0, "该软件包尚未关联任何在行项目的测试节点，无法提交转测。");
+    if (input.scopeProjectId !== undefined) {
+      assert(projects.some((project) => project.id === input.scopeProjectId), "所选软件包不在当前项目的使用范围内。");
+    }
+
     const timestamp = now();
     const result = run(
       `INSERT INTO package_versions
@@ -138,15 +115,7 @@ export function submitTransfer(
     );
     const versionId = Number(result.lastInsertRowid);
     for (const project of projects) {
-      run(
-        `INSERT INTO version_transfer_requests
-          (package_version_id, project_id, status, submitted_at, updated_at)
-         VALUES (?, ?, 'PENDING', ?, ?)`,
-        versionId,
-        project.id,
-        timestamp,
-        timestamp,
-      );
+      insertTransferRequest(db, versionId, project.id, timestamp);
     }
     audit(
       actor.id,
@@ -423,7 +392,7 @@ export function sendBatch(actor: SessionUser, batchId: number) {
       versionIds.add(item.package_version_id);
     }
     for (const versionId of versionIds) {
-      refreshVersionAggregate(versionId);
+      refreshVersionAggregate(db, versionId, timestamp);
       refreshTrialReadiness(db, versionId, timestamp);
     }
     audit(actor.id, "SEND_BATCH", "BATCH", batchId, `发起 ${batch.code}（${batch.project_name}）整套配套转测，${changes.length} 个变更包`);
@@ -457,7 +426,7 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
         timestamp,
         request.id,
       );
-      refreshVersionAggregate(request.package_version_id);
+      refreshVersionAggregate(db, request.package_version_id, timestamp);
       refreshTrialReadiness(db, request.package_version_id, timestamp);
     }
     run(
@@ -615,7 +584,7 @@ export async function completeBatchTest(
             timestamp, item.version_id,
           );
         }
-        refreshVersionAggregate(item.version_id);
+        refreshVersionAggregate(db, item.version_id, timestamp);
         refreshTrialReadiness(db, item.version_id, timestamp);
       }
       audit(actor.id, "COMPLETE_BATCH", "BATCH", batchId, `提交 ${batch.code} 测试结论：${input.conclusion}，上传报告 ${file.name}`);
@@ -868,7 +837,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         );
       }
     }
-    refreshVersionAggregate(anchor.package_version_id);
+    refreshVersionAggregate(db, anchor.package_version_id, timestamp);
     audit(
       actor.id,
       "RELEASE_TRIAL",
@@ -1410,7 +1379,7 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
         request.id,
       );
     }
-    refreshVersionAggregate(anchor.package_version_id);
+    refreshVersionAggregate(db, anchor.package_version_id, timestamp);
     audit(
       actor.id,
       "RELEASE_FORMAL",

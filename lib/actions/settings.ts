@@ -462,13 +462,14 @@ export async function savePackageUsagesAction(
   const user = await actionUser();
   const packageId = numberValue(formData, "packageId");
   if (!packageId) return { error: "软件包参数无效。" };
+  let backfilled: number;
   try {
-    savePackageUsages(user, packageId, idList(formData, "nodeIds"));
+    backfilled = savePackageUsages(user, packageId, idList(formData, "nodeIds"));
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  successRedirect(directoryActionHref("packages", formData, packageId), "项目使用范围已更新。");
+  successRedirect(directoryActionHref("packages", formData, packageId), backfilled > 0 ? `项目使用范围已更新，已补派 ${backfilled} 条转测申请。` : "项目使用范围已更新。");
 }
 
 export async function updateUserRoleAction(

@@ -5,7 +5,7 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
-import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { getAdminPackages, getAreaConfigs, getPeople, parseFlash } from "@/lib/queries";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
@@ -52,7 +52,7 @@ export default async function PackagesSettingsPage({
   }));
   const progressOptions = packages.map((pkg) => ({
     value: pkg.currentStatus ?? missing,
-    label: pkg.currentStatus ? PACKAGE_STATUS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : "无在途流程",
+    label: pkg.currentStatus ? PACKAGE_PROGRESS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : "无在途流程",
   }));
   const fields = {
     code: { key: "code", label: "软件包编码", kind: "text" },

@@ -9,6 +9,7 @@ import { assert } from "./services";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 import { refreshProjectTrialReadiness } from "./trial-readiness";
+import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
 import { LEGACY_VERSION_IMPORT_SQL, STANDALONE_IMPORTED_VERSION_SQL } from "./version-scope";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
@@ -336,6 +337,8 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         projectId,
       );
       if ((existing.status === "ARCHIVED") !== (input.status === "ARCHIVED")) {
+        if (existing.status === "ARCHIVED") backfillTrialTransferRequests(db, actor.id, { projectId });
+        refreshScopedPendingVersions(db, { projectId });
         refreshProjectTrialReadiness(db, new Date().toISOString(), projectId);
       }
     } else {
@@ -1005,42 +1008,42 @@ export function getPackageUsageBlockingVersion(packageId: number) {
 }
 
 export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds: number[]) {
-  const pkg = one<{ id: number; name: string; area_id: number | null }>(
-    "SELECT id, name, area_id FROM packages WHERE id = ?",
-    packageId,
-  );
-  assert(pkg, "软件包不存在。", "NOT_FOUND");
-  assert(canManagePackageArea(actor, pkg.area_id), "只有责任田主管或系统管理员可以维护该软件包使用范围。", "FORBIDDEN");
   const uniqueNodeIds = [...new Set(nodeIds)];
-  if (uniqueNodeIds.length > 0) {
-    const nodes = all<{ id: number }>(
-      `SELECT id FROM project_nodes WHERE id IN (${uniqueNodeIds.map(() => "?").join(",")})`,
-      ...uniqueNodeIds,
+  return transaction(() => {
+    const pkg = one<{ id: number; name: string; area_id: number | null }>(
+      "SELECT id, name, area_id FROM packages WHERE id = ?",
+      packageId,
     );
-    assert(nodes.length === uniqueNodeIds.length, "选择的项目节点中包含无效数据。");
-  }
-  transaction(() => {
+    assert(pkg, "软件包不存在。", "NOT_FOUND");
+    assert(canManagePackageArea(actor, pkg.area_id), "只有责任田主管或系统管理员可以维护该软件包使用范围。", "FORBIDDEN");
     const blockingVersion = getPackageUsageBlockingVersion(packageId);
     assert(!blockingVersion, `该软件包 ${blockingVersion?.version ?? ""} 正在绑定验证中，暂不能调整项目节点范围。`);
+    const nodes = uniqueNodeIds.length
+      ? all<{ id: number; project_id: number }>(
+        `SELECT id, project_id FROM project_nodes WHERE id IN (${uniqueNodeIds.map(() => "?").join(",")})`,
+        ...uniqueNodeIds,
+      )
+      : [];
+    assert(nodes.length === uniqueNodeIds.length, "选择的项目节点中包含无效数据。");
     run("DELETE FROM package_usages WHERE package_id = ?", packageId);
-    for (const nodeId of uniqueNodeIds) {
-      const node = one<{ project_id: number }>("SELECT project_id FROM project_nodes WHERE id = ?", nodeId);
-      if (node) {
-        run(
-          "INSERT INTO package_usages (package_id, project_id, node_id) VALUES (?, ?, ?)",
-          packageId,
-          node.project_id,
-          nodeId,
-        );
-      }
+    for (const node of nodes) {
+      run(
+        "INSERT INTO package_usages (package_id, project_id, node_id) VALUES (?, ?, ?)",
+        packageId,
+        node.project_id,
+        node.id,
+      );
     }
+    const backfilled = backfillTrialTransferRequests(db, actor.id, { packageId });
+    refreshScopedPendingVersions(db, { packageId });
     audit(
       actor.id,
       "UPDATE_PACKAGE_USAGE",
       "PACKAGE",
       packageId,
-      `更新 ${pkg.name} 使用范围，共 ${uniqueNodeIds.length} 个项目测试节点`,
+      `更新 ${pkg.name} 使用范围，共 ${nodes.length} 个项目测试节点`,
     );
+    return backfilled.length;
   });
 }
 
