@@ -148,6 +148,8 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
   const m2 = `/trial/${m2Request}?project=2`;
   const formal = `/formal/${versionId}?project=1`;
   const node = page.locator(".binding-requirement");
+  const bindingRow = page.getByRole("region", { name: "试制版本绑定验证表格" }).getByRole("row").filter({ hasText: testVersion });
+  const formalRow = page.getByRole("region", { name: "待转正版本列表" }).getByRole("row").filter({ hasText: testVersion });
   const statuses = () => db.prepare(
     "SELECT status FROM version_transfer_requests WHERE package_version_id = ? ORDER BY project_id",
   ).all(versionId).map((row) => row.status);
@@ -182,14 +184,32 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
 
     await login(page, "ADMIN001");
-    await page.goto(formal);
+    for (const projectId of [2, 1]) {
+      await page.goto(`/trial?view=binding&project=${projectId}`);
+      await expect(page.getByRole("region", { name: "试制版本绑定验证", exact: true })).toBeVisible();
+      await expect(bindingRow).toHaveCount(0);
+      await page.goto(`/formal?project=${projectId}&q=${testVersion}`);
+      await expect(formalRow).toHaveCount(1);
+      await expect(formalRow.getByRole("link", { name: "核对并转正" })).toHaveAttribute("href", new RegExp(`^/formal/${versionId}[?]project=${projectId}(?:&|$)`));
+    }
+    await formalRow.getByRole("link", { name: "核对并转正" }).click();
     await expect(page.getByText(/还有 1 条绑定电子流待审批/)).toBeVisible();
     await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toHaveCount(0);
-
-    await page.goto("/trial?view=binding&project=1");
-    const bindingRow = page.getByRole("row").filter({ hasText: testVersion });
-    await expect(bindingRow).toContainText("待转正");
-    await bindingRow.getByRole("link", { name: "查看节点与审批" }).click();
+    const evidence = page.getByRole("region", { name: "项目验收与绑定证据" });
+    const n1Evidence = evidence.locator("details").filter({ has: page.locator("summary").filter({ hasText: "星云 N1" }) });
+    if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator("summary").click();
+    const bindingRecord = n1Evidence.getByRole("link", { name: "查看绑定验证记录" });
+    await expect(bindingRecord).toHaveAttribute("href", n1);
+    await bindingRecord.click();
+    await expect(page.getByRole("heading", { name: "已进入待转正" })).toBeVisible();
+    await expect(page.getByText(/还有 1 条绑定电子流待审批/)).toBeVisible();
+    const formalLink = page.getByRole("link", { name: "前往转正发布" });
+    await expect(formalLink).toHaveAttribute("href", formal);
+    await formalLink.click();
+    await expect(page).toHaveURL(url => url.pathname === `/formal/${versionId}` && url.searchParams.get("project") === "1");
+    await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "已进入待转正" })).toBeVisible();
     await approveFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("2/1 条码通过")).toBeVisible();
     await expect(node.locator("summary").first()).toContainText("待确认");
@@ -206,13 +226,25 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await expect(node.locator("summary").first()).toContainText("待确认");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
     await expectFlash(page, "版本已回到绑定验证");
+    await expect(formalLink).toHaveCount(0);
+    for (const projectId of [1, 2]) {
+      await page.goto(`/formal?project=${projectId}&q=${testVersion}`);
+      await expect(page.getByText("没有匹配的版本", { exact: true })).toBeVisible();
+      await expect(formalRow).toHaveCount(0);
+      await page.goto(`/trial?view=binding&project=${projectId}`);
+      await expect(bindingRow).toHaveCount(1);
+      await expect(bindingRow).toContainText("绑定中");
+    }
 
     await login(page, "VALID001");
     await page.goto(n1);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
     await login(page, "ADMIN001");
-    await page.goto(formal);
+    await page.goto(n1);
+    await expect(page.getByRole("heading", { name: "已满足转正条件" })).toBeVisible();
+    await expect(formalLink).toHaveAttribute("href", formal);
+    await formalLink.click();
     await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toBeVisible();
 
     await page.goto(n1);

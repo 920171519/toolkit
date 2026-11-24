@@ -100,8 +100,8 @@ test("两个队列各自筛选时保留条件及项目范围，绑定详情返�
     url.searchParams.get("f_binding_status") === "RISK,PUSHED",
   );
   const bindingRows = binding.locator("tbody tr");
-  await expect(bindingRows).toHaveCount(2);
-  await expect(bindingRows.filter({ hasText: "1004NET" })).toContainText("待转正");
+  await expect(bindingRows).toHaveCount(1);
+  await expect(bindingRows.filter({ hasText: "1004NET" })).toHaveCount(0);
   const validatingRow = bindingRows.filter({ hasText: "1006KEY" });
   await expect(validatingRow.getByRole("cell", { name: "赵敏", exact: true })).toBeVisible();
   await expect(validatingRow.getByRole("cell", { name: "未关联转测批次", exact: true })).toBeVisible();
@@ -121,8 +121,37 @@ test("两个队列各自筛选时保留条件及项目范围，绑定详情返�
   await pendingMenu.getByRole("button", { name: "应用", exact: true }).click();
   await expect(binding.getByText("没有匹配的版本", { exact: true })).toBeVisible();
   await binding.getByRole("link", { name: "清除全部筛选", exact: true }).click();
-  await expect(bindingRows).toHaveCount(2);
+  await expect(bindingRows).toHaveCount(1);
   await tabs.getByRole("link", { name: /待发布试制/ }).click();
   await expect(page).toHaveURL(/f_release_version=1\.6\.0/);
   await expect(release.locator("tbody tr")).toHaveCount(1);
+});
+
+test("旧版待转正筛选值退出节点绑定筛选，仍可使用同一链接中的有效条件", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const path = "/trial?project=1&view=binding";
+  const binding = page.getByRole("region", { name: "试制版本绑定验证", exact: true });
+  const rows = binding.locator("tbody tr");
+  const statusFilter = binding.getByRole("button", { name: "筛选绑定状态", exact: true });
+  const statusMenu = binding.getByRole("dialog", { name: "筛选绑定状态", exact: true });
+
+  await page.goto(path + "&f_binding_status=PENDING_FORMAL,PUSHED");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("1006KEY");
+  await statusFilter.click();
+  await expect(statusMenu.getByRole("checkbox", { name: "绑定中", exact: true })).toBeChecked();
+  await expect(statusMenu.getByRole("checkbox", { name: "待转正", exact: true })).toHaveCount(0);
+  await statusMenu.getByRole("button", { name: "应用", exact: true }).click();
+  await expect(page).toHaveURL(url =>
+    url.searchParams.get("project") === "1" &&
+    url.searchParams.get("view") === "binding" &&
+    url.searchParams.get("f_binding_status") === "PUSHED",
+  );
+
+  await page.goto(path + "&binding_status=" + encodeURIComponent("待转正"));
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("1006KEY");
+  await page.goto(path + "&f_binding_status=PENDING_FORMAL");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("1006KEY");
 });

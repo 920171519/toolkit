@@ -20,7 +20,6 @@ export const trialReleaseStatuses = {
 export const trialBindingStatuses = {
   PENDING: "待推送绑定",
   PUSHED: "绑定中",
-  PENDING_FORMAL: "待转正",
   SKIPPED: "跳过绑定",
   RISK: "风险发布",
   OVERDUE: "已超期",
@@ -49,6 +48,7 @@ function legacyFilterParams(kind: TrialQueueKind, field: ColumnFilterField, valu
   const [key, max] = columnFilterKeys(field);
   if (field.kind === "text") return { [key]: value };
   const normalized = value.normalize("NFKC");
+  if (field.key === "binding_status" && (normalized === "待转正" || normalized === "PENDING_FORMAL")) return {};
   if (field.kind === "number") {
     const number = Number(normalized);
     if (Number.isSafeInteger(number) && number >= 0 && String(number) === normalized) {
@@ -98,6 +98,11 @@ export function trialQueueParams(search: TrialSearchParams): Record<string, stri
       const directionKey = trialQueueKey(kind, "direction");
       if (search[directionKey] === "desc") result[directionKey] = "desc";
     }
+  }
+  if (result.f_binding_status) {
+    const remaining = result.f_binding_status.split(",").filter((value) => value !== "PENDING_FORMAL");
+    if (remaining.length > 0) result.f_binding_status = remaining.join(",");
+    else delete result.f_binding_status;
   }
   return result;
 }

@@ -36,9 +36,7 @@ function readyStatus(row: TrialReadyVersion) {
 }
 
 function bindingStatusOptions(row: TrialVersionRow) {
-  const statuses: Array<keyof typeof trialBindingStatuses> = [
-    row.status === "PENDING_FORMAL" ? "PENDING_FORMAL" : row.bindingMode,
-  ];
+  const statuses: Array<keyof typeof trialBindingStatuses> = [row.bindingMode];
   if (row.releaseMode === "RISK" || !row.batchId) statuses.push("RISK");
   if (row.isOverdue) statuses.push("OVERDUE");
   return statuses.map((value) => ({ value, label: trialBindingStatuses[value] }));
@@ -83,7 +81,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     ...(records.find((row) => canManageProjectWorkflowForProject(user, row.projectId)) ?? records[0]),
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
-  const trials = getTrialVersions(scope, true).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
+  const trials = getTrialVersions(scope).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
@@ -138,7 +136,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       value: (row) => bindingStatusOptions(row).map((option) => option.label).join(" · "),
       choices: bindingStatusOptions,
       cell: (row) => <div className={styles.bindingStatus}>
-        <span>{trialBindingStatuses[row.status === "PENDING_FORMAL" ? "PENDING_FORMAL" : row.bindingMode]}</span>
+        <span>{trialBindingStatuses[row.bindingMode]}</span>
         {(row.releaseMode === "RISK" || !row.batchId) && <Badge tone="amber">风险发布</Badge>}
         {Boolean(row.isOverdue) && <Badge tone="rose">已超期</Badge>}
       </div>,

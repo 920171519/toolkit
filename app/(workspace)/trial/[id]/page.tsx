@@ -129,9 +129,11 @@ export default async function TrialDetailPage({
       </section>}
 
       {canEditFlows && request.status === "PENDING_FORMAL" && <section className={styles.nextAction}>
-        <h2>{pendingReviews > 0 ? "绑定条码已达标" : "已满足转正条件"}</h2>
-        {pendingReviews > 0 ? <span className="small muted">还有 {pendingReviews} 条绑定电子流待审批，处理后可转正。</span>
-          : manager ? <Link href={workflowHref("/formal", scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="small muted">待软件经理发布</span>}
+        <h2>{pendingReviews > 0 ? "已进入待转正" : "已满足转正条件"}</h2>
+        {pendingReviews > 0 && <span className="small muted">还有 {pendingReviews} 条绑定电子流待审批，处理后可转正。</span>}
+        {manager
+          ? <Link href={workflowHref(`/formal/${request.versionId}`, request.projectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link>
+          : <span className="small muted">版本已移至转正发布，待软件经理发布。</span>}
       </section>}
 
       <div className={styles.detailColumns}>

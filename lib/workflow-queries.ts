@@ -575,7 +575,6 @@ export function getTrialReadyVersions(
 
 export type TrialVersionRow = {
   requestId: number;
-  status: "TRIAL" | "PENDING_FORMAL";
   versionId: number;
   projectId: number;
   projectName: string;
@@ -607,10 +606,10 @@ export type TrialVersionRow = {
   pendingFlowCount: number;
 };
 
-export function getTrialVersions(projectIds: number[] | null = null, includePendingFormal = false): TrialVersionRow[] {
+export function getTrialVersions(projectIds: number[] | null = null): TrialVersionRow[] {
   return filterByProject(
     all<TrialVersionRow>(
-      `SELECT r.id AS requestId, r.status, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
               su.name AS submittedByName, pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary, o.name AS ownerName,
@@ -637,15 +636,8 @@ export function getTrialVersions(projectIds: number[] | null = null, includePend
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE pr.status != 'ARCHIVED' AND pv.status IN ('TRIAL','PENDING_FORMAL')
-         AND (r.status = 'TRIAL' OR (
-         ? = 1 AND r.status = 'PENDING_FORMAL'
-         AND EXISTS (SELECT 1 FROM binding_requirements br
-           WHERE br.request_id = r.id AND br.status = 'PASSED'
-             AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL)
-       ))
+       WHERE pr.status != 'ARCHIVED' AND pv.status = 'TRIAL' AND r.status = 'TRIAL'
        ORDER BY r.trial_released_at DESC, r.id DESC`,
-      includePendingFormal ? 1 : 0,
     ),
     projectIds,
   ).map((version) => ({
