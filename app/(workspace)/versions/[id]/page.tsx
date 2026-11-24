@@ -94,7 +94,7 @@ export default async function VersionTracePage({
       )}
       <div className="info-strip" style={{ marginBottom: 16 }}>
         {version.status !== "VOID" && <span><StatusPill status={version.status as "PENDING_TRANSFER" | "IN_TEST" | "PENDING_TRIAL" | "TRIAL" | "PENDING_FORMAL" | "FORMAL"} /></span>}
-        <span><strong>{details.reduce((total, detail) => total + detail.requirements.filter((requirement) => requirement.status === "PASSED").length, 0)}</strong> 个通过节点</span>
+        <span><strong>{details.reduce((total, detail) => total + detail.requirements.filter((requirement) => requirement.confirmedAt !== null).length, 0)}</strong> 个通过节点</span>
         {version.releaseMode === "RISK" && <Badge tone="rose">风险发布</Badge>}
         {requests.length === 0 && version.trialFormNo && (releaseFlowUrl(version.trialFormNo)
           ? <ReleaseFlowEvidence value={version.trialFormNo} label="查看试制电子流" />
@@ -122,7 +122,7 @@ export default async function VersionTracePage({
               const meta = transferStatusFallback[request.status] ?? TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META];
               const testMeta = request.integrationStatus ? transferStatusFallback[request.integrationStatus] : null;
               const detail = detailByRequest.get(request.requestId);
-              const passed = detail?.requirements.filter((requirement) => requirement.status === "PASSED" || requirement.waivedAt).length ?? 0;
+              const passed = detail?.requirements.filter((requirement) => requirement.confirmedAt || requirement.waivedAt).length ?? 0;
               const total = detail?.requirements.length ?? 0;
               const linked = linkedProjects.has(request.projectId);
               const riskEntry = riskEntries[request.requestId];
@@ -197,7 +197,14 @@ export default async function VersionTracePage({
               {detail.requirements.length === 0 && <p className="note">暂无节点绑定记录。</p>}
               {detail.requirements.map((requirement) => (
                 <div className="version-trace-requirement" key={requirement.id}>
-                  <div className="toolbar" style={{ gap: 8 }}><span className="chip">{requirement.nodeName}</span><Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.waivedAt ? "节点免绑定" : requirement.status === "CANCELLED" ? "无需绑定" : "待绑定"}</Badge><span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码</span></div>
+                  <div className="toolbar" style={{ gap: 8 }}>
+                    <span className="chip">{requirement.nodeName}</span>
+                    {requirement.confirmedAt ? <Badge tone="emerald">节点通过</Badge>
+                      : requirement.waivedAt ? <Badge tone="slate">节点免绑定</Badge>
+                      : requirement.status === "CANCELLED" && <Badge tone="slate">{detail.request.status === "VOID" ? "已关闭" : "无需绑定"}</Badge>}
+                    <span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码</span>
+                  </div>
+                  {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
                   {requirement.waivedAt && <p className="small muted">免绑定原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
                   {requirement.flows.map((flow) => (
                     <div className="version-trace-flow" key={flow.id}>

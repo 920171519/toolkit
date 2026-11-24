@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
-import { refreshProjectTrialReadiness } from "./trial-readiness";
+import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
 
@@ -125,6 +125,8 @@ function migrateSchema(database: DatabaseSync) {
     ["decision_reason", "ALTER TABLE binding_requirements ADD COLUMN decision_reason TEXT"],
     ["waived_at", "ALTER TABLE binding_requirements ADD COLUMN waived_at TEXT"],
     ["waived_by", "ALTER TABLE binding_requirements ADD COLUMN waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["confirmed_at", "ALTER TABLE binding_requirements ADD COLUMN confirmed_at TEXT"],
+    ["confirmed_by", "ALTER TABLE binding_requirements ADD COLUMN confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
   ]) {
     if (!requirementColumns.some((column) => column.name === name)) database.exec(sql);
   }
@@ -143,6 +145,16 @@ function migrateSchema(database: DatabaseSync) {
        WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL')
          AND EXISTS (SELECT 1 FROM binding_requirements br WHERE br.package_version_id = package_versions.id)`,
     );
+  }
+  const migratedAt = new Date().toISOString();
+  const legacyBindingPasses = database.prepare(
+    `UPDATE binding_requirements SET status = 'PENDING', updated_at = ?
+     WHERE status = 'PASSED' AND confirmed_at IS NULL
+       AND package_version_id IN (SELECT id FROM package_versions WHERE status IN ('TRIAL','PENDING_FORMAL'))
+     RETURNING package_version_id AS versionId`,
+  ).all(migratedAt) as { versionId: number }[];
+  for (const versionId of new Set(legacyBindingPasses.map((requirement) => requirement.versionId))) {
+    refreshTrialReadiness(database, versionId, migratedAt);
   }
   database.exec(
     `INSERT OR IGNORE INTO project_pms (project_id, user_id, created_at)

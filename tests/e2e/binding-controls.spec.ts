@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { expectFlash, login } from "./helpers";
+import { confirmBindingNode, expectFlash, login } from "./helpers";
 
 const testVersion = "2.0.0-binding-controls-e2e";
 
@@ -75,7 +75,71 @@ async function withdrawFlow(page: Page, barcode: string) {
   await expect(flowRow(page, barcode)).toContainText(reason);
 }
 
-test("管理员审批、达标后新增和撤销电子流正确联动共享转正", async ({ page }) => {
+test("审批达到数量后仍由绑定责任人确认节点，通过记录可追溯", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const version = "2.0.0-node-confirmation-e2e";
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, version, ["N1"]);
+  const trial = `/trial/${requestId}?project=1`;
+  const node = page.locator(".binding-requirement");
+  const confirmation = node.getByRole("button", { name: "确认节点通过", exact: true, includeHidden: true });
+  const statuses = () => db.prepare(
+    `SELECT br.status AS nodeStatus, r.status AS requestStatus, br.confirmed_at AS confirmedAt, u.employee_id AS confirmedBy
+       FROM binding_requirements br JOIN version_transfer_requests r ON r.id = br.request_id
+       LEFT JOIN users u ON u.id = br.confirmed_by
+      WHERE br.request_id = ?`,
+  ).get(requestId);
+
+  try {
+    await page.goto(trial);
+    await expect(confirmation).toHaveCount(0);
+    await submitFlow(page, "NODE-CONFIRM-QA");
+    await login(page, "ADMIN001");
+    await page.goto(trial);
+    await approveFlow(page, "NODE-CONFIRM-QA");
+    await expect(node.locator("summary").first()).toContainText("1/1 条码通过");
+    await expect(node.locator("summary").first()).toContainText("待确认");
+    await expect(confirmation).toHaveCount(0);
+    expect(statuses()).toMatchObject({ nodeStatus: "PENDING", requestStatus: "TRIAL", confirmedAt: null, confirmedBy: null });
+    const versionFlow = `/versions/${versionId}?project=1`;
+    const evidence = page.locator("#version-binding");
+    const projectEvidence = evidence.locator("summary").filter({ hasText: "星云 N1" });
+    await page.goto(versionFlow);
+    await projectEvidence.click();
+    await expect(evidence.getByText("1/1 条码", { exact: true })).toBeVisible();
+    await expect(evidence.getByText("节点通过", { exact: true })).toHaveCount(0);
+    await page.goto(`/formal?project=1&q=${version}`);
+    await expect(page.getByRole("row").filter({ hasText: version })).toHaveCount(0);
+
+    await login(page, "MGR001");
+    await page.goto(trial);
+    await expect(confirmation).toHaveCount(0);
+
+    await login(page, "VALID001");
+    const task = page.getByRole("link", { name: /确认节点通过/ }).filter({ hasText: version });
+    await expect(task).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
+    await task.click();
+    await confirmBindingNode(page, node);
+    await page.reload();
+    await expect(node.locator("summary").first()).toContainText("绑定通过");
+    await expect(confirmation).toHaveCount(0);
+    expect(statuses()).toMatchObject({ nodeStatus: "PASSED", requestStatus: "PENDING_FORMAL", confirmedAt: expect.any(String), confirmedBy: "VALID001" });
+
+    await login(page, "ADMIN001");
+    await page.goto(versionFlow);
+    await projectEvidence.click();
+    await expect(evidence.getByText("节点通过", { exact: true })).toBeVisible();
+    await expect(evidence.getByText(/韩松 确认通过/)).toBeVisible();
+    await page.goto(`/formal?project=1&q=${version}`);
+    await expect(page.getByRole("row").filter({ hasText: version }).getByRole("link", { name: "核对并转正" })).toBeVisible();
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
+test("额外审批或撤销已审批电子流后须重新确认，共享版本重新校验转正", async ({ page }) => {
   await login(page, "VALID001");
   const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
@@ -83,6 +147,7 @@ test("管理员审批、达标后新增和撤销电子流正确联动共享转�
   const n1 = `/trial/${n1Request}?project=1`;
   const m2 = `/trial/${m2Request}?project=2`;
   const formal = `/formal/${versionId}?project=1`;
+  const node = page.locator(".binding-requirement");
   const statuses = () => db.prepare(
     "SELECT status FROM version_transfer_requests WHERE package_version_id = ? ORDER BY project_id",
   ).all(versionId).map((row) => row.status);
@@ -107,7 +172,16 @@ test("管理员审批、达标后新增和撤销电子流正确联动共享转�
 
     await page.goto(m2);
     await approveFlow(page, "CONTROL-M2-FIRST");
+    expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await login(page, "VALID001");
+    await page.goto(n1);
+    await confirmBindingNode(page, node);
+    expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await page.goto(m2);
+    await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+
+    await login(page, "ADMIN001");
     await page.goto(formal);
     await expect(page.getByText(/还有 1 条绑定电子流待审批/)).toBeVisible();
     await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toHaveCount(0);
@@ -118,9 +192,26 @@ test("管理员审批、达标后新增和撤销电子流正确联动共享转�
     await bindingRow.getByRole("link", { name: "查看节点与审批" }).click();
     await approveFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("2/1 条码通过")).toBeVisible();
-    await withdrawFlow(page, "CONTROL-N1-SECOND");
+    await expect(node.locator("summary").first()).toContainText("待确认");
+    expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await login(page, "VALID001");
+    await page.goto(n1);
+    await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+
+    await login(page, "ADMIN001");
+    await page.goto(n1);
+    await withdrawFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("1/1 条码通过")).toBeVisible();
+    await expect(node.locator("summary").first()).toContainText("待确认");
+    expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await expectFlash(page, "版本已回到绑定验证");
+
+    await login(page, "VALID001");
+    await page.goto(n1);
+    await confirmBindingNode(page, node);
+    expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+    await login(page, "ADMIN001");
     await page.goto(formal);
     await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toBeVisible();
 
@@ -143,7 +234,11 @@ test("管理员审批、达标后新增和撤销电子流正确联动共享转�
     const approval = page.getByRole("dialog", { name: /审批 BF-/ });
     await approval.getByLabel("审批意见").fill("已重新核对撤销后补交的设备。");
     await approval.getByRole("button", { name: "审批通过" }).click();
-    await expectFlash(page, "绑定电子流已通过");
+    await expectFlash(page, "绑定电子流审批通过");
+    expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await login(page, "VALID001");
+    await page.goto(n1);
+    await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
   } finally {
     db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
@@ -193,9 +288,16 @@ test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑�
     expect(versionStatus()).toBe("TRIAL");
     await page.goto(`/trial/${m2Request}`);
     await approveFlow(page, "ARCHIVE-QA-M2");
+    expect(versionStatus()).toBe("TRIAL");
+    await login(page, "VALID001");
+    await page.goto(`/trial/${n1Request}`);
+    await confirmBindingNode(page, page.locator(".binding-requirement"));
+    await page.goto(`/trial/${m2Request}`);
+    await confirmBindingNode(page, page.locator(".binding-requirement"));
     expect(versionStatus()).toBe("PENDING_FORMAL");
     expect(activeRequests()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
 
+    await login(page, "ADMIN001");
     await setProjectStatus(page, archived.id, "ACTIVE");
     expect(versionStatus()).toBe("TRIAL");
     expect(activeRequests()).toEqual(["TRIAL", "TRIAL"]);

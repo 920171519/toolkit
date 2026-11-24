@@ -299,6 +299,8 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   decision_reason TEXT,
   waived_at TEXT,
   waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  confirmed_at TEXT,
+  confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(package_version_id, project_id, node_id)

@@ -21,6 +21,16 @@ export async function confirmAction(page: Page) {
   await page.getByRole("alertdialog").getByRole("button", { name: /^确认/ }).click();
 }
 
+export async function confirmBindingNode(page: Page, node: Locator) {
+  const summary = node.locator("summary").first();
+  await expect(summary).toContainText("待确认");
+  if ((await node.getAttribute("open")) === null) await summary.click();
+  await node.getByRole("button", { name: "确认节点通过", exact: true }).click();
+  await confirmAction(page);
+  await expectFlash(page, "已确认节点通过");
+  await expect(summary).toContainText("绑定通过");
+}
+
 export async function selectOptionContaining(select: Locator, text: string) {
   const options = await select.locator("option").evaluateAll((items) =>
     items.map((item) => ({

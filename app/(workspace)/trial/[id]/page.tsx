@@ -22,6 +22,7 @@ import {
 } from "@/lib/constants";
 import {
   cancelBindingFlowAction,
+  confirmBindingRequirementAction,
   decideBindingFlowAction,
   pushBindingTasksAction,
   skipBindingAction,
@@ -63,7 +64,7 @@ export default async function TrialDetailPage({
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
   const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
   const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
-  const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
+  const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
   const waived = requirements.filter((requirement) => requirement.waivedAt !== null).length;
   const pendingDecision = canEditFlows && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
@@ -145,6 +146,9 @@ export default async function TrialDetailPage({
                     && (requirement.status === "PENDING" || requirement.status === "PASSED");
                   const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const canWaive = open && request.status === "TRIAL" && requirement.status === "PENDING" && (manager || requirement.bindingOwnerId === user.id);
+                  const readyToConfirm = open && requirement.status === "PENDING"
+                    && requirement.approvedCount >= requirement.requiredCount;
+                  const canConfirm = readyToConfirm && requirement.bindingOwnerId === user.id;
                   const needsWithdrawal = (status: string) => status === "PENDING" || status === "APPROVED";
                   const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
                     && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
@@ -155,7 +159,11 @@ export default async function TrialDetailPage({
                     <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen}>
                       <summary className={styles.nodeHeading}>
                         <span><strong>{requirement.nodeName}</strong> <span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码通过</span></span>
-                        <span>{requirement.waivedAt ? <Badge tone="slate" dot>节点免绑</Badge> : requirement.status === "PASSED" ? <Badge tone="emerald" dot>绑定通过</Badge> : requirement.status === "CANCELLED" ? <Badge tone="slate" dot>{request.status === "VOID" ? "已关闭" : "已跳过"}</Badge> : requirement.pushedAt ? <Badge tone="amber" dot>待绑定</Badge> : <Badge tone="slate" dot>未推送</Badge>}</span>
+                        <span>{requirement.waivedAt ? <Badge tone="slate" dot>节点免绑</Badge>
+                          : requirement.confirmedAt ? <Badge tone="emerald" dot>绑定通过</Badge>
+                          : requirement.status === "CANCELLED" ? <Badge tone="slate" dot>{request.status === "VOID" ? "已关闭" : "已跳过"}</Badge>
+                          : readyToConfirm ? <Badge tone="amber" dot>待确认</Badge>
+                          : canEditFlows && (requirement.pushedAt ? <Badge tone="amber" dot>待绑定</Badge> : <Badge tone="slate" dot>未推送</Badge>)}</span>
                         <ChevronDown size={16} aria-hidden="true" />
                       </summary>
                       <div className="binding-table-body">
@@ -164,8 +172,18 @@ export default async function TrialDetailPage({
                           <span className="small muted">审批范围 {requirement.approverOptions.map((approver) => approver.userName).join("、") || "未配置"}</span>
                         </div>
                         {requirement.waivedAt && <p className="small muted" style={{ marginBottom: 8 }}>免绑原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
-                        {(canSubmit || canWaive) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
-                          {canSubmit && <FormDialog key={requirement.flows.length} label="新增绑定电子流" title={`${requirement.nodeName} · 提交绑定电子流`} triggerClassName="button button-primary button-sm" cancelLabel="取消">
+                        {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
+                        {(canSubmit || canWaive || canConfirm) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
+                          {canConfirm && <ActionForm action={confirmBindingRequirementAction}
+                            hidden={{
+                              ...actionFields,
+                              requirementId: requirement.id,
+                              evidenceKey: requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => flow.id).sort((a, b) => a - b).join(","),
+                            }}
+                            submitText="确认节点通过" submitClassName="button-sm"
+                            confirmMessage={`确认 ${requirement.nodeName} 的 ${requirement.approvedCount} 个已审批条码均已验证通过。全部在行节点完成后，符合条件的版本会进入待转正。`}
+                          />}
+                          {canSubmit && <FormDialog key={requirement.flows.length} label="新增绑定电子流" title={`${requirement.nodeName} · 提交绑定电子流`} triggerClassName={`button ${canConfirm ? "button-secondary" : "button-primary"} button-sm`} cancelLabel="取消">
                             <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} scopeProjectId={scopeProjectId} listState={listState} />
                           </FormDialog>}
                           {canWaive && <FormDialog label="节点无需绑定" title={`${requirement.nodeName} · 确认免绑`} description="只影响当前项目的这个节点。待审批电子流会关闭，已登记的记录会保留。" triggerClassName="button button-secondary button-sm" cancelLabel="取消">

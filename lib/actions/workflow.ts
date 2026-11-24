@@ -21,6 +21,7 @@ import {
   cancelBindingFlow,
   cancelTransfer,
   completeBatchTest,
+  confirmBindingRequirement,
   createBatchDraft,
   type CreateBatchInput,
   decideBindingFlow,
@@ -310,6 +311,25 @@ export async function waiveBindingRequirementAction(_prev: ActionState, formData
   );
 }
 
+export async function confirmBindingRequirementAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requirementId = numberValue(formData, "requirementId");
+  if (!requirementId) return { error: "绑定任务参数无效。" };
+  let result: ReturnType<typeof confirmBindingRequirement>;
+  try {
+    result = confirmBindingRequirement(user, requirementId, text(formData, "evidenceKey"));
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  workflowSuccessRedirect(
+    formData,
+    `/trial/${result.requestId}`,
+    result.enteredFormal ? "已确认节点通过，版本已进入待转正。" : "已确认节点通过。",
+    actionListState(formData),
+  );
+}
+
 export async function abandonTrialReleaseAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requestId = numberValue(formData, "requestId");
@@ -392,7 +412,7 @@ export async function cancelBindingFlowAction(_prev: ActionState, formData: Form
   }
   refreshAll();
   workflowSuccessRedirect(formData, `/trial/${result.requestId}`,
-    result.returnedToBinding ? "绑定电子流已撤销，条码数量未达要求，版本已回到绑定验证。" : "绑定电子流已撤销。",
+    result.returnedToBinding ? "绑定电子流已撤销，节点需重新确认，版本已回到绑定验证。" : "绑定电子流已撤销。",
     actionListState(formData));
 }
 
@@ -412,11 +432,7 @@ export async function decideBindingFlowAction(_prev: ActionState, formData: Form
   workflowSuccessRedirect(
     formData,
     `/trial/${result.requestId}`,
-    result.enteredFormal
-      ? "绑定电子流已通过，该软件包全部项目节点绑定数量已满足。"
-      : decision === "APPROVED"
-        ? "绑定电子流审批通过。"
-        : "绑定电子流已驳回，提交人将收到通知。",
+    decision === "APPROVED" ? "绑定电子流审批通过。" : "绑定电子流已驳回，提交人将收到通知。",
     actionListState(formData),
   );
 }

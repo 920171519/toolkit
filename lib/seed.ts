@@ -583,6 +583,9 @@ function seedAll(db: DatabaseSync) {
   const insertFlowBarcode = db.prepare(
     "INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)",
   );
+  const confirmDemoRequirement = db.prepare(
+    "UPDATE binding_requirements SET status = 'PASSED', confirmed_at = ?, confirmed_by = ? WHERE id = ?",
+  );
   let flowSequence = 0;
   const addFlow = (
     requirementId: number,
@@ -660,7 +663,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-13T11:00:00+08:00",
         "硬件绑定验证通过，条码与软件包版本匹配。",
       );
-      db.prepare("UPDATE binding_requirements SET status = 'PASSED' WHERE id = ?").run(requirement.id);
+      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), hanSong, requirement.id);
     }
   }
 
@@ -681,7 +684,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-12T15:00:00+08:00",
         "条码绑定信息核对通过。",
       );
-      db.prepare("UPDATE binding_requirements SET status = 'PASSED' WHERE id = ?").run(evtRequirement.id);
+      confirmDemoRequirement.run(iso("2026-11-12T16:00:00+08:00"), hanSong, evtRequirement.id);
     }
     if (pvtRequirement) {
       addFlow(
@@ -726,7 +729,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-13T11:00:00+08:00",
         "硬件绑定验证通过，条码与软件包版本匹配。",
       );
-      db.prepare("UPDATE binding_requirements SET status = 'PASSED' WHERE id = ?").run(requirement.id);
+      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), hanSong, requirement.id);
     }
     db.prepare(
       "UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', trial_form_no = ?, trial_released_at = ?, updated_at = ? WHERE id = ?",

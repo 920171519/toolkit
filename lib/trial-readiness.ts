@@ -12,7 +12,8 @@ const activeReleaseRequest = "r.trial_released_at IS NOT NULL AND pr.status != '
 export function getActiveBindingSummary(database: DatabaseSync, versionId: number): ActiveBindingSummary {
   return database.prepare(
     `SELECT COUNT(*) AS total,
-            COUNT(CASE WHEN br.status = 'PASSED' OR (br.status = 'CANCELLED' AND br.waived_at IS NOT NULL) THEN 1 END) AS settled,
+            COUNT(CASE WHEN (br.status = 'PASSED' AND br.confirmed_at IS NOT NULL)
+                         OR (br.status = 'CANCELLED' AND br.waived_at IS NOT NULL) THEN 1 END) AS settled,
             COUNT(CASE WHEN br.status = 'CANCELLED' THEN 1 END) AS cancelled
      FROM version_transfer_requests r
      JOIN projects pr ON pr.id = r.project_id

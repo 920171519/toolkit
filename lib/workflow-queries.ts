@@ -623,7 +623,8 @@ export function getTrialVersions(projectIds: number[] | null = null, includePend
                    THEN 1 ELSE 0 END AS isOverdue,
               b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
+              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
+               AND br.confirmed_at IS NOT NULL) AS requirementPassed,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived,
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
        FROM version_transfer_requests r
@@ -703,6 +704,8 @@ export type BindingRequirementRow = {
   decisionReason: string | null;
   waivedAt: string | null;
   waivedByName: string | null;
+  confirmedAt: string | null;
+  confirmedByName: string | null;
   approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string }>;
   flows: BindingFlowRow[];
 };
@@ -783,7 +786,8 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             br.binding_owner_id AS bindingOwnerId, bo.name AS bindingOwnerName,
             br.approver_id AS approverId, ba.name AS approverName,
             br.pushed_at AS pushedAt, pu.name AS pushedByName, br.decision_reason AS decisionReason,
-            br.waived_at AS waivedAt, wu.name AS waivedByName
+            br.waived_at AS waivedAt, wu.name AS waivedByName,
+            CASE WHEN br.status = 'PASSED' THEN br.confirmed_at END AS confirmedAt, cu.name AS confirmedByName
      FROM binding_requirements br
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
@@ -791,6 +795,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
      LEFT JOIN users ba ON ba.id = br.approver_id
      LEFT JOIN users pu ON pu.id = br.pushed_by
      LEFT JOIN users wu ON wu.id = br.waived_by
+     LEFT JOIN users cu ON cu.id = br.confirmed_by
      WHERE br.request_id = ? ORDER BY n.sort_order`,
     requestId,
   ).map((requirement) => {
@@ -879,7 +884,8 @@ export function getPendingFormalVersions(projectIds: number[] | null = null, ver
                    AND datetime(r.trial_released_at, '+' || pg.trial_overdue_days || ' days') < datetime('now')
                    THEN 1 ELSE 0 END AS isOverdue,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED') AS requirementPassed,
+              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
+               AND br.confirmed_at IS NOT NULL) AS requirementPassed,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
@@ -1107,7 +1113,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   }>(
     `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, pv.version,
             pr.name AS projectName, n.name AS nodeName, br.required_count AS requiredCount,
-            (SELECT COUNT(*) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
+            (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
              WHERE f.requirement_id = br.id AND f.status = 'APPROVED') AS approvedCount
      FROM binding_requirements br
      JOIN version_transfer_requests r ON r.id = br.request_id
@@ -1122,9 +1128,10 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     user.id,
   );
   for (const task of bindingTasks) {
+    const action = task.approvedCount >= task.requiredCount ? "确认节点通过" : "提交绑定电子流";
     tasks.push({
       key: `binding-${task.requirementId}`,
-      title: `提交绑定电子流：${task.packageName} ${task.version}`,
+      title: `${action}：${task.packageName} ${task.version}`,
       description: `${task.projectName} / ${task.nodeName}，已通过条码 ${task.approvedCount}/${task.requiredCount}`,
       href: `/trial/${task.requestId}#binding-node-${task.requirementId}`,
       category: "bind",

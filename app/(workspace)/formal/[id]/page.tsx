@@ -81,7 +81,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
             <div className={styles.nodeList}>
               {evidence.map(({ request, requirements }, index) => {
                 const conclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
-                const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
+                const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
                 const waived = requirements.filter((requirement) => requirement.waivedAt).length;
                 const canInspect = canAccessProjectPage(user, request.projectId);
                 const trialUrl = releaseFlowUrl(request.trialFormNo);
@@ -110,10 +110,13 @@ export default async function FormalDetailPage({ params, searchParams }: {
                           <div className="formal-requirement" key={requirement.id}>
                             <div className={styles.rowActions}>
                               <strong>{requirement.nodeName}</strong>
-                              <Badge tone={requirement.status === "PASSED" ? "emerald" : requirement.status === "CANCELLED" ? "slate" : "amber"}>{requirement.status === "PASSED" ? "节点通过" : requirement.waivedAt ? "节点免绑定" : requirement.status === "CANCELLED" ? "无需绑定" : "待通过"}</Badge>
+                              {requirement.confirmedAt ? <Badge tone="emerald">节点通过</Badge>
+                                : requirement.waivedAt ? <Badge tone="slate">节点免绑定</Badge>
+                                : requirement.status === "CANCELLED" && <Badge tone="slate">无需绑定</Badge>}
                               <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
                             </div>
                             {requirement.waivedAt && <p className="small muted">免绑原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
+                            {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
                             {requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => (
                               <div className="formal-flow-line" key={flow.id}><span className="mono small">{flow.flowNo}</span><span className="small">{flow.barcodes.length} 个条码：{flow.barcodes.join("、")}</span>{flow.webUrl && <ExternalLink href={flow.webUrl}>网页电子流</ExternalLink>}</div>
                             ))}

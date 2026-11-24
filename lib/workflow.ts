@@ -1070,22 +1070,74 @@ export function voidPackageVersion(actor: SessionUser, versionId: number, reason
   });
 }
 
-function refreshBindingProgress(requirementId: number, versionId: number, timestamp: string) {
-  const count = one<{ approved: number }>(
-    `SELECT COUNT(DISTINCT b.barcode) AS approved
-     FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-     WHERE f.requirement_id = ? AND f.status = 'APPROVED'`,
-    requirementId,
-  );
+function invalidateBindingConfirmation(requirementId: number, versionId: number, timestamp: string) {
   run(
-    `UPDATE binding_requirements SET status = CASE WHEN required_count <= ? THEN 'PASSED' ELSE 'PENDING' END,
-         updated_at = ?
+    `UPDATE binding_requirements SET status = 'PENDING', confirmed_at = NULL, confirmed_by = NULL, updated_at = ?
      WHERE id = ? AND status IN ('PENDING','PASSED') AND waived_at IS NULL`,
-    count?.approved ?? 0,
     timestamp,
     requirementId,
   );
-  return refreshTrialReadiness(db, versionId, timestamp);
+  refreshTrialReadiness(db, versionId, timestamp);
+}
+
+export function confirmBindingRequirement(actor: SessionUser, requirementId: number, evidenceKey: string) {
+  return transaction(() => {
+    const requirement = one<{
+      request_id: number;
+      request_status: string;
+      version_id: number;
+      version_status: string;
+      project_name: string;
+      project_status: string;
+      node_name: string;
+      package_name: string;
+      version: string;
+      binding_owner_id: number | null;
+      required_count: number;
+      status: string;
+      pushed_at: string | null;
+      waived_at: string | null;
+    }>(
+      `SELECT br.request_id, r.status AS request_status, pv.id AS version_id, pv.status AS version_status,
+              pr.name AS project_name, pr.status AS project_status, n.name AS node_name, p.name AS package_name, pv.version,
+              br.binding_owner_id, br.required_count, br.status, br.pushed_at, br.waived_at
+       FROM binding_requirements br
+       JOIN version_transfer_requests r ON r.id = br.request_id
+       JOIN package_versions pv ON pv.id = br.package_version_id
+       JOIN packages p ON p.id = pv.package_id
+       JOIN projects pr ON pr.id = br.project_id
+       JOIN project_nodes n ON n.id = br.node_id
+       WHERE br.id = ?`,
+      requirementId,
+    );
+    assert(requirement, "绑定任务不存在。", "NOT_FOUND");
+    assert(requirement.binding_owner_id === actor.id, "只有该节点的绑定验证责任人可以确认节点通过。", "FORBIDDEN");
+    assert(requirement.project_status !== "ARCHIVED", "项目已归档，不能确认节点通过。");
+    assert(isBindingOpen(requirement.request_status) && isBindingOpen(requirement.version_status), "该版本已结束绑定验证，不能确认节点通过。");
+    assert(requirement.status === "PENDING" && requirement.pushed_at && !requirement.waived_at, "该节点未推送、已关闭、已免绑或已确认。");
+
+    const approvedEntries = all<{ flowId: number; barcode: string | null }>(
+      `SELECT f.id AS flowId, b.barcode
+       FROM binding_flows f LEFT JOIN binding_flow_barcodes b ON b.flow_id = f.id
+       WHERE f.requirement_id = ? AND f.status = 'APPROVED'
+       ORDER BY f.id`,
+      requirementId,
+    );
+    const approvedFlowIds = new Set(approvedEntries.map((entry) => entry.flowId));
+    assert(Array.from(approvedFlowIds).join(",") === evidenceKey, "已通过的绑定电子流发生变化，请刷新并重新核对后确认。");
+    const barcodes = new Set(approvedEntries.flatMap(({ barcode }) => barcode === null ? [] : [barcode]));
+    assert(barcodes.size > 0 && barcodes.size >= requirement.required_count, "已审批通过的有效条码数量尚未达标，不能确认节点通过。");
+
+    const timestamp = now();
+    run(
+      "UPDATE binding_requirements SET status = 'PASSED', confirmed_at = ?, confirmed_by = ?, updated_at = ? WHERE id = ?",
+      timestamp, actor.id, timestamp, requirementId,
+    );
+    const enteredFormal = refreshTrialReadiness(db, requirement.version_id, timestamp);
+    audit(actor.id, "CONFIRM_BINDING_REQUIREMENT", "BINDING_REQUIREMENT", requirementId,
+      `确认 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定验证通过，已审批通过的条码 ${barcodes.size} 个`);
+    return { requestId: requirement.request_id, enteredFormal };
+  });
 }
 
 export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[], approverId: number, webUrl: string) {
@@ -1230,7 +1282,7 @@ export function cancelBindingFlow(actor: SessionUser, flowId: number, reason: st
     );
     let returnedToBinding = false;
     if (beforeFormal && flow.status === "APPROVED") {
-      refreshBindingProgress(flow.requirement_id, flow.version_id, timestamp);
+      invalidateBindingConfirmation(flow.requirement_id, flow.version_id, timestamp);
       returnedToBinding = flow.version_status === "PENDING_FORMAL"
         && one<{ status: string }>("SELECT status FROM package_versions WHERE id = ?", flow.version_id)?.status === "TRIAL";
     }
@@ -1297,15 +1349,15 @@ export function decideBindingFlow(
       comment.trim(),
       flowId,
     );
-    const enteredFormal = decision === "APPROVED" && refreshBindingProgress(flow.requirement_id, flow.version_id, timestamp);
+    if (decision === "APPROVED") invalidateBindingConfirmation(flow.requirement_id, flow.version_id, timestamp);
     audit(
       actor.id,
       decision === "APPROVED" ? "APPROVE_BINDING_FLOW" : "REJECT_BINDING_FLOW",
       "BINDING_FLOW",
       flowId,
-      `${decision === "APPROVED" ? "通过" : "驳回"} ${flow.package_name} ${flow.version} 在 ${flow.project_name}/${flow.node_name} 的绑定电子流：${comment.trim()}${enteredFormal ? "。该版本全部项目绑定完成，已进入待转正" : ""}`,
+      `${decision === "APPROVED" ? "通过" : "驳回"} ${flow.package_name} ${flow.version} 在 ${flow.project_name}/${flow.node_name} 的绑定电子流：${comment.trim()}`,
     );
-    return { enteredFormal, requestId: flow.request_id };
+    return { requestId: flow.request_id };
   });
 }
 
