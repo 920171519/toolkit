@@ -5,7 +5,7 @@ import { expectFlash, login } from "./helpers";
 
 const testVersion = "2.0.0-binding-controls-e2e";
 
-function setupBindingFixture(db: DatabaseSync) {
+function setupBindingFixture(db: DatabaseSync, version = testVersion, projectCodes = ["N1", "M2"]) {
   const versionId = Number(db.prepare(
     `INSERT INTO package_versions
        (package_id, version, change_summary, archive_url, status, binding_mode, trial_form_no,
@@ -13,9 +13,9 @@ function setupBindingFixture(db: DatabaseSync) {
      SELECT id, ?, '绑定流程回归专用', 'https://example.com/archive', 'TRIAL', 'PUSHED',
             'https://example.com/trial', datetime('now'), datetime('now'), datetime('now')
      FROM packages WHERE name = '1004NET'`,
-  ).run(testVersion).lastInsertRowid);
+  ).run(version).lastInsertRowid);
   try {
-    const requestIds = ["N1", "M2"].map((projectCode) => {
+    const requestIds = projectCodes.map((projectCode) => {
       const requestId = Number(db.prepare(
         `INSERT INTO version_transfer_requests
            (package_version_id, project_id, status, integration_status, trial_form_no, trial_released_at, submitted_at, updated_at)
@@ -147,6 +147,84 @@ test("管理员审批、达标后新增和撤销电子流正确联动共享转�
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
   } finally {
     db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
+async function setProjectStatus(page: Page, projectId: number, status: "ACTIVE" | "ARCHIVED") {
+  await page.goto(`/settings/projects/${projectId}?edit=project`);
+  const form = page.getByTestId(`edit-project-form-${projectId}`);
+  await form.getByLabel("流程状态", { exact: true }).selectOption(status);
+  await form.getByRole("button", { name: "保存项目配置" }).click();
+  await expectFlash(page, "项目配置已更新");
+}
+
+test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑定", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const version = "2.0.0-archived-binding-e2e";
+  const archived = db.prepare("SELECT id, status FROM projects WHERE code = 'X0'").get() as { id: number; status: string };
+  const { versionId, requestIds: [n1Request, m2Request, archivedRequest] } =
+    setupBindingFixture(db, version, ["N1", "M2", "X0"]);
+  const versionStatus = () => db.prepare("SELECT status FROM package_versions WHERE id = ?").get(versionId)?.status;
+  const activeRequests = () => db.prepare(
+    "SELECT status FROM version_transfer_requests WHERE id IN (?, ?) ORDER BY id",
+  ).all(n1Request, m2Request).map((row) => row.status);
+  const archivedEvidence = () => db.prepare(
+    `SELECT r.status AS requestStatus, r.trial_released_at AS trialReleasedAt, r.formal_released_at AS formalReleasedAt,
+            br.status AS nodeStatus, f.status AS flowStatus, f.web_url AS flowUrl
+     FROM version_transfer_requests r
+     JOIN binding_requirements br ON br.request_id = r.id
+     JOIN binding_flows f ON f.requirement_id = br.id
+     WHERE r.id = ?`,
+  ).get(archivedRequest);
+
+  try {
+    expect(archived.status).toBe("ARCHIVED");
+    await page.goto(`/trial/${n1Request}`);
+    await submitFlow(page, "ARCHIVE-QA-N1");
+    await page.goto(`/trial/${m2Request}`);
+    await submitFlow(page, "ARCHIVE-QA-M2");
+
+    await login(page, "ADMIN001");
+    await page.goto(`/trial/${n1Request}`);
+    await approveFlow(page, "ARCHIVE-QA-N1");
+    expect(versionStatus()).toBe("TRIAL");
+    await page.goto(`/trial/${m2Request}`);
+    await approveFlow(page, "ARCHIVE-QA-M2");
+    expect(versionStatus()).toBe("PENDING_FORMAL");
+    expect(activeRequests()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+
+    await setProjectStatus(page, archived.id, "ACTIVE");
+    expect(versionStatus()).toBe("TRIAL");
+    expect(activeRequests()).toEqual(["TRIAL", "TRIAL"]);
+    await page.goto(`/trial/${archivedRequest}`);
+    await submitFlow(page, "ARCHIVE-QA-X0");
+    await setProjectStatus(page, archived.id, "ARCHIVED");
+    expect(versionStatus()).toBe("PENDING_FORMAL");
+    expect(activeRequests()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+
+    const preserved = archivedEvidence();
+    expect(preserved).toMatchObject({ nodeStatus: "PENDING", flowStatus: "PENDING", formalReleasedAt: null });
+    await page.goto(`/formal?q=${version}`);
+    const row = page.getByRole("row").filter({ hasText: version });
+    await expect(row).toContainText("星云 N1");
+    await expect(row).toContainText("极光 M2");
+    await expect(row).not.toContainText("远山 X0");
+    await row.getByRole("link", { name: "核对并转正" }).click();
+    await page.getByRole("button", { name: "发布正式版本", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: /^转正/ });
+    await dialog.getByRole("textbox", { name: "转正电子流网址", exact: true }).fill("https://example.com/formal/archive-qa");
+    await dialog.getByRole("textbox", { name: "转正评审纪要", exact: true }).fill("在行项目节点完成，保留归档项目绑定记录。");
+    await dialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
+    await expectFlash(page, "同步发布正式版本");
+    expect(versionStatus()).toBe("FORMAL");
+    expect(activeRequests()).toEqual(["FORMAL", "FORMAL"]);
+    expect(archivedEvidence()).toEqual(preserved);
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.prepare("UPDATE projects SET status = ? WHERE id = ?").run(archived.status, archived.id);
     db.close();
   }
 });

@@ -657,7 +657,8 @@ export function getTrialVersions(projectIds: number[] | null = null, includePend
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE pr.status != 'ARCHIVED' AND (r.status = 'TRIAL' OR (
+       WHERE pr.status != 'ARCHIVED' AND pv.status IN ('TRIAL','PENDING_FORMAL')
+         AND (r.status = 'TRIAL' OR (
          ? = 1 AND r.status = 'PENDING_FORMAL'
          AND EXISTS (SELECT 1 FROM binding_requirements br
            WHERE br.request_id = r.id AND br.status = 'PASSED'
@@ -740,6 +741,7 @@ export type TrialDetail = {
     versionId: number;
     version: string;
     status: string;
+    versionStatus: string;
     integrationStatus: string | null;
     ongoingTestCount: number;
     changeSummary: string;
@@ -770,7 +772,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
   const request = one<TrialDetail["request"]>(
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.id AS versionId,
-            pv.version, r.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
+            pv.version, r.status, pv.status AS versionStatus, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             r.integration_status AS integrationStatus, ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
             r.trial_form_no AS trialFormNo, pv.trial_review_minutes AS trialReviewMinutes,
             r.trial_released_at AS trialReleasedAt,
@@ -907,7 +909,7 @@ export function getPendingFormalVersions(projectIds: number[] | null = null, ver
        JOIN packages pg ON pg.id = p.id
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
-       WHERE r.status = 'PENDING_FORMAL' AND pr.status != 'ARCHIVED'
+       WHERE pv.status = 'PENDING_FORMAL' AND r.status = 'PENDING_FORMAL' AND pr.status != 'ARCHIVED'
          ${versionId === undefined ? "" : "AND pv.id = ?"}
        ORDER BY r.trial_released_at DESC, r.id DESC`,
       ...(versionId === undefined ? [] : [versionId]),
@@ -1135,6 +1137,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
      WHERE br.binding_owner_id = ? AND pr.status != 'ARCHIVED' AND r.status = 'TRIAL' AND br.status = 'PENDING'
+       AND pv.status = 'TRIAL'
        AND br.pushed_at IS NOT NULL
      ORDER BY pr.sort_order, n.sort_order`,
     user.id,

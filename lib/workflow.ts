@@ -1,7 +1,7 @@
 import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
 
-import { all, one, run, transaction } from "./db";
+import { all, db, one, run, transaction } from "./db";
 import {
   canApproveBindingFlow,
   canSubmitBindingFlow,
@@ -12,6 +12,7 @@ import { assert } from "./services";
 import { getPendingBindingFlowCount, getTrialReadyVersions } from "./workflow-queries";
 import { getRiskTrialEntries } from "./trial-risk-entry";
 import { trialReleaseStateKey } from "./trial-release-state";
+import { getActiveBindingSummary, hasActiveIntegrationBatch, refreshTrialReadiness } from "./trial-readiness";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 import { reportArchivePath, resolveReportPath } from "./report-storage";
@@ -90,43 +91,6 @@ function refreshVersionAggregate(versionId: number) {
   else if (requests.every((request) => ["PASSED", "FAILED", "BLOCKED", "VOID", "CANCELLED"].includes(request.status))) status = "PENDING_TRIAL";
   else if (requests.some((request) => ["PASSED", "FAILED", "BLOCKED"].includes(request.status))) status = "IN_TEST";
   run("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?", status, now(), versionId);
-}
-
-function hasActiveIntegrationBatch(versionId: number) {
-  return Boolean(one<{ id: number }>(
-    `SELECT b.id FROM batch_items bi
-     JOIN integration_batches b ON b.id = bi.batch_id
-     JOIN projects p ON p.id = b.project_id
-     WHERE bi.package_version_id = ? AND bi.transfer_request_id IS NOT NULL
-       AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED' LIMIT 1`,
-    versionId,
-  ));
-}
-
-function refreshTrialReadiness(versionId: number, timestamp: string) {
-  const version = one<{ status: string; binding_mode: string }>(
-    "SELECT status, binding_mode FROM package_versions WHERE id = ?",
-    versionId,
-  );
-  if (!version || !isBindingOpen(version.status)) return false;
-
-  const outstanding = one<{ id: number }>(
-    `SELECT id FROM binding_requirements WHERE package_version_id = ?
-     AND status != 'PASSED' AND NOT (status = 'CANCELLED' AND waived_at IS NOT NULL) LIMIT 1`,
-    versionId,
-  );
-  const bindingReady = version.binding_mode === "SKIPPED" || (version.binding_mode === "PUSHED" && !outstanding);
-  const nextStatus = bindingReady && !hasActiveIntegrationBatch(versionId) ? "PENDING_FORMAL" : "TRIAL";
-  if (version.status === nextStatus) return false;
-  run("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?", nextStatus, timestamp, versionId);
-  run(
-    `UPDATE version_transfer_requests SET status = ?, updated_at = ?
-     WHERE package_version_id = ? AND status IN ('TRIAL','PENDING_FORMAL')`,
-    nextStatus,
-    timestamp,
-    versionId,
-  );
-  return nextStatus === "PENDING_FORMAL";
 }
 
 export function submitTransfer(
@@ -376,7 +340,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
         item.previousVersion,
         item.changedVsPrevious ? 1 : 0,
       );
-      if (item.requestId) refreshTrialReadiness(item.versionId, timestamp);
+      if (item.requestId) refreshTrialReadiness(db, item.versionId, timestamp);
     }
     audit(actor.id, "CREATE_BATCH", "BATCH", batchId, `创建 ${code}（${project.name}）转测草稿，${items.length} 个包，${changedCount} 个变更包`);
     return batchId;
@@ -398,7 +362,7 @@ export function deleteDraftBatch(actor: SessionUser, batchId: number) {
     );
     run("DELETE FROM integration_batches WHERE id = ?", batchId);
     const timestamp = now();
-    for (const version of versionIds) refreshTrialReadiness(version.id, timestamp);
+    for (const version of versionIds) refreshTrialReadiness(db, version.id, timestamp);
     audit(actor.id, "DELETE_BATCH_DRAFT", "BATCH", batchId, `删除 ${batch.code} 转测草稿`);
   });
 }
@@ -460,7 +424,7 @@ export function sendBatch(actor: SessionUser, batchId: number) {
     }
     for (const versionId of versionIds) {
       refreshVersionAggregate(versionId);
-      refreshTrialReadiness(versionId, timestamp);
+      refreshTrialReadiness(db, versionId, timestamp);
     }
     audit(actor.id, "SEND_BATCH", "BATCH", batchId, `发起 ${batch.code}（${batch.project_name}）整套配套转测，${changes.length} 个变更包`);
   });
@@ -494,7 +458,7 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
         request.id,
       );
       refreshVersionAggregate(request.package_version_id);
-      refreshTrialReadiness(request.package_version_id, timestamp);
+      refreshTrialReadiness(db, request.package_version_id, timestamp);
     }
     run(
       "UPDATE trial_risk_admissions SET invalidated_at = ? WHERE batch_id = ? AND stage = 'IN_TEST' AND invalidated_at IS NULL",
@@ -652,7 +616,7 @@ export async function completeBatchTest(
           );
         }
         refreshVersionAggregate(item.version_id);
-        refreshTrialReadiness(item.version_id, timestamp);
+        refreshTrialReadiness(db, item.version_id, timestamp);
       }
       audit(actor.id, "COMPLETE_BATCH", "BATCH", batchId, `提交 ${batch.code} 测试结论：${input.conclusion}，上传报告 ${file.name}`);
       return { voidedCount };
@@ -1012,7 +976,7 @@ export function skipBindingAndEnterFormal(actor: SessionUser, requestId: number,
       timestamp,
       anchor.package_version_id,
     );
-    const enteredFormal = refreshTrialReadiness(anchor.package_version_id, timestamp);
+    const enteredFormal = refreshTrialReadiness(db, anchor.package_version_id, timestamp);
     audit(actor.id, "SKIP_BINDING", "PACKAGE_VERSION", anchor.package_version_id, `跳过 ${anchor.package_name} ${anchor.version} 绑定验证：${reason.trim()}`);
     return { enteredFormal };
   });
@@ -1057,7 +1021,7 @@ export function waiveBindingRequirement(actor: SessionUser, requirementId: numbe
       timestamp, `该节点无需绑定：${reason.trim()}`, requirementId,
     );
     audit(actor.id, "WAIVE_BINDING_REQUIREMENT", "BINDING_REQUIREMENT", requirementId, `${requirement.node_name} 无需绑定：${reason.trim()}`);
-    const enteredFormal = refreshTrialReadiness(requirement.package_version_id, timestamp);
+    const enteredFormal = refreshTrialReadiness(db, requirement.package_version_id, timestamp);
     return { requestId: requirement.request_id, enteredFormal };
   });
 }
@@ -1152,7 +1116,7 @@ function refreshBindingProgress(requirementId: number, versionId: number, timest
     timestamp,
     requirementId,
   );
-  return refreshTrialReadiness(versionId, timestamp);
+  return refreshTrialReadiness(db, versionId, timestamp);
 }
 
 export function submitBindingFlow(actor: SessionUser, requirementId: number, barcodes: string[], approverId: number, webUrl: string) {
@@ -1389,8 +1353,10 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
       package_name: string;
       version: string;
       binding_mode: string;
+      version_status: string;
     }>(
-      `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version, pv.binding_mode
+      `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version, pv.binding_mode,
+              pv.status AS version_status
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
@@ -1411,23 +1377,13 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
       "只有使用该软件包的项目软件经理或系统管理员可以发布转正。",
       "FORBIDDEN",
     );
-    assert(!hasActiveIntegrationBatch(anchor.package_version_id), "该软件包仍有关联转测批次待发起或在测，不能转正。");
+    assert(anchor.version_status === "PENDING_FORMAL", "该版本尚未完成绑定验证或已转正。");
+    assert(!hasActiveIntegrationBatch(db, anchor.package_version_id), "该软件包仍有关联转测批次待发起或在测，不能转正。");
     assert(getPendingBindingFlowCount(anchor.package_version_id) === 0, "仍有绑定电子流待审批。请在绑定验证中完成审批或撤销后再转正。");
     for (const request of requests) {
       assert(request.status === "PENDING_FORMAL", `${request.project_name} 尚未完成全部项目绑定验证，不能转正。`);
     }
-    const summary = one<{ total: number; settled: number; cancelled: number }>(
-      `SELECT COUNT(*) AS total,
-              SUM(CASE WHEN br.status = 'PASSED' OR (br.status = 'CANCELLED' AND br.waived_at IS NOT NULL) THEN 1 ELSE 0 END) AS settled,
-              SUM(CASE WHEN br.status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled
-       FROM binding_requirements br
-       JOIN version_transfer_requests r ON r.id = br.request_id
-       WHERE r.package_version_id = ?`,
-      anchor.package_version_id,
-    );
-    const total = Number(summary?.total ?? 0);
-    const settled = Number(summary?.settled ?? 0);
-    const cancelled = Number(summary?.cancelled ?? 0);
+    const { total, settled, cancelled } = getActiveBindingSummary(db, anchor.package_version_id);
     if (anchor.binding_mode === "SKIPPED") {
       assert(cancelled === total, "该版本已标记无需绑定，但仍存在未关闭的绑定要求。");
     } else {

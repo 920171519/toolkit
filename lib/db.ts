@@ -3,6 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
+import { refreshProjectTrialReadiness } from "./trial-readiness";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
 
@@ -20,6 +21,7 @@ function createDatabase(): DatabaseSync {
   try {
     database.exec(SCHEMA_SQL);
     migrateSchema(database);
+    refreshProjectTrialReadiness(database, new Date().toISOString());
     database.exec("COMMIT");
   } catch (error) {
     database.close();

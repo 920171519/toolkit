@@ -61,11 +61,11 @@ export default async function TrialDetailPage({
   const actionFields = { requestId, scopeProjectId, ...listState };
   const archived = request.projectStatus === "ARCHIVED";
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
-  const canEditFlows = !archived && isBindingOpen(request.status);
-  const pendingReviews = request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
+  const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
+  const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
   const passed = requirements.filter((requirement) => requirement.status === "PASSED").length;
   const waived = requirements.filter((requirement) => requirement.waivedAt !== null).length;
-  const pendingDecision = !archived && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
+  const pendingDecision = canEditFlows && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
   const identity = packageIdentity({ name: request.packageName, code: request.packageCode });
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
@@ -102,7 +102,7 @@ export default async function TrialDetailPage({
         </div>
       )}
 
-      {!archived && request.isOverdue > 0 && request.status !== "VOID" && request.status !== "FORMAL" && (
+      {canEditFlows && request.isOverdue > 0 && (
         <div className="risk-callout" data-tone="danger" style={{ marginBottom: 12 }}>已超期 · 试制发布超过 {request.trialOverdueDays} 天，尚未转正</div>
       )}
       {riskRelease && request.status !== "VOID" && (
@@ -127,7 +127,7 @@ export default async function TrialDetailPage({
         </div>}
       </section>}
 
-      {!archived && request.status === "PENDING_FORMAL" && <section className={styles.nextAction}>
+      {canEditFlows && request.status === "PENDING_FORMAL" && <section className={styles.nextAction}>
         <h2>{pendingReviews > 0 ? "绑定条码已达标" : "已满足转正条件"}</h2>
         {pendingReviews > 0 ? <span className="small muted">还有 {pendingReviews} 条绑定电子流待审批，处理后可转正。</span>
           : manager ? <Link href={workflowHref("/formal", scopeProjectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="small muted">待软件经理发布</span>}

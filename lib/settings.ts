@@ -1,6 +1,6 @@
 import "server-only";
 
-import { all, one, run, transaction } from "./db";
+import { all, db, one, run, transaction } from "./db";
 import { ROLES, type PackageStatus, type Role } from "./constants";
 import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
 import { canManagePackageArea, canManageProjectWorkflowForProject, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
@@ -8,6 +8,7 @@ import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type Project
 import { assert } from "./services";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
+import { refreshProjectTrialReadiness } from "./trial-readiness";
 import { LEGACY_VERSION_IMPORT_SQL, STANDALONE_IMPORTED_VERSION_SQL } from "./version-scope";
 
 function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
@@ -315,7 +316,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     let projectId = input.id ?? 0;
     let stage = requestedStage ?? DEFAULT_PROJECT_STAGE;
     if (projectId) {
-      const existing = one<{ sort_order: number; stage: ProjectStage }>("SELECT sort_order, stage FROM projects WHERE id = ?", projectId);
+      const existing = one<{ sort_order: number; stage: ProjectStage; status: string }>("SELECT sort_order, stage, status FROM projects WHERE id = ?", projectId);
       assert(existing, "项目不存在。", "NOT_FOUND");
       stage = requestedStage ?? existing.stage;
       const sortOrder = input.sortOrder == null ? existing.sort_order : Math.max(0, Math.floor(input.sortOrder));
@@ -334,6 +335,9 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         sortOrder,
         projectId,
       );
+      if ((existing.status === "ARCHIVED") !== (input.status === "ARCHIVED")) {
+        refreshProjectTrialReadiness(db, new Date().toISOString(), projectId);
+      }
     } else {
       const maxOrder = one<{ value: number }>("SELECT COALESCE(MAX(sort_order), 0) AS value FROM projects");
       const sortOrder = input.sortOrder == null
