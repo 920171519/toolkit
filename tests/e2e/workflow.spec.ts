@@ -550,12 +550,11 @@ test.describe("工程协同台项目维度流程", () => {
     await approveAllBindingFlows(page);
     await page.waitForTimeout(300);
 
-    // N1 节点已达标，由绑定责任人确认后仍须等待 M2。
-    await login(page, "VALID001");
-    await page.goto(otaTrialUrl);
+    // N1 的软件经理确认达标节点后，共享版本仍须等待 M2。
     for (const node of ["EVT", "DVT", "PVT"]) {
       await confirmBindingNode(page, page.locator(".binding-requirement").filter({ hasText: node }));
     }
+    await login(page, "VALID001");
     await page.goto("/trial");
     const m2Row = page.locator(".data-table tbody tr").filter({ hasText: "1001OTA" }).filter({ hasText: "极光 M2" }).filter({ hasText: "1.6.0" }).first();
     await expect(m2Row).toBeVisible();
@@ -570,7 +569,7 @@ test.describe("工程协同台项目维度流程", () => {
     await approveAllBindingFlows(page);
     await expect(page.locator(".binding-requirement summary").first()).toContainText("待确认");
     await expect(page.getByRole("heading", { name: "已满足转正条件" })).toHaveCount(0);
-    await login(page, "VALID001");
+    await login(page, "MGR002");
     await page.goto(m2TrialUrl);
     await confirmBindingNode(page, page.locator(".binding-requirement"));
     await expect(page.getByRole("heading", { name: "已满足转正条件" })).toBeVisible();
@@ -836,7 +835,7 @@ test.describe("工程协同台项目维度流程", () => {
     await review.locator('textarea[name="comment"]').fill("已核对设备条码和网页电子流。");
     await review.getByRole("button", { name: "审批通过" }).click();
     await expect(dvt.locator("summary").first()).toContainText("待确认");
-    await login(page, "VALID001");
+    await login(page, "MGR001");
     await page.goto(trialUrl.toString());
     await confirmBindingNode(page, dvt);
 

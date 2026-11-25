@@ -663,7 +663,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-13T11:00:00+08:00",
         "硬件绑定验证通过，条码与软件包版本匹配。",
       );
-      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), hanSong, requirement.id);
+      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), userIds.OWNER002, requirement.id);
     }
   }
 
@@ -684,7 +684,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-12T15:00:00+08:00",
         "条码绑定信息核对通过。",
       );
-      confirmDemoRequirement.run(iso("2026-11-12T16:00:00+08:00"), hanSong, evtRequirement.id);
+      confirmDemoRequirement.run(iso("2026-11-12T16:00:00+08:00"), userIds.OWNER003, evtRequirement.id);
     }
     if (pvtRequirement) {
       addFlow(
@@ -729,7 +729,7 @@ function seedAll(db: DatabaseSync) {
         "2026-11-13T11:00:00+08:00",
         "硬件绑定验证通过，条码与软件包版本匹配。",
       );
-      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), hanSong, requirement.id);
+      confirmDemoRequirement.run(iso("2026-11-13T12:00:00+08:00"), userIds.OWNER002, requirement.id);
     }
     db.prepare(
       "UPDATE version_transfer_requests SET status = 'PENDING_FORMAL', trial_form_no = ?, trial_released_at = ?, updated_at = ? WHERE id = ?",

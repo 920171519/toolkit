@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "@/lib/permissions";
-import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -56,13 +56,15 @@ export default async function TrialDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { request, requirements } = data;
-  if (!canAccessProjectPage(user, request.projectId)) notFound();
+  const archived = request.projectStatus === "ARCHIVED";
+  const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
+  const ownsOpenTrial = canEditFlows && request.packageOwnerId === user.id;
+  if (!ownsOpenTrial && !canAccessProjectPage(user, request.projectId)) notFound();
   const scopeProjectId = requireWorkflowProject(user, search.project, request.projectId)?.id;
   const listState = { ...getWorkflowListState(search), ...trialQueueParams(search), view: "binding" };
   const actionFields = { requestId, scopeProjectId, ...listState };
-  const archived = request.projectStatus === "ARCHIVED";
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
-  const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
+  const canConfirmNodes = canEditFlows && canConfirmBindingNodeForProject(user, request.packageOwnerId, request.projectId);
   const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
   const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
   const waived = requirements.filter((requirement) => requirement.waivedAt !== null).length;
@@ -150,13 +152,13 @@ export default async function TrialDetailPage({
                   const canWaive = open && request.status === "TRIAL" && requirement.status === "PENDING" && (manager || requirement.bindingOwnerId === user.id);
                   const readyToConfirm = open && requirement.status === "PENDING"
                     && requirement.approvedCount >= requirement.requiredCount;
-                  const canConfirm = readyToConfirm && requirement.bindingOwnerId === user.id;
+                  const canConfirm = readyToConfirm && canConfirmNodes;
                   const needsWithdrawal = (status: string) => status === "PENDING" || status === "APPROVED";
                   const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
                     && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
                   const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
                     && needsWithdrawal(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
-                  const pendingOpen = canSubmit || canWaive || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
+                  const pendingOpen = canSubmit || canWaive || canConfirm || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
                   return (
                     <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen}>
                       <summary className={styles.nodeHeading}>
@@ -177,6 +179,7 @@ export default async function TrialDetailPage({
                         {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
                         {(canSubmit || canWaive || canConfirm) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
                           {canConfirm && <ActionForm action={confirmBindingRequirementAction}
+                            className="inline-action-form"
                             hidden={{
                               ...actionFields,
                               requirementId: requirement.id,

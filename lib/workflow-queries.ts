@@ -712,6 +712,7 @@ export type TrialDetail = {
     packageId: number;
     packageName: string;
     packageCode: string;
+    packageOwnerId: number | null;
     versionId: number;
     version: string;
     status: string;
@@ -745,7 +746,7 @@ export type TrialDetail = {
 export function getTrialDetail(requestId: number): TrialDetail | null {
   const request = one<TrialDetail["request"]>(
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
-            p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.id AS versionId,
+            p.id AS packageId, p.name AS packageName, p.code AS packageCode, p.owner_id AS packageOwnerId, pv.id AS versionId,
             pv.version, r.status, pv.status AS versionStatus, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             r.integration_status AS integrationStatus, ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
             r.trial_form_no AS trialFormNo, pv.trial_review_minutes AS trialReviewMinutes,
@@ -1096,6 +1097,9 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   const bindingTasks = all<{
     requirementId: number;
     requestId: number;
+    projectId: number;
+    packageOwnerId: number | null;
+    bindingOwnerId: number | null;
     packageName: string;
     version: string;
     projectName: string;
@@ -1103,7 +1107,8 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     requiredCount: number;
     approvedCount: number;
   }>(
-    `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, pv.version,
+    `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, pv.version, pr.id AS projectId,
+            p.owner_id AS packageOwnerId, br.binding_owner_id AS bindingOwnerId,
             pr.name AS projectName, n.name AS nodeName, br.required_count AS requiredCount,
             (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
              WHERE f.requirement_id = br.id AND f.status = 'APPROVED') AS approvedCount
@@ -1113,14 +1118,17 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
-     WHERE br.binding_owner_id = ? AND pr.status != 'ARCHIVED' AND r.status = 'TRIAL' AND br.status = 'PENDING'
-       AND pv.status = 'TRIAL'
-       AND br.pushed_at IS NOT NULL
+     WHERE pr.status != 'ARCHIVED' AND r.status = 'TRIAL' AND pv.status = 'TRIAL'
+       AND br.status = 'PENDING' AND br.pushed_at IS NOT NULL
+       AND (br.binding_owner_id = ? OR p.owner_id = ? OR ? = 1 OR br.project_id IN (SELECT value FROM json_each(?)))
      ORDER BY pr.sort_order, n.sort_order`,
-    user.id,
+    user.id, user.id, user.role === "ADMIN" ? 1 : 0, JSON.stringify(managedProjectIds),
   );
   for (const task of bindingTasks) {
-    const action = task.approvedCount >= task.requiredCount ? "确认节点通过" : "提交绑定电子流";
+    const ready = task.approvedCount >= task.requiredCount;
+    const canConfirm = task.packageOwnerId === user.id || managerScope === null || managedProjectIds.includes(task.projectId);
+    if (ready ? !canConfirm : task.bindingOwnerId !== user.id) continue;
+    const action = ready ? "确认节点通过" : "提交绑定电子流";
     tasks.push({
       key: `binding-${task.requirementId}`,
       title: `${action}：${task.packageName} ${task.version}`,

@@ -149,6 +149,14 @@ export function canManageProjectWorkflowForProject(user: SessionUser | null, pro
   return isProjectSoftwareManager(user.id, projectId);
 }
 
+export function canConfirmBindingNodeForProject(
+  user: SessionUser,
+  packageOwnerId: number | null,
+  projectId: number,
+): boolean {
+  return user.id === packageOwnerId || canManageProjectWorkflowForProject(user, projectId);
+}
+
 export function getManagedProjectIdsForUser(userId: number): number[] {
   return all<{ projectId: number }>(
     "SELECT project_id AS projectId FROM project_software_managers WHERE user_id = ? ORDER BY project_id",

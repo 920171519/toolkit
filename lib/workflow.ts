@@ -7,7 +7,7 @@ import {
   canSubmitBindingFlow,
   isBindingOpen,
 } from "./permissions";
-import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getTransferAreaIds } from "./access";
+import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getTransferAreaIds } from "./access";
 import { assert } from "./services";
 import { getPendingBindingFlowCount, getTrialReadyVersions } from "./workflow-queries";
 import { getRiskTrialEntries } from "./trial-risk-entry";
@@ -1087,20 +1087,21 @@ export function confirmBindingRequirement(actor: SessionUser, requirementId: num
       request_status: string;
       version_id: number;
       version_status: string;
+      project_id: number;
       project_name: string;
       project_status: string;
       node_name: string;
       package_name: string;
       version: string;
-      binding_owner_id: number | null;
+      package_owner_id: number | null;
       required_count: number;
       status: string;
       pushed_at: string | null;
       waived_at: string | null;
     }>(
       `SELECT br.request_id, r.status AS request_status, pv.id AS version_id, pv.status AS version_status,
-              pr.name AS project_name, pr.status AS project_status, n.name AS node_name, p.name AS package_name, pv.version,
-              br.binding_owner_id, br.required_count, br.status, br.pushed_at, br.waived_at
+              pr.id AS project_id, pr.name AS project_name, pr.status AS project_status, n.name AS node_name,
+              p.name AS package_name, p.owner_id AS package_owner_id, pv.version, br.required_count, br.status, br.pushed_at, br.waived_at
        FROM binding_requirements br
        JOIN version_transfer_requests r ON r.id = br.request_id
        JOIN package_versions pv ON pv.id = br.package_version_id
@@ -1111,7 +1112,11 @@ export function confirmBindingRequirement(actor: SessionUser, requirementId: num
       requirementId,
     );
     assert(requirement, "绑定任务不存在。", "NOT_FOUND");
-    assert(requirement.binding_owner_id === actor.id, "只有该节点的绑定验证责任人可以确认节点通过。", "FORBIDDEN");
+    assert(
+      canConfirmBindingNodeForProject(actor, requirement.package_owner_id, requirement.project_id),
+      "只有软件包责任人、本项目软件经理或系统管理员可以确认节点通过。",
+      "FORBIDDEN",
+    );
     assert(requirement.project_status !== "ARCHIVED", "项目已归档，不能确认节点通过。");
     assert(isBindingOpen(requirement.request_status) && isBindingOpen(requirement.version_status), "该版本已结束绑定验证，不能确认节点通过。");
     assert(requirement.status === "PENDING" && requirement.pushed_at && !requirement.waived_at, "该节点未推送、已关闭、已免绑或已确认。");

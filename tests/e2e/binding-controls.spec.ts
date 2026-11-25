@@ -75,7 +75,7 @@ async function withdrawFlow(page: Page, barcode: string) {
   await expect(flowRow(page, barcode)).toContainText(reason);
 }
 
-test("审批达到数量后仍由绑定责任人确认节点，通过记录可追溯", async ({ page }) => {
+test("只有软件包责任人、本项目软件经理和管理员可确认节点，通过记录可追溯", async ({ page }) => {
   await login(page, "VALID001");
   const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
@@ -84,6 +84,8 @@ test("审批达到数量后仍由绑定责任人确认节点，通过记录可�
   const trial = `/trial/${requestId}?project=1`;
   const node = page.locator(".binding-requirement");
   const confirmation = node.getByRole("button", { name: "确认节点通过", exact: true, includeHidden: true });
+  const submit = node.getByRole("button", { name: "新增绑定电子流", exact: true });
+  const confirmTask = page.getByRole("link", { name: /确认节点通过/ }).filter({ hasText: version });
   const statuses = () => db.prepare(
     `SELECT br.status AS nodeStatus, r.status AS requestStatus, br.confirmed_at AS confirmedAt, u.employee_id AS confirmedBy
        FROM binding_requirements br JOIN version_transfer_requests r ON r.id = br.request_id
@@ -100,7 +102,13 @@ test("审批达到数量后仍由绑定责任人确认节点，通过记录可�
     await approveFlow(page, "NODE-CONFIRM-QA");
     await expect(node.locator("summary").first()).toContainText("1/1 条码通过");
     await expect(node.locator("summary").first()).toContainText("待确认");
-    await expect(confirmation).toHaveCount(0);
+    await expect(confirmation).toBeVisible();
+    await expect.poll(async () => {
+      const waive = node.getByRole("button", { name: "节点无需绑定", exact: true });
+      const boxes = await Promise.all([confirmation, submit, waive].map((button) => button.boundingBox()));
+      const centers = boxes.flatMap((box) => box ? [box.y + box.height / 2] : []);
+      return centers.length === 3 ? Math.max(...centers) - Math.min(...centers) : Infinity;
+    }).toBeLessThanOrEqual(1);
     expect(statuses()).toMatchObject({ nodeStatus: "PENDING", requestStatus: "TRIAL", confirmedAt: null, confirmedBy: null });
     const versionFlow = `/versions/${versionId}?project=1`;
     const evidence = page.locator("#version-binding");
@@ -113,27 +121,91 @@ test("审批达到数量后仍由绑定责任人确认节点，通过记录可�
     await expect(page.getByRole("row").filter({ hasText: version })).toHaveCount(0);
 
     await login(page, "MGR001");
+    await expect(confirmTask).toBeVisible();
     await page.goto(trial);
+    await expect(confirmation).toHaveCount(1);
+
+    await login(page, "OWNER001");
+    await expect(confirmTask).toHaveCount(0);
+    await page.goto(trial);
+    await expect(node.locator("summary").first()).toContainText("待确认");
     await expect(confirmation).toHaveCount(0);
 
+    await login(page, "MGR002");
+    await expect(confirmTask).toHaveCount(0);
+    await page.goto(trial);
+    await expect(page.getByRole("heading", { name: "页面或记录不存在" })).toBeVisible();
+
     await login(page, "VALID001");
-    const task = page.getByRole("link", { name: /确认节点通过/ }).filter({ hasText: version });
-    await expect(task).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
-    await task.click();
+    await expect(confirmTask).toHaveCount(0);
+    await page.goto(trial);
+    await expect(submit).toBeVisible();
+    await expect(confirmation).toHaveCount(0);
+
+    await login(page, "OWNER002");
+    await expect(confirmTask).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
+    await confirmTask.click();
     await confirmBindingNode(page, node);
     await page.reload();
     await expect(node.locator("summary").first()).toContainText("绑定通过");
     await expect(confirmation).toHaveCount(0);
-    expect(statuses()).toMatchObject({ nodeStatus: "PASSED", requestStatus: "PENDING_FORMAL", confirmedAt: expect.any(String), confirmedBy: "VALID001" });
+    expect(statuses()).toMatchObject({ nodeStatus: "PASSED", requestStatus: "PENDING_FORMAL", confirmedAt: expect.any(String), confirmedBy: "OWNER002" });
 
     await login(page, "ADMIN001");
     await page.goto(versionFlow);
     await projectEvidence.click();
     await expect(evidence.getByText("节点通过", { exact: true })).toBeVisible();
-    await expect(evidence.getByText(/韩松 确认通过/)).toBeVisible();
+    await expect(evidence.getByText(/陈曦 确认通过/)).toBeVisible();
     await page.goto(`/formal?project=1&q=${version}`);
     await expect(page.getByRole("row").filter({ hasText: version }).getByRole("link", { name: "核对并转正" })).toBeVisible();
   } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
+test("兼任外项目经理的软件包责任人可确认本包节点，其他项目资料仍受限", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const version = "2.0.0-cross-project-owner-e2e";
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, version, ["N1"]);
+  const pkg = db.prepare(`SELECT p.id, p.owner_id AS ownerId
+    FROM packages p JOIN package_versions v ON v.package_id = p.id
+    WHERE v.id = ?`).get(versionId) as { id: number; ownerId: number };
+  const unrelated = db.prepare(`SELECT r.id FROM version_transfer_requests r
+    JOIN package_versions v ON v.id = r.package_version_id
+    JOIN packages p ON p.id = v.package_id
+    JOIN projects pr ON pr.id = r.project_id
+    WHERE p.name = '1006KEY' AND v.version = '1.3.0' AND pr.code = 'N1'`).get() as { id: number };
+
+  try {
+    db.prepare("UPDATE packages SET owner_id = (SELECT id FROM users WHERE employee_id = 'MGR002') WHERE id = ?").run(pkg.id);
+    const trial = `/trial/${requestId}`;
+    await page.goto(trial);
+    await submitFlow(page, "CROSS-PROJECT-OWNER-QA");
+    await login(page, "ADMIN001");
+    await page.goto(trial);
+    await approveFlow(page, "CROSS-PROJECT-OWNER-QA");
+
+    await login(page, "MGR002");
+    const task = page.getByRole("link", { name: /确认节点通过/ }).filter({ hasText: version });
+    await expect(task).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
+    await page.goto(`/trial/${unrelated.id}`);
+    await expect(page.getByRole("heading", { name: "页面或记录不存在" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /1006KEY 1\.3\.0/ })).toHaveCount(0);
+
+    await page.goto("/dashboard");
+    await task.click();
+    await expect(page).toHaveURL(url => url.pathname === trial && /^#binding-node-[0-9]+$/.test(url.hash));
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(version + " · 绑定验证");
+    await confirmBindingNode(page, page.locator(".binding-requirement"));
+    const confirmation = db.prepare(`SELECT br.status, u.employee_id AS employeeId
+      FROM binding_requirements br JOIN users u ON u.id = br.confirmed_by
+      WHERE br.request_id = ?`).get(requestId);
+    expect(confirmation).toMatchObject({ status: "PASSED", employeeId: "MGR002" });
+  } finally {
+    db.prepare("UPDATE packages SET owner_id = ? WHERE id = ?").run(pkg.ownerId, pkg.id);
     db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
     db.close();
   }
@@ -175,10 +247,11 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await page.goto(m2);
     await approveFlow(page, "CONTROL-M2-FIRST");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
-    await login(page, "VALID001");
+    await login(page, "MGR001");
     await page.goto(n1);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await login(page, "MGR002");
     await page.goto(m2);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
@@ -214,12 +287,8 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await expect(page.getByText("2/1 条码通过")).toBeVisible();
     await expect(node.locator("summary").first()).toContainText("待确认");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
-    await login(page, "VALID001");
-    await page.goto(n1);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
-
-    await login(page, "ADMIN001");
     await page.goto(n1);
     await withdrawFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("1/1 条码通过")).toBeVisible();
@@ -236,12 +305,9 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
       await expect(bindingRow).toContainText("绑定中");
     }
 
-    await login(page, "VALID001");
     await page.goto(n1);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
-    await login(page, "ADMIN001");
-    await page.goto(n1);
     await expect(page.getByRole("heading", { name: "已满足转正条件" })).toBeVisible();
     await expect(formalLink).toHaveAttribute("href", formal);
     await formalLink.click();
@@ -268,8 +334,6 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await approval.getByRole("button", { name: "审批通过" }).click();
     await expectFlash(page, "绑定电子流审批通过");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
-    await login(page, "VALID001");
-    await page.goto(n1);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
   } finally {
@@ -321,15 +385,12 @@ test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑�
     await page.goto(`/trial/${m2Request}`);
     await approveFlow(page, "ARCHIVE-QA-M2");
     expect(versionStatus()).toBe("TRIAL");
-    await login(page, "VALID001");
-    await page.goto(`/trial/${n1Request}`);
     await confirmBindingNode(page, page.locator(".binding-requirement"));
-    await page.goto(`/trial/${m2Request}`);
+    await page.goto(`/trial/${n1Request}`);
     await confirmBindingNode(page, page.locator(".binding-requirement"));
     expect(versionStatus()).toBe("PENDING_FORMAL");
     expect(activeRequests()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
 
-    await login(page, "ADMIN001");
     await setProjectStatus(page, archived.id, "ACTIVE");
     expect(versionStatus()).toBe("TRIAL");
     expect(activeRequests()).toEqual(["TRIAL", "TRIAL"]);
