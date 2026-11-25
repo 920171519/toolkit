@@ -103,6 +103,23 @@
   padding: 12px 20px;
 }
 
+.paginationControls,
+.pageNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.paginationControls {
+  gap: 8px 16px;
+}
+
+.pageNavigation {
+  white-space: nowrap;
+}
+
 .stack {
   display: grid;
   gap: 16px;
@@ -168,9 +185,17 @@
 }
 
 @media (max-width: 690px) {
-  .pagination :global(.button),
-  .pagination :global(.select) {
+  .pagination {
+    padding-inline: 12px;
+  }
+
+  .pageNavigation :global(.button) {
     min-height: 44px;
+    padding-inline: 8px;
+  }
+
+  .pageNavigation svg {
+    display: none;
   }
 
   .record {
@@ -185,6 +210,22 @@
 
   .recordActions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .paginationControls {
+    display: contents;
+  }
+
+  .pageNavigation {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 

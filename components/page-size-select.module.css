@@ -1,0 +1,19 @@
+.control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.control > :global(.select) {
+  inline-size: auto;
+  min-inline-size: 64px;
+}
+
+@media (max-width: 690px) {
+  .control > :global(.select) {
+    min-height: 44px;
+  }
+}

@@ -139,9 +139,11 @@ export function TrialQueueTable<Row>({
         </Link> : undefined} />}
       <nav className={styles.pagination} aria-label={title + "分页"}>
         <DirectoryPageSize path="/trial" params={listParams} pageSize={pageSize} pageParam={field("page")} sizeParam={field("size")} hash={hash} />
-        <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>
-        {page > 1 && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page > 2 ? page - 1 : undefined })} prefetch={false}><ArrowLeft size={13} />上一页</Link>}
-        {page < pages && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page + 1 })} prefetch={false}>下一页<ArrowRight size={13} /></Link>}
+        <div className={styles.pageNavigation}>
+          <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>
+          {page > 1 && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page > 2 ? page - 1 : undefined })} prefetch={false}><ArrowLeft size={13} aria-hidden="true" />上一页</Link>}
+          {page < pages && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page + 1 })} prefetch={false}>下一页<ArrowRight size={13} aria-hidden="true" /></Link>}
+        </div>
       </nav>
     </section>
   );

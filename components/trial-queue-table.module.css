@@ -76,12 +76,23 @@
   padding: 12px 16px;
 }
 
-@media (max-width: 640px) {
+.pageNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 690px) {
   .header {
     padding-inline: 16px;
   }
 
   .pagination {
     justify-content: flex-start;
+  }
+
+  .pageNavigation :global(.button) {
+    min-height: 44px;
   }
 }

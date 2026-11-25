@@ -83,8 +83,8 @@ dialog.workspace-dialog::backdrop { background: var(--dialog-backdrop); }
 .package-index .data-table :is(th, td):nth-child(n + 4) { width: 1%; white-space: nowrap; }
 .package-index-usage { min-width: 10rem; }
 .package-index-pagination { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: 12px 16px; font-size: 13px; }
-.package-index-pagination label, .package-index-pagination nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.package-index-pagination .select { width: auto; min-height: 32px; padding-block: 4px; }
+.package-index-pagination nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; white-space: nowrap; }
+@media (max-width: 690px) { .package-index-pagination .button { min-height: 44px; } }
 .package-index .version-stack { gap: 4px; }
 .package-scope-projects { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 0; margin: 0; list-style: none; }
 .package-scope-projects li { overflow-wrap: anywhere; white-space: normal; }

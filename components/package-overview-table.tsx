@@ -9,7 +9,8 @@ import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter
 import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { PageSizeSelect } from "@/components/page-size-select";
 import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
 import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
@@ -188,15 +189,10 @@ export function PackageOverviewTable({
             : selectedProjectId ? <Link href={urlWith({ project: null, page: null, open: null, panel: null })} prefetch={false}
               className="button button-secondary button-sm">查看全部软件包</Link> : undefined} />}
         <div className="package-index-pagination">
-          <label>
-            <span>每页行数</span>
-            <select className="select" aria-label="每页行数" value={pageSize} onChange={(event) => {
-              const size = getListPageSize(event.target.value);
-              window.history.pushState(null, "", urlWith({ page: null, pageSize: size === DEFAULT_LIST_PAGE_SIZE ? null : size }));
-            }}>
-              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+          <PageSizeSelect label="每页行数" value={pageSize} onChange={(event) => {
+            const size = getListPageSize(event.target.value);
+            window.history.pushState(null, "", urlWith({ page: null, pageSize: size === DEFAULT_LIST_PAGE_SIZE ? null : size }));
+          }} />
           <nav aria-label="软件包分页">
             {page > 1 && <Link href={urlWith({ page: page - 1 === 1 ? null : page - 1 })} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
             <span>第 {page} / {lastPage} 页</span>

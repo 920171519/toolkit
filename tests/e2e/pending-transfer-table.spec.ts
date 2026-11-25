@@ -61,6 +61,7 @@ test("待转测表头筛选保留互斥选择和暂缓项，核对完整配套�
   const search = page.getByRole("search", { name: "软件包、版本、项目或人员" });
   await search.getByRole("searchbox").fill("1003COM 2.9.70");
   await search.getByRole("button", { name: "搜索" }).click();
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "1003COM 2.9.70");
   await page.reload();
   await expect(oldChoice).toHaveCount(0);
   await expect(newChoice).not.toBeChecked();
@@ -71,6 +72,8 @@ test("待转测表头筛选保留互斥选择和暂缓项，核对完整配套�
 
   await search.getByRole("searchbox").fill("1003COM");
   await search.getByRole("button", { name: "搜索" }).click();
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "1003COM");
+  await expect(oldChoice).toBeChecked();
   await oldChoice.uncheck();
   const details = oldRequest.getByRole("link", { name: "查看 1003COM 详情" });
   await details.click();

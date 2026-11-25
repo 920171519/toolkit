@@ -48,9 +48,9 @@ export function DirectoryPagination({ path, params, page, pages, total, unit, pa
   return (
     <div className={styles.pagination}>
       <span className={styles.meta} role="status">共 {total} {unit}</span>
-      <div className="toolbar">
+      <div className={styles.paginationControls}>
         <DirectoryPageSize path={path} params={params} pageSize={pageSize} />
-        {pages > 1 && <nav aria-label={label} className="toolbar">
+        {pages > 1 && <nav aria-label={label} className={styles.pageNavigation}>
           {page > 1 && <Link href={href(page - 1)} prefetch={false} className="button button-secondary button-sm"><ChevronLeft size={14} aria-hidden="true" />上一页</Link>}
           <span className="small muted">第 {page} 页 / 共 {pages} 页</span>
           {page < pages && <Link href={href(page + 1)} prefetch={false} className="button button-secondary button-sm">下一页<ChevronRight size={14} aria-hidden="true" /></Link>}

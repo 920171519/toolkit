@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getListPageSize, LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { getListPageSize } from "@/lib/list-pagination";
+import { PageSizeSelect } from "@/components/page-size-select";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref } from "@/lib/settings-directory";
 import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
 import { getProjectOptions, type ProjectOption } from "@/lib/workflow-queries";
@@ -189,12 +190,7 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
         </div>
         <SettingsFilters action={url} search={query} placeholder="项目、编码、人员姓名或工号" hasFilters={Boolean(query)} clearHref={directoryHref(url, { ...returnParams, pageSize: String(pageSize) })}>
           {Object.entries(returnParams).filter(([, value]) => value).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
-          <div className="field">
-            <label className="label" htmlFor="area-project-page-size">每页条数</label>
-            <select className="select" id="area-project-page-size" name="pageSize" defaultValue={pageSize}>
-              {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </div>
+          <PageSizeSelect key={pageSize} name="pageSize" defaultValue={pageSize} />
         </SettingsFilters>
         {list.items.length ? <ul className="settings-record-list">
           {list.items.map((project) => {

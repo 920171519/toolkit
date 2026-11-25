@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
-import { LIST_PAGE_SIZES } from "@/lib/list-pagination";
+import { PageSizeSelect } from "@/components/page-size-select";
 import styles from "./workflow-queue.module.css";
 
 export function WorkflowListSearch({ action, label, query, pageSize, fields, children, showPageSize = true }: {
@@ -19,12 +19,8 @@ export function WorkflowListSearch({ action, label, query, pageSize, fields, chi
         : <input key={name} type="hidden" name={name} value={value} />)}
       <input className="input input-sm" key={query} type="search" name="q" defaultValue={query} maxLength={100} placeholder={label} aria-label={label} />
       {children}
-      {showPageSize ? <label className={styles.pageSize}>
-        <span>每页</span>
-        <select key={pageSize} className="input input-sm" name="pageSize" defaultValue={pageSize} aria-label="每页条数">
-          {LIST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size} 条</option>)}
-        </select>
-      </label> : <input type="hidden" name="pageSize" value={pageSize} />}
+      {showPageSize ? <PageSizeSelect key={pageSize} name="pageSize" defaultValue={pageSize} />
+        : <input type="hidden" name="pageSize" value={pageSize} />}
       <button className="button button-secondary button-sm" type="submit"><Search size={14} aria-hidden="true" />搜索</button>
     </form>
   );

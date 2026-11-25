@@ -279,29 +279,16 @@
   align-items: center;
 }
 
-.listSearch,
-.pageSize {
+.listSearch {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-.listSearch {
   margin-left: auto;
 }
 
 .listSearch > input[type="search"] {
   width: clamp(10rem, 22vw, 18rem);
-}
-
-.listSearch select {
-  width: auto;
-}
-
-.pageSize {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .pagination {
@@ -409,5 +396,13 @@
 
   .cardActions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 690px) {
+  .listSearch > :global(.input-sm),
+  .listSearch > :global(.button-sm),
+  .pagination :global(.button-sm) {
+    min-height: 44px;
   }
 }
