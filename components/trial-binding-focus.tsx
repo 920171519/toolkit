@@ -8,7 +8,7 @@ export function TrialBindingFocus({ detail = false }: { detail?: boolean }) {
   useEffect(() => {
     let frame = 0;
     const focus = (hash: string) => {
-      if (detail ? !/^#binding-(?:node-\d+|flow-\d+|nodes|decision|formal)$/.test(hash) : hash !== "#binding-queue") return;
+      if (detail ? !/^#binding-(?:node-\d+|flow-\d+|barcodes-\d+|nodes|decision|formal)$/.test(hash) : hash !== "#binding-queue") return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const target = document.getElementById(hash.slice(1));

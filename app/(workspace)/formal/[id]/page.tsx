@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
+import { BindingBarcodeList } from "@/components/binding-barcode-list";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
@@ -151,12 +152,21 @@ export default async function FormalDetailPage({ params, searchParams }: {
                               {requirement.confirmedAt ? <Badge tone="emerald">节点通过</Badge>
                                 : requirement.waivedAt ? <Badge tone="slate">节点免绑定</Badge>
                                 : requirement.status === "CANCELLED" && <Badge tone="slate">无需绑定</Badge>}
-                              <span className="small muted">通过条码 {requirement.approvedCount}/{requirement.requiredCount}</span>
+                              {requirement.legacyConfirmation
+                                ? <span className="small muted">历史节点 · 未记录逐条结果</span>
+                                : !requirement.waivedAt && <span className="small muted">通过条码 {requirement.passedBarcodeCount}/{requirement.requiredCount}{requirement.failedBarcodeCount > 0 && ` · ${requirement.failedBarcodeCount} 条 FAIL`}</span>}
                             </div>
                             {requirement.waivedAt && <p className="small muted">免绑原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
                             {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
                             {requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => (
-                              <div className="formal-flow-line" key={flow.id}><span className="mono small">{flow.flowNo}</span><span className="small">{flow.barcodes.length} 个条码：{flow.barcodes.join("、")}</span>{flow.webUrl && <ExternalLink href={flow.webUrl}>网页电子流</ExternalLink>}</div>
+                              <div className="formal-flow-line" key={flow.id}>
+                                <span className="mono small">{flow.flowNo}</span>
+                                {flow.webUrl && <ExternalLink href={flow.webUrl}>网页电子流</ExternalLink>}
+                                {flow.barcodeResults.length > 0 && <details className="barcode-details">
+                                  <summary>设备条码（{flow.barcodeResults.length}）</summary>
+                                  <BindingBarcodeList barcodes={flow.barcodeResults} />
+                                </details>}
+                              </div>
                             ))}
                           </div>
                         ))}

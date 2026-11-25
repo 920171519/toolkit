@@ -29,6 +29,7 @@ import {
   deleteDraftBatch,
   releaseFormal,
   releaseTrial,
+  saveBindingBarcodeResults,
   sendBatch,
   submitBindingFlow,
   submitTransfer,
@@ -323,17 +324,52 @@ export async function waiveBindingRequirementAction(_prev: ActionState, formData
   );
 }
 
-export async function confirmBindingRequirementAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+function bindingBarcodeFormFields(formData: FormData, prefix: string): Map<number, string> {
+  const fields = new Map<number, string>();
+  for (const [name, value] of formData) {
+    if (!name.startsWith(prefix)) continue;
+    const suffix = name.slice(prefix.length);
+    const barcodeId = Number(suffix);
+    if (!/^[1-9]\d*$/.test(suffix) || !Number.isSafeInteger(barcodeId) || fields.has(barcodeId) || typeof value !== "string") {
+      throw new DomainError("设备条码参数无效。");
+    }
+    fields.set(barcodeId, value);
+  }
+  return fields;
+}
+
+export async function saveBindingBarcodeResultsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requirementId = numberValue(formData, "requirementId");
-  if (!requirementId) return { error: "绑定任务参数无效。" };
-  let result: ReturnType<typeof confirmBindingRequirement>;
+  const flowId = numberValue(formData, "flowId");
+  if (!requirementId || !flowId) return { error: "绑定电子流参数无效。" };
+  let result: ReturnType<typeof saveBindingBarcodeResults>;
   try {
-    result = confirmBindingRequirement(user, requirementId, text(formData, "evidenceKey"));
+    result = saveBindingBarcodeResults(user, requirementId, flowId, text(formData, "evidenceKey"), bindingBarcodeFormFields(formData, "result_"));
   } catch (error) {
     return failure(error);
   }
   refreshAll();
+  workflowSuccessRedirect(formData, `/trial/${result.requestId}`, "已保存条码判定。", actionListState(formData), `binding-barcodes-${flowId}`);
+}
+
+export async function confirmBindingRequirementAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await actionUser();
+  const requirementId = numberValue(formData, "requirementId");
+  if (!requirementId) return { error: "绑定任务参数无效。" };
+  const saveReasonsOnly = text(formData, "intent") === "save-reasons";
+  let result: ReturnType<typeof confirmBindingRequirement>;
+  try {
+    result = confirmBindingRequirement(user, requirementId, text(formData, "evidenceKey"),
+      bindingBarcodeFormFields(formData, "failureReason_"), saveReasonsOnly);
+  } catch (error) {
+    return failure(error);
+  }
+  refreshAll();
+  if (saveReasonsOnly) {
+    workflowSuccessRedirect(formData, `/trial/${result.requestId}`, "已保存失败原因，节点仍待确认。",
+      actionListState(formData), `binding-node-${requirementId}`);
+  }
   workflowSuccessRedirect(
     formData,
     `/trial/${result.requestId}`,
@@ -411,7 +447,7 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
   }
   refreshAll();
   workflowSuccessRedirect(formData, `/trial/${result.requestId}`, `绑定电子流已提交：${result.flowNo}，等待 ${result.approverName} 审批。`,
-    actionListState(formData), `binding-flow-${result.flowId}`);
+    actionListState(formData), `binding-barcodes-${result.flowId}`);
 }
 
 export async function cancelBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

@@ -14,6 +14,7 @@ import { getFormalReleaseGuidance, getTrialReleaseGuidance } from "@/lib/release
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { BindingBarcodeList } from "@/components/binding-barcode-list";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
@@ -218,7 +219,9 @@ export default async function VersionTracePage({
                     {requirement.confirmedAt ? <Badge tone="emerald">节点通过</Badge>
                       : requirement.waivedAt ? <Badge tone="slate">节点免绑定</Badge>
                       : requirement.status === "CANCELLED" && <Badge tone="slate">{detail.request.status === "VOID" ? "已关闭" : "无需绑定"}</Badge>}
-                    <span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码</span>
+                    {requirement.legacyConfirmation
+                      ? <span className="small muted">历史节点 · 未记录逐条结果</span>
+                      : !requirement.waivedAt && <span className="small muted">通过条码 {requirement.passedBarcodeCount}/{requirement.requiredCount}{requirement.failedBarcodeCount > 0 && ` · ${requirement.failedBarcodeCount} 条 FAIL`}</span>}
                   </div>
                   {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
                   {requirement.waivedAt && <p className="small muted">免绑定原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
@@ -228,7 +231,10 @@ export default async function VersionTracePage({
                       <Badge tone={BINDING_FLOW_STATUS_META[flow.status as keyof typeof BINDING_FLOW_STATUS_META]?.tone ?? "slate"}>{BINDING_FLOW_STATUS_META[flow.status as keyof typeof BINDING_FLOW_STATUS_META]?.label ?? "已记录"}</Badge>
                       {flow.webUrl && <ExternalLink href={flow.webUrl} className="flow-web-link">网页电子流</ExternalLink>}
                       <span className="small muted">审批人 {flow.approverName ?? "—"}{flow.reviewComment && ` · ${flow.reviewComment}`}</span>
-                      {flow.barcodes.length > 0 && <details className="barcode-details"><summary>设备条码（{flow.barcodes.length}）</summary><div className="barcode-chip-list">{flow.barcodes.map((barcode) => <span key={barcode} className="mono barcode-chip">{barcode}</span>)}</div></details>}
+                      {flow.barcodeResults.length > 0 && <details className="barcode-details">
+                        <summary>设备条码（{flow.barcodeResults.length}）</summary>
+                        <BindingBarcodeList barcodes={flow.barcodeResults} />
+                      </details>}
                     </div>
                   ))}
                 </div>

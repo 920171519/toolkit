@@ -74,6 +74,30 @@ function migrateSchema(database: DatabaseSync) {
   if (!flowColumns.some((column) => column.name === "reviewed_by")) {
     database.exec("ALTER TABLE binding_flows ADD COLUMN reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL");
   }
+  const barcodeColumns = database
+    .prepare("PRAGMA table_info(binding_flow_barcodes)")
+    .all() as Array<{ name: string }>;
+  for (const [name, sql] of [
+    ["validation_result", "ALTER TABLE binding_flow_barcodes ADD COLUMN validation_result TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN ('UNREVIEWED','PASS','FAIL'))"],
+    ["validated_at", "ALTER TABLE binding_flow_barcodes ADD COLUMN validated_at TEXT"],
+    ["validated_by", "ALTER TABLE binding_flow_barcodes ADD COLUMN validated_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["failure_reason", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason TEXT"],
+    ["failure_reason_at", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason_at TEXT"],
+    ["failure_reason_by", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+  ]) {
+    if (!barcodeColumns.some((column) => column.name === name)) database.exec(sql);
+  }
+  const legacyBarcodeFlows = database.prepare(
+    `SELECT f.id, f.device_barcode AS barcodes, f.submitted_at AS submittedAt
+     FROM binding_flows f
+     WHERE trim(f.device_barcode) <> ''
+       AND NOT EXISTS (SELECT 1 FROM binding_flow_barcodes b WHERE b.flow_id = f.id)`,
+  ).all() as Array<{ id: number; barcodes: string; submittedAt: string }>;
+  const insertBarcode = database.prepare("INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)");
+  for (const flow of legacyBarcodeFlows) {
+    const barcodes = new Set(flow.barcodes.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean));
+    for (const barcode of barcodes) insertBarcode.run(flow.id, barcode, flow.submittedAt);
+  }
   const requestColumns = database
     .prepare("PRAGMA table_info(version_transfer_requests)")
     .all() as Array<{ name: string }>;
@@ -127,6 +151,8 @@ function migrateSchema(database: DatabaseSync) {
     ["waived_by", "ALTER TABLE binding_requirements ADD COLUMN waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
     ["confirmed_at", "ALTER TABLE binding_requirements ADD COLUMN confirmed_at TEXT"],
     ["confirmed_by", "ALTER TABLE binding_requirements ADD COLUMN confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
+    ["barcode_revision", "ALTER TABLE binding_requirements ADD COLUMN barcode_revision INTEGER NOT NULL DEFAULT 0 CHECK (barcode_revision >= 0)"],
+    ["barcode_confirmation", "ALTER TABLE binding_requirements ADD COLUMN barcode_confirmation INTEGER NOT NULL DEFAULT 0 CHECK (barcode_confirmation IN (0,1))"],
   ]) {
     if (!requirementColumns.some((column) => column.name === name)) database.exec(sql);
   }

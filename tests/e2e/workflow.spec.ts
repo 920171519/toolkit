@@ -8,6 +8,7 @@ import {
   confirmBindingNode,
   expectFlash,
   login,
+  savePassedBindingBarcodes,
   selectOptionContaining,
 } from "./helpers";
 
@@ -560,7 +561,13 @@ test.describe("工程协同台项目维度流程", () => {
     await login(page, "MGR001");
     await page.goto(otaTrialUrl);
     await approveAllBindingFlows(page);
-    await page.waitForTimeout(300);
+    for (const barcodes of [
+      ["N1-OTA-EVT-001", "N1-OTA-EVT-002"],
+      ["N1-OTA-EVT-003"],
+      ["N1-OTA-DVT-001"],
+      ["N1-OTA-PVT-001"],
+      bulkBarcodes,
+    ]) await savePassedBindingBarcodes(page, barcodes);
 
     // N1 的软件经理确认达标节点后，共享版本仍须等待 M2。
     for (const node of ["EVT", "DVT", "PVT"]) {
@@ -579,10 +586,11 @@ test.describe("工程协同台项目维度流程", () => {
     await login(page, "OWNER002");
     await page.goto(m2TrialUrl);
     await approveAllBindingFlows(page);
-    await expect(page.locator(".binding-requirement summary").first()).toContainText("待确认");
+    await expect(page.locator(".binding-requirement summary").first()).toContainText("待判定");
     await expect(page.getByRole("heading", { name: "已满足转正条件" })).toHaveCount(0);
     await login(page, "MGR002");
     await page.goto(m2TrialUrl);
+    await savePassedBindingBarcodes(page, ["M2-OTA-PVT-001"]);
     await confirmBindingNode(page, page.locator(".binding-requirement"));
     await expect(page.getByRole("heading", { name: "已满足转正条件" })).toBeVisible();
 
@@ -593,7 +601,7 @@ test.describe("工程协同台项目维度流程", () => {
     const bindingDetails = page.getByRole("region", { name: "项目验收与绑定证据" });
     await expect(bindingDetails).toContainText("极光 M2");
     const n1Evidence = bindingDetails.locator("details").filter({ hasText: "星云 N1" }).first();
-    if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator("summary").click();
+    if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator(":scope > summary").click();
     await expect(bindingDetails).toContainText("N1-OTA");
     await expect(bindingDetails.locator("a").filter({ hasText: "网页电子流" }).first()).toBeVisible();
     await page.getByRole("button", { name: "发布正式版本" }).click();
@@ -846,9 +854,10 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(review.getByText("E2E-PARALLEL-OTA-002", { exact: true })).toBeVisible();
     await review.locator('textarea[name="comment"]').fill("已核对设备条码和网页电子流。");
     await review.getByRole("button", { name: "审批通过" }).click();
-    await expect(dvt.locator("summary").first()).toContainText("待确认");
+    await expect(dvt.locator("summary").first()).toContainText("待判定");
     await login(page, "MGR001");
     await page.goto(trialUrl.toString());
+    await savePassedBindingBarcodes(page, ["E2E-PARALLEL-OTA-002"]);
     await confirmBindingNode(page, dvt);
 
     await login(page, "TEST001");

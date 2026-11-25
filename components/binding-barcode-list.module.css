@@ -1,0 +1,81 @@
+.barcodeList {
+  display: grid;
+  max-block-size: 19rem;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+
+.barcodeRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-inline-size: 0;
+  padding: 6px 8px;
+}
+
+.barcodeRow + .barcodeRow {
+  border-block-start: 1px solid var(--line);
+}
+
+.identity, .reasonGroup {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.barcodeRow .code {
+  max-inline-size: 100%;
+  white-space: normal;
+  font-size: 12px;
+}
+
+.reason, .audit {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reason {
+  white-space: pre-wrap;
+}
+
+.barcodeRow .resultSelect {
+  inline-size: 6rem;
+}
+
+.flowDetails {
+  max-inline-size: 38rem;
+}
+
+.flowEditor :global(.form-footer) {
+  padding-block-start: 6px;
+}
+
+.reasonGroup {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.reasonGroup legend {
+  padding-inline: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reasonGroup :global(.field) {
+  margin: 0;
+}
+
+@media (max-width: 690px) {
+  .barcodeRow .resultSelect, .flowEditor :global(.button) {
+    min-block-size: 44px;
+  }
+}

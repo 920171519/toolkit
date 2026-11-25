@@ -281,6 +281,12 @@ CREATE TABLE IF NOT EXISTS binding_flow_barcodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   flow_id INTEGER NOT NULL REFERENCES binding_flows(id) ON DELETE CASCADE,
   barcode TEXT NOT NULL,
+  validation_result TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN ('UNREVIEWED','PASS','FAIL')),
+  validated_at TEXT,
+  validated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  failure_reason TEXT,
+  failure_reason_at TEXT,
+  failure_reason_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL
 );
 
@@ -301,6 +307,8 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   confirmed_at TEXT,
   confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  barcode_revision INTEGER NOT NULL DEFAULT 0 CHECK (barcode_revision >= 0),
+  barcode_confirmation INTEGER NOT NULL DEFAULT 0 CHECK (barcode_confirmation IN (0,1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(package_version_id, project_id, node_id)

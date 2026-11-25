@@ -215,7 +215,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
       shownFlows += pending.length;
       for (const flow of pending) items.push({
         title: `${nodeTitle} · ${flow.flowNo} 待审批`,
-        detail: `有效条码 ${node.approvedCount}/${node.requiredCount}。指定审批人：${flow.approverName ?? "未配置"}。`,
+        detail: `通过条码 ${node.passedBarcodeCount}/${node.requiredCount}。指定审批人：${flow.approverName ?? "未配置"}。`,
         href: `${trialHref}#binding-flow-${flow.id}`,
         actionLabel: canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id ? "去审批" : "查看待审批电子流",
       });
@@ -223,14 +223,18 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
         : (node.status === "CANCELLED" && node.waivedAt !== null) || (node.status === "PASSED" && node.confirmedAt !== null);
       if (!settled) shownUnsettled += 1;
       if (settled || version.bindingMode === "PENDING") continue;
-      const ready = node.pushedAt !== null && node.approvedCount >= node.requiredCount;
-      const missing = Math.max(0, node.requiredCount - node.submittedCount);
-      if (!ready && pending.length > 0 && missing === 0) continue;
+      const ready = node.pushedAt !== null && node.passedBarcodeCount >= node.requiredCount && node.unreviewedApprovedCount === 0;
+      const missing = Math.max(0, node.requiredCount - (node.submittedCount - node.failedBarcodeCount));
+      if (!ready && pending.length > 0 && missing === 0 && node.unreviewedApprovedCount === 0 && node.failedBarcodeCount === 0) continue;
+      const reviewTitle = ready ? "待确认节点通过" : node.unreviewedApprovedCount > 0 ? "待判定设备条码"
+        : node.failedBarcodeCount > 0 ? "待核对失败条码" : null;
+      const reviewDetail = `通过条码 ${node.passedBarcodeCount}/${node.requiredCount}`
+        + (node.unreviewedApprovedCount > 0 ? `，${node.unreviewedApprovedCount} 条待判定` : "")
+        + (node.failedBarcodeCount > 0 ? `，${node.failedBarcodeCount} 条 FAIL` : "");
       items.push({
-        title: `${nodeTitle} · ${ready ? "待确认节点通过" : node.pushedAt ? "待提交或补充绑定电子流" : "绑定任务尚未推送"}`,
-        detail: ready
-          ? "由软件包责任人、该节点所属项目的软件经理或管理员确认。"
-          : !node.pushedAt ? "请先由该项目的软件经理推送节点绑定任务。"
+        title: `${nodeTitle} · ${!node.pushedAt ? "绑定任务尚未推送" : reviewTitle ?? "待提交或补充绑定电子流"}`,
+        detail: !node.pushedAt ? "请先由该项目的软件经理推送节点绑定任务。"
+          : reviewTitle ? `${reviewDetail}。请由软件包责任人、该节点所属项目的软件经理或管理员办理。`
             : `已登记 ${node.submittedCount}/${node.requiredCount} 个去重条码，还需补充 ${missing} 个。${canSubmitBindingFlow(user, node.bindingOwnerId)
               ? "可在节点提交电子流。" : `请联系绑定责任人${node.bindingOwnerName ? ` ${node.bindingOwnerName}` : ""}补充。`}`,
         href: `${trialHref}#binding-node-${node.id}`,

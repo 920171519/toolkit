@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEventHandler, type ReactNode } from "react";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { DialogSurface } from "@/components/form-dialog";
 import type { ActionState } from "@/lib/action-state";
@@ -21,6 +21,7 @@ type Props = {
   footerNote?: ReactNode;
   hideSubmit?: boolean;
   disabled?: boolean;
+  onChange?: FormEventHandler<HTMLFormElement>;
   preserveValuesOnSubmit?: boolean;
   title?: string;
   submitName?: string;
@@ -51,6 +52,7 @@ export function ActionForm({
   footerNote,
   hideSubmit = false,
   disabled = false,
+  onChange,
   preserveValuesOnSubmit = false,
   title,
   submitName,
@@ -101,6 +103,7 @@ export function ActionForm({
       action={formAction}
       className={className}
       data-testid={testId}
+      onChange={onChange}
       onReset={(event) => {
         // React resets uncontrolled inputs when an action returns, including on validation errors.
         if (!resettingAfterSuccess.current) event.preventDefault();

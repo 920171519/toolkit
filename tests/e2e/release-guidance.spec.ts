@@ -10,6 +10,8 @@ test("试制版本保留转正入口，按当前权限定位实际的节点与�
   await keyRow.getByRole("link", { name: "查看节点与审批" }).click();
   await expect(page.getByRole("heading", { name: /1006KEY 1\.3\.0.*绑定验证/ })).toBeVisible();
   const initialPath = new URL(page.url()).pathname;
+  const legacyNode = page.locator(".binding-requirement").filter({ has: page.locator("summary").filter({ hasText: "EVT" }) });
+  await expect(legacyNode).toContainText("按原规则确认");
   const formalEntry = page.getByRole("button", { name: "前往转正发布", exact: true });
   await formalEntry.click();
   const guidance = page.getByRole("dialog", { name: "转正发布条件" });

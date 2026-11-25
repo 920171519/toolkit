@@ -1,11 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { confirmBindingNode, expectFlash, login } from "./helpers";
+import { bindingBarcodeResult, confirmBindingNode, expectFlash, login, saveBindingBarcodeResults, savePassedBindingBarcodes } from "./helpers";
 
 const testVersion = "2.0.0-binding-controls-e2e";
 
-function setupBindingFixture(db: DatabaseSync, version = testVersion, projectCodes = ["N1", "M2"]) {
+function setupBindingFixture(db: DatabaseSync, version = testVersion, projectCodes = ["N1", "M2"], requiredCount = 1) {
   const versionId = Number(db.prepare(
     `INSERT INTO package_versions
        (package_id, version, change_summary, archive_url, status, binding_mode, trial_form_no,
@@ -26,13 +26,13 @@ function setupBindingFixture(db: DatabaseSync, version = testVersion, projectCod
         `INSERT INTO binding_requirements
            (request_id, package_version_id, project_id, node_id, required_count, binding_owner_id, approver_id,
             pushed_at, created_at, updated_at)
-         SELECT r.id, r.package_version_id, r.project_id, n.id, 1, owner.id, approver.id,
+         SELECT r.id, r.package_version_id, r.project_id, n.id, ?, owner.id, approver.id,
                 datetime('now'), datetime('now'), datetime('now')
          FROM version_transfer_requests r JOIN project_nodes n ON n.project_id = r.project_id
          JOIN users owner ON owner.employee_id = 'VALID001'
          JOIN users approver ON approver.employee_id = 'OWNER001'
          WHERE r.id = ? ORDER BY n.sort_order, n.id LIMIT 1`,
-      ).run(requestId);
+      ).run(requiredCount, requestId);
       return requestId;
     });
     return { versionId, requestIds };
@@ -46,23 +46,24 @@ function flowRow(page: Page, barcode: string) {
   return page.locator(".binding-flow-row").filter({ hasText: barcode });
 }
 
-async function submitFlow(page: Page, barcode: string) {
+async function submitFlow(page: Page, barcode: string | string[]) {
+  const barcodes = typeof barcode === "string" ? [barcode] : barcode;
   await page.getByRole("button", { name: "新增绑定电子流", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /提交绑定电子流/ });
-  await dialog.getByLabel("设备条码").fill(barcode);
-  await dialog.getByLabel("网页电子流地址").fill("https://example.com/binding/" + barcode);
+  await dialog.getByLabel("设备条码").fill(barcodes.join("\n"));
+  await dialog.getByLabel("网页电子流地址").fill("https://example.com/binding/" + barcodes[0]);
   await dialog.getByRole("button", { name: "提交绑定电子流", exact: true }).click();
   await expectFlash(page, "绑定电子流已提交");
-  await expect(flowRow(page, barcode)).toBeVisible();
+  await expect(flowRow(page, barcodes[0])).toBeVisible();
 }
 
-async function approveFlow(page: Page, barcode: string) {
+async function approveFlow(page: Page, barcode: string, reviewer = "张启明") {
   await flowRow(page, barcode).getByRole("button", { name: "审批电子流", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /审批 BF-/ });
   await dialog.getByLabel("审批意见").fill("已核对本次绑定的设备条码。");
   await dialog.getByRole("button", { name: "审批通过", exact: true }).click();
   await expectFlash(page, /绑定电子流已通过|绑定电子流审批通过/);
-  await expect(flowRow(page, barcode)).toContainText("实际审批人 张启明");
+  await expect(flowRow(page, barcode)).toContainText(`实际审批人 ${reviewer}`);
 }
 
 async function withdrawFlow(page: Page, barcode: string) {
@@ -100,8 +101,8 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
     await login(page, "ADMIN001");
     await page.goto(trial);
     await approveFlow(page, "NODE-CONFIRM-QA");
-    await expect(node.locator("summary").first()).toContainText("1/1 条码通过");
-    await expect(node.locator("summary").first()).toContainText("待确认");
+    await expect(node.locator("summary").first()).toContainText("0/1 条码通过");
+    await expect(node.locator("summary").first()).toContainText("待判定");
     await expect(confirmation).toBeVisible();
     await expect.poll(async () => {
       const waive = node.getByRole("button", { name: "节点无需绑定", exact: true });
@@ -115,12 +116,19 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
     const projectEvidence = evidence.locator("summary").filter({ hasText: "星云 N1" });
     await page.goto(versionFlow);
     await projectEvidence.click();
-    await expect(evidence.getByText("1/1 条码", { exact: true })).toBeVisible();
+    await expect(evidence.getByText(/0\/1.*条码|通过条码.*0\/1/)).toBeVisible();
     await expect(evidence.getByText("节点通过", { exact: true })).toHaveCount(0);
     await page.goto(`/formal?project=1&q=${version}`);
     await expect(page.getByRole("row").filter({ hasText: version })).toHaveCount(0);
 
     await login(page, "MGR001");
+    const validationTask = page.getByRole("link", { name: /判定设备条码/ }).filter({ hasText: version });
+    await expect(confirmTask).toHaveCount(0);
+    await expect(validationTask).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
+    await validationTask.click();
+    await savePassedBindingBarcodes(page, ["NODE-CONFIRM-QA"]);
+    await expect(node.locator("summary").first()).toContainText("1/1 条码通过");
+    await page.goto("/dashboard");
     await expect(confirmTask).toBeVisible();
     await page.goto(trial);
     await expect(confirmation).toHaveCount(1);
@@ -130,6 +138,7 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
     await page.goto(trial);
     await expect(node.locator("summary").first()).toContainText("待确认");
     await expect(confirmation).toHaveCount(0);
+    await expect(bindingBarcodeResult(flowRow(page, "NODE-CONFIRM-QA"), "NODE-CONFIRM-QA", true)).toHaveCount(0);
 
     await login(page, "MGR002");
     await expect(confirmTask).toHaveCount(0);
@@ -164,6 +173,109 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
   }
 });
 
+test("逐条记录混合判定，原因可先保存，补齐获批 PASS 后确认节点", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-mixed-barcodes-e2e", ["N1"], 2);
+  const trial = `/trial/${requestId}?project=1`;
+  const node = page.locator(".binding-requirement");
+  const initialPass = "MIXED-PASS-01";
+  const fails = ["MIXED-FAIL-01", "LONG-MIXED-FAIL-02-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"];
+  const unreviewed = "MIXED-UNREVIEWED";
+  const supplementalPass = "MIXED-PASS-02";
+  const reasons = ["设备启动后重复重启，未完成验证。", "设备加载配置后无法接入测试网络。"];
+  const summary = node.locator("summary").first();
+  const confirm = node.getByRole("button", { name: "确认节点通过", exact: true });
+  const reasonDialog = page.getByRole("dialog", { name: /填写条码失败原因/ });
+  const reasonFor = (barcode: string) => reasonDialog.getByRole("textbox", { name: `条码 ${barcode} 失败原因`, exact: true });
+  const savedBarcodes = () => db.prepare(
+    `SELECT b.barcode, b.validation_result AS result, b.failure_reason AS reason,
+            u.employee_id AS validatedBy, ru.employee_id AS reasonBy
+     FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
+     JOIN binding_requirements br ON br.id = f.requirement_id
+     LEFT JOIN users u ON u.id = b.validated_by
+     LEFT JOIN users ru ON ru.id = b.failure_reason_by
+     WHERE br.request_id = ? ORDER BY b.id`,
+  ).all(requestId);
+  const nodeStatus = () => db.prepare(
+    `SELECT status FROM binding_requirements WHERE request_id = ?`,
+  ).get(requestId)?.status;
+
+  try {
+    await page.goto(trial);
+    await submitFlow(page, [initialPass, ...fails, unreviewed]);
+    await submitFlow(page, supplementalPass);
+    await expect(bindingBarcodeResult(flowRow(page, initialPass), initialPass, true)).toHaveCount(0);
+
+    await login(page, "MGR001");
+    await page.goto(trial);
+    await saveBindingBarcodeResults(page, flowRow(page, initialPass), {
+      [initialPass]: "PASS",
+      [fails[0]]: "FAIL",
+      [fails[1]]: "FAIL",
+    });
+    await saveBindingBarcodeResults(page, flowRow(page, supplementalPass), { [supplementalPass]: "PASS" });
+    await expect(summary).toContainText("0/2 条码通过");
+    expect(savedBarcodes().map(({ result, validatedBy }) => [result, validatedBy])).toEqual([
+      ["PASS", "MGR001"], ["FAIL", "MGR001"], ["FAIL", "MGR001"], ["UNREVIEWED", null], ["PASS", "MGR001"],
+    ]);
+
+    await login(page, "OWNER001");
+    await page.goto(trial);
+    await expect(bindingBarcodeResult(flowRow(page, initialPass), initialPass, true)).toHaveCount(0);
+    await expect(flowRow(page, initialPass).getByRole("button", { name: "审批电子流", exact: true })).toBeVisible();
+
+    await login(page, "ADMIN001");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(trial);
+    await approveFlow(page, initialPass);
+    await expect(summary).toContainText("1/2 条码通过");
+    await confirm.click();
+    await expect(reasonDialog).toBeVisible();
+    await expect(reasonDialog.getByRole("textbox")).toHaveCount(2);
+    await expect(reasonDialog.getByRole("button", { name: "保存原因并确认通过" })).toHaveCount(0);
+    for (const [index, barcode] of fails.entries()) {
+      const input = reasonFor(barcode);
+      await expect(input).toHaveAttribute("required", "");
+      await input.fill(reasons[index]);
+    }
+    await reasonDialog.getByRole("button", { name: "保存失败原因", exact: true }).click();
+    await expectFlash(page, "已保存失败原因，节点仍待确认");
+    expect(nodeStatus()).toBe("PENDING");
+    expect(savedBarcodes().filter(({ result }) => result === "FAIL").map(({ reason, reasonBy }) => [reason, reasonBy])).toEqual([
+      [reasons[0], "ADMIN001"], [reasons[1], "ADMIN001"],
+    ]);
+
+    await approveFlow(page, supplementalPass);
+    await expect(summary).toContainText("2/2 条码通过");
+    await confirm.click();
+    await expect(reasonDialog.getByRole("button", { name: "保存失败原因", exact: true })).toBeVisible();
+    await expect(reasonDialog.getByRole("button", { name: "保存原因并确认通过" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(confirm).toBeFocused();
+    await savePassedBindingBarcodes(page, [unreviewed]);
+    await expect(summary).toContainText("3/2 条码通过");
+    await confirm.click();
+    for (const [index, barcode] of fails.entries()) {
+      await expect(reasonFor(barcode)).toHaveValue(reasons[index]);
+    }
+    await reasonDialog.getByRole("button", { name: "保存原因并确认通过", exact: true }).click();
+    await expectFlash(page, "已确认节点通过");
+    expect(nodeStatus()).toBe("PASSED");
+    await expect(bindingBarcodeResult(flowRow(page, initialPass), initialPass, true)).toHaveCount(0);
+
+    await page.goto(`/formal/${versionId}?project=1`);
+    const formalEvidence = page.getByRole("region", { name: "项目验收与绑定证据" });
+    await expect(formalEvidence).toContainText(reasons[0]);
+    await page.goto(`/versions/${versionId}?project=1`);
+    await expect(page.locator("#version-binding")).toContainText(reasons[1]);
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
 test("兼任外项目经理的软件包责任人可确认本包节点，其他项目资料仍受限", async ({ page }) => {
   await login(page, "VALID001");
   const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
@@ -189,6 +301,11 @@ test("兼任外项目经理的软件包责任人可确认本包节点，其他�
     await approveFlow(page, "CROSS-PROJECT-OWNER-QA");
 
     await login(page, "MGR002");
+    const validationTask = page.getByRole("link", { name: /判定设备条码/ }).filter({ hasText: version });
+    await expect(validationTask).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
+    await validationTask.click();
+    await savePassedBindingBarcodes(page, ["CROSS-PROJECT-OWNER-QA"]);
+    await page.goto("/dashboard");
     const task = page.getByRole("link", { name: /确认节点通过/ }).filter({ hasText: version });
     await expect(task).toHaveAttribute("href", new RegExp(`^/trial/${requestId}#binding-node-[0-9]+$`));
     await page.goto(`/trial/${unrelated.id}`);
@@ -249,10 +366,12 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
     await login(page, "MGR001");
     await page.goto(n1);
+    await savePassedBindingBarcodes(page, ["CONTROL-N1-FIRST"]);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
     await login(page, "MGR002");
     await page.goto(m2);
+    await savePassedBindingBarcodes(page, ["CONTROL-M2-FIRST"]);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
 
@@ -274,7 +393,7 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await releaseCheck.getByRole("button", { name: "关闭", exact: true }).click();
     const evidence = page.getByRole("region", { name: "项目验收与绑定证据" });
     const n1Evidence = evidence.locator("details").filter({ has: page.locator("summary").filter({ hasText: "星云 N1" }) });
-    if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator("summary").click();
+    if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator(":scope > summary").click();
     const bindingRecord = n1Evidence.getByRole("link", { name: "查看绑定验证记录" });
     await expect(bindingRecord).toHaveAttribute("href", n1);
     await bindingRecord.click();
@@ -286,6 +405,9 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await releaseCheck.getByRole("button", { name: "关闭", exact: true }).click();
     await expect(page.getByRole("heading", { name: "已进入待转正" })).toBeVisible();
     await approveFlow(page, "CONTROL-N1-SECOND");
+    await expect(node.locator("summary").first()).toContainText("1/1 条码通过");
+    await expect(node.locator("summary").first()).toContainText("待判定");
+    await savePassedBindingBarcodes(page, ["CONTROL-N1-SECOND"]);
     await expect(page.getByText("2/1 条码通过")).toBeVisible();
     await expect(node.locator("summary").first()).toContainText("待确认");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
@@ -337,8 +459,71 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await approval.getByRole("button", { name: "审批通过" }).click();
     await expectFlash(page, "绑定电子流审批通过");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
+    await savePassedBindingBarcodes(page, ["CONTROL-N1-FIRST"]);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
+test("已确认节点可立即判定新提交的待审批条码，审批后保留判定并重新确认", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-append-barcode-result-e2e", ["N1"]);
+  const trial = `/trial/${requestId}?project=1`;
+  const initial = "APPEND-BASE-01";
+  const pass = "APPEND-PASS-01";
+  const fail = "APPEND-FAIL-01";
+  const initialFlow = flowRow(page, initial);
+  const supplementalFlow = flowRow(page, pass);
+  const node = page.locator(".binding-requirement");
+  const summary = node.locator("summary").first();
+  const status = () => db.prepare(
+    `SELECT br.status AS nodeStatus, br.confirmed_at AS confirmedAt, r.status AS requestStatus
+     FROM binding_requirements br JOIN version_transfer_requests r ON r.id = br.request_id
+     WHERE br.request_id = ?`,
+  ).get(requestId);
+
+  try {
+    await page.goto(trial);
+    await submitFlow(page, initial);
+    await login(page, "ADMIN001");
+    await page.goto(trial);
+    await approveFlow(page, initial);
+    await savePassedBindingBarcodes(page, [initial]);
+    await confirmBindingNode(page, node);
+    const confirmation = status();
+    expect(confirmation).toMatchObject({ nodeStatus: "PASSED", requestStatus: "PENDING_FORMAL", confirmedAt: expect.any(String) });
+
+    await submitFlow(page, [pass, fail]);
+    await expect(supplementalFlow).toContainText("待审批");
+    await expect(bindingBarcodeResult(supplementalFlow, pass)).toBeVisible();
+    await expect(bindingBarcodeResult(supplementalFlow, fail)).toHaveValue("UNREVIEWED");
+    await expect(supplementalFlow.getByRole("button", { name: "保存条码判定", exact: true })).toBeDisabled();
+    await expect(bindingBarcodeResult(initialFlow, initial, true)).toHaveCount(0);
+    await saveBindingBarcodeResults(page, supplementalFlow, { [pass]: "PASS", [fail]: "FAIL" });
+    await expect(summary).toContainText("1/1 条码通过");
+    await expect(summary).toContainText("绑定通过");
+    await expect(bindingBarcodeResult(initialFlow, initial, true)).toHaveCount(0);
+    expect(status()).toEqual(confirmation);
+
+    await login(page, "OWNER001");
+    await page.goto(trial);
+    await approveFlow(page, pass, "王磊");
+    expect(status()).toMatchObject({ nodeStatus: "PENDING", requestStatus: "TRIAL", confirmedAt: null });
+
+    await login(page, "ADMIN001");
+    await page.goto(trial);
+    await expect(summary).toContainText("2/1 条码通过");
+    await expect(bindingBarcodeResult(initialFlow, initial, true)).toHaveValue("PASS");
+    await expect(bindingBarcodeResult(supplementalFlow, pass, true)).toHaveValue("PASS");
+    await expect(bindingBarcodeResult(supplementalFlow, fail, true)).toHaveValue("FAIL");
+    await node.getByRole("button", { name: "确认节点通过", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: /填写条码失败原因/ });
+    await expect(dialog.getByRole("textbox", { name: `条码 ${fail} 失败原因`, exact: true })).toBeVisible();
   } finally {
     db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
     db.close();
@@ -384,9 +569,11 @@ test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑�
     await login(page, "ADMIN001");
     await page.goto(`/trial/${n1Request}`);
     await approveFlow(page, "ARCHIVE-QA-N1");
+    await savePassedBindingBarcodes(page, ["ARCHIVE-QA-N1"]);
     expect(versionStatus()).toBe("TRIAL");
     await page.goto(`/trial/${m2Request}`);
     await approveFlow(page, "ARCHIVE-QA-M2");
+    await savePassedBindingBarcodes(page, ["ARCHIVE-QA-M2"]);
     expect(versionStatus()).toBe("TRIAL");
     await confirmBindingNode(page, page.locator(".binding-requirement"));
     await page.goto(`/trial/${n1Request}`);

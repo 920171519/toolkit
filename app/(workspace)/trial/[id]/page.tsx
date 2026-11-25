@@ -33,12 +33,15 @@ import { ActionForm } from "@/components/action-form";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { BindingFlowForm } from "@/components/binding-flow-form";
+import { BindingBarcodeEditor } from "@/components/binding-barcode-editor";
+import { BindingBarcodeList } from "@/components/binding-barcode-list";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog, type GuidanceItem } from "@/components/guidance-dialog";
 import { TrialBindingFocus } from "@/components/trial-binding-focus";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
+import barcodeStyles from "@/components/binding-barcode-list.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "绑定验证详情" };
@@ -162,8 +165,10 @@ export default async function TrialDetailPage({
                   const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const showWaive = acceptsBinding && request.status === "TRIAL" && requirement.status === "PENDING"
                     && (manager || requirement.bindingOwnerId === user.id);
+                  const requiredBarcodes = Math.max(1, requirement.requiredCount);
+                  const passShortfall = Math.max(0, requiredBarcodes - requirement.passedBarcodeCount);
                   const readyToConfirm = open && requirement.status === "PENDING"
-                    && requirement.approvedCount >= requirement.requiredCount;
+                    && passShortfall === 0 && requirement.unreviewedApprovedCount === 0;
                   const canConfirm = readyToConfirm && canConfirmNodes;
                   const showConfirm = acceptsBinding && requirement.status === "PENDING" && canConfirmNodes;
                   const pushGuidance = [{
@@ -178,34 +183,53 @@ export default async function TrialDetailPage({
                   const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
                     && needsWithdrawal(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
                   const pendingFlows = requirement.flows.filter((flow) => flow.status === "PENDING");
-                  const missing = Math.max(0, requirement.requiredCount - requirement.submittedCount);
-                  const qualificationHint = pendingFlows.length > 0
-                    ? missing > 0
-                      ? `请处理待审批电子流，并由绑定责任人补充 ${missing} 个条码。`
-                      : "已提交的条码数量达标，等待指定审批人完成审批。"
-                    : `请由绑定责任人补充 ${missing} 个条码并提交电子流。`;
+                  const unreviewedFlows = requirement.flows.filter((flow) => flow.status === "APPROVED"
+                    && flow.barcodeResults.some((barcode) => barcode.result === "UNREVIEWED"));
+                  const failedFlows = requirement.flows.filter((flow) => needsWithdrawal(flow.status)).flatMap((flow) => {
+                    const barcodes = flow.barcodeResults.filter((barcode) => barcode.result === "FAIL");
+                    return barcodes.length > 0 ? [{ flow, barcodes }] : [];
+                  });
+                  const missingReasonId = failedFlows.flatMap(({ barcodes }) => barcodes).find((barcode) => !barcode.failureReason?.trim())?.id;
+                  const missing = Math.max(0, requiredBarcodes - requirement.submittedCount + requirement.failedBarcodeCount);
+                  const qualificationHint = [
+                    missing > 0 ? `由绑定责任人补充至少 ${missing} 个条码并提交电子流。` : undefined,
+                    passShortfall > 0 && pendingFlows.length > 0 ? "由指定审批人处理待审批电子流。" : undefined,
+                    requirement.unreviewedApprovedCount > 0 ? `还有 ${requirement.unreviewedApprovedCount} 个已审批条码待判定。` : undefined,
+                  ].filter(Boolean).join("");
+                  const confirmationFields = { ...actionFields, requirementId: requirement.id, evidenceKey: requirement.barcodeEvidenceKey };
                   const confirmGuidance: GuidanceItem[] = !requirement.pushedAt ? pushGuidance : [
-                    {
-                      title: "已审批条码尚未达标",
-                      detail: `当前已审批 ${requirement.approvedCount}/${requirement.requiredCount}。${qualificationHint}`,
-                    },
-                    ...pendingFlows.map((flow) => ({
+                    ...(passShortfall > 0 ? [{
+                      title: `还需 ${passShortfall} 个通过条码`,
+                      detail: `当前 ${requirement.passedBarcodeCount}/${requirement.requiredCount}。只有电子流已审批且验证结果为 PASS 的条码计入。${qualificationHint}`,
+                    }] : []),
+                    ...unreviewedFlows.map((flow) => ({
+                      title: `${flow.flowNo} · 条码待判定`,
+                      href: `#binding-barcodes-${flow.id}`,
+                      actionLabel: "判定设备条码",
+                    })),
+                    ...(passShortfall === 0 ? [] : pendingFlows.map((flow) => ({
                       title: `${flow.flowNo} · 待审批`,
                       href: `#binding-flow-${flow.id}`,
                       actionLabel: canReview(flow) ? "去审批" : "查看待审批电子流",
-                    })),
+                    }))),
                   ];
-                  const pendingOpen = canSubmit || showWaive || showConfirm || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
+                  const pendingOpen = canSubmit || showWaive || showConfirm || (open && canConfirmNodes && pendingFlows.length > 0)
+                    || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
                   return (
                     <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen} tabIndex={-1}>
                       <summary className={styles.nodeHeading}>
-                        <span><strong>{requirement.nodeName}</strong> <span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码通过</span></span>
+                        <span><strong>{requirement.nodeName}</strong> <span className="small muted">
+                          {requirement.legacyConfirmation ? `${requirement.approvedCount}/${requirement.requiredCount} 条码已审批` : `${requirement.passedBarcodeCount}/${requirement.requiredCount} 条码通过`}
+                          {requirement.unreviewedApprovedCount > 0 && !requirement.legacyConfirmation && ` · ${requirement.unreviewedApprovedCount} 待判定`}
+                          {requirement.failedBarcodeCount > 0 && ` · ${requirement.failedBarcodeCount} FAIL`}
+                        </span></span>
                         <span>{requirement.waivedAt ? <Badge tone="slate" dot>节点免绑</Badge>
                           : requirement.confirmedAt ? <Badge tone="emerald" dot>绑定通过</Badge>
                           : requirement.status === "CANCELLED" ? <Badge tone="slate" dot>{request.status === "VOID" ? "已关闭" : "已跳过"}</Badge>
                           : readyToConfirm ? <Badge tone="amber" dot>待确认</Badge>
                           : canEditFlows && (requirement.pushedAt
-                            ? <Badge tone="amber" dot>{pendingFlows.length > 0 && missing === 0 ? "待审批" : "待绑定"}</Badge>
+                            ? <Badge tone="amber" dot>{requirement.unreviewedApprovedCount > 0 ? "待判定"
+                              : pendingFlows.length > 0 && missing === 0 ? "待审批" : "待绑定"}</Badge>
                             : <Badge tone="slate" dot>未推送</Badge>)}</span>
                         <ChevronDown size={16} aria-hidden="true" />
                       </summary>
@@ -215,20 +239,40 @@ export default async function TrialDetailPage({
                           <span className="small muted">审批范围 {requirement.approverOptions.map((approver) => approver.userName).join("、") || "未配置"}</span>
                         </div>
                         {requirement.waivedAt && <p className="small muted" style={{ marginBottom: 8 }}>免绑原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
-                        {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
+                        {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}{requirement.legacyConfirmation && " · 按原规则确认，未记录逐条结果"}</p>}
+                        {open && requirement.status === "PENDING" && requirement.unreviewedApprovedCount > 0 && !canConfirmNodes &&
+                          <p className="small muted">待软件包责任人、本项目软件经理或管理员判定条码。</p>}
                         {readyToConfirm && !canConfirmNodes && <p className="small muted">待软件包责任人、本项目软件经理或管理员确认。</p>}
-                        {open && requirement.status === "PENDING" && !readyToConfirm && pendingFlows.length > 0 &&
+                        {open && requirement.status === "PENDING" && !readyToConfirm && pendingFlows.length > 0 && qualificationHint &&
                           <p className="small muted">已提交 {requirement.submittedCount}/{requirement.requiredCount} 个条码。{qualificationHint}</p>}
                         {(showSubmit || showWaive || showConfirm) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
-                          {showConfirm && (canConfirm ? <ActionForm action={confirmBindingRequirementAction}
+                          {showConfirm && (open && failedFlows.length > 0 ? (
+                            <FormDialog label="确认节点通过" title={`${requirement.nodeName} · 填写条码失败原因`}
+                              description={canConfirm
+                                ? `${requirement.passedBarcodeCount}/${requirement.requiredCount} 个条码通过。逐条补齐失败原因后确认。`
+                                : `本次可保存失败原因。${passShortfall > 0 ? `还需 ${passShortfall} 个通过条码。` : ""}${qualificationHint}`}
+                              triggerClassName={`button ${canConfirm ? "button-primary" : "button-secondary"} button-sm`} cancelLabel="取消">
+                              <ActionForm action={confirmBindingRequirementAction} preserveValuesOnSubmit
+                                hidden={{ ...confirmationFields, intent: canConfirm ? undefined : "save-reasons" }}
+                                submitText={canConfirm ? "保存原因并确认通过" : "保存失败原因"}>
+                                {failedFlows.map(({ flow, barcodes }) => (
+                                  <fieldset className={barcodeStyles.reasonGroup} key={flow.id}>
+                                    <legend className="mono">{flow.flowNo}</legend>
+                                    {barcodes.map((barcode) => (
+                                      <label className="field" key={barcode.id}>
+                                        <span className="label"><span className="mono">{barcode.barcode}</span> 失败原因 <span className="required-mark" aria-hidden="true">*</span></span>
+                                        <textarea className="textarea" name={`failureReason_${barcode.id}`} aria-label={`条码 ${barcode.barcode} 失败原因`}
+                                          defaultValue={barcode.failureReason ?? ""} required maxLength={2000} rows={2} data-dialog-autofocus={barcode.id === missingReasonId || undefined} />
+                                      </label>
+                                    ))}
+                                  </fieldset>
+                                ))}
+                              </ActionForm>
+                            </FormDialog>
+                          ) : canConfirm ? <ActionForm action={confirmBindingRequirementAction}
                             className="inline-action-form"
-                            hidden={{
-                              ...actionFields,
-                              requirementId: requirement.id,
-                              evidenceKey: requirement.flows.filter((flow) => flow.status === "APPROVED").map((flow) => flow.id).sort((a, b) => a - b).join(","),
-                            }}
+                            hidden={confirmationFields}
                             submitText="确认节点通过" submitClassName="button-sm"
-                            confirmMessage={`确认 ${requirement.nodeName} 的 ${requirement.approvedCount} 个已审批条码均已验证通过。全部在行节点完成后，符合条件的版本会进入待转正。`}
                           /> : <GuidanceDialog label="确认节点通过" title={`${requirement.nodeName} · 节点通过条件`}
                             items={confirmGuidance} triggerClassName="button button-secondary button-sm" />)}
                           {showSubmit && (canSubmit ? <FormDialog key={requirement.flows.length} label="新增绑定电子流" title={`${requirement.nodeName} · 提交绑定电子流`} triggerClassName={`button ${canConfirm ? "button-secondary" : "button-primary"} button-sm`} cancelLabel="取消">
@@ -251,6 +295,7 @@ export default async function TrialDetailPage({
                             const meta = BINDING_FLOW_STATUS_META[flow.status as BindingFlowStatus];
                             const canApprove = canReview(flow);
                             const canCancel = canWithdraw(flow);
+                            const canMarkBarcodes = open && canConfirmNodes && (flow.status === "PENDING" || (showConfirm && flow.status === "APPROVED"));
                             return (
                               <div className={`binding-flow-row ${styles.detailAnchor}`} key={flow.id} id={`binding-flow-${flow.id}`} tabIndex={-1}>
                                 <div className="toolbar" style={{ gap: 7, flexWrap: "wrap" }}>
@@ -259,12 +304,22 @@ export default async function TrialDetailPage({
                                   <Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? flow.status}</Badge>
                                   {flow.webUrl && <ExternalLink href={flow.webUrl} className="flow-web-link">网页电子流</ExternalLink>}
                                 </div>
-                                {flow.barcodes.length > 0 && (
-                                  <details className="barcode-details">
-                                    <summary>设备条码 {flow.barcodes.length} 个</summary>
-                                    <div className="barcode-chip-list">
-                                      {flow.barcodes.map((barcode) => <span className="mono barcode-chip" key={barcode}>{barcode}</span>)}
-                                    </div>
+                                {flow.barcodeResults.length > 0 && (
+                                  <details className={`barcode-details ${barcodeStyles.flowDetails} ${styles.detailAnchor}`} id={`binding-barcodes-${flow.id}`} tabIndex={-1}>
+                                    <summary>设备条码 {flow.barcodeResults.length} 个</summary>
+                                    {canMarkBarcodes ? (
+                                      <BindingBarcodeEditor key={flow.barcodeResults.map(({ id, result }) => `${id}:${result}`).join(",")} barcodes={flow.barcodeResults}
+                                        hidden={{ ...confirmationFields, flowId: flow.id }}>
+                                        <BindingBarcodeList barcodes={flow.barcodeResults} editable />
+                                      </BindingBarcodeEditor>
+                                    ) : <>
+                                      <BindingBarcodeList barcodes={flow.barcodeResults} />
+                                      {open && needsWithdrawal(flow.status) && <p className="small muted">
+                                        {requirement.status === "PASSED" && flow.status === "APPROVED"
+                                          ? "节点已确认，已审批的条码结果已锁定。"
+                                          : "由软件包责任人、本项目软件经理或管理员判定。"}
+                                      </p>}
+                                    </>}
                                   </details>
                                 )}
                                 <div className="small muted" style={{ marginTop: 4 }}>
@@ -296,7 +351,7 @@ export default async function TrialDetailPage({
                                     {canCancel && (
                                       <FormDialog label="撤销电子流" title={`撤销 ${flow.flowNo}`}
                                         description={flow.status === "APPROVED" && canEditFlows
-                                          ? "请先在原网页撤销电子流。登记后，本次条码将移出有效数量，低于要求时版本将回到绑定验证。"
+                                          ? "请先在原网页撤销电子流。登记后，这些条码不再计入有效数量，已确认的节点需要重新确认。"
                                           : "请先在原网页撤销电子流。登记后，本条电子流将标记为已撤销。"}
                                         triggerClassName="button button-ghost button-sm" cancelLabel="取消">
                                         <ActionForm action={cancelBindingFlowAction} hidden={{ ...actionFields, flowId: flow.id }} submitText="确认撤销电子流" submitVariant="danger" submitClassName="button-sm">
