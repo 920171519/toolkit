@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { confirmAction, expectFlash, login } from "./helpers";
 
-test("设置页的角色权限和项目删除可用鼠标与键盘展开", async ({ page }) => {
+test("角色权限说明可展开，项目删除入口直接可见且支持键盘", async ({ page }) => {
   await login(page, "ADMIN001");
   await page.goto("/settings/users");
   const roles = page.locator("summary").filter({ hasText: "角色权限说明" });
@@ -20,23 +20,16 @@ test("设置页的角色权限和项目删除可用鼠标与键盘展开", async
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/settings/projects/1");
-  const deletion = page.locator("summary").filter({ hasText: "项目删除" });
   const deleteButton = page.getByRole("button", { name: "删除项目", exact: true });
-  await expect(deletion).toHaveCSS("cursor", "pointer");
-  await expect(deletion.locator('svg[aria-hidden="true"]')).toBeVisible();
-  await expect(deleteButton).toBeHidden();
-  await deletion.press("Space");
   await expect(deleteButton).toBeVisible();
   await expect(deleteButton).toBeEnabled();
   await deleteButton.press("Enter");
-  const blockers = page.getByRole("dialog", { name: "删除项目" });
+  const blockers = page.getByRole("dialog", { name: "暂时无法删除项目", exact: true });
+  await expect(blockers).toContainText("星云 N1");
   await expect(blockers.getByRole("link", { name: "前往项目资料" })).toHaveAttribute("href", "/settings/projects/1?edit=project#project-profile");
   await expect(blockers.getByRole("link", { name: "查看使用范围" }).first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(deleteButton).toBeFocused();
-  await deletion.press("Enter");
-  await expect(deleteButton).toBeHidden();
-  await expect(deletion).toBeFocused();
 });
 
 test("项目配置列出负责的项目，并保留归档配置入口", async ({ page }) => {
@@ -160,9 +153,14 @@ test("项目阶段可在新建和编辑时保存，独立于流程状态", async
   await page.goto("/settings/projects");
   await expect(row.getByRole("cell", { name: "TR5", exact: true })).toBeVisible();
   await page.goto(settingsPath);
-  await page.getByText("项目删除", { exact: true }).click();
-  await page.getByRole("button", { name: "删除项目", exact: true }).click();
-  await confirmAction(page);
+  const deleteButton = page.getByRole("button", { name: "删除项目", exact: true });
+  await deleteButton.click();
+  const confirmation = page.getByRole("alertdialog", { name: "删除项目", exact: true });
+  await expect(confirmation).toContainText("将永久删除项目“阶段验收项目”的资料、联系人配置、项目分工和测试节点。");
+  await confirmation.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(deleteButton).toBeFocused();
+  await deleteButton.click();
+  await confirmation.getByRole("button", { name: "确认删除项目", exact: true }).click();
   await expectFlash(page, "项目已删除");
 });
 

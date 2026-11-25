@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowDown, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, ArrowDown, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
@@ -128,22 +128,21 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
           </ul>
         ) : <EmptyState title="尚未配置测试节点" description="添加节点后，才能为软件包设置本项目的使用范围。" />}
       </section>
-      <details className="card settings-disclosure">
-        <summary><ChevronRight size={16} aria-hidden="true" />项目删除</summary>
-        <div className="card-body">
-          <div className="settings-inline-form">
-            {deleteReasons.length > 0 ? (
-              <GuidanceDialog label="删除项目" title="删除项目"
-                description="此项目仍关联以下记录。结束项目时可在项目资料中归档并保留历史。"
-                items={[...deleteReasons, { title: "保留项目资料和历史", href: editHref, actionLabel: "前往项目资料" }]}
-                triggerClassName="button button-outline-danger" />
-            ) : (
-              <ActionForm action={deleteProjectAction} hidden={{ ...listContext, id: project.id }} submitText="删除项目" submitVariant="outline-danger"
-                confirmMessage={`将永久删除项目“${project.name}”及其联系人、分工和测试节点。`} />
-            )}
-          </div>
-        </div>
-      </details>
+      <div className="settings-project-footer">
+        {deleteReasons.length > 0 ? (
+          <GuidanceDialog label="删除项目" title="暂时无法删除项目"
+            description={project.status === "ARCHIVED"
+              ? `项目“${project.name}”已归档，以下关联记录仍需保留。`
+              : `项目“${project.name}”仍关联以下记录。可在项目资料中归档并保留历史。`}
+            items={project.status === "ARCHIVED" ? deleteReasons
+              : [...deleteReasons, { title: "归档项目并保留历史", href: editHref, actionLabel: "前往项目资料" }]}
+            triggerClassName="button button-outline-danger" />
+        ) : (
+          <ActionForm className="inline-action-form" action={deleteProjectAction} hidden={{ ...listContext, id: project.id }}
+            submitText="删除项目" submitVariant="outline-danger"
+            confirmMessage={`将永久删除项目“${project.name}”的资料、联系人配置、项目分工和测试节点。`} />
+        )}
+      </div>
     </div>
   );
 }

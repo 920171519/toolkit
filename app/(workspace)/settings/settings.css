@@ -168,12 +168,11 @@
   padding-top: 0;
 }
 
-.settings-inline-form {
-  padding: 16px;
-  margin-top: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+.settings-project-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .settings-remove-button {
@@ -364,12 +363,9 @@
   }
 
   .settings-project-editor .form-grid :is(.input, .select),
-  .settings-project-editor .form-footer .button {
+  .settings-project-editor .form-footer .button,
+  .settings-project-footer .button {
     min-height: 44px;
-  }
-
-  .settings-inline-form {
-    padding: 12px;
   }
 
   .settings-content .settings-record {
