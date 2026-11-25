@@ -153,7 +153,7 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requireRole(roles: Role[]): Promise<SessionUser> {
   const user = await requireUser();
   if (!roles.includes(user.role)) {
-    redirect("/dashboard?flash=" + encodeURIComponent("当前角色无权访问该页面。"));
+    redirect("/dashboard?tone=error&flash=" + encodeURIComponent("当前角色无权访问该页面。请联系系统管理员核对权限。"));
   }
   return user;
 }

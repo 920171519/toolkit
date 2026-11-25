@@ -81,7 +81,9 @@ export default async function ProjectOverviewPage({
         {projectHeader}
         <section className={`card ${styles.accessNotice}`} aria-label="项目访问范围">
           <h2>项目流程需要分配权限</h2>
-          <p>请联系项目管理员开通流程权限。</p>
+          <p>{project.softwareManagers.length > 0
+            ? `可联系项目软件经理 ${project.softwareManagers.map((person) => person.name).join("、")} 或系统管理员核对流程分工。`
+            : "请联系系统管理员分配项目流程权限。"}</p>
           <Link href={returnTo ?? "/overview"} className="button button-secondary" prefetch={false}>返回项目总览</Link>
         </section>
       </div>
@@ -102,10 +104,6 @@ export default async function ProjectOverviewPage({
   const formal = currentProject ? getPendingFormalVersions([projectId]) : [];
   const lateBindings = bindings.filter((version) => version.isOverdue).length;
   const lateFormal = formal.filter((version) => version.isOverdue).length;
-  const showBindingQueue = !canPrepare || lateBindings > 0 || (ready === 0 && bindings.length > 0);
-  const bindingDetail = showBindingQueue
-    ? ready > 0 ? `${ready} 个版本待发试制` : undefined
-    : bindings.length > 0 ? `${bindings.length} 个版本绑定中` : undefined;
   const stages = [
     {
       label: "转测",
@@ -115,14 +113,8 @@ export default async function ProjectOverviewPage({
       view: pending === 0 && batches.draft > 0 ? "drafts" : undefined,
     },
     { label: "集成测试", metric: { count: batches.inTest, label: "在测" }, href: "/integration" },
-    {
-      label: "试制与绑定",
-      metric: showBindingQueue ? { count: bindings.length, label: "绑定中" } : { count: ready, label: "待发试制" },
-      detail: canPrepare ? bindingDetail : undefined,
-      href: "/trial",
-      view: showBindingQueue ? "binding" : undefined,
-      overdue: lateBindings,
-    },
+    ...(canPrepare ? [{ label: "待发布试制", metric: { count: ready, label: "个版本" }, href: "/trial" }] : []),
+    { label: "节点绑定", metric: { count: bindings.length, label: "个版本" }, href: "/trial", view: "binding", overdue: lateBindings },
     { label: "待转正", metric: { count: formal.length }, href: "/formal", overdue: lateFormal },
   ];
 
@@ -131,11 +123,11 @@ export default async function ProjectOverviewPage({
       {projectHeader}
 
       {currentProject && (
-        <section className={styles.metricGrid} aria-label="当前流程">
+        <section className={styles.metricGrid} data-show-trial-release={canPrepare || undefined} aria-label="当前流程">
           {stages.map(({ label, metric, detail, href, view, overdue }) => (
             <Link
-              key={href}
-              id={href === "/trial" ? "trials" : undefined}
+              key={label}
+              id={view === "binding" ? "trials" : undefined}
               href={scopedHref(href, { view })}
               className={styles.metricCard}
               data-urgent={Boolean(overdue) || undefined}
@@ -161,7 +153,9 @@ export default async function ProjectOverviewPage({
               <Link href={scopedHref("/integration", { view: currentProject ? undefined : "history" })} className="button button-ghost button-sm" prefetch={false}>全部批次 <ArrowRight size={13} aria-hidden="true" /></Link>
             )} />
           </div>
-          {recentBatches.length === 0 ? <div className={styles.emptyPanel}>暂无集成测试批次</div> : (
+          {recentBatches.length === 0 ? <EmptyState title="暂无集成测试批次" action={canPrepare
+            ? <Link href={scopedHref("/submissions")} className="button button-secondary button-sm" prefetch={false}>查看待安排申请</Link>
+            : undefined} /> : (
             <ul className={styles.activityList}>
               {recentBatches.map((batch) => {
                 const conclusion = batch.conclusion ? CONCLUSION_META[batch.conclusion] : undefined;
@@ -191,7 +185,9 @@ export default async function ProjectOverviewPage({
               <Link href={scopedHref("/versions")} className="button button-ghost button-sm" prefetch={false}>版本全链路 <ArrowRight size={13} aria-hidden="true" /></Link>
             )} />
           </div>
-          {projectVersions.length === 0 ? <div className={styles.emptyPanel}>暂无项目版本记录</div> : (
+          {projectVersions.length === 0 ? <EmptyState title="暂无项目版本记录" action={currentProject
+            ? <Link href={scopedHref("/submissions/transfer")} className="button button-secondary button-sm" prefetch={false}>提交转测申请</Link>
+            : undefined} /> : (
             <ul className={styles.activityList}>
               {projectVersions.map((version) => {
                 const status = projectVersionStatus(version.status);
@@ -226,7 +222,11 @@ export default async function ProjectOverviewPage({
           )} />
         </div>
         {packageRows.length === 0 ? (
-          <EmptyState title="暂无软件包" />
+          <EmptyState title="暂无关联软件包" description={currentProject ? "由责任田主管或管理员为软件包关联本项目的测试节点。" : undefined}
+            action={currentProject
+              ? <Link href={user.role === "ADMIN" ? "/settings/packages" : "/settings/areas"} className="button button-secondary button-sm" prefetch={false}>
+                {user.role === "ADMIN" ? "查看软件包配置" : "查看责任田分工"}
+              </Link> : undefined} />
         ) : (
           <div className="table-wrap" tabIndex={0} role="region" aria-label="项目软件包表，可横向滚动">
             <table className={`data-table ${styles.packageTable}`}>

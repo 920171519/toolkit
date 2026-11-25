@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { Badge } from "@/components/ui";
 import { admitRiskTrialAction } from "@/lib/actions/workflow";
 import { packageIdentity } from "@/lib/package-identity";
 import type { RiskTrialEntry, RiskTrialEntryStage } from "@/lib/trial-risk-entry";
+import { workflowHref } from "@/lib/workflow-links";
 import { WorkflowPackageName } from "./workflow-package-name";
 
 const stageLabel: Record<RiskTrialEntryStage, string> = {
@@ -22,7 +24,12 @@ export function RiskTrialEntryAction({ entry, packageName, packageCode, version,
   projectName: string;
   returnTo?: string;
 }) {
-  if (entry.registered) return <Badge tone="amber">已登记风险原因</Badge>;
+  if (entry.registered) return <>
+    <Badge tone="amber">已登记风险原因</Badge>
+    <Link className="archive-link" href={workflowHref(`/trial/ready/${entry.requestId}`, undefined, { returnTo })} prefetch={false}>
+      查看待发布试制
+    </Link>
+  </>;
   const identity = packageIdentity({ name: packageName, code: packageCode });
   return (
     <FormDialog

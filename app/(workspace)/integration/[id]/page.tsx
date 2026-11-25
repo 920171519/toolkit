@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, ClipboardCheck, FileText } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, FileText } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { batchSelectionKey, DRAFT_CREATED_MESSAGE } from "@/lib/batch-preparation";
+import { batchSelectionKey, DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getIntegrationManagedProjectIds, getManagedProjectIdsForUser } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -12,14 +12,18 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
-import { getBatchDetail, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getBatchDetail, getWorkflowProjectScope, type BatchItemRow } from "@/lib/workflow-queries";
+import { getBatchSendCheck } from "@/lib/batch-send-check";
+import { getTrialReleaseGuidance } from "@/lib/release-guidance";
+import { all } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
 import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
-import { BatchConclusionFields } from "@/components/batch-conclusion-fields";
+import { BatchConclusionFields, BatchReportField } from "@/components/batch-conclusion-fields";
 import { ClearBatchChoices } from "@/components/pending-batch-choices";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { Badge, BatchStatusPill, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
@@ -49,7 +53,6 @@ export default async function BatchDetailPage({
   const { batch, items, progressNotes } = data;
   const project = requireWorkflowProject(user, search.project, batch.projectId);
   const listState = getWorkflowListState(search);
-  const batchFormFields = { batchId: batch.id, scopeProjectId: project?.id, ...listState };
   const manager = canManageProjectWorkflowForProject(user, batch.projectId);
   const archived = batch.projectStatus === "ARCHIVED";
   const canManage = !archived && manager;
@@ -57,9 +60,12 @@ export default async function BatchDetailPage({
   const isActive = batch.status === "IN_TEST";
   const canTest = isActive && !archived && canSubmitIntegrationConclusionForProject(user, batch.projectId);
   if (isDraft && !manager) notFound();
+  const requestListState = isDraft && !archived ? draftRequestListState(search) : {};
+  const fromRequests = requestListState.fromRequests === "1";
+  const batchFormFields = { batchId: batch.id, scopeProjectId: project?.id, ...listState, ...requestListState };
   const returnPath = isDraft && !archived ? "/submissions" : "/integration";
-  const returnView = archived ? "history" : isDraft ? "drafts" : isActive ? undefined : "history";
-  const returnLabel = archived ? "返回历史批次" : isDraft ? "返回待发起批次" : isActive ? "返回在测批次" : "返回历史批次";
+  const returnView = archived ? "history" : isDraft ? fromRequests ? undefined : "drafts" : isActive ? undefined : "history";
+  const returnLabel = fromRequests ? "返回待安排申请" : returnView === "drafts" ? "返回待发起批次" : returnView === "history" ? "返回历史批次" : "返回在测批次";
   const showSecondary = (canManage && (isDraft || isActive)) || batch.status === "COMPLETED" || batch.status === "TERMINATED";
   const changedItems = items.filter((item) => item.isChanged);
   const riskStage = batch.status === "IN_TEST" ? "IN_TEST"
@@ -70,13 +76,60 @@ export default async function BatchDetailPage({
     item.transferRequestId && item.requestStatus === riskStage ? [item.transferRequestId] : [],
   ) : []);
   const showRisk = Object.keys(riskEntries).length > 0;
+  const showContinuation = !archived && (batch.status === "COMPLETED" || batch.status === "TERMINATED");
+  const trialGuidance = new Map(showContinuation
+    ? changedItems.filter(({ requestStatus }) => requestStatus === "PASSED")
+      .map(({ versionId }) => [versionId, getTrialReleaseGuidance(user, versionId, { projectId: batch.projectId, returnTo: listState.returnTo })])
+    : []);
+  const reportContacts = isActive && !archived && !canTest ? all<{ name: string }>(
+    `SELECT DISTINCT u.name FROM users u
+     WHERE u.is_active = 1 AND (
+       EXISTS (SELECT 1 FROM area_project_leads l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
+         WHERE l.project_id = ? AND l.user_id = u.id)
+       OR EXISTS (SELECT 1 FROM area_leaders l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
+         WHERE l.user_id = u.id)
+     ) ORDER BY u.name`, batch.projectId,
+  ).map(({ name }) => name) : [];
+  const draftBlockers = isDraft && canManage ? getBatchSendCheck(batch.id).blockers : [];
+  const editHref = workflowHref("/submissions/batch/new", batch.projectId, { ...listState, ...requestListState, draft: batch.id, from: project ? undefined : "all" });
 
   const historyState = readIntegrationHistory(search);
   const backToList = workflowHref(returnPath, project?.id ?? (archived ? batch.projectId : undefined), {
     ...listState,
+    request: requestListState.request,
     ...(returnView === "history" ? integrationHistoryParams(historyState) : {}),
     view: returnView,
   }) + (returnView === "history" ? "#integration-history" : "");
+
+  function nextStep(item: BatchItemRow) {
+    if (!item.isChanged) return <span className="small muted">配套基线，本轮结论不更新该版本</span>;
+    const context = { returnTo: listState.returnTo };
+    const traceHref = workflowHref(`/versions/${item.versionId}`, project?.id, context);
+    if (item.versionStatus === "VOID" || item.requestStatus === "VOID") return <Link href={traceHref} prefetch={false} className="archive-link">查看作废记录</Link>;
+    if (item.versionStatus === "FORMAL") return <Link href={traceHref} prefetch={false} className="archive-link">查看转正记录</Link>;
+    const queueProject = batch.projectId && (scope === null || scope.includes(batch.projectId)) ? batch.projectId : undefined;
+    if (item.requestStatus === "PENDING" && item.transferRequestId) {
+      return queueProject ? <Link href={workflowHref("/submissions", queueProject, { ...context, request: item.transferRequestId })}
+        prefetch={false} className="archive-link">查看待安排申请</Link> : <span className="small muted">请联系该项目的软件经理安排转测。</span>;
+    }
+    if (item.requestStatus === "IN_TEST" && item.activeBatchId) {
+      return <Link href={workflowHref(`/integration/${item.activeBatchId}`, queueProject, context)}
+        prefetch={false} className="archive-link">查看当前在测批次</Link>;
+    }
+    if (item.versionStatus === "TRIAL" || item.versionStatus === "PENDING_FORMAL") {
+      return <Link href={traceHref} prefetch={false} className="archive-link">{item.versionStatus === "TRIAL" ? "查看试制与绑定进度" : "核对转正进度"}</Link>;
+    }
+    const trial = trialGuidance.get(item.versionId);
+    if (trial?.href && !trial.items.length) return <Link href={trial.href} prefetch={false} className="archive-link">
+      {trial.canManage ? "查看发布试制" : "查看试制进度"}</Link>;
+    if (trial?.items.length) return <GuidanceDialog label="检查试制条件" title={`${item.packageName} ${item.version} · 试制条件`} description={trial.description}
+      items={trial.items} fallbackHref={traceHref} triggerClassName="button button-secondary button-sm" />;
+    if (item.requestStatus === "FAILED" || item.requestStatus === "BLOCKED") {
+      return <Link href={workflowHref("/submissions/transfer", queueProject, { ...context, package: item.packageId })}
+        prefetch={false} className="archive-link">查看新版本提交条件</Link>;
+    }
+    return <Link href={traceHref} prefetch={false} className="archive-link">查看版本进度</Link>;
+  }
 
   return (
     <>
@@ -87,15 +140,11 @@ export default async function BatchDetailPage({
         actions={<>
           <Link href={backToList} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />{returnLabel}</Link>
           {canTest && <FormDialog label={<><ClipboardCheck size={16} aria-hidden="true" />提交测试结论</>} title={`${batch.code} · 提交项目测试结论`} description={batch.projectName ?? undefined} cancelLabel="取消">
-            <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论">
+            <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论" preserveValuesOnSubmit>
               <div className={styles.formFields}>
                 <BatchConclusionFields items={items.map(({ versionId, packageName, version, parallelRiskTrial }) => ({ versionId, packageName, version, parallelRiskTrial }))} />
                 <label className="field"><span className="label">测试总结</span><textarea className="textarea" name="testSummary" required minLength={10} placeholder="验证范围、结果及问题定位" /></label>
-                <div className="field">
-                  <label className="label" htmlFor="test-report">验证报告 <span className="required-mark" aria-hidden="true">*</span></label>
-                  <input id="test-report" className={`input ${styles.testUpload}`} name="reportFile" type="file" required accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt,.zip" aria-describedby="report-constraints" />
-                  <span id="report-constraints" className="hint">PDF、图片、Word、Excel、TXT 或 ZIP，最大 15 MB</span>
-                </div>
+                <BatchReportField />
               </div>
             </ActionForm>
           </FormDialog>}
@@ -105,7 +154,9 @@ export default async function BatchDetailPage({
       <FlashMessage notice={notice} />
 
       {isActive && !archived && !canTest && <section className={styles.nextAction}>
-        <h2>等待测试结论</h2>
+        <div><h2>等待测试结论</h2><p>{reportContacts.length > 0
+          ? `可由本项目集成测试负责人或主管提交：${reportContacts.join("、")}。`
+          : "请联系管理员在集成测试责任田分配本项目负责人。管理员也可提交结论。"}</p></div>
         <a className="button button-secondary button-sm" href="#progress">查看测试进展</a>
       </section>}
 
@@ -121,7 +172,7 @@ export default async function BatchDetailPage({
             <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
               <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="配套版本快照表格" tabIndex={0}>
                 <table className="data-table">
-                  <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th>{showRisk && <th scope="col">风险试制</th>}</tr></thead>
+                  <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th>{showRisk && <th scope="col">风险试制</th>}{showContinuation && <th scope="col">下一步</th>}</tr></thead>
                   <tbody>
                     {items.map((item) => {
                       const entry = item.transferRequestId ? riskEntries[item.transferRequestId] : undefined;
@@ -139,6 +190,7 @@ export default async function BatchDetailPage({
                           {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
                         </td>
                         {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={batch.projectName ?? "未指定项目"} returnTo={listState.returnTo} />}</td>}
+                        {showContinuation && <td>{nextStep(item)}</td>}
                       </tr>;
                     })}
                   </tbody>
@@ -172,7 +224,13 @@ export default async function BatchDetailPage({
           {isDraft && canManage && (
             <section className="card" aria-label="草稿操作">
               <div className={`card-body ${styles.cardActions}`}>
-                <ActionForm action={sendBatchAction} hidden={batchFormFields} submitText="发起转测" submitClassName="button-sm" className="inline-action-form" confirmMessage={`发起 ${batch.code} 后，${batch.projectName ?? "该项目"}的测试负责人会收到待测批次。`} />
+                {draftBlockers.length > 0 ? <GuidanceDialog label="发起转测" title={`${batch.code} · 发起转测条件`} fallbackHref={editHref}
+                  items={draftBlockers.map(({ message, batchId: other }) => ({ title: message,
+                    href: other ? workflowHref(`/integration/${other}`, batch.projectId, { returnTo: listState.returnTo }) : editHref,
+                    actionLabel: other ? "查看占用批次" : "调整配套" }))}
+                  triggerClassName="button button-secondary button-sm" />
+                  : <ActionForm action={sendBatchAction} hidden={batchFormFields} submitText="发起转测" submitClassName="button-sm" className="inline-action-form" confirmMessage={`发起 ${batch.code} 后，${batch.projectName ?? "该项目"}的测试负责人会收到待测批次。`} />}
+                <Link href={editHref} prefetch={false} className="button button-secondary button-sm">调整配套</Link>
                 <FormDialog label="删除草稿" title={`删除 ${batch.code} 草稿`} description="草稿将被删除，本批次占用的版本会退回待安排申请。" triggerClassName="button button-ghost button-sm" cancelLabel="取消">
                   <ActionForm action={deleteDraftBatchAction} hidden={batchFormFields} submitText="删除草稿" submitVariant="outline-danger" submitClassName="button-sm" />
                 </FormDialog>
@@ -197,7 +255,6 @@ export default async function BatchDetailPage({
                 {batch.issueAttribution && <Badge tone={ATTRIBUTION_META[batch.issueAttribution as keyof typeof ATTRIBUTION_META]?.tone ?? "slate"}>{ATTRIBUTION_META[batch.issueAttribution as keyof typeof ATTRIBUTION_META]?.label ?? batch.issueAttribution}</Badge>}
                 <p className="change-copy" style={{ marginTop: 12 }}>{batch.testSummary}</p>
                 {batch.testReportUrl && <div style={{ marginTop: 12 }}><ExternalLink href={batch.testReportUrl}><FileText size={12} /> {batch.testReportName ?? "测试验证报告"}</ExternalLink></div>}
-                {canManage && <div style={{ marginTop: 14 }}><Link href={workflowHref("/trial", project?.id)} prefetch={false} className="button button-secondary button-sm">查看试制发布队列 <ArrowRight size={12} /></Link></div>}
               </div>
             </section>
           )}

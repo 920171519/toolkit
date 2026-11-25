@@ -4,7 +4,7 @@ import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
-import { batchSelectionKey } from "@/lib/batch-preparation";
+import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -14,14 +14,17 @@ import {
   getBatchCount,
   getBatches,
   getPendingTransferGroups,
+  getManagedProjectIds,
   getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { PendingTransferTable } from "@/components/pending-transfer-table";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import styles from "@/components/workflow-queue.module.css";
+import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "待转测申请" };
@@ -38,20 +41,25 @@ export default async function SubmissionsPage({
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
-  const groups = getPendingTransferGroups(scope);
+  const groups = getPendingTransferGroups(scope, user.role === "ADMIN" ? null : getManagedProjectIds(user));
   const canRequest = getTransferPackageOptions(user, project?.id).length > 0;
+  const transferHref = workflowHref("/submissions/transfer", project?.id, { returnTo });
   const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER");
   const showDrafts = canPrepare && params.view === "drafts";
   const query = getWorkflowSearch(params.q);
+  const focusedRequestId = showDrafts ? undefined : readTransferRequestId(params.request);
   const pageSize = getListPageSize(params.pageSize);
   const matches = workflowSearchMatcher(query);
-  const requestCount = groups.reduce((total, group) => total + group.items.length, 0);
+  const requestCount = groups.reduce((total, group) => total + group.items.filter((item) => item.draftBatchId === null).length, 0);
   const visibleGroups = showDrafts ? [] : groups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => matches(item.packageName, item.packageCode, item.version, group.projectName, group.projectCode, item.ownerName, item.submittedByName)),
+    items: group.items.filter((item) =>
+      (focusedRequestId === undefined || item.requestId === focusedRequestId)
+      && matches(item.packageName, item.packageCode, item.version, group.projectName, group.projectCode, item.ownerName, item.submittedByName),
+    ),
   })).filter((group) => group.items.length > 0);
   const riskEntries = getRiskTrialEntries(visibleGroups.flatMap((group) =>
-    !archived && canManageProjectWorkflowForProject(user, group.projectId) ? group.items.map((item) => item.requestId) : [],
+    !archived && canManageProjectWorkflowForProject(user, group.projectId) ? group.items.filter((item) => item.draftBatchId === null).map((item) => item.requestId) : [],
   ));
   const draftFilters = { statuses: ["DRAFT"] as ["DRAFT"], activeProjectsOnly: true };
   const draftsCount = canPrepare ? getBatchCount(scope, draftFilters) : 0;
@@ -72,6 +80,7 @@ export default async function SubmissionsPage({
     q: query || undefined,
     page: page.current > 1 ? page.current : undefined,
     pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    request: focusedRequestId,
     returnTo,
   };
   const requestsByProject = new Map(groups.map((group) => [group.projectId, group.items]));
@@ -83,7 +92,8 @@ export default async function SubmissionsPage({
         description={archived ? "项目已归档" : undefined}
         actions={<>
           <Link href={integrationHref} prefetch={false} className="button button-secondary">{archived ? "查看历史批次" : "查看在测批次"} <ArrowRight size={14} /></Link>
-          {canRequest && <Link href={workflowHref("/submissions/transfer", project?.id, { returnTo })} prefetch={false} className="button button-primary" data-testid="submit-transfer-trigger"><ClipboardList size={14} /> 提交转测申请</Link>}
+          {canRequest ? <Link href={transferHref} prefetch={false} className="button button-primary" data-testid="submit-transfer-trigger"><ClipboardList size={14} /> 提交转测申请</Link>
+            : <GuidanceDialog label="提交转测申请" title="转测提交条件" fallbackHref={transferHref} items={getTransferEntryGuidance(user, project?.id)} />}
         </>}
       />
       <FlashMessage notice={notice} />
@@ -127,11 +137,15 @@ export default async function SubmissionsPage({
           <h2 className={styles.tableHeading}>待安排申请</h2>
           {!canPrepare && <Badge tone="slate">{requestCount} 个</Badge>}
           <WorkflowListSearch action="/submissions" label="软件包、版本、项目或人员" query={query} pageSize={pageSize} fields={{ project: project?.id, returnTo }} />
+          {focusedRequestId !== undefined && visibleGroups.length > 0 &&
+            <Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">查看全部待安排申请</Link>}
         </div>
         <div className="card-body">
           {visibleGroups.length === 0 ? (
-            query ? <EmptyState title="没有匹配的申请" action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} />
-              : <EmptyState title="没有待转测的申请" />
+            focusedRequestId !== undefined ? <EmptyState title="此申请当前不在待安排队列"
+              action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">查看全部待安排申请</Link>} />
+              : query ? <EmptyState title="没有匹配的申请" action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} />
+              : <EmptyState title="没有待转测的申请" action={<Link href={canPrepare && draftsCount > 0 ? draftsHref : transferHref} prefetch={false} className="button button-secondary button-sm">{canPrepare && draftsCount > 0 ? "查看待发起批次" : "查看转测提交条件"}</Link>} />
           ) : (
             <div className={styles.stack}>
               {visibleGroups.map((group) => {
@@ -146,15 +160,15 @@ export default async function SubmissionsPage({
                   }
                 }
                 return <PendingTransferTable
-                  key={group.projectId}
+                  key={`${group.projectId}-${focusedRequestId ?? "all"}`}
                   group={{ ...group, items: group.items.map((item) => ({
                     ...item,
                     riskEntry: riskEntries[item.requestId],
-                    canCancel: item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
+                    canCancel: item.draftBatchId === null && item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
                   })) }}
                   scopeProjectId={project?.id}
                   pageSize={pageSize}
-                  selection={Object.keys(defaults).length > 0 ? { key: batchSelectionKey(user.id, group.projectId), defaults, versionPackages } : undefined}
+                  selection={managesGroup ? { key: batchSelectionKey(user.id, group.projectId), defaults, versionPackages } : undefined}
                   returnState={returnState}
                 />;
               })}

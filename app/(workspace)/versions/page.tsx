@@ -35,6 +35,7 @@ export default async function VersionsPage({ searchParams }: {
   const tabs = getTraceVersionTabs(requested.tabs, project?.id);
   const { rows, total, page, pageCount } = getTraceVersionPage(requested, project?.id);
   const state = { ...requested, page, tabs: tabs.map((tab) => tab.id) };
+  const filtered = Boolean(state.query || Object.keys(state.filters).length);
   const listParams = {
     ...traceListParams(state),
     project: project ? String(project.id) : undefined,
@@ -103,7 +104,17 @@ export default async function VersionsPage({ searchParams }: {
             </tbody>
           </table>
         </div>
-        {rows.length === 0 && <EmptyState title="未找到版本" />}
+        {rows.length === 0 && <EmptyState
+          title={filtered ? "没有匹配的版本" : state.packageId ? "此软件包暂无版本记录" : "当前范围暂无版本记录"}
+          action={filtered
+            ? <Link href={traceHref({ ...state, query: "", filters: {}, page: 1 }, project?.id)} prefetch={false}
+              className="button button-secondary button-sm">清除查询条件</Link>
+            : state.packageId
+              ? <Link href={traceHref({ ...state, packageId: undefined, page: 1 }, project?.id)} prefetch={false}
+                className="button button-secondary button-sm">查看其他软件包版本</Link>
+              : <Link href={workflowHref("/packages", project?.id, { returnTo: state.returnTo })} prefetch={false}
+                className="button button-secondary button-sm">查看软件版本总览</Link>}
+        />}
         <DirectoryPagination path="/versions" params={listParams} page={page} pages={pageCount} pageSize={state.pageSize} total={total} unit="条" label="版本列表分页" />
       </section>
     </>

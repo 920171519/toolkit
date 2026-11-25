@@ -102,6 +102,10 @@
   background: var(--surface);
 }
 
+.metricGrid[data-show-trial-release="true"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .metricCard {
   position: relative;
   display: grid;
@@ -330,12 +334,6 @@
   white-space: nowrap;
 }
 
-.emptyPanel {
-  padding: 8px 20px 16px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .packageTable td,
 .packageTable tbody th {
   vertical-align: top;
@@ -374,16 +372,21 @@
 }
 
 @media (max-width: 1100px) {
-  .metricGrid {
+  .metricGrid,
+  .metricGrid[data-show-trial-release="true"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .metricCard:nth-child(3) {
+  .metricCard:nth-child(odd) {
     border-inline-start: 0;
   }
 
   .metricCard:nth-child(n + 3) {
     border-top: 1px solid var(--line);
+  }
+
+  .metricGrid[data-show-trial-release="true"] .metricCard:last-child {
+    grid-column: 1 / -1;
   }
 }
 

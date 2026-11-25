@@ -120,7 +120,7 @@ test("旧链接恢复列筛选，空结果仍可清除单列并保留项目和�
   await version.fill("1.6.999");
   await expect(body.getByRole("row")).toHaveCount(2);
   await versionFilter.getByRole("button", { name: "应用", exact: true }).click();
-  await expect(page.getByText("未找到版本", { exact: true })).toBeVisible();
+  await expect(page.getByText("没有匹配的版本", { exact: true })).toBeVisible();
   await expect(table.getByRole("button", { name: "筛选版本", exact: true })).toBeFocused();
   await expect(page).toHaveURL((url) => url.searchParams.get("f_version") === "1.6.999");
 

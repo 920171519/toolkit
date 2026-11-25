@@ -1,6 +1,6 @@
 "use server";
 
-import { DRAFT_CREATED_MESSAGE } from "@/lib/batch-preparation";
+import { DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 
@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
 import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
+import { DomainError } from "@/lib/services";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
@@ -50,6 +51,7 @@ function workflowSuccessRedirect(
   path: string,
   message: string,
   params?: Record<string, string | number | undefined>,
+  anchor?: string,
 ): never {
   const returnTo = safeOverviewReturnPath(text(formData, "returnTo"));
   const search = Object.fromEntries(
@@ -59,10 +61,10 @@ function workflowSuccessRedirect(
   const integrationQuery = path.startsWith("/integration/") && (search.history === "1" || search.view === "history")
     ? integrationHistoryParams(readIntegrationHistory(search))
     : undefined;
-  return successRedirect(
-    workflowHref(path, numberValue(formData, "scopeProjectId"), { ...params, ...trialQuery, ...integrationQuery, returnTo }),
-    message,
-  );
+  const href = workflowHref(path, numberValue(formData, "scopeProjectId"), {
+    ...params, ...trialQuery, ...integrationQuery, returnTo, flash: message,
+  });
+  redirect(anchor ? `${href}#${anchor}` : href);
 }
 
 function actionListState(formData: FormData) {
@@ -111,6 +113,8 @@ export async function cancelTransferAction(_prev: ActionState, formData: FormDat
 export async function createBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const projectId = numberValue(formData, "projectId");
+  const draftBatchId = numberValue(formData, "draftBatchId") ?? undefined;
+  const expectedDraftRevision = numberValue(formData, "expectedDraftRevision") ?? undefined;
   const code = text(formData, "code");
   const title = text(formData, "title");
   if (!projectId) return { error: "请选择项目。" };
@@ -133,12 +137,13 @@ export async function createBatchAction(_prev: ActionState, formData: FormData):
   if (items.length === 0) return { error: "请为整套配套选择版本。" };
   let batchId: number;
   try {
-    batchId = createBatchDraft(user, { projectId, code, title, items });
+    batchId = createBatchDraft(user, { projectId, draftBatchId, expectedDraftRevision, code, title, items });
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/integration/${batchId}`, DRAFT_CREATED_MESSAGE);
+  workflowSuccessRedirect(formData, `/integration/${batchId}`, draftBatchId ? "转测草稿已更新。核对配套后即可发起集成测试。" : DRAFT_CREATED_MESSAGE,
+    draftBatchId ? { ...actionListState(formData), ...draftRequestListState({ fromRequests: text(formData, "fromRequests"), request: text(formData, "request") }) } : undefined);
 }
 
 export async function addBatchProgressAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -164,7 +169,8 @@ export async function deleteDraftBatchAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, "/submissions", "转测草稿已删除。", { view: "drafts", ...actionListState(formData) });
+  const requestList = draftRequestListState({ fromRequests: text(formData, "fromRequests"), request: text(formData, "request") });
+  workflowSuccessRedirect(formData, "/submissions", "转测草稿已删除。", { view: requestList.fromRequests ? undefined : "drafts", ...actionListState(formData), request: requestList.request });
 }
 
 export async function sendBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -200,10 +206,10 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
   const conclusion = text(formData, "conclusion");
   const issueAttribution = text(formData, "issueAttribution");
   if (!batchId) return { error: "批次参数无效。" };
-  if (!["PASS", "FAIL", "BLOCKED"].includes(conclusion)) return { error: "请选择测试结论。" };
+  if (!["PASS", "FAIL", "BLOCKED"].includes(conclusion)) return { error: "请补齐测试结论。", fieldErrors: { conclusion: "请选择测试结论。" } };
   const uploaded = formData.get("reportFile");
   const reportFile = uploaded instanceof File && uploaded.size > 0 ? uploaded : null;
-  if (!reportFile) return { error: "请上传验证报告。" };
+  if (!reportFile) return { error: "请补齐验证报告。", fieldErrors: { reportFile: "请上传非空的验证报告。" } };
   let voidedCount = 0;
   try {
     const result = await completeBatchTest(user, batchId, {
@@ -215,6 +221,9 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
     });
     voidedCount = result.voidedCount;
   } catch (error) {
+    if (error instanceof DomainError && error.code === "INVALID_TEST_REPORT") {
+      return { error: "验证报告无法上传。", fieldErrors: { reportFile: error.message } };
+    }
     return failure(error);
   }
   refreshAll();
@@ -255,7 +264,8 @@ export async function releaseTrialAction(_prev: ActionState, formData: FormData)
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/trial/${requestId}`, `试制版本已发布，已生成 ${taskCount} 个节点绑定任务。请先决定是否推送绑定任务。`);
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, `试制版本已发布，已生成 ${taskCount} 个节点绑定任务。请先决定是否推送绑定任务。`,
+    actionListState(formData), "binding-decision");
 }
 
 export async function pushBindingTasksAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -269,26 +279,27 @@ export async function pushBindingTasksAction(_prev: ActionState, formData: FormD
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/trial/${requestId}`, `已向全部使用项目的绑定责任人推送 ${count} 个节点绑定任务。`, actionListState(formData));
+  workflowSuccessRedirect(formData, `/trial/${requestId}`, `已向全部使用项目的绑定责任人推送 ${count} 个节点绑定任务。请由各节点责任人提交电子流。`,
+    actionListState(formData), "binding-nodes");
 }
 
 export async function skipBindingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await actionUser();
   const requestId = numberValue(formData, "requestId");
   if (!requestId) return { error: "项目版本参数无效。" };
-  let enteredFormal = false;
+  let result: ReturnType<typeof skipBindingAndEnterFormal>;
   try {
-    const result = skipBindingAndEnterFormal(user, requestId, text(formData, "reason"));
-    enteredFormal = result.enteredFormal;
+    result = skipBindingAndEnterFormal(user, requestId, text(formData, "reason"));
   } catch (error) {
     return failure(error);
   }
   refreshAll();
   workflowSuccessRedirect(
     formData,
-    enteredFormal ? "/formal" : `/trial/${requestId}`,
-    enteredFormal ? "已记录不进行绑定验证的原因，全部使用项目进入待转正。" : "已记录无需绑定。关联转测批次结束后再进入待转正。",
-    enteredFormal ? undefined : actionListState(formData),
+    result.enteredFormal ? `/formal/${result.versionId}` : `/trial/${requestId}`,
+    result.enteredFormal ? "已记录不进行绑定验证的原因，全部使用项目进入待转正。请核对本版本的发布条件。" : "已记录无需绑定。关联转测批次结束后再进入待转正。",
+    actionListState(formData),
+    result.enteredFormal ? undefined : "binding-formal",
   );
 }
 
@@ -306,8 +317,9 @@ export async function waiveBindingRequirementAction(_prev: ActionState, formData
   workflowSuccessRedirect(
     formData,
     `/trial/${result.requestId}`,
-    result.enteredFormal ? "已登记此节点无需绑定，版本已进入待转正。" : "已登记此节点无需绑定。",
+    result.enteredFormal ? "已登记此节点无需绑定，版本已进入待转正。" : "已登记此节点无需绑定。可查看转正发布条件了解剩余步骤。",
     actionListState(formData),
+    result.enteredFormal ? "binding-formal" : `binding-node-${requirementId}`,
   );
 }
 
@@ -325,8 +337,9 @@ export async function confirmBindingRequirementAction(_prev: ActionState, formDa
   workflowSuccessRedirect(
     formData,
     `/trial/${result.requestId}`,
-    result.enteredFormal ? "已确认节点通过，版本已进入待转正。" : "已确认节点通过。",
+    result.enteredFormal ? "已确认节点通过，版本已进入待转正。" : "已确认节点通过。可在转正发布条件中查看剩余步骤。",
     actionListState(formData),
+    "binding-formal",
   );
 }
 
@@ -390,14 +403,15 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
     return { error: "请至少添加一个有效设备条码。" };
   }
   const webUrl = text(formData, "webUrl");
-  let requestId: number;
+  let result: ReturnType<typeof submitBindingFlow>;
   try {
-    ({ requestId } = submitBindingFlow(user, requirementId, barcodes, approverId, webUrl));
+    result = submitBindingFlow(user, requirementId, barcodes, approverId, webUrl);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  workflowSuccessRedirect(formData, `/trial/${requestId}`, "绑定电子流已提交，等待本项目节点审批人审批。", actionListState(formData));
+  workflowSuccessRedirect(formData, `/trial/${result.requestId}`, `绑定电子流已提交：${result.flowNo}，等待 ${result.approverName} 审批。`,
+    actionListState(formData), `binding-flow-${result.flowId}`);
 }
 
 export async function cancelBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -413,7 +427,7 @@ export async function cancelBindingFlowAction(_prev: ActionState, formData: Form
   refreshAll();
   workflowSuccessRedirect(formData, `/trial/${result.requestId}`,
     result.returnedToBinding ? "绑定电子流已撤销，节点需重新确认，版本已回到绑定验证。" : "绑定电子流已撤销。",
-    actionListState(formData));
+    actionListState(formData), `binding-node-${result.requirementId}`);
 }
 
 export async function decideBindingFlowAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -432,8 +446,9 @@ export async function decideBindingFlowAction(_prev: ActionState, formData: Form
   workflowSuccessRedirect(
     formData,
     `/trial/${result.requestId}`,
-    decision === "APPROVED" ? "绑定电子流审批通过。" : "绑定电子流已驳回，提交人将收到通知。",
+    decision === "APPROVED" ? "绑定电子流审批通过。请按当前节点的条码进度继续。" : "绑定电子流已驳回，提交人将收到通知。",
     actionListState(formData),
+    decision === "APPROVED" ? `binding-node-${result.requirementId}` : `binding-flow-${flowId}`,
   );
 }
 

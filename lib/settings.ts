@@ -552,40 +552,85 @@ export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userI
   return node.project_id;
 }
 
+export function getNodeApproverRemovalBlocker(userId: number, primaryApproverId: number | null, approverCount: number) {
+  if (userId === primaryApproverId) {
+    return { message: "主审批人不能从审批人范围移除，请先修改节点审批人。", target: "primary" } as const;
+  }
+  if (approverCount <= 1) {
+    return { message: "节点至少需要保留一个审批人。", target: "range" } as const;
+  }
+  return null;
+}
+
 export function removeProjectNodeApprover(actor: SessionUser, assignmentId: number) {
   assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护节点审批人范围。", "FORBIDDEN");
-  const assignment = one<{
-    id: number;
-    node_id: number;
-    user_id: number;
-    node_name: string;
-    project_id: number;
-    project_name: string;
-    user_name: string;
-    primary_approver_id: number | null;
-  }>(
-    `SELECT pna.id, pna.node_id, pna.user_id, n.name AS node_name, n.project_id,
-            p.name AS project_name, u.name AS user_name, n.binding_approver_id AS primary_approver_id
-     FROM project_node_approvers pna
-     JOIN project_nodes n ON n.id = pna.node_id
-     JOIN projects p ON p.id = n.project_id
-     JOIN users u ON u.id = pna.user_id
-     WHERE pna.id = ?`,
-    assignmentId,
-  );
-  assert(assignment, "节点审批人配置不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, assignment.project_id);
-  assert(assignment.user_id !== assignment.primary_approver_id, "主审批人不能从审批人范围移除，请先修改节点审批人。");
-  const count = one<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM project_node_approvers WHERE node_id = ?",
-    assignment.node_id,
-  );
-  assert(Number(count?.count ?? 0) > 1, "节点至少需要保留一个审批人。");
-  transaction(() => {
+  return transaction(() => {
+    const assignment = one<{
+      node_id: number;
+      user_id: number;
+      node_name: string;
+      project_id: number;
+      project_name: string;
+      user_name: string;
+      primary_approver_id: number | null;
+      approver_count: number;
+    }>(
+      `SELECT pna.node_id, pna.user_id, n.name AS node_name, n.project_id,
+              p.name AS project_name, u.name AS user_name, n.binding_approver_id AS primary_approver_id,
+              (SELECT COUNT(*) FROM project_node_approvers a WHERE a.node_id = pna.node_id) AS approver_count
+       FROM project_node_approvers pna
+       JOIN project_nodes n ON n.id = pna.node_id
+       JOIN projects p ON p.id = n.project_id
+       JOIN users u ON u.id = pna.user_id
+       WHERE pna.id = ?`,
+      assignmentId,
+    );
+    assert(assignment, "节点审批人配置不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, assignment.project_id);
+    const blocker = getNodeApproverRemovalBlocker(assignment.user_id, assignment.primary_approver_id, assignment.approver_count);
+    assert(!blocker, blocker?.message ?? "");
     run("DELETE FROM project_node_approvers WHERE id = ?", assignmentId);
     audit(actor.id, "REMOVE_NODE_APPROVER", "PROJECT", assignment.project_id, `${assignment.project_name}/${assignment.node_name} 移除绑定电子流审批人 ${assignment.user_name}`);
+    return { projectId: assignment.project_id, nodeId: assignment.node_id };
   });
-  return { projectId: assignment.project_id, nodeId: assignment.node_id };
+}
+
+export function getSettingsPackageReferences(scope: { projectId: number } | { nodeId: number } | { enabledOwnerId: number }) {
+  type Reference = { id: number; name: string; code: string; areaId: number | null; areaName: string | null };
+  const packages = `SELECT DISTINCT p.id, p.name, p.code, p.area_id AS areaId, a.name AS areaName
+    FROM packages p LEFT JOIN areas a ON a.id = p.area_id`;
+  if ("enabledOwnerId" in scope) {
+    return all<Reference>(`${packages} WHERE p.owner_id = ? AND p.is_active = 1 ORDER BY p.code, p.id`, scope.enabledOwnerId);
+  }
+  const [column, id] = "projectId" in scope ? ["project_id", scope.projectId] : ["node_id", scope.nodeId];
+  return all<Reference>(`${packages} JOIN package_usages u ON u.package_id = p.id WHERE u.${column} = ? ORDER BY p.code, p.id`, id);
+}
+
+function countBindingHistory(column: "project_id" | "node_id", id: number) {
+  return one<{ count: number }>(
+    `SELECT (SELECT COUNT(*) FROM binding_requirements WHERE ${column} = ?)
+            + (SELECT COUNT(*) FROM binding_tasks WHERE ${column} = ?)
+            + (SELECT COUNT(*) FROM binding_flows WHERE ${column} = ?) AS count`,
+    id, id, id,
+  )?.count ?? 0;
+}
+
+export function getNodeDeletionBlockers(nodeId: number) {
+  return {
+    packages: getSettingsPackageReferences({ nodeId }),
+    hasBindingHistory: countBindingHistory("node_id", nodeId) > 0,
+  };
+}
+
+export function getProjectDeletionBlockers(projectId: number) {
+  return {
+    packages: getSettingsPackageReferences({ projectId }),
+    batches: all<{ id: number; code: string }>(
+      "SELECT id, code FROM integration_batches WHERE project_id = ? ORDER BY id DESC",
+      projectId,
+    ),
+    hasBindingHistory: countBindingHistory("project_id", projectId) > 0,
+  };
 }
 
 export function deleteProjectNode(actor: SessionUser, nodeId: number) {
@@ -597,20 +642,10 @@ export function deleteProjectNode(actor: SessionUser, nodeId: number) {
   );
   assert(node, "项目节点不存在。", "NOT_FOUND");
   assertProjectConfigurationAccess(actor, node.project_id);
-  const usageCount = one<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM package_usages WHERE node_id = ?",
-    nodeId,
-  );
-  assert(
-    Number(usageCount?.count ?? 0) === 0,
-    "该节点已被软件包使用，请先调整软件包使用范围后再删除节点。",
-  );
-  const bindingCount = one<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM binding_requirements WHERE node_id = ?",
-    nodeId,
-  );
-  assert(Number(bindingCount?.count ?? 0) === 0, "该节点存在绑定验证历史，不能删除。");
   transaction(() => {
+    const blockers = getNodeDeletionBlockers(nodeId);
+    assert(blockers.packages.length === 0, "该节点已被软件包使用，请先调整软件包使用范围后再删除节点。");
+    assert(!blockers.hasBindingHistory, "该节点存在绑定验证历史，不能删除。");
     run("DELETE FROM project_nodes WHERE id = ?", nodeId);
     audit(actor.id, "DELETE_PROJECT_NODE", "PROJECT", node.project_id, `删除 ${node.project_name} 的节点 ${node.name}`);
   });
@@ -622,12 +657,10 @@ export function deleteProject(actor: SessionUser, projectId: number) {
   const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
   assert(project, "项目不存在。", "NOT_FOUND");
   assertProjectConfigurationAccess(actor, projectId);
-  const usageCount = one<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM package_usages WHERE project_id = ?",
-    projectId,
-  );
-  assert(Number(usageCount?.count ?? 0) === 0, "项目仍关联软件包使用范围，不能删除。请先将项目归档。");
   transaction(() => {
+    const blockers = getProjectDeletionBlockers(projectId);
+    assert(blockers.packages.length === 0, "项目仍关联软件包使用范围，不能删除。请先将项目归档。");
+    assert(blockers.batches.length === 0 && !blockers.hasBindingHistory, "项目存在测试批次或绑定历史，请使用归档保留记录。");
     run("DELETE FROM projects WHERE id = ?", projectId);
     audit(actor.id, "DELETE_PROJECT", "PROJECT", projectId, `删除项目：${project.name}`);
   });
@@ -643,6 +676,17 @@ export type SavePackageInput = {
   isActive: boolean;
   trialOverdueDays: number;
 };
+
+type PackageBlockingVersion = { id: number; version: string; status: PackageStatus; isStandaloneImport: number };
+
+export function getPackageDeactivationBlockingVersions(packageId: number) {
+  return all<PackageBlockingVersion>(
+    `SELECT pv.id, pv.version, pv.status, (${STANDALONE_IMPORTED_VERSION_SQL}) AS isStandaloneImport
+     FROM package_versions pv WHERE pv.package_id = ? AND pv.status != 'FORMAL'
+     ORDER BY pv.submitted_at DESC, pv.id DESC`,
+    packageId,
+  );
+}
 
 export function savePackage(actor: SessionUser, input: SavePackageInput): number {
   const existingPackage = input.id
@@ -686,14 +730,13 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
     const area = one<{ id: number }>("SELECT id FROM areas WHERE id = ?", input.areaId);
     assert(area, "责任田不存在。");
   }
-  if (input.id && !input.isActive) {
-    const activeVersion = one<{ version: string }>(
-      "SELECT version FROM package_versions WHERE package_id = ? AND status != 'FORMAL' LIMIT 1",
-      input.id,
-    );
-    assert(!activeVersion, "该软件包仍有在途版本，不能停用。");
-  }
   return transaction(() => {
+    if (input.id && !input.isActive) {
+      const current = one<{ active: number }>("SELECT is_active AS active FROM packages WHERE id = ?", input.id);
+      if (current?.active) {
+        assert(getPackageDeactivationBlockingVersions(input.id).length === 0, "该软件包仍有未转正版本记录，不能停用。");
+      }
+    }
     if (identityChanged) {
       const matches = all<{ name: string; code: string }>(
         "SELECT name, code FROM packages WHERE id != ? AND (UPPER(code) = ? OR UPPER(name) = ?)",
@@ -972,14 +1015,10 @@ export function updatePackageResponsibility(
     input.ownerId,
   );
   assert(owner, "责任人不存在或已停用。");
-  if (pkg.is_active === 1 && !input.isActive) {
-    const activeVersion = one<{ version: string }>(
-      "SELECT version FROM package_versions WHERE package_id = ? AND status != 'FORMAL' LIMIT 1",
-      packageId,
-    );
-    assert(!activeVersion, "该软件包仍有在途版本，不能停用。");
-  }
   transaction(() => {
+    if (pkg.is_active === 1 && !input.isActive) {
+      assert(getPackageDeactivationBlockingVersions(packageId).length === 0, "该软件包仍有未转正版本记录，不能停用。");
+    }
     run(
       "UPDATE packages SET owner_id = ?, description = ?, is_active = ? WHERE id = ?",
       input.ownerId,
@@ -997,12 +1036,12 @@ export function updatePackageResponsibility(
   });
 }
 
-export function getPackageUsageBlockingVersion(packageId: number) {
-  return one<{ version: string }>(
-    `SELECT pv.version FROM package_versions pv
+export function getPackageUsageBlockingVersions(packageId: number) {
+  return all<Pick<PackageBlockingVersion, "id" | "version" | "status">>(
+    `SELECT pv.id, pv.version, pv.status FROM package_versions pv
      WHERE pv.package_id = ? AND pv.status IN ('TRIAL', 'PENDING_FORMAL')
        AND NOT ${STANDALONE_IMPORTED_VERSION_SQL}
-     LIMIT 1`,
+     ORDER BY pv.submitted_at DESC, pv.id DESC`,
     packageId,
   );
 }
@@ -1016,8 +1055,8 @@ export function savePackageUsages(actor: SessionUser, packageId: number, nodeIds
     );
     assert(pkg, "软件包不存在。", "NOT_FOUND");
     assert(canManagePackageArea(actor, pkg.area_id), "只有责任田主管或系统管理员可以维护该软件包使用范围。", "FORBIDDEN");
-    const blockingVersion = getPackageUsageBlockingVersion(packageId);
-    assert(!blockingVersion, `该软件包 ${blockingVersion?.version ?? ""} 正在绑定验证中，暂不能调整项目节点范围。`);
+    const [blockingVersion] = getPackageUsageBlockingVersions(packageId);
+    assert(!blockingVersion, `该软件包 ${blockingVersion?.version ?? ""} 正在试制或待转正，暂不能调整项目节点范围。`);
     const nodes = uniqueNodeIds.length
       ? all<{ id: number; project_id: number }>(
         `SELECT id, project_id FROM project_nodes WHERE id IN (${uniqueNodeIds.map(() => "?").join(",")})`,
@@ -1082,14 +1121,10 @@ export function setUserActive(actor: SessionUser, userId: number, active: boolea
     );
     assert(Number(adminCount?.count ?? 0) > 1, "系统至少需要保留一名启用状态的管理员。");
   }
-  if (!active) {
-    const owned = one<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM packages WHERE owner_id = ? AND is_active = 1",
-      userId,
-    );
-    assert(Number(owned?.count ?? 0) === 0, "该人员仍负责启用中的软件包，请先转移责任人。");
-  }
   transaction(() => {
+    if (!active) {
+      assert(getSettingsPackageReferences({ enabledOwnerId: userId }).length === 0, "该人员仍负责启用中的软件包，请先转移责任人。");
+    }
     run("UPDATE users SET is_active = ? WHERE id = ?", active ? 1 : 0, userId);
     if (!active) run("DELETE FROM sessions WHERE user_id = ?", userId);
     audit(

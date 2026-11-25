@@ -100,6 +100,17 @@ test.describe("公开项目联系人与账号", () => {
     await expect(page.getByRole("heading", { name: "我的工作台" })).toBeVisible();
     await expect(page.locator("main")).toContainText("测试成员");
 
+    const transferEntry = page.getByRole("link", { name: "提交转测申请", exact: true });
+    await transferEntry.click();
+    const transferConditions = page.getByRole("dialog", { name: "提交转测条件", exact: true });
+    await expect(transferConditions).toContainText("账号尚未分配责任田职责");
+    await expect(transferConditions.getByRole("link", { name: "查看责任田分工" })).toHaveAttribute("href", "/settings/areas");
+    await page.keyboard.press("Escape");
+    await expect(transferEntry).toBeFocused();
+    await page.goto("/settings/users");
+    await expect(page.locator(".flash")).toHaveAttribute("data-tone", "error");
+    await expect(page.locator(".flash")).toContainText("请联系系统管理员核对权限");
+
     await page.goto("/settings/areas");
     await expect(page).toHaveURL(/\/settings\/areas/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("责任田配置");

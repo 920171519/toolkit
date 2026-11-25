@@ -27,7 +27,13 @@ test("设置页的角色权限和项目删除可用鼠标与键盘展开", async
   await expect(deleteButton).toBeHidden();
   await deletion.press("Space");
   await expect(deleteButton).toBeVisible();
-  await expect(deleteButton).toBeDisabled();
+  await expect(deleteButton).toBeEnabled();
+  await deleteButton.press("Enter");
+  const blockers = page.getByRole("dialog", { name: "删除项目" });
+  await expect(blockers.getByRole("link", { name: "前往项目资料" })).toHaveAttribute("href", "/settings/projects/1?edit=project#project-profile");
+  await expect(blockers.getByRole("link", { name: "查看使用范围" }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(deleteButton).toBeFocused();
   await deletion.press("Enter");
   await expect(deleteButton).toBeHidden();
   await expect(deletion).toBeFocused();

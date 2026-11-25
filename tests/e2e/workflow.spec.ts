@@ -299,7 +299,9 @@ test.describe("工程协同台项目维度流程", () => {
     await login(page, "MGR001");
     await page.goto("/overview");
     await page.getByRole("link", { name: "星云 N1", exact: true }).click();
-    const trial = page.getByRole("region", { name: "当前流程" }).getByRole("link", { name: /试制与绑定/ });
+    const stages = page.getByRole("region", { name: "当前流程" });
+    await expect(stages.getByRole("link", { name: /待发布试制/ })).toHaveAttribute("href", "/trial?project=1");
+    const trial = stages.getByRole("link", { name: /节点绑定/ });
     await expect(trial).toContainText("已超期");
     await expect(trial).toHaveAttribute("href", "/trial?project=1&view=binding");
     await trial.click();
@@ -395,6 +397,16 @@ test.describe("工程协同台项目维度流程", () => {
     await page.locator('textarea[name="reason"]').fill("验证完成");
     await page.getByRole("button", { name: "确认终止测试" }).click();
     await expectFlash(page, "本批次已终止");
+    const baselineOta = page.getByRole("row").filter({ hasText: "1001OTA" });
+    await expect(baselineOta).toContainText("配套基线，本轮结论不更新该版本");
+    await expect(baselineOta.getByRole("link", { name: "查看待安排申请" })).toHaveCount(0);
+    const changedSec = page.getByRole("row").filter({ hasText: "1005SEC" }).filter({ hasText: "本轮变更" });
+    const returnedRequest = changedSec.getByRole("link", { name: "查看待安排申请" });
+    await expect(returnedRequest).toHaveAttribute("href", /\/submissions\?project=1&request=\d+/);
+    await returnedRequest.click();
+    await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByRole("table").locator("tbody tr")).toContainText("1005SEC");
+    await page.goBack();
     await page.getByRole("link", { name: "返回历史批次" }).click();
     await expect(page).toHaveURL(url => url.pathname === "/integration" && url.searchParams.get("view") === "history");
     const search = page.getByRole("search", { name: "批次号、标题或项目" });
@@ -930,10 +942,8 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("textbox", { name: "免绑原因", exact: true }).fill("该版本只修复配置项，已完成整机集成验证，无需重复绑定设备条码。");
     await page.getByRole("button", { name: "确认无需绑定" }).click();
     await expectFlash(page, "全部使用项目进入待转正");
-    await expect(page).toHaveURL(/\/formal/);
-    const formalCard = page.getByRole("row", { name: /1001OTA.*1\.6\.1/ });
-    await expect(formalCard).toContainText("无需绑定");
-    await formalCard.getByRole("link", { name: "核对并转正" }).click();
+    await expect(page).toHaveURL(/\/formal\/\d+/);
+    await expect(page.getByRole("heading", { name: "1001OTA 1.6.1 · 转正核对" })).toBeVisible();
     await expect(page.getByText(/无需绑定原因/).first()).toBeVisible();
     await page.getByRole("button", { name: "发布正式版本" }).click();
     const formalDialog = page.getByRole("dialog", { name: /转正 1001OTA 1.6.1/ });
@@ -1024,7 +1034,7 @@ test.describe("工程协同台项目维度流程", () => {
     await traceStatus.click();
     await statusMenu.getByRole("checkbox", { name: /试制/ }).first().check();
     await statusMenu.getByRole("button", { name: "应用", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "未找到版本" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "没有匹配的版本" })).toBeVisible();
     await traceStatus.click();
     await statusMenu.getByRole("link", { name: "清除本列" }).click();
     const version = page.getByRole("link", { name: "9.9.1", exact: true });
@@ -1034,7 +1044,7 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("link", { name: "返回版本列表" }).click();
     await expect(page).toHaveURL(url => url.searchParams.get("q") === "1002CFG 9.9.1");
     await page.goto("/versions?project=2&q=1002CFG+9.9.1");
-    await expect(page.getByText("未找到版本", { exact: true })).toBeVisible();
+    await expect(page.getByText("没有匹配的版本", { exact: true })).toBeVisible();
   });
 
 });

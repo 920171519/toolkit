@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { canSubmitIntegrationConclusionForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
 import { BATCH_STATUS_META, type BatchStatus } from "@/lib/constants";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
@@ -36,6 +36,7 @@ export default async function IntegrationPage({
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
+  const canArrange = project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER";
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
   const activeStatuses: BatchStatus[] = ["IN_TEST"];
   const historyStatuses: BatchStatus[] = archived ? ["IN_TEST", "COMPLETED", "TERMINATED"] : ["COMPLETED", "TERMINATED"];
@@ -118,7 +119,10 @@ export default async function IntegrationPage({
               })}</tbody>
             </table>
           </div>
-          {history.rows.length === 0 && <EmptyState title={(query || Object.keys(historyState.filters).length) ? "没有匹配的历史批次" : "暂无历史批次"} />}
+          {history.rows.length === 0 && <EmptyState title={(query || Object.keys(historyState.filters).length) ? "没有匹配的历史批次" : "暂无历史批次"}
+            action={query || Object.keys(historyState.filters).length
+              ? <Link href={queueHref(true, "") + "#integration-history"} prefetch={false} className="button button-secondary button-sm">重置搜索与筛选</Link>
+              : !archived ? <Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">查看在测批次</Link> : undefined} />}
           <DirectoryPagination {...filterHeader} page={history.page} pages={history.pages} total={history.total} unit="个批次" pageSize={historyState.pageSize} label="历史批次分页" />
         </section>
       ) : <section className="card">
@@ -128,7 +132,9 @@ export default async function IntegrationPage({
         </div>
         {visible.length === 0 ? (
           query ? <EmptyState title="没有匹配的批次" action={<Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} /> : (
-            <EmptyState title="当前没有在测批次" />
+            <EmptyState title="当前没有在测批次" description={canArrange ? "草稿发起转测后，批次会进入此列表。" : "项目软件经理发起转测后，批次会进入此列表。"}
+              action={<Link href={canArrange ? workflowHref("/submissions", project?.id, { view: "drafts", returnTo }) : queueHref(true, "")} prefetch={false}
+                className="button button-secondary button-sm">{canArrange ? "查看待发起批次" : "查看历史批次"}</Link>} />
           )
         ) : (
           <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="在测批次列表" tabIndex={0}>

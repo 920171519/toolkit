@@ -5,15 +5,15 @@ import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { TrialQueueTable, type TrialTableColumn } from "@/components/trial-queue-table";
-import { Badge, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
+import { TrialReleaseAction } from "@/components/trial-release-action";
+import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/trial-queue-table.module.css";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
-import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
-import { abandonTrialReleaseAction, releaseTrialAction } from "@/lib/actions/workflow";
+import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -163,7 +163,11 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="试制与绑定验证"
         description={archived ? "项目已归档" : undefined}
-        actions={<Link href={workflowHref(archived ? "/versions" : "/formal", projectId, { returnTo })} className="button button-secondary" prefetch={false}>{archived ? "查看版本全链路" : "查看待转正版本"} <ArrowRight size={14} aria-hidden="true" /></Link>} />
+        actions={<>
+          {canViewReleaseQueue && !showBindings && <Link href={workflowHref("/versions", projectId, { q: queueParams.release_q, returnTo })}
+            className="button button-secondary" prefetch={false}>按版本检查试制条件</Link>}
+          <Link href={workflowHref(archived ? "/versions" : "/formal", projectId, { returnTo })} className="button button-secondary" prefetch={false}>{archived ? "查看版本全链路" : "查看待转正版本"} <ArrowRight size={14} aria-hidden="true" /></Link>
+        </>} />
       <FlashMessage notice={notice} />
 
       {canViewReleaseQueue && <WorkflowQueueNav label="试制与绑定队列" views={[
@@ -183,43 +187,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
           return (
             <div className={styles.actions}>
               {canRelease(row) && <>
-                <FormDialog label="发布" title={"发布 " + title + " 试制"}
-                  description={"发布后同步到全部 " + row.versionProjectCount + " 个使用项目。"}
-                  triggerClassName="button button-secondary button-sm" cancelLabel="取消">
-                  <WorkflowPackageName {...identity} />
-                  <section aria-label="验收依据">
-                    <h3>验收依据</h3>
-                    {row.records.map((record) => {
-                      const conclusion = record.batchConclusion ? CONCLUSION_META[record.batchConclusion as BatchConclusion] : null;
-                      const status = TRANSFER_REQUEST_STATUS_META[record.integrationStatus as TransferRequestStatus];
-                      return <div className="trial-source-line" key={record.requestId}>
-                        <strong>{record.projectName}</strong>
-                        <Badge tone={conclusion?.tone ?? status?.tone ?? "slate"}>{conclusion?.label ?? status?.label ?? "待验收"}</Badge>
-                        {batchLink(record, record.projectId)}
-                        {record.batchReportUrl && <ExternalLink href={record.batchReportUrl}>验证报告</ExternalLink>}
-                        {record.batchTestSummary && <span className="small muted trial-summary">{record.batchTestSummary}</span>}
-                      </div>;
-                    })}
-                    <div className={styles.actions}>
-                      <ExternalLink href={row.archiveUrl}>归档包</ExternalLink>
-                      {row.versionProjectCount > row.records.length && <Link href={workflowHref(`/versions/${row.versionId}`, undefined, { returnTo })} className="archive-link" prefetch={false}>全部项目证据</Link>}
-                    </div>
-                    {row.ongoingTestCount > 0 && <p className="note">已有 {row.ongoingTestCount} 个待发起或在测批次，完成前无法转正。</p>}
-                  </section>
-                  {risk && <p className="risk-callout" style={{ marginBottom: 10 }}>风险发布原因 · {row.riskConclusion}</p>}
-                  <ActionForm action={releaseTrialAction} hidden={releaseFields}
-                    submitText="发布全项目共享试制版本" submitClassName="button-sm"
-                    confirmMessage={`全部 ${row.versionProjectCount} 个使用项目将同步使用 ${title} 试制版本。`}>
-                    <label className="field">
-                      <span className="label">试制电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
-                      <input className="input" name="trialFormNo" type="url" required placeholder="https://eflow.example.com/trials/160" />
-                    </label>
-                    <label className="field">
-                      <span className="label">试制评审纪要 <span className="required-mark" aria-hidden="true">*</span></span>
-                      <textarea className="textarea" name="reviewMinutes" required maxLength={2000} />
-                    </label>
-                  </ActionForm>
-                </FormDialog>
+                <TrialReleaseAction actor={user} row={row} records={row.records} projectId={projectId} query={query} />
                 <FormDialog label={risk ? "撤回风险试制" : "放弃"} title={risk ? `撤回 ${title} 风险试制` : `放弃发布 ${title} 试制`}
                   description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
                   triggerClassName="button button-ghost button-sm" cancelLabel="取消">

@@ -5,11 +5,11 @@ import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { correctLegacyVersionAction } from "@/lib/actions/settings";
 import { packageIdentity } from "@/lib/package-identity";
-import { getLegacyVersionForCorrection } from "@/lib/settings";
+import { getImportedPackageVersions, getLegacyVersionForCorrection } from "@/lib/settings";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
 import { LegacyReleaseFields } from "@/components/legacy-release-fields";
-import { PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import styles from "../../../package-settings.module.css";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +25,24 @@ export default async function LegacyVersionCorrectionPage({ params, searchParams
   const packageId = Number(id);
   const parsedVersionId = Number(versionId);
   if (!Number.isSafeInteger(packageId) || packageId < 1 || !Number.isSafeInteger(parsedVersionId) || parsedVersionId < 1) notFound();
-  const existing = getLegacyVersionForCorrection(packageId, parsedVersionId);
-  if (!existing) notFound();
-
-  const { code } = packageIdentity({ code: existing.packageCode, name: existing.packageName });
   const listParams = directoryFilters("packages", await searchParams);
   const back = `${directoryHref(`/settings/packages/${packageId}`, listParams)}#imported-version-history`;
+  const existing = getLegacyVersionForCorrection(packageId, parsedVersionId);
+  if (!existing) {
+    const history = getImportedPackageVersions(packageId).find(({ id }) => id === parsedVersionId);
+    if (!history) notFound();
+    return (
+      <>
+        <PageHeader title="更正历史版本" description={history.version}
+          actions={<Link href={back} className="button button-secondary" prefetch={false}>返回历史补录版本</Link>} />
+        <EmptyState
+          title={history.status === "VOID" ? "版本已作废" : "版本已被流程记录引用"}
+          description="当前版本和相关历史证据需要保留。"
+          action={<Link href={`/versions/${parsedVersionId}`} className="button button-secondary" prefetch={false}>查看历史记录</Link>} />
+      </>
+    );
+  }
+  const { code } = packageIdentity({ code: existing.packageCode, name: existing.packageName });
 
   return (
     <>

@@ -66,6 +66,9 @@ export type PendingTransferItem = {
   submittedAt: string;
   ownerName: string | null;
   canInclude: number;
+  packageActive: number;
+  draftBatchId: number | null;
+  draftBatchCode: string | null;
 };
 
 export type PendingTransferGroup = {
@@ -75,15 +78,21 @@ export type PendingTransferGroup = {
   items: PendingTransferItem[];
 };
 
-export function getPendingTransferGroups(projectIds: number[] | null = null): PendingTransferGroup[] {
+export function getPendingTransferGroups(
+  projectIds: number[] | null = null,
+  guidanceProjectIds: number[] | null = [],
+): PendingTransferGroup[] {
+  const guideScope = guidanceProjectIds === null ? "1" : guidanceProjectIds.length
+    ? `pr.id IN (${guidanceProjectIds.map(() => "?").join(", ")})` : "0";
   const rows = all<PendingTransferItem & { projectId: number; projectName: string; projectCode: string }>(
     `SELECT r.id AS requestId, pv.id AS versionId, p.id AS packageId, p.name AS packageName,
             p.code AS packageCode, pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             su.name AS submittedByName, pv.submitted_by AS submittedById, pv.status AS versionStatus,
             pv.submitted_at AS submittedAt, o.name AS ownerName,
-            p.is_active = 1 AND EXISTS (
+            draft.id IS NULL AND p.is_active = 1 AND EXISTS (
               SELECT 1 FROM package_usages usage WHERE usage.package_id = p.id AND usage.project_id = r.project_id
             ) AS canInclude,
+            p.is_active AS packageActive, draft.id AS draftBatchId, draft.code AS draftBatchCode,
             pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
@@ -91,14 +100,17 @@ export function getPendingTransferGroups(projectIds: number[] | null = null): Pe
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
+     LEFT JOIN integration_batches draft ON draft.id = (
+       SELECT b.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+       WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT' ORDER BY b.id LIMIT 1
+     )
      WHERE pv.status != 'VOID' AND r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
        AND pr.status != 'ARCHIVED'
-       AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
-       AND NOT EXISTS (
-         SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT'
-       )
+       AND ((draft.id IS NULL AND EXISTS (
+         SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id
+       )) OR ${guideScope})
      ORDER BY pr.sort_order, pr.id, pv.submitted_at DESC, pv.id DESC`,
+    ...(guidanceProjectIds ?? []),
   );
   const groups = new Map<number, PendingTransferGroup>();
   for (const row of filterByProject(rows, projectIds)) {
@@ -156,7 +168,7 @@ export function getPreviousBatchVersion(projectId: number, packageId: number) {
   );
 }
 
-export function getBatchCandidatesForProject(projectId: number): BatchCandidatePackage[] {
+export function getBatchCandidatesForProject(projectId: number, editingBatchId = 0): BatchCandidatePackage[] {
   const packages = all<{
     packageId: number;
     packageName: string;
@@ -219,10 +231,11 @@ export function getBatchCandidatesForProject(projectId: number): BatchCandidateP
               THEN COALESCE(r.integration_status, r.status) ELSE r.status END AS status,
             EXISTS (
               SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-              WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT'
+              WHERE bi.transfer_request_id = r.id AND b.id != ?
+                AND (b.status = 'DRAFT' OR (b.status = 'IN_TEST' AND COALESCE(r.integration_status, r.status) = 'PENDING'))
             ) AS reserved
      FROM version_transfer_requests r WHERE r.project_id = ?`,
-    projectId,
+    editingBatchId, projectId,
   );
   const requestByVersion = new Map(projectRequests.map((request) => [request.versionId, request]));
   return packages.map((pkg) => {
@@ -426,6 +439,8 @@ export type BatchItemRow = {
   isChanged: boolean;
   transferRequestId: number | null;
   requestStatus: string | null;
+  versionStatus: string;
+  activeBatchId: number | null;
   formalVersion: string | null;
   trialVersions: string | null;
   previousTestVersion: string | null;
@@ -463,6 +478,12 @@ export function getBatchDetail(batchId: number, projectIds: number[] | null): Ba
             bi.change_summary AS changeSummary, bi.is_changed AS isChanged,
             bi.transfer_request_id AS transferRequestId,
             CASE WHEN pv.status = 'VOID' THEN 'VOID' ELSE COALESCE(r.integration_status, r.status) END AS requestStatus,
+            pv.status AS versionStatus,
+            (SELECT active_batch.id FROM batch_items current_item
+             JOIN integration_batches active_batch ON active_batch.id = current_item.batch_id
+             WHERE current_item.transfer_request_id = r.id AND active_batch.project_id = r.project_id
+               AND active_batch.status = 'IN_TEST'
+             ORDER BY active_batch.id DESC LIMIT 1) AS activeBatchId,
             bi.formal_version AS formalVersion, bi.trial_versions AS trialVersions,
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
             u.name AS ownerName, bi.issue_affected AS issueAffected,
@@ -535,14 +556,15 @@ const ONGOING_TEST_COUNT_SQL = `(
 
 export function getTrialReadyVersions(
   projectIds: number[] | null = null,
-  options: { requestId?: number; includeUnregisteredRisk?: boolean } = {},
+  options: { requestId?: number; versionId?: number; includeUnregisteredRisk?: boolean } = {},
 ): TrialReadyVersion[] {
   if (projectIds?.length === 0) return [];
   const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
+  const versionScope = options.versionId === undefined ? "" : "AND id = ?";
   const projectsScope = projectIds === null ? "" : "AND pr.id IN (SELECT value FROM json_each(?))";
   return all<TrialReadyVersion>(
     `WITH ${trialEligibilityCtes(`SELECT id, package_id FROM package_versions
-       WHERE status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} ${requestScope}`)}
+       WHERE status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} ${requestScope} ${versionScope}`)}
      SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
             pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
             pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
@@ -567,6 +589,7 @@ export function getTrialReadyVersions(
        ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectsScope}
      ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
     ...(options.requestId === undefined ? [] : [options.requestId]),
+    ...(options.versionId === undefined ? [] : [options.versionId]),
     options.includeUnregisteredRisk ? 1 : 0,
     ...(options.requestId === undefined ? [] : [options.requestId]),
     ...(projectIds === null ? [] : [JSON.stringify(projectIds)]),
@@ -668,13 +691,21 @@ export type BindingFlowRow = {
   cancelReason: string | null;
 };
 
-export function getPendingBindingFlowCount(versionId: number): number {
-  return one<{ count: number }>(
-    `SELECT COUNT(*) AS count FROM binding_flows f
+function getPendingBindingFlowCounts(versionIds: number[]): Map<number, number> {
+  if (versionIds.length === 0) return new Map();
+  const rows = all<{ versionId: number; count: number }>(
+    `SELECT f.package_version_id AS versionId, COUNT(*) AS count FROM binding_flows f
      JOIN projects pr ON pr.id = f.project_id
-     WHERE f.package_version_id = ? AND f.status = 'PENDING' AND pr.status != 'ARCHIVED'`,
-    versionId,
-  )?.count ?? 0;
+     WHERE f.package_version_id IN (SELECT value FROM json_each(?))
+       AND f.status = 'PENDING' AND pr.status != 'ARCHIVED'
+     GROUP BY f.package_version_id`,
+    JSON.stringify(versionIds),
+  );
+  return new Map(rows.map(({ versionId, count }) => [versionId, count]));
+}
+
+export function getPendingBindingFlowCount(versionId: number): number {
+  return getPendingBindingFlowCounts([versionId]).get(versionId) ?? 0;
 }
 
 export type BindingRequirementRow = {
@@ -685,6 +716,7 @@ export type BindingRequirementRow = {
   nodeName: string;
   requiredCount: number;
   approvedCount: number;
+  submittedCount: number;
   pendingCount: number;
   status: string;
   bindingOwnerId: number | null;
@@ -698,7 +730,7 @@ export type BindingRequirementRow = {
   waivedByName: string | null;
   confirmedAt: string | null;
   confirmedByName: string | null;
-  approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string }>;
+  approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string; isActive: number }>;
   flows: BindingFlowRow[];
 };
 
@@ -773,7 +805,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     requestId,
   );
   if (!request) return null;
-  const requirements = all<Omit<BindingRequirementRow, "flows" | "approvedCount" | "pendingCount">>(
+  const requirements = all<Omit<BindingRequirementRow, "flows" | "approvedCount" | "submittedCount" | "pendingCount">>(
     `SELECT br.id, br.project_id AS projectId, pr.name AS projectName, br.node_id AS nodeId,
             n.name AS nodeName, br.required_count AS requiredCount, br.status,
             br.binding_owner_id AS bindingOwnerId, bo.name AS bindingOwnerName,
@@ -816,19 +848,33 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
       barcodeMap.set(row.flowId, list);
     }
     const flows: BindingFlowRow[] = flowRows.map((flow) => ({ ...flow, barcodes: barcodeMap.get(flow.id) ?? [] }));
-    const approverOptions = all<{ userId: number; userName: string; userEmployeeId: string }>(
-      `SELECT bra.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+    const approverOptions = all<BindingRequirementRow["approverOptions"][number]>(
+      `SELECT bra.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.is_active AS isActive
        FROM binding_requirement_approvers bra JOIN users u ON u.id = bra.user_id
        WHERE bra.requirement_id = ? ORDER BY bra.id`,
       requirement.id,
     );
     if (approverOptions.length === 0 && requirement.approverId && requirement.approverName) {
-      approverOptions.push({ userId: requirement.approverId, userName: requirement.approverName, userEmployeeId: "" });
+      const approver = one<BindingRequirementRow["approverOptions"][number]>(
+        "SELECT id AS userId, name AS userName, employee_id AS userEmployeeId, is_active AS isActive FROM users WHERE id = ?",
+        requirement.approverId,
+      );
+      if (approver) approverOptions.push(approver);
     }
-    const approvedCount = new Set(flows.filter((flow) => flow.status === "APPROVED").flatMap((flow) => flow.barcodes)).size;
+    const approvedBarcodes = new Set<string>();
+    const submittedBarcodes = new Set<string>();
+    for (const flow of flows) {
+      if (flow.status === "PENDING" || flow.status === "APPROVED") {
+        for (const barcode of flow.barcodes) {
+          submittedBarcodes.add(barcode);
+          if (flow.status === "APPROVED") approvedBarcodes.add(barcode);
+        }
+      }
+    }
     return {
       ...requirement,
-      approvedCount,
+      approvedCount: approvedBarcodes.size,
+      submittedCount: submittedBarcodes.size,
       pendingCount: flows.filter((flow) => flow.status === "PENDING").length,
       approverOptions,
       flows,
@@ -1106,12 +1152,18 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     nodeName: string;
     requiredCount: number;
     approvedCount: number;
+    submittedCount: number;
+    pendingFlowId: number | null;
   }>(
     `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, pv.version, pr.id AS projectId,
             p.owner_id AS packageOwnerId, br.binding_owner_id AS bindingOwnerId,
             pr.name AS projectName, n.name AS nodeName, br.required_count AS requiredCount,
             (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-             WHERE f.requirement_id = br.id AND f.status = 'APPROVED') AS approvedCount
+             WHERE f.requirement_id = br.id AND f.status = 'APPROVED') AS approvedCount,
+            (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
+             WHERE f.requirement_id = br.id AND f.status IN ('APPROVED','PENDING')) AS submittedCount,
+            (SELECT f.id FROM binding_flows f WHERE f.requirement_id = br.id AND f.status = 'PENDING'
+             ORDER BY f.submitted_at, f.id LIMIT 1) AS pendingFlowId
      FROM binding_requirements br
      JOIN version_transfer_requests r ON r.id = br.request_id
      JOIN package_versions pv ON pv.id = br.package_version_id
@@ -1119,7 +1171,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN projects pr ON pr.id = br.project_id
      JOIN project_nodes n ON n.id = br.node_id
      WHERE pr.status != 'ARCHIVED' AND r.status = 'TRIAL' AND pv.status = 'TRIAL'
-       AND br.status = 'PENDING' AND br.pushed_at IS NOT NULL
+       AND br.status = 'PENDING' AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL
        AND (br.binding_owner_id = ? OR p.owner_id = ? OR ? = 1 OR br.project_id IN (SELECT value FROM json_each(?)))
      ORDER BY pr.sort_order, n.sort_order`,
     user.id, user.id, user.role === "ADMIN" ? 1 : 0, JSON.stringify(managedProjectIds),
@@ -1128,12 +1180,15 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     const ready = task.approvedCount >= task.requiredCount;
     const canConfirm = task.packageOwnerId === user.id || managerScope === null || managedProjectIds.includes(task.projectId);
     if (ready ? !canConfirm : task.bindingOwnerId !== user.id) continue;
-    const action = ready ? "确认节点通过" : "提交绑定电子流";
+    const waitingApproval = !ready && task.pendingFlowId !== null && task.submittedCount >= task.requiredCount;
+    const action = ready ? "确认节点通过" : waitingApproval ? "跟进电子流审批" : "提交绑定电子流";
+    const linkTarget = waitingApproval ? `binding-flow-${task.pendingFlowId}` : `binding-node-${task.requirementId}`;
+    const progress = `${task.projectName} / ${task.nodeName}，已通过条码 ${task.approvedCount}/${task.requiredCount}`;
     tasks.push({
       key: `binding-${task.requirementId}`,
       title: `${action}：${task.packageName} ${task.version}`,
-      description: `${task.projectName} / ${task.nodeName}，已通过条码 ${task.approvedCount}/${task.requiredCount}`,
-      href: `/trial/${task.requestId}#binding-node-${task.requirementId}`,
+      description: waitingApproval ? `${progress} · 已登记足量条码，等待审批` : progress,
+      href: `/trial/${task.requestId}#${linkTarget}`,
       category: "bind",
     });
   }
@@ -1221,13 +1276,37 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
         category: "manage",
       });
     }
-    const pendingFormal = Array.from(new Map(getPendingFormalVersions(managerScope).map((item) => [item.versionId, item])).values());
-    if (pendingFormal.length > 0) {
+    const pendingDecisions = all<{ requestId: number; versionId: number; projectId: number; projectName: string; packageName: string; version: string }>(
+      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName, p.name AS packageName, pv.version
+       FROM package_versions pv
+       JOIN packages p ON p.id = pv.package_id
+       JOIN version_transfer_requests r ON r.package_version_id = pv.id
+       JOIN projects pr ON pr.id = r.project_id
+       WHERE pv.status = 'TRIAL' AND pv.binding_mode = 'PENDING' AND r.status = 'TRIAL' AND pr.status != 'ARCHIVED'
+         AND (? = 1 OR pr.id IN (SELECT value FROM json_each(?)))
+       ORDER BY r.trial_released_at DESC, r.id DESC`,
+      managerScope === null ? 1 : 0,
+      JSON.stringify(managedProjectIds),
+    );
+    const bindingDecisions = new Map(pendingDecisions.map((version) => [version.versionId, version]));
+    for (const version of bindingDecisions.values()) {
       tasks.push({
-        key: "formal-ready",
-        title: `${pendingFormal.length} 个版本待提交转正电子流`,
-        description: pendingFormal.slice(0, 4).map((version) => `${version.projectName} · ${version.packageName} ${version.version}`).join("、"),
-        href: "/formal",
+        key: `binding-decision-${version.versionId}`,
+        title: `决定绑定方式：${version.packageName} ${version.version}`,
+        description: `${version.projectName} · 已发布试制，待推送绑定或登记整版免绑`,
+        href: workflowHref(`/trial/${version.requestId}`, version.projectId),
+        category: "manage",
+      });
+    }
+    const pendingFormal = Array.from(new Map(getPendingFormalVersions(managerScope).map((item) => [item.versionId, item])).values());
+    const pendingFlows = getPendingBindingFlowCounts(pendingFormal.map(({ versionId }) => versionId));
+    for (const version of pendingFormal) {
+      const pending = pendingFlows.get(version.versionId) ?? 0;
+      tasks.push({
+        key: `formal-${version.versionId}`,
+        title: `${pending > 0 ? "处理待审批电子流" : "核对并转正"}：${version.packageName} ${version.version}`,
+        description: `${version.projectName} · ${pending > 0 ? `${pending} 条绑定电子流待处理` : "待提交转正电子流"}`,
+        href: workflowHref(`/formal/${version.versionId}`, version.projectId),
         category: "manage",
       });
     }
@@ -1251,7 +1330,8 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
             COALESCE((
               SELECT GROUP_CONCAT(pr.name || '·' || CASE r.status
                 WHEN 'PENDING' THEN '待测试' WHEN 'IN_TEST' THEN '测试中'
-                WHEN 'PASSED' THEN '可发试制' WHEN 'FAILED' THEN '不通过'
+                WHEN 'PASSED' THEN CASE WHEN pv.status = 'PENDING_TRIAL' THEN '待发试制' ELSE '测试通过' END
+                WHEN 'FAILED' THEN '不通过'
                 WHEN 'BLOCKED' THEN '无法验证' WHEN 'TRIAL' THEN '试制中'
                 WHEN 'PENDING_FORMAL' THEN '待转正' WHEN 'FORMAL' THEN '已转正'
                 WHEN 'VOID' THEN '已作废' ELSE r.status END, ' / ')

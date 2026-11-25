@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canEditPackageById } from "@/lib/access";
 import { getPackageDetail } from "@/lib/queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
+import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,12 @@ export async function GET(
   if (!data) {
     return NextResponse.json({ error: "软件包不存在。" }, { status: 404 });
   }
+  const canEdit = canEditPackageById(user, packageId);
   return NextResponse.json(
     {
       ...data,
-      canEdit: canEditPackageById(user, packageId),
+      canEdit,
+      deactivationBlockers: canEdit ? getPackageDeactivationBlockingVersions(packageId) : [],
     },
     {
       headers: { "Cache-Control": "no-store" },

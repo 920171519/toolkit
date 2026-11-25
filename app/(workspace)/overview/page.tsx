@@ -134,7 +134,12 @@ export default async function OverviewPage({
             </tbody>
           </table>
         </div>
-        {items.length === 0 && <EmptyState title={filtered ? "没有匹配的项目" : "暂无项目"} />}
+        {items.length === 0 && <EmptyState title={filtered ? "没有匹配的项目" : "暂无项目"}
+          action={filtered
+            ? <Link href={directoryHref(path, { pageSize: listParams.pageSize })} prefetch={false}
+              className="button button-secondary button-sm">清除查询条件</Link>
+            : user.role === "ADMIN" ? <Link href="/settings/projects" prefetch={false}
+              className="button button-secondary button-sm">前往项目配置</Link> : undefined} />}
         <DirectoryPagination path={path} params={listParams} page={page} pages={pages} total={total} unit="个项目" pageSize={pageSize} label="项目分页" />
       </section>
     </>

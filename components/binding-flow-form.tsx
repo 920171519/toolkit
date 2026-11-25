@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { submitBindingFlowAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
 
-type ApproverOption = { userId: number; userName: string; userEmployeeId: string };
+type ApproverOption = { userId: number; userName: string; userEmployeeId: string; isActive: number };
 
 export function BindingFlowForm({
   requirementId,
@@ -10,6 +11,7 @@ export function BindingFlowForm({
   currentUserId,
   scopeProjectId,
   listState,
+  configurationHref,
 }: {
   requirementId: number;
   requestId: number;
@@ -17,11 +19,19 @@ export function BindingFlowForm({
   currentUserId: number;
   scopeProjectId?: number;
   listState?: Record<string, string | number | undefined>;
+  configurationHref?: string;
 }) {
-  const selectableApprovers = approvers.filter((approver) => approver.userId !== currentUserId);
+  const possibleApprovers = approvers.filter((approver) => approver.userId !== currentUserId);
+  const selectableApprovers = possibleApprovers.filter((approver) => approver.isActive);
   const barcodeId = `binding-barcodes-${requirementId}`;
   if (selectableApprovers.length === 0) {
-    return <div className="muted-panel">该节点审批人范围为空，请联系软件经理在项目配置中维护审批人。</div>;
+    return <div className="muted-panel">
+      <p>{approvers.length === 0 ? "该节点尚未配置审批人。" : possibleApprovers.length === 0
+        ? "审批范围内只有当前提交人。电子流须由其他人审批。"
+        : "其他候选审批人已停用。"}</p>
+      {configurationHref ? <Link className="archive-link" href={configurationHref} prefetch={false}>配置节点审批人</Link>
+        : <p>请联系该项目的软件经理调整审批范围。</p>}
+    </div>;
   }
 
   return (
@@ -30,6 +40,7 @@ export function BindingFlowForm({
       hidden={{ requirementId, requestId, scopeProjectId, ...listState }}
       submitText="提交绑定电子流"
       submitClassName="button-sm"
+      preserveValuesOnSubmit
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label className="field">

@@ -5,8 +5,10 @@ import { requireUser } from "@/lib/auth";
 import { BINDING_FLOW_STATUS_META, PACKAGE_STATUS_META, ROLE_META, type PackageStatus } from "@/lib/constants";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
+import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { getPersonalDashboard, type PersonalAlert } from "@/lib/workflow-queries";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +17,7 @@ export const metadata: Metadata = { title: "我的工作台" };
 const categories = [
   { key: "alert", label: "异常处理" },
   { key: "approve", label: "待我审批" },
-  { key: "bind", label: "待我绑定" },
+  { key: "bind", label: "绑定与节点确认" },
   { key: "test", label: "转测与集成测试" },
   { key: "manage", label: "试制与转正" },
 ] as const;
@@ -58,7 +60,9 @@ export default async function DashboardPage({ searchParams }: {
       <PageHeader
         title="我的工作台"
         description={<span className={styles.accountInfo}>{user.name} · {ROLE_META[user.role].label}</span>}
-        actions={canSubmit && <Link prefetch={false} href="/submissions/transfer" className="button button-primary"><Plus size={16} aria-hidden="true" /> 提交转测申请</Link>}
+        actions={canSubmit
+          ? <Link prefetch={false} href="/submissions/transfer" className="button button-primary"><Plus size={16} aria-hidden="true" /> 提交转测申请</Link>
+          : <GuidanceDialog label="提交转测申请" title="提交转测条件" items={getTransferEntryGuidance(user)} fallbackHref="/submissions/transfer" />}
       />
       <FlashMessage notice={notice} />
 

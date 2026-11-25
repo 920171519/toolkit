@@ -88,6 +88,9 @@ export function TrialQueueTable<Row>({
   const href = (changes: Record<string, string | number | undefined>) => workflowHref("/trial", projectId, { ...query, ...changes }) + hash;
   const filterPrefix = `f_${kind}_`;
   const filtered = Object.keys(query).some((key) => key.startsWith(filterPrefix)) || Boolean(search);
+  const resetFilters = Object.fromEntries(Object.keys(query)
+    .filter((key) => key.startsWith(filterPrefix) || key === field("q") || key === field("page"))
+    .map((key) => [key, undefined]));
   const listParams = { project: projectId?.toString(), ...query };
 
   return (
@@ -130,7 +133,10 @@ export function TrialQueueTable<Row>({
           </tbody>
         </table>
       </div>
-      {!visible.length && <EmptyState title={filtered ? "没有匹配的版本" : emptyTitle} />}
+      {!visible.length && <EmptyState title={filtered ? "没有匹配的版本" : emptyTitle}
+        action={filtered ? <Link className="button button-secondary button-sm" href={href(resetFilters)} prefetch={false}>
+          清除本队列筛选
+        </Link> : undefined} />}
       <nav className={styles.pagination} aria-label={title + "分页"}>
         <DirectoryPageSize path="/trial" params={listParams} pageSize={pageSize} pageParam={field("page")} sizeParam={field("size")} hash={hash} />
         <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>

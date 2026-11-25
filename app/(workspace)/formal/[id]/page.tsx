@@ -4,22 +4,26 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
-import { Badge, ExternalLink, PageHeader, ProgressBar } from "@/components/ui";
+import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
 import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
+import { all } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
+import { parseFlash } from "@/lib/queries";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "转正核对" };
@@ -33,10 +37,37 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const versionId = Number(id);
   if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
   const search = await searchParams;
+  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, search.project);
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
+  const listState = getWorkflowListState(search);
+  const guidance = getFormalReleaseGuidance(user, versionId, { projectId: project?.id, returnTo: listState.returnTo });
+  const returnHref = workflowHref("/formal", project?.id, listState);
+  const traceHref = workflowHref(`/versions/${versionId}`, project?.id, { ...listState, from: "formal" });
   const records = getPendingFormalVersions(scope, versionId);
-  if (records.length === 0) notFound();
+  if (records.length === 0) {
+    // A version can leave the live queue when its last project is archived.
+    const canViewHistory = !guidance && all<{ projectId: number }>(
+      `SELECT project_id AS projectId
+       FROM version_transfer_requests WHERE package_version_id = ? AND trial_released_at IS NOT NULL`, versionId,
+    ).some(({ projectId }) => (project === undefined || project.id === projectId) && canAccessProjectPage(user, projectId));
+    if (!guidance && !canViewHistory) notFound();
+    const title = guidance?.status === "FORMAL" ? "该版本已转正"
+      : guidance?.status === "VOID" ? "该版本已作废" : "该版本暂未入列";
+    return (
+      <>
+        <PageHeader title="转正核对" description={guidance?.description}
+          actions={<Link href={returnHref} prefetch={false} className="button button-secondary"><ArrowLeft size={14} aria-hidden="true" />返回待转正列表</Link>} />
+        <FlashMessage notice={notice} />
+        <section className={styles.nextAction}>
+          <h2>{title}</h2>
+          {guidance && guidance.status !== "FORMAL" && guidance.status !== "VOID"
+            ? <GuidanceDialog label="查看转正条件" title="转正发布条件" description={guidance.description} items={guidance.items} />
+            : <Link href={traceHref} prefetch={false} className="button button-secondary">查看版本记录</Link>}
+        </section>
+      </>
+    );
+  }
   const manageable = records.find((record) => canManageProjectWorkflowForProject(user, record.projectId));
   const version = manageable ?? records[0];
   const pendingBindingFlows = getPendingBindingFlowCount(versionId);
@@ -46,8 +77,13 @@ export default async function FormalDetailPage({ params, searchParams }: {
     .filter((detail): detail is NonNullable<ReturnType<typeof getTrialDetail>> => detail !== null);
   const projects = evidence.map(({ request }) => request.projectName);
   const trialReviewMinutes = evidence[0]?.request.trialReviewMinutes;
-  const returnHref = workflowHref("/formal", project?.id, getWorkflowListState(search));
-  const traceHref = workflowHref(`/versions/${version.versionId}`, project?.id);
+  const canPublish = Boolean(manageable && guidance?.href);
+  const publishGuidance = guidance?.items.length ? guidance.items : [{
+    title: "请从具有管理权限的项目核对发布",
+    detail: "该版本由任一在行使用项目的软件经理或管理员发布。",
+    href: guidance?.href ?? traceHref,
+    actionLabel: guidance?.href ? "前往转正发布" : "查看版本全链路",
+  }];
 
   return (
     <>
@@ -57,10 +93,10 @@ export default async function FormalDetailPage({ params, searchParams }: {
         actions={<>
           <Link href={returnHref} prefetch={false} className="button button-secondary"><ArrowLeft size={14} aria-hidden="true" />返回待转正列表</Link>
           {manageable && <VersionVoidDialog versionId={versionId} code={identity.code} version={version.version}
-            returnFields={{ ...getWorkflowListState(search), scopeProjectId: project?.id, from: "formal" }} />}
-          {manageable && pendingBindingFlows === 0 && <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
+            returnFields={{ ...listState, scopeProjectId: project?.id, from: "formal" }} />}
+          {canPublish && manageable ? <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
             <WorkflowPackageName {...identity} />
-            <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...getWorkflowListState(search) }} submitText="提交转正电子流并发布">
+            <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...listState }} submitText="提交转正电子流并发布" preserveValuesOnSubmit>
               <label className="field">
                 <span className="label">转正电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
                 <input className="input" name="flowNo" type="url" required placeholder="https://eflow.example.com/releases/152" />
@@ -70,9 +106,11 @@ export default async function FormalDetailPage({ params, searchParams }: {
                 <textarea className="textarea" name="reviewMinutes" required maxLength={2000} />
               </label>
             </ActionForm>
-          </FormDialog>}
+          </FormDialog> : <GuidanceDialog label={manageable ? "发布正式版本" : "查看发布条件"}
+            title="转正发布条件" description={guidance?.description} items={publishGuidance} />}
         </>}
       />
+      <FlashMessage notice={notice} />
       {pendingBindingFlows > 0 && <p className="risk-callout">还有 {pendingBindingFlows} 条绑定电子流待审批。请在下方打开绑定验证，完成审批或撤销后再转正。</p>}
       <div className={styles.detailColumns}>
         <section className="card" aria-label="项目验收与绑定证据">

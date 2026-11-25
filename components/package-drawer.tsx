@@ -12,11 +12,12 @@ import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
+import { SettingsPackageActivation, type PackageDeactivationBlockers } from "@/components/settings-package-activation";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import styles from "./package-drawer.module.css";
 
-export type DrawerPayload = PackageDetailData & { canEdit: boolean };
+export type DrawerPayload = PackageDetailData & { canEdit: boolean; deactivationBlockers: PackageDeactivationBlockers };
 
 const panels = [
   { id: "overview", label: "概览" },
@@ -151,11 +152,10 @@ function UsageList({ usages }: { usages: PackageDetailData["usages"] }) {
   );
 }
 
-export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer = false, onClose, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
+export function PackageDrawer({ packageId, projectId, people, onClose, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
   packageId: number;
   projectId?: number;
   people: PersonOption[];
-  canSubmitTransfer?: boolean;
   onClose: () => void;
   initialDetail?: DrawerPayload | null;
   readOnly?: boolean;
@@ -295,18 +295,12 @@ export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer 
         {!detail && !loadError && <div className="drawer-loading" role="status"><LoaderCircle size={20} className="animate-spin" aria-hidden="true" />正在加载软件包详情…</div>}
 
         {detail && pkg && editing && (
-          <form action={submitResponsibility} className={styles.editor} data-testid="package-responsibility-form">
+          <form action={submitResponsibility} onReset={(event) => event.preventDefault()} className={styles.editor} data-testid="package-responsibility-form">
             <h3>编辑责任信息</h3>
             <input type="hidden" name="packageId" value={pkg.id} />
             <SettingsPersonPicker name="ownerId" label="责任人" defaultValue={pkg.ownerId ?? ""} options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} />
             <label className="field"><span className="label">软件包说明</span><textarea className="textarea" name="description" defaultValue={pkg.description} /></label>
-            <div className={styles.activeField}>
-              <label className="check-item">
-                <input type="checkbox" name="isActive" defaultChecked={pkg.isActive} aria-describedby={pkg.isActive ? `${id}-disable-note` : undefined} />
-                <span>启用软件包</span>
-              </label>
-              {pkg.isActive && <p id={`${id}-disable-note`} className={styles.disableNote}>停用后不能提交新转测或安排新绑定。有在途版本时无法停用。</p>}
-            </div>
+            <SettingsPackageActivation className={styles.activeField} active={pkg.isActive} blockers={detail.deactivationBlockers} />
             {state.error && <div className="form-error" role="alert">{state.error}</div>}
             <div className="form-footer">
               <button type="button" className="button button-secondary" disabled={pending} onClick={cancelEdit}>取消</button>
@@ -354,7 +348,7 @@ export function PackageDrawer({ packageId, projectId, people, canSubmitTransfer 
         )}
       </div>
 
-      {!editing && detail && !readOnly && canSubmitTransfer && <footer className={styles.footer}>
+      {!editing && detail && !readOnly && <footer className={styles.footer}>
         <Link href={workflowHref("/submissions/transfer", projectId, { package: packageId })} prefetch={false} className="button button-primary">提交转测申请 <ArrowUpRight size={15} aria-hidden="true" /></Link>
       </footer>}
     </dialog>

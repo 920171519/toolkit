@@ -157,6 +157,15 @@ test("共享版本等最后一个在行项目通过后自动进入待发布试�
   await login(page, "MGR001");
   await expectTrialState(page, sample, "待其他项目验收");
 
+  await login(page, "ADMIN001");
+  await page.goto(`/trial?project=1&release_q=${sample.version}`);
+  await page.getByRole("link", { name: "按版本检查试制条件" }).click();
+  await page.getByRole("row").filter({ hasText: sample.code }).getByRole("link", { name: sample.version, exact: true }).click();
+  await page.getByRole("button", { name: "发布试制", exact: true }).click();
+  const guidance = page.getByRole("dialog", { name: "试制发布条件" });
+  await expect(guidance).toContainText("磐石 T3 · 等待集成测试结论");
+  await expect(guidance.getByRole("link", { name: "查看转测批次" })).toHaveAttribute("href", `/integration/${sample.batches[1]}?project=3`);
+
   await submitPassingConclusion(page, sample.batches[1], "TEST003");
   await login(page, "MGR001");
   await expectTrialState(page, sample, "待发试制");

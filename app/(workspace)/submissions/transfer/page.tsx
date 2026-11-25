@@ -3,11 +3,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getTransferPackageOptions } from "@/lib/queries";
+import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { workflowHref } from "@/lib/workflow-links";
 import { TransferRequestForm } from "@/components/transfer-request-form";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "提交转测申请" };
@@ -18,8 +19,10 @@ export default async function NewTransferRequestPage({ searchParams }: { searchP
   const project = requireWorkflowProject(user, params.project);
   const returnTo = safeOverviewReturnPath(params.returnTo);
   const packages = getTransferPackageOptions(user, project?.id);
-  const requestedId = typeof params.package === "string" ? Number(params.package) : null;
+  const requestedId = typeof params.package === "string" && /^[1-9][0-9]*$/.test(params.package) && Number.isSafeInteger(Number(params.package)) ? Number(params.package) : undefined;
   const initialPackageId = packages.find((pkg) => pkg.id === requestedId)?.id;
+  const guidance = !packages.length || (requestedId !== undefined && initialPackageId === undefined)
+    ? getTransferEntryGuidance(user, project?.id, requestedId) : [];
   return (
     <>
       <PageHeader
@@ -28,7 +31,15 @@ export default async function NewTransferRequestPage({ searchParams }: { searchP
       />
       <section className="card" style={{ maxWidth: 760 }}>
         <div className="card-body">
-          {packages.length === 0 ? <EmptyState title="没有可提交的软件包" description="当前范围内没有你所属责任田的启用软件包。" /> : <TransferRequestForm key={`${project?.id ?? "all"}-${initialPackageId ?? "choose"}`} packages={packages} scopeProjectId={project?.id} initialPackageId={initialPackageId} returnTo={returnTo} />}
+          {guidance.length > 0 && <section aria-label="转测提交条件" className="risk-callout">
+            <h2>{packages.length === 0 ? "没有可提交的软件包" : "指定的软件包暂不可提交"}</h2>
+            <ul>{guidance.map((item) => <li key={item.title}>
+              <strong>{item.title}</strong>
+              {item.detail && <p>{item.detail}</p>}
+              {item.href && <Link href={item.href} prefetch={false} className="archive-link">{item.actionLabel}</Link>}
+            </li>)}</ul>
+          </section>}
+          {packages.length > 0 && <TransferRequestForm key={`${project?.id ?? "all"}-${initialPackageId ?? "choose"}`} packages={packages} scopeProjectId={project?.id} initialPackageId={initialPackageId} returnTo={returnTo} />}
         </div>
       </section>
     </>

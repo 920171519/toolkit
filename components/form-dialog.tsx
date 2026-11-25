@@ -60,6 +60,7 @@ export function FormDialog({
   wide = false,
   fallbackHref,
   cancelLabel,
+  closeOnLinkClick = false,
 }: {
   label: ReactNode;
   title: string;
@@ -70,6 +71,7 @@ export function FormDialog({
   wide?: boolean;
   fallbackHref?: string;
   cancelLabel?: string;
+  closeOnLinkClick?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const invoker = useRef<HTMLElement | null>(null);
@@ -96,7 +98,10 @@ export function FormDialog({
       )}
       {open && (
         <DialogSurface title={title} description={description} wide={wide} returnFocus={invoker} onClose={() => setOpen(false)}>
-          {children}
+          {closeOnLinkClick ? <div onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            if (event.target instanceof Element && event.target.closest("a[href]")) setOpen(false);
+          }}>{children}</div> : children}
           {cancelLabel && <div className="workspace-dialog-cancel">
             <button type="button" className="button button-secondary" onClick={() => setOpen(false)}>{cancelLabel}</button>
           </div>}

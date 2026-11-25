@@ -267,7 +267,11 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     }
     await formalRow.getByRole("link", { name: "核对并转正" }).click();
     await expect(page.getByText(/还有 1 条绑定电子流待审批/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "发布正式版本", exact: true }).click();
+    const releaseCheck = page.getByRole("dialog", { name: "转正发布条件" });
+    await expect(releaseCheck.getByRole("link", { name: "去审批" })).toHaveAttribute("href", /#binding-flow-\d+$/);
+    await expect(releaseCheck.getByRole("button", { name: "提交转正电子流并发布" })).toHaveCount(0);
+    await releaseCheck.getByRole("button", { name: "关闭", exact: true }).click();
     const evidence = page.getByRole("region", { name: "项目验收与绑定证据" });
     const n1Evidence = evidence.locator("details").filter({ has: page.locator("summary").filter({ hasText: "星云 N1" }) });
     if ((await n1Evidence.getAttribute("open")) === null) await n1Evidence.locator("summary").click();
@@ -277,11 +281,9 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await expect(page.getByRole("heading", { name: "已进入待转正" })).toBeVisible();
     await expect(page.getByText(/还有 1 条绑定电子流待审批/)).toBeVisible();
     const formalLink = page.getByRole("link", { name: "前往转正发布" });
-    await expect(formalLink).toHaveAttribute("href", formal);
-    await formalLink.click();
-    await expect(page).toHaveURL(url => url.pathname === `/formal/${versionId}` && url.searchParams.get("project") === "1");
-    await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toHaveCount(0);
-    await page.goBack();
+    await page.getByRole("button", { name: "前往转正发布" }).click();
+    await expect(releaseCheck.getByRole("link", { name: "去审批" })).toHaveAttribute("href", /#binding-flow-\d+$/);
+    await releaseCheck.getByRole("button", { name: "关闭", exact: true }).click();
     await expect(page.getByRole("heading", { name: "已进入待转正" })).toBeVisible();
     await approveFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("2/1 条码通过")).toBeVisible();
@@ -289,6 +291,7 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);
     await confirmBindingNode(page, node);
     expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+    await expect(page.locator("#binding-formal")).toBeFocused();
     await page.goto(n1);
     await withdrawFlow(page, "CONTROL-N1-SECOND");
     await expect(page.getByText("1/1 条码通过")).toBeVisible();

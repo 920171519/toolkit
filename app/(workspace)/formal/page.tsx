@@ -53,13 +53,20 @@ export default async function FormalPage({ searchParams }: {
     returnTo,
   };
   const versions = matching.slice(page.offset, page.end);
+  const traceHref = workflowHref("/versions", project?.id, { q: query || undefined, returnTo });
+  const bindingHref = workflowHref("/trial", project?.id, { view: "binding", returnTo });
 
   return (
     <>
       <PageHeader
         title="转正发布"
         description={archived ? "项目已归档" : undefined}
-        actions={<Link href={workflowHref(archived ? "/versions" : "/trial", project?.id, { view: archived ? undefined : "binding", returnTo })} prefetch={false} className="button button-secondary">{archived ? "查看版本全链路" : "查看绑定验证"} <ArrowRight size={14} /></Link>}
+        actions={<>
+          {!archived && <Link href={traceHref} prefetch={false}
+            className="button button-secondary">按版本检查转正条件</Link>}
+          <Link href={archived ? traceHref : bindingHref} prefetch={false}
+            className="button button-secondary">{archived ? "查看版本全链路" : "查看绑定验证"} <ArrowRight size={14} /></Link>
+        </>}
       />
       <FlashMessage notice={notice} />
       <section className="card">
@@ -68,8 +75,15 @@ export default async function FormalPage({ searchParams }: {
           <WorkflowListSearch action="/formal" label="软件包、版本或项目" query={query} pageSize={pageSize} fields={{ project: project?.id, returnTo }} />
         </div>
         {versions.length === 0 ? (
-          query ? <EmptyState title="没有匹配的版本" action={<Link href={listHref("")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>} />
-            : <EmptyState title="没有待转正的版本" />
+          <EmptyState title={query ? "没有匹配的版本" : "没有待转正的版本"}
+            description={archived ? "可在版本全链路查看该项目的历史记录。"
+              : query ? "如果目标版本仍在办理，可按软件包或版本号检查转正条件。" : "已发试制且仍在办理的版本可在绑定验证中查看。"}
+            action={<div className={styles.cardActions}>
+              {query && <Link href={listHref("")} prefetch={false} className="button button-secondary button-sm">清除搜索</Link>}
+              <Link href={archived || query ? traceHref : bindingHref} prefetch={false} className="button button-secondary button-sm">
+                {archived ? "查看历史版本" : query ? "检查软件包版本" : "查看在办绑定任务"}
+              </Link>
+            </div>} />
         ) : (
           <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="待转正版本列表" tabIndex={0}>
             <table className="data-table">

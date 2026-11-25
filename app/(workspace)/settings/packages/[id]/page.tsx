@@ -3,16 +3,19 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getLedAreaIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getLedAreaIds } from "@/lib/access";
+import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
-import { getImportedPackageVersions, getPackageUsageBlockingVersion } from "@/lib/settings";
+import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
 import { ActionForm } from "@/components/action-form";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { Badge, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { PackageUsagePicker } from "@/components/package-usage-picker";
+import { SettingsPackageActivation } from "@/components/settings-package-activation";
 import { SettingsSelect } from "@/components/settings-select";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import styles from "../package-settings.module.css";
@@ -48,7 +51,8 @@ export default async function PackageSettingsDetailPage({
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));
-  const bindingActive = Boolean(getPackageUsageBlockingVersion(pkg.id));
+  const usageBlockers = getPackageUsageBlockingVersions(pkg.id);
+  const deactivationBlockers = getPackageDeactivationBlockingVersions(pkg.id);
   const history = directoryPage(getImportedPackageVersions(pkg.id), listParams.historyPage, 10);
   const packagePath = `/settings/packages/${pkg.id}`;
   const historyParams = { ...listParams, historyPage: history.page > 1 ? String(history.page) : undefined };
@@ -68,7 +72,7 @@ export default async function PackageSettingsDetailPage({
 
       <div className="two-col">
         <div className="settings-card-stack">
-          <section className="card">
+          <section className="card" id="package-responsibility">
             <div className="card-header"><h2>责任信息</h2></div>
             <div className="card-body" style={{ paddingTop: 14 }}>
               <ActionForm className="workspace-edit-form" action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
@@ -107,28 +111,22 @@ export default async function PackageSettingsDetailPage({
                     <span className="label">试制超期天数 <span className="required-mark" aria-hidden="true">*</span></span>
                     <input className="input" type="number" name="trialOverdueDays" min={1} max={365} defaultValue={pkg.trialOverdueDays} required />
                   </label>
-                  <div className="field span-2">
-                    <label className="check-item" style={{ maxWidth: 280 }}>
-                      <input type="checkbox" name="isActive" defaultChecked={pkg.isActive} aria-describedby="settings-package-disable-effect" />
-                      启用软件包
-                    </label>
-                    <span id="settings-package-disable-effect" className="small muted">停用后禁止提交新版本，历史版本保留。</span>
-                  </div>
+                  <SettingsPackageActivation className="field span-2" active={pkg.isActive} blockers={deactivationBlockers} />
                 </div>
               </ActionForm>
             </div>
           </section>
 
-          <section className="card">
+          <section className="card" id="package-usage">
             <div className="card-header">
               <div className="settings-label-help">
                 <h2>项目节点使用范围</h2>
                 <InfoTooltip label="使用范围变更说明">新增在行项目会为尚未发布试制的转测版本补建申请。历史批次和绑定任务保留原范围。</InfoTooltip>
               </div>
-              {bindingActive && <span className="settings-meta">{usedNodeIds.size} 个节点</span>}
+              {usageBlockers.length > 0 && <span className="settings-meta">{usedNodeIds.size} 个节点</span>}
             </div>
             <div className="card-body" style={{ paddingTop: 14 }}>
-              {bindingActive ? (
+              {usageBlockers.length > 0 ? (
                 <div>
                   <div className="workflow-banner" data-tone="warning" style={{ marginBottom: 14 }}>
                     <ShieldAlert size={17} style={{ color: "var(--warning)", flex: "none" }} aria-hidden="true" />
@@ -137,11 +135,20 @@ export default async function PackageSettingsDetailPage({
                   {usages.length ? <dl className="detail-list">{usages.map((usage) => (
                     <div className="detail-row" key={usage.projectId}><dt>{usage.projectName}{usage.projectStatus === "ARCHIVED" ? "（已归档）" : ""}</dt><dd>{usage.nodes.map((node) => node.nodeName).join("、")}</dd></div>
                   ))}</dl> : <p className="small muted">暂无使用节点。</p>}
+                  <div className="form-footer">
+                    <GuidanceDialog label="保存使用范围" title="保存使用范围"
+                      description="以下版本处理完毕后，可以修改项目节点。"
+                      items={usageBlockers.map((version) => ({
+                        title: `${identity.code} ${version.version} · ${PACKAGE_STATUS_META[version.status].label}`,
+                        href: `/versions/${version.id}`, actionLabel: "查看版本全链路",
+                      }))} />
+                  </div>
                 </div>
               ) : (
                 <ActionForm action={savePackageUsagesAction} testId="package-usage-form" hidden={{ ...listParams, packageId: pkg.id }} submitText="保存使用范围">
-                  <PackageUsagePicker projects={projects.map((project) => ({
+                  <PackageUsagePicker createProjectHref={isAdmin ? "/settings/projects" : undefined} projects={projects.map((project) => ({
                     id: project.id, name: project.name, code: project.code, status: project.status,
+                    configureHref: canManageProjectWorkflowForProject(user, project.id) ? `/settings/projects/${project.id}#nodes` : undefined,
                     nodes: project.nodes.map(({ id, name, description }) => ({ id, name, description })),
                   }))} defaultNodeIds={[...usedNodeIds]} />
                 </ActionForm>
@@ -195,9 +202,17 @@ export default async function PackageSettingsDetailPage({
                   : <StatusPill status={version.status} />}</td>
                 <td><div className={styles.historyActions}>
                   <Link href={`/versions/${version.id}`} className="button button-ghost button-sm" prefetch={false}>全链路追溯</Link>
-                  {isAdmin && Boolean(version.canCorrect) && (
+                  {isAdmin && (version.canCorrect ? (
                     <Link href={directoryHref(`${packagePath}/history/${version.id}`, historyParams)} className="button button-secondary button-sm" prefetch={false}>更正补录</Link>
-                  )}
+                  ) : (
+                    <GuidanceDialog label="更正补录" title="更正历史版本"
+                      items={[{
+                        title: version.status === "VOID" ? "版本已作废" : "版本已被流程记录引用",
+                        detail: "保留当前版本和相关历史证据。",
+                        href: `/versions/${version.id}`, actionLabel: "查看历史记录",
+                      }]}
+                      triggerClassName="button button-secondary button-sm" />
+                  ))}
                   {isAdmin && (version.status === "TRIAL" || version.status === "FORMAL") && (
                     <VersionVoidDialog versionId={version.id} code={identity.code} version={version.version}
                       returnFields={{ ...historyParams, voidFrom: "package-settings" }} triggerClassName="button button-outline-danger button-sm" />

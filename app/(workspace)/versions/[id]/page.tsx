@@ -10,10 +10,12 @@ import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
+import { getFormalReleaseGuidance, getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
 import { canVoidPackageVersion } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
@@ -69,6 +71,17 @@ export default async function VersionTracePage({
   const canVoid = project?.status !== "ARCHIVED" && canVoidPackageVersion(user, versionId);
   const fromFormal = search.from === "formal";
   const formalState = getWorkflowListState(search);
+  const releaseContext = { projectId, returnTo: state.returnTo };
+  const isFormalStep = version.status === "TRIAL" || version.status === "PENDING_FORMAL";
+  const releaseGuidance = project?.status === "ARCHIVED" || version.status === "FORMAL" || version.status === "VOID"
+    ? null
+    : isFormalStep
+      ? getFormalReleaseGuidance(user, versionId, releaseContext)
+      : getTrialReleaseGuidance(user, versionId, releaseContext);
+  const actionLabel = releaseGuidance?.canManage
+    ? isFormalStep ? "前往转正发布" : "发布试制"
+    : isFormalStep ? "查看转正条件" : "检查试制条件";
+  const guidanceTitle = isFormalStep ? "转正条件" : "试制发布条件";
 
   return (
     <>
@@ -80,6 +93,9 @@ export default async function VersionTracePage({
         </>}
         actions={<>
           {fromFormal && <Link href={workflowHref("/formal", projectId, formalState)} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />返回待转正列表</Link>}
+          {releaseGuidance && (releaseGuidance.items.length > 0
+            ? <GuidanceDialog label={actionLabel} title={guidanceTitle} description={releaseGuidance.description} items={releaseGuidance.items} />
+            : releaseGuidance.href && <Link href={releaseGuidance.href} prefetch={false} className="button button-primary">{actionLabel}</Link>)}
           <Link href={workflowHref("/packages", projectId, { open: version.packageId })} prefetch={false} className="button button-secondary">查看软件包</Link>
           {project && <Link href={workflowHref(`/versions/${versionId}`, undefined, { returnTo: state.returnTo })} prefetch={false} className="button button-secondary">查看跨项目版本证据</Link>}
           {canVoid && <VersionVoidDialog versionId={versionId} code={identity.code} version={version.version}

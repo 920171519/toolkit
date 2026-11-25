@@ -66,3 +66,29 @@ export function getTrialProgress(versionIds: number[], projectId?: number) {
   );
   return new Map(rows.map((row) => [row.versionId, row]));
 }
+
+export function getTrialNodeUsages(packageId: number) {
+  return all<{
+    projectId: number;
+    projectName: string;
+    nodeId: number;
+    nodeName: string;
+    requiredCount: number;
+    bindingOwnerId: number | null;
+    bindingApproverId: number | null;
+  }>(`SELECT u.project_id AS projectId, p.name AS projectName, u.node_id AS nodeId,
+            n.name AS nodeName, n.required_binding_count AS requiredCount,
+            n.binding_owner_id AS bindingOwnerId, n.binding_approver_id AS bindingApproverId
+     FROM package_usages u
+     JOIN project_nodes n ON n.id = u.node_id
+     JOIN projects p ON p.id = u.project_id
+     WHERE u.package_id = ? AND p.status != 'ARCHIVED'
+     ORDER BY p.sort_order, n.sort_order`, packageId);
+}
+
+export function missingTrialNodeAssignments(node: { bindingOwnerId: number | null; bindingApproverId: number | null }) {
+  return [
+    ...(!node.bindingOwnerId ? ["绑定验证责任人"] : []),
+    ...(!node.bindingApproverId ? ["绑定电子流审批人"] : []),
+  ];
+}

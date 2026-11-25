@@ -38,7 +38,7 @@ import {
   updateUserRole,
 } from "@/lib/settings";
 import { ROLES, type Role } from "@/lib/constants";
-import { areaDirectoryDetailParams, areaDirectoryListParams, directoryActionHref, directoryFilters, directoryHref } from "@/lib/settings-directory";
+import { areaDirectoryDetailParams, areaDirectoryListParams, directoryActionHref, directoryFilters, directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
 
 async function actionUser() {
   const user = await getCurrentUser();
@@ -59,6 +59,17 @@ function areaDetailHref(formData: FormData, areaId: number, isNew = false) {
   const list = areaDirectoryDetailParams(isNew ? params : areaDirectoryListParams(params));
   const { q, page, pageSize } = directoryFilters("areas", params);
   return directoryHref(`/settings/areas/${areaId}`, { ...list, ...(!isNew && { q, page, pageSize }) });
+}
+
+function projectSettingsHref(formData: FormData, projectId?: number, nodeId?: number) {
+  const filters = projectDirectoryListParams({
+    listQ: text(formData, "listQ"),
+    listStatus: text(formData, "listStatus"),
+    listPage: text(formData, "listPage"),
+  }, true);
+  if (projectId === undefined) return directoryHref("/settings/projects", filters);
+  const path = `/settings/projects/${projectId}`;
+  return directoryHref(nodeId === undefined ? path : `${path}/nodes/${nodeId}`, projectDirectoryDetailParams(filters));
 }
 
 export async function saveAreaAction(
@@ -228,9 +239,9 @@ export async function saveProjectAction(
   }
   refreshAll();
   if (user.role === "SOFTWARE_MANAGER" && !softwareManagerIds.includes(user.id)) {
-    successRedirect("/settings/projects", "项目配置已更新。你已不负责该项目。");
+    successRedirect(projectSettingsHref(formData), "项目配置已更新。你已不负责该项目。");
   }
-  successRedirect(`/settings/projects/${projectId}`, id ? "项目配置已更新。" : "项目已创建，可继续添加测试节点。");
+  successRedirect(projectSettingsHref(formData, projectId), id ? "项目配置已更新。" : "项目已创建，可继续添加测试节点。");
 }
 
 export async function addProjectNodeAction(
@@ -256,7 +267,7 @@ export async function addProjectNodeAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/projects/${projectId}`, "项目测试节点已添加。");
+  successRedirect(projectSettingsHref(formData, projectId), "项目测试节点已添加。");
 }
 
 export async function addProjectNodeApproverAction(
@@ -274,7 +285,7 @@ export async function addProjectNodeApproverAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/projects/${projectId}/nodes/${nodeId}`, "节点审批人范围已更新。");
+  successRedirect(projectSettingsHref(formData, projectId, nodeId), "节点审批人范围已更新。");
 }
 
 export async function removeProjectNodeApproverAction(
@@ -291,7 +302,7 @@ export async function removeProjectNodeApproverAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/projects/${scope.projectId}/nodes/${scope.nodeId}`, "节点审批人已移除。");
+  successRedirect(projectSettingsHref(formData, scope.projectId, scope.nodeId), "节点审批人已移除。");
 }
 
 export async function updateProjectNodeAction(
@@ -318,7 +329,7 @@ export async function updateProjectNodeAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/projects/${projectId}/nodes/${nodeId}`, "项目节点绑定配置已更新。");
+  successRedirect(projectSettingsHref(formData, projectId, nodeId), "项目节点绑定配置已更新。");
 }
 
 export async function deleteProjectNodeAction(
@@ -335,7 +346,7 @@ export async function deleteProjectNodeAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect(`/settings/projects/${projectId}`, "项目测试节点已删除。");
+  successRedirect(projectSettingsHref(formData, projectId), "项目测试节点已删除。");
 }
 
 export async function deleteProjectAction(
@@ -351,7 +362,7 @@ export async function deleteProjectAction(
     return failure(error);
   }
   refreshAll();
-  successRedirect("/settings/projects", "项目已删除。");
+  successRedirect(projectSettingsHref(formData), "项目已删除。");
 }
 
 export async function savePackageAction(

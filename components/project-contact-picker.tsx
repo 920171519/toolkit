@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 type ContactOption = { id: number; name: string; employeeId: string };
 
@@ -11,12 +11,14 @@ export function ProjectContactPicker({
   options,
   defaultSelectedIds = [],
   className = "",
+  emptyHelp,
 }: {
   label: string;
   name: "pmUserIds" | "softwareManagerIds";
   options: ContactOption[];
   defaultSelectedIds?: number[];
   className?: string;
+  emptyHelp?: ReactNode;
 }) {
   const labelId = useId();
   const [search, setSearch] = useState("");
@@ -50,7 +52,14 @@ export function ProjectContactPicker({
           }}
         />
       </label>
-      {matchingIds.size === 0 && <span className="small muted" role="status">没有匹配的人员</span>}
+      {options.length === 0 ? (
+        <div className="small muted" role="status">{emptyHelp ?? "没有启用的候选人员。"}</div>
+      ) : matchingIds.size === 0 && (
+        <div className="toolbar">
+          <span className="small muted" role="status">没有匹配的人员</span>
+          <button type="button" className="button button-ghost button-sm" onClick={() => setSearch("")}>清除搜索</button>
+        </div>
+      )}
       <div className="person-check-grid">
         {options.map((person) => {
           const checked = selectedIds.has(person.id);

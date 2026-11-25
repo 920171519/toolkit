@@ -44,6 +44,22 @@ export function areaDirectoryDetailParams(params: DirectoryParams) {
   return { ...filters, listQ: q, listPage: page, listPageSize: pageSize };
 }
 
+export function projectDirectoryListParams(params: DirectoryParams, fromDetail = false) {
+  const q = directoryValue(fromDetail ? params.listQ : params.q);
+  const status = fromDetail ? params.listStatus : params.status;
+  const page = Number(directoryValue(fromDetail ? params.listPage : params.page));
+  return {
+    q: q || undefined,
+    status: status === "ACTIVE" || status === "PAUSED" || status === "ARCHIVED" ? status : undefined,
+    page: Number.isSafeInteger(page) && page > 1 ? String(page) : undefined,
+  };
+}
+
+export function projectDirectoryDetailParams(params: DirectoryParams) {
+  const { q, status, page } = projectDirectoryListParams(params);
+  return { listQ: q, listStatus: status, listPage: page };
+}
+
 export function directoryActionHref(directory: Directory, formData: FormData, id?: number) {
   const filters = directoryFilters(directory, Object.fromEntries(
     [...sharedKeys, ...filterKeys[directory]].map((key) => {

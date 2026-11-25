@@ -10,10 +10,13 @@ import {
   parseFlash,
 } from "@/lib/queries";
 import { canEditPackageById, hasAreaLeadership } from "@/lib/access";
+import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
 import { PackageOverviewTable } from "@/components/package-overview-table";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
+import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +37,8 @@ export default async function PackagesPage({
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
   const initialDetail = initialOpenId ? getPackageDetail(initialOpenId, true, selectedProject?.id) : null;
   const initialCanEdit = initialOpenId ? canEditPackageById(user, initialOpenId) : false;
-  const transferableIds = getTransferPackageOptions(user, selectedProject?.id).map((pkg) => pkg.id);
+  const canRequest = getTransferPackageOptions(user, selectedProject?.id).length > 0;
+  const transferHref = workflowHref("/submissions/transfer", selectedProject?.id);
 
   return (
     <>
@@ -46,7 +50,9 @@ export default async function PackagesPage({
             <Link href={workflowHref("/versions", selectedProject?.id)} className="button button-secondary">
               <ListTree size={14} aria-hidden="true" /> 版本全链路
             </Link>
-            {transferableIds.length > 0 && <Link href={workflowHref("/submissions/transfer", selectedProject?.id)} className="button button-primary"><Plus size={14} aria-hidden="true" /> 提交转测申请</Link>}
+            {canRequest ? <Link href={transferHref} className="button button-primary"><Plus size={14} aria-hidden="true" /> 提交转测申请</Link>
+              : <GuidanceDialog label="提交转测申请" title="转测提交条件" fallbackHref={transferHref}
+                  items={getTransferEntryGuidance(user, selectedProject?.id)} />}
           </>
         }
       />
@@ -56,9 +62,10 @@ export default async function PackagesPage({
         key={selectedProject?.id ?? "all"}
         packages={packages}
         people={people}
-        transferableIds={transferableIds}
         selectedProjectId={selectedProject?.id}
-        initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit } : null}
+        initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit,
+          deactivationBlockers: initialCanEdit ? getPackageDeactivationBlockingVersions(initialDetail.package.id) : [],
+        } : null}
       />
     </>
   );

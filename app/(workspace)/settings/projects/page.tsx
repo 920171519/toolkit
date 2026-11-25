@@ -6,8 +6,11 @@ import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
+import { directoryHref, projectDirectoryDetailParams } from "@/lib/settings-directory";
+import { getProjectManagerCandidateGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { ProjectSettingsFields, PROJECT_STATUS_OPTIONS } from "@/components/project-settings-fields";
 import { matchesSearch, searchValue, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -29,18 +32,22 @@ export default async function ProjectsSettingsPage({ searchParams }: {
   const projects = getProjectConfigs().filter((project) => isAdmin || project.softwareManagers.some((manager) => manager.id === user.id));
   const list = settingsPage(projects.filter((project) => (!status || project.status === status) && matchesSearch(query, project.name, project.code, project.pmName, project.softwareManagerName)), params.page);
   const people = isAdmin ? getPeople() : [];
+  const managerCandidateBlocker = isAdmin ? getProjectManagerCandidateGuidance(user, people) : null;
+  const listContext = projectDirectoryDetailParams({ q: query, status, page: String(list.page) });
 
   return (
     <>
       <PageHeader
         title="项目与测试节点"
-        actions={isAdmin && (
+        actions={isAdmin && (managerCandidateBlocker ? (
+          <GuidanceDialog label="新建项目" title="新建项目" items={[managerCandidateBlocker]} />
+        ) : (
           <FormDialog label={<><Plus size={16} aria-hidden="true" /> 新建项目</>} title="新建项目" testId="new-project-trigger">
-            <ActionForm action={saveProjectAction} submitText="创建项目" testId="new-project-form" preserveValuesOnSubmit>
-              <ProjectSettingsFields people={people} />
+            <ActionForm action={saveProjectAction} hidden={listContext} submitText="创建项目" testId="new-project-form" preserveValuesOnSubmit>
+              <ProjectSettingsFields people={people} canManagePeople />
             </ActionForm>
           </FormDialog>
-        )}
+        ))}
       />
       <FlashMessage notice={notice} />
       <section className="card" aria-label="项目列表">
@@ -65,18 +72,21 @@ export default async function ProjectsSettingsPage({ searchParams }: {
               <tbody>{list.items.map((project) => {
                 const projectStatus = PROJECT_STATUS_META[project.status];
                 const stage = PROJECT_STAGE_META[getProjectStage(project.status, project.stage)];
+                const configHref = directoryHref(`${listPath}/${project.id}`, listContext);
                 return <tr key={project.id}>
-                  <th scope="row" className="settings-project-identity"><Link href={`${listPath}/${project.id}`} className="archive-link" prefetch={false}>{project.name}</Link><div className="small muted">{project.code}</div></th>
+                  <th scope="row" className="settings-project-identity"><Link href={configHref} className="archive-link" prefetch={false}>{project.name}</Link><div className="small muted">{project.code}</div></th>
                   <td><span className="settings-stage">{stage.label}</span></td>
                   <td><Badge tone={projectStatus.tone} dot>{projectStatus.label}</Badge></td>
                   <td className="settings-project-contacts"><span className="small">PM {project.pmName ?? "待指定"}</span><div className="small muted">软件经理 {project.softwareManagerName ?? "待指定"}</div></td>
                   <td className="settings-number">{project.nodes.length} 个</td>
-                  <td className="cell-actions"><Link href={`${listPath}/${project.id}`} aria-label={`配置${project.name}`} className="button button-secondary button-sm" prefetch={false}>配置项目</Link></td>
+                  <td className="cell-actions"><Link href={configHref} aria-label={`配置${project.name}`} className="button button-secondary button-sm" prefetch={false}>配置项目</Link></td>
                 </tr>;
               })}</tbody>
             </table>
           </div>
-        ) : <EmptyState title={query || status ? "没有匹配的项目" : "暂无可配置的项目"} description={!query && !status && !isAdmin ? "由管理员分配项目。" : undefined} />}
+        ) : <EmptyState title={query || status ? "没有匹配的项目" : "暂无可配置的项目"}
+          description={!query && !status && !isAdmin ? "请联系系统管理员在项目配置中将你设为软件经理。" : undefined}
+          action={!query && !status && !isAdmin ? <Link href="/overview" className="button button-secondary button-sm" prefetch={false}>查看项目总览</Link> : undefined} />}
         <SettingsPagination action={listPath} page={list.page} pageCount={list.pageCount} filters={{ q: query, status }} range={`共 ${list.total} 个项目`} />
       </section>
     </>

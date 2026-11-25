@@ -8,6 +8,20 @@ type ActiveBindingSummary = {
 
 const openTrialStatuses = "('TRIAL','PENDING_FORMAL')";
 const activeReleaseRequest = "r.trial_released_at IS NOT NULL AND pr.status != 'ARCHIVED'";
+const activeIntegrationBatch = `FROM batch_items bi
+  JOIN integration_batches b ON b.id = bi.batch_id
+  JOIN projects p ON p.id = b.project_id
+  WHERE bi.package_version_id = ? AND bi.transfer_request_id IS NOT NULL
+    AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED'`;
+
+export function getActiveReleaseRequests(database: DatabaseSync, versionId: number) {
+  return database.prepare(
+    `SELECT r.id, r.project_id AS projectId, pr.name AS projectName, r.status
+     FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
+     WHERE r.package_version_id = ? AND ${activeReleaseRequest}
+     ORDER BY pr.sort_order`,
+  ).all(versionId) as Array<{ id: number; projectId: number; projectName: string; status: string }>;
+}
 
 export function getActiveBindingSummary(database: DatabaseSync, versionId: number): ActiveBindingSummary {
   return database.prepare(
@@ -23,13 +37,20 @@ export function getActiveBindingSummary(database: DatabaseSync, versionId: numbe
 }
 
 export function hasActiveIntegrationBatch(database: DatabaseSync, versionId: number) {
-  return Boolean(database.prepare(
-    `SELECT b.id FROM batch_items bi
-     JOIN integration_batches b ON b.id = bi.batch_id
-     JOIN projects p ON p.id = b.project_id
-     WHERE bi.package_version_id = ? AND bi.transfer_request_id IS NOT NULL
-       AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED' LIMIT 1`,
-  ).get(versionId));
+  return Boolean(database.prepare(`SELECT b.id ${activeIntegrationBatch} LIMIT 1`).get(versionId));
+}
+
+export function getActiveIntegrationBatches(database: DatabaseSync, versionId: number) {
+  return database.prepare(
+    `SELECT DISTINCT b.id, b.code, b.status, p.id AS projectId, p.name AS projectName
+     ${activeIntegrationBatch} ORDER BY p.sort_order, b.id`,
+  ).all(versionId) as Array<{ id: number; code: string; status: string; projectId: number; projectName: string }>;
+}
+
+export function areFormalBindingsReady(binding: ActiveBindingSummary, mode: string) {
+  return mode === "SKIPPED"
+    ? binding.cancelled === binding.total
+    : binding.total > 0 && binding.settled === binding.total;
 }
 
 export function refreshTrialReadiness(database: DatabaseSync, versionId: number, timestamp: string) {
@@ -44,9 +65,8 @@ export function refreshTrialReadiness(database: DatabaseSync, versionId: number,
   if (!version) return false;
 
   const binding = getActiveBindingSummary(database, versionId);
-  const ready = version.binding_mode === "SKIPPED"
-    ? binding.cancelled === binding.total
-    : version.binding_mode === "PUSHED" && binding.total > 0 && binding.settled === binding.total;
+  const ready = (version.binding_mode === "PUSHED" || version.binding_mode === "SKIPPED")
+    && areFormalBindingsReady(binding, version.binding_mode);
   const nextStatus = ready && !hasActiveIntegrationBatch(database, versionId) ? "PENDING_FORMAL" : "TRIAL";
   if (version.status !== nextStatus) {
     database.prepare("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?")

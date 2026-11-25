@@ -8,6 +8,7 @@ import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { rememberPendingReview, usePendingBatchChoices } from "@/components/pending-batch-choices";
@@ -48,7 +49,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
   scopeProjectId?: number;
   pageSize: number;
   selection?: { key: string; defaults: Record<number, number>; versionPackages: Record<number, number> };
-  returnState: { q?: string; page?: number; pageSize?: number; returnTo?: string };
+  returnState: { q?: string; page?: number; pageSize?: number; request?: number; returnTo?: string };
 }) {
   const { projectId, projectName, projectCode, items } = group;
   const { choices, choose, reset } = usePendingBatchChoices(selection?.key);
@@ -123,7 +124,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
           {selection && <InfoTooltip label="本轮转测选择说明">每个软件包本轮可选一个待测版本。暂缓的版本留在申请队列。</InfoTooltip>}
         </div>
         <div className={styles.cardActions}>
-          {isFiltered && <button className="button button-ghost button-sm" type="button" onClick={() => { setFilters({}); setPage(1); }}>清除全部筛选</button>}
+          {isFiltered && matchingRows.length > 0 && <button className="button button-ghost button-sm" type="button" onClick={() => { setFilters({}); setPage(1); }}>清除全部筛选</button>}
           {selection && <>
           <span className="small" role="status">
             已选 {checkedCount} 个版本
@@ -131,7 +132,11 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
             {checkedOnOtherPages > 0 && <>，另有 {checkedOnOtherPages} 个在其他分页。</>}
           </span>
           {Object.keys(choices).length > 0 && <button type="button" className="button button-ghost button-sm" onClick={reset}>恢复默认选择</button>}
-          <Link href={prepareHref} prefetch={false} className="button button-primary button-sm" data-testid={`open-batch-${projectId}`} onClick={() => rememberPendingReview(selection.key, hiddenVersions)}>准备转测批次 <ArrowRight size={14} aria-hidden="true" /></Link>
+          {Object.keys(selection.defaults).length > 0 ? <Link href={prepareHref} prefetch={false} className="button button-primary button-sm" data-testid={`open-batch-${projectId}`} onClick={() => rememberPendingReview(selection.key, hiddenVersions)}>准备转测批次 <ArrowRight size={14} aria-hidden="true" /></Link>
+            : <GuidanceDialog label="准备转测批次" title="准备转测批次的条件" fallbackHref={prepareHref}
+              items={[{ title: "目前没有可纳入的待转测版本", detail: "先处理已占用的草稿，或提交可在本项目验证的新版本。",
+                href: items.some((item) => item.draftBatchId !== null) ? workflowHref("/submissions", projectId, { view: "drafts", returnTo: returnState.returnTo }) : workflowHref("/submissions/transfer", projectId, { returnTo: returnState.returnTo }),
+                actionLabel: items.some((item) => item.draftBatchId !== null) ? "查看待发起批次" : "查看转测提交条件" }]} />}
           </>}
         </div>
       </div>
@@ -158,7 +163,9 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
               {selection && <td className={styles.selectionCell}>{item.canInclude ? <input type="checkbox"
                 aria-label={`本轮转测 ${item.packageName} ${item.version}`}
                 checked={checked}
-                onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : <span className="muted">—</span>}</td>}
+                onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : item.draftBatchId !== null
+                  ? <Link href={workflowHref(`/integration/${item.draftBatchId}`, scopeProjectId, { ...returnState, fromRequests: "1" })} prefetch={false} className="archive-link">{item.draftBatchCode} 草稿占用</Link>
+                  : <span className="small muted">{item.packageActive ? "不在项目使用范围" : "软件包已停用"}</span>}</td>}
               <th scope="row">
                 <strong className="mono">{identity.code}</strong>
               </th>
@@ -186,13 +193,15 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
           ))}</tbody>
         </table>
       </div>
-      {visibleRows.length === 0 && <EmptyState title="没有匹配的待转测申请" />}
+      {visibleRows.length === 0 && <EmptyState title="没有匹配的待转测申请"
+        action={isFiltered && <button className="button button-secondary button-sm" type="button"
+          onClick={() => { setFilters({}); setPage(1); }}>清除全部筛选</button>} />}
       {pages > 1 && <nav className={`toolbar ${styles.rowActions}`} aria-label={`${projectName}申请列表分页`}>
         <button className="button button-secondary button-sm" type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>上一页</button>
         <span className="small muted">第 {currentPage} / {pages} 页</span>
         <button className="button button-secondary button-sm" type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>下一页</button>
       </nav>}
-      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} people={[]} readOnly canSubmitTransfer={false} onClose={() => {
+      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} people={[]} readOnly onClose={() => {
         setActivePackage(null);
         requestAnimationFrame(() => detailTrigger.current?.focus());
       }} />}

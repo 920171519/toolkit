@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { submitTransferAction } from "@/lib/actions/workflow";
 import type { ActionState } from "@/lib/action-state";
 import styles from "./workflow-queue.module.css";
@@ -42,12 +43,13 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
   const pageSize = 12;
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const canSubmit =
-    selected !== null &&
-    version.trim().length > 0 &&
-    changeSummary.trim().length >= 5 &&
-    /^https?:\/\//i.test(archiveUrl.trim()) &&
-    /^https?:\/\//i.test(buildUrl.trim());
+  const conditions = [
+    !selected ? { title: "选择软件包", detail: "按名称、编码或责任人搜索并选择软件包。" } : null,
+    !version.trim() ? { title: "填写版本号" } : null,
+    changeSummary.trim().length < 5 ? { title: "填写变更说明", detail: "至少填写 5 个字。" } : null,
+    !/^https?:\/\//i.test(archiveUrl.trim()) ? { title: "补齐归档链接", detail: "链接以 http:// 或 https:// 开头。" } : null,
+    !/^https?:\/\//i.test(buildUrl.trim()) ? { title: "补齐构建地址", detail: "地址以 http:// 或 https:// 开头。" } : null,
+  ].filter((item): item is NonNullable<typeof item> => item !== null);
 
   return (
     <form action={formAction} data-testid="transfer-form">
@@ -76,7 +78,10 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                 />
               </label>
               <div className="package-pick-list">
-                {filtered.length === 0 ? <span className="small muted">没有匹配的软件包</span> : visible.map((pkg) => (
+                {filtered.length === 0 ? <div className="toolbar">
+                  <span className="small muted">没有匹配的软件包</span>
+                  <button type="button" className="button button-secondary button-sm" onClick={() => { setSearch(""); setPage(1); }}>清除搜索</button>
+                </div> : visible.map((pkg) => (
                   <button type="button" className="package-pick-item" key={pkg.id} onClick={() => setPackageId(pkg.id)} data-testid={`transfer-package-${pkg.id}`}>
                     <span className={styles.packageChoiceLabel}><strong>{pkg.name}</strong> · {pkg.code}</span>
                     <span className={`small muted ${styles.packageChoiceAside}`}>{pkg.ownerName ?? "待指定责任人"}</span>
@@ -105,9 +110,10 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
       {state?.error && <div className="form-error" role="alert">{state.error}</div>}
       <div className="form-footer">
         <span id={submitHintId} className="form-note">提交后，所有使用该软件包的在行项目都会收到申请。</span>
-        <button type="submit" className="button button-primary" aria-describedby={submitHintId} disabled={!canSubmit || pending}>
+        {conditions.length > 0 && !pending ? <GuidanceDialog label="提交申请" title="提交转测申请的条件" items={conditions} />
+          : <button type="submit" className="button button-primary" aria-describedby={submitHintId} disabled={pending}>
           {pending ? "提交中…" : "提交申请"}
-        </button>
+        </button>}
       </div>
     </form>
   );

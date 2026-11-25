@@ -7,7 +7,10 @@ import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { getAdminUsers, parseFlash } from "@/lib/queries";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { saveUserProfileAction, setUserActiveAction, updateUserRoleAction } from "@/lib/actions/settings";
+import { getSettingsPackageReferences } from "@/lib/settings";
+import { packageReferenceGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 
@@ -29,7 +32,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
   const listParams = directoryFilters("users", { ...search, f_role: search.f_role ?? legacyRole });
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const isSelf = member.id === user.id;
-  const blockedDeactivation = member.isActive && member.activeOwnedPackages > 0;
+  const activeOwnedPackages = !isSelf && member.isActive ? getSettingsPackageReferences({ enabledOwnerId: userId }) : [];
   return (
     <div className="settings-card-stack">
       <PageHeader
@@ -52,7 +55,9 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
       <section className="card">
         <div className="card-header"><h2>责任田</h2></div>
         <div className="card-body toolbar">
-          {member.areas.length ? member.areas.map((area) => <Link key={area.id} className="button button-secondary button-sm" href={`/settings/areas/${area.id}`} prefetch={false}>{area.name}</Link>) : <p className="small muted">未分配责任田。</p>}
+          {member.areas.length ? member.areas.map((area) => <Link key={area.id} className="button button-secondary button-sm" href={`/settings/areas/${area.id}`} prefetch={false}>{area.name}</Link>) : (
+            <><span className="small muted">未分配责任田。</span><Link href="/settings/areas" className="button button-secondary button-sm" prefetch={false}>查看责任田配置</Link></>
+          )}
         </div>
       </section>
       <section className="card">
@@ -75,15 +80,18 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
       {!isSelf && <section className="card">
         <div className="card-header"><h2>登录状态</h2></div>
         <div className="card-body">
-          <ActionForm
+          {activeOwnedPackages.length > 0 ? (
+            <GuidanceDialog label="停用账号" title={`停用 ${member.name} 的账号`}
+              description="停用前，请转交以下启用软件包的责任人。"
+              items={packageReferenceGuidance(user, activeOwnedPackages, "在责任信息中选择接任人员并保存。", "owner")}
+              triggerClassName="button button-outline-danger" />
+          ) : <ActionForm
             action={setUserActiveAction}
             hidden={{ ...listParams, userId, active: member.isActive ? "0" : "1" }}
             submitText={member.isActive ? "停用账号" : "启用账号"}
             submitVariant={member.isActive ? "outline-danger" : "secondary"}
-            disabled={blockedDeactivation}
-            footerNote={blockedDeactivation ? `此账号仍负责 ${member.activeOwnedPackages} 个启用的软件包。请先转交责任人。` : undefined}
             confirmMessage={member.isActive ? `将停用 ${member.name} 的账号并结束其登录会话。已有业务记录保留。` : `重新启用后，${member.name} 可以登录。`}
-          />
+          />}
         </div>
       </section>}
     </div>

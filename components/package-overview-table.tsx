@@ -26,11 +26,10 @@ function nodeOptionValue(name: string) {
 }
 
 export function PackageOverviewTable({
-  packages, people, transferableIds, initialDetail = null, selectedProjectId,
+  packages, people, initialDetail = null, selectedProjectId,
 }: {
   packages: PackageOverviewRow[];
   people: PersonOption[];
-  transferableIds: number[];
   initialDetail?: DrawerPayload | null;
   selectedProjectId?: number;
 }) {
@@ -136,7 +135,7 @@ export function PackageOverviewTable({
             <input type="search" value={query} onChange={(event) => window.history.replaceState(null, "", urlWith({ q: event.target.value, page: null }))} aria-label="搜索软件包" placeholder="搜索软件包、版本或责任人" />
           </label>
           <span className="small muted" role="status">{filtered.length}{filterSet ? " / " + packages.length : ""} 个软件包</span>
-          {filterSet && <button type="button" className="button button-ghost button-sm" onClick={resetFilters}>清除筛选</button>}
+          {filterSet && visible.length > 0 && <button type="button" className="button button-ghost button-sm" onClick={resetFilters}>清除筛选</button>}
         </div>
           <div className="table-wrap" role="region" aria-label="软件版本总览表格" tabIndex={0}>
             <table className="data-table">
@@ -183,7 +182,11 @@ export function PackageOverviewTable({
               </tbody>
             </table>
           </div>
-        {visible.length === 0 && <EmptyState title={filterSet ? "没有匹配的软件包" : "暂无软件包"} />}
+        {visible.length === 0 && <EmptyState
+          title={filterSet ? "没有匹配的软件包" : selectedProjectId ? "当前项目暂无软件包" : "暂无软件包"}
+          action={filterSet ? <button type="button" className="button button-secondary button-sm" onClick={resetFilters}>清除筛选</button>
+            : selectedProjectId ? <Link href={urlWith({ project: null, page: null, open: null, panel: null })} prefetch={false}
+              className="button button-secondary button-sm">查看全部软件包</Link> : undefined} />}
         <div className="package-index-pagination">
           <label>
             <span>每页行数</span>
@@ -201,7 +204,7 @@ export function PackageOverviewTable({
           </nav>
         </div>
       </section>
-      {openId && <PackageDrawer key={`${openId}-${openPanel}`} packageId={openId} projectId={selectedProjectId} people={people} canSubmitTransfer={transferableIds.includes(openId)} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} initialPanel={openPanel} />}
+      {openId && <PackageDrawer key={`${openId}-${openPanel}`} packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} initialPanel={openPanel} />}
     </>
   );
 }

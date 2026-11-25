@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ProjectContactPicker } from "@/components/project-contact-picker";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES, PROJECT_STAGE_META } from "@/lib/project-stage";
@@ -9,14 +10,16 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: "ARCHIVED", label: "已归档" },
 ] as const;
 
-export function ProjectSettingsFields({ people, project }: { people: PersonOption[]; project?: ProjectConfig }) {
+export function ProjectSettingsFields({ people, project, canManagePeople }: { people: PersonOption[]; project?: ProjectConfig; canManagePeople?: boolean }) {
   const softwareManagers = people.filter((person) => person.role === "SOFTWARE_MANAGER");
   return (
     <div className="form-grid">
       <label className="field"><span className="label">项目名称</span><input className="input" name="name" defaultValue={project?.name} placeholder="例如 星云 N2" minLength={2} required /></label>
       <label className="field"><span className="label">项目编码</span><input className="input" name="code" defaultValue={project?.code} placeholder="例如 N2" maxLength={20} pattern="[A-Za-z0-9_\-]{2,20}" required /></label>
-      <ProjectContactPicker label="PM" name="pmUserIds" options={people} defaultSelectedIds={project?.pms.map((person) => person.id)} className="span-2" />
-      <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} defaultSelectedIds={project?.softwareManagers.map((person) => person.id)} className="span-2" />
+      <ProjectContactPicker label="PM" name="pmUserIds" options={people} defaultSelectedIds={project?.pms.map((person) => person.id)} className="span-2"
+        emptyHelp={canManagePeople ? <>没有启用的候选人员。 <Link href="/settings/users" prefetch={false}>查看人员与角色</Link></> : "请联系管理员启用可担任 PM 的账号。"} />
+      <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} defaultSelectedIds={project?.softwareManagers.map((person) => person.id)} className="span-2"
+        emptyHelp={canManagePeople ? <>没有启用的软件经理账号。 <Link href="/settings/users" prefetch={false}>配置人员角色</Link></> : "请联系管理员启用具有软件经理角色的账号。"} />
       <div className="field">
         <span className="settings-label-help">
           <label className="label" htmlFor="settings-project-stage">项目阶段</label>

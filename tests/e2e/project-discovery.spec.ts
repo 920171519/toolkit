@@ -88,8 +88,8 @@ test("授权项目的流程入口保留项目范围，试制内容按角色显�
   const catalog = page.getByRole("region", { name: "项目列表", exact: true });
   await catalog.getByRole("link", { name: "星云 N1", exact: true }).click();
   const workflow = page.getByRole("region", { name: "当前流程", exact: true });
-  const binding = workflow.getByRole("link", { name: /试制与绑定/ });
-  await expect(binding).not.toContainText("待发试制");
+  const binding = workflow.getByRole("link", { name: /节点绑定/ });
+  await expect(workflow.getByRole("link", { name: /待发布试制/ })).toHaveCount(0);
   await expect(binding).toHaveAttribute("href", "/trial?project=1&view=binding");
   await expect(workflow.getByRole("link", { name: /集成测试/ })).toHaveAttribute("href", "/integration?project=1");
   await expect(workflow.getByRole("link", { name: /转正/ })).toHaveAttribute("href", "/formal?project=1");

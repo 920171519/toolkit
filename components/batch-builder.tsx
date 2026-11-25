@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Link from "next/link";
 import { Search } from "lucide-react";
 import type { BatchCandidatePackage, ProjectOption } from "@/lib/workflow-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
-import { Badge } from "@/components/ui";
+import { Badge, EmptyState } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
+import { DialogSurface } from "@/components/form-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { usePendingBatchChoices, usePendingReview } from "@/components/pending-batch-choices";
 import type { CreateBatchInput } from "@/lib/workflow";
@@ -23,6 +25,9 @@ export function BatchBuilder({
   scopeProjectId,
   selectionKey,
   returnTo,
+  draft,
+  listState,
+  transfersHref,
 }: {
   project: ProjectOption;
   candidates: BatchCandidatePackage[];
@@ -30,13 +35,33 @@ export function BatchBuilder({
   scopeProjectId?: number;
   selectionKey?: string;
   returnTo?: string;
+  draft?: { id: number; title: string; revision: number; items: Array<{ packageId: number; versionId: number; isChanged: boolean }> };
+  listState?: { q?: string; page?: number; pageSize?: number; fromRequests?: "1"; request?: number };
+  transfersHref: string;
 }) {
   const hiddenVersions = usePendingReview(selectionKey);
   const { choices } = usePendingBatchChoices(selectionKey);
-  const [selected, setSelected] = useState<Map<number, number>>(() => new Map());
+  const savedItems = new Map(draft?.items.map((item) => [item.packageId, item]));
+  const savedVersion = (candidate: BatchCandidatePackage) => {
+    const saved = savedItems.get(candidate.packageId);
+    return saved && candidate.versions.find((version) =>
+      version.id === saved.versionId && version.status !== "VOID" && version.requestStatus !== "VOID"
+      && (version.requestStatus === "PENDING") === saved.isChanged,
+    );
+  };
+  const [selected, setSelected] = useState<Map<number, number>>(() => new Map(
+    candidates.flatMap((candidate) => {
+      const prior = savedVersion(candidate);
+      return prior ? [[candidate.packageId, prior.id] as const] : [];
+    }),
+  ));
   const [includeOverrides, setIncludeOverrides] = useState<Map<number, boolean>>(() => new Map());
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [showConditions, setShowConditions] = useState(false);
+  const conditionsTrigger = useRef<HTMLButtonElement>(null);
+  const results = useRef<HTMLDivElement>(null);
 
   const rows = candidates.map((candidate) => {
     const choice = choices[candidate.packageId];
@@ -45,9 +70,9 @@ export function BatchBuilder({
     const manualVersion = selected.get(candidate.packageId);
     const versionId = manualVersion ?? previous ?? preselected?.id ?? candidate.defaultVersionId;
     const version = candidate.versions.find((item) => item.id === versionId) ?? null;
-    const included = includeOverrides.get(candidate.packageId) ?? (choice !== null || previous !== null);
+    const included = includeOverrides.get(candidate.packageId) ?? (draft ? Boolean(savedVersion(candidate)) : choice !== null || previous !== null);
     const carryPrevious = manualVersion === undefined && previous !== null;
-    const changed = !carryPrevious && version?.requestStatus === "PENDING";
+    const changed = !carryPrevious && version?.requestStatus === "PENDING" && version.status !== "VOID";
     return { candidate, versionId, version, included, carryPrevious, changed };
   });
   const included = rows.filter((row) => row.included);
@@ -59,29 +84,34 @@ export function BatchBuilder({
     carryPrevious: carryPrevious || undefined,
   }));
   const term = query.trim().toLocaleLowerCase();
-  const matches = rows.filter(({ candidate }) => `${candidate.packageName} ${candidate.packageCode} ${candidate.ownerName ?? ""}`.toLocaleLowerCase().includes(term));
+  const hasPendingVersion = (candidate: BatchCandidatePackage) => candidate.versions.some(({ status, requestStatus }) => status !== "VOID" && requestStatus === "PENDING");
+  const matches = rows.filter(({ candidate }) => (!pendingOnly || hasPendingVersion(candidate)) && `${candidate.packageName} ${candidate.packageCode} ${candidate.ownerName ?? ""}`.toLocaleLowerCase().includes(term));
   const pageSize = 25;
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
   const visibleRows = matches.slice((page - 1) * pageSize, page * pageSize);
+  const availablePending = candidates.some(hasPendingVersion);
+  const canSave = changedCount > 0;
 
   return (
+    <>
     <ActionForm
       action={createBatchAction}
       testId="batch-builder-form"
       submitText="保存草稿并核对"
       submitVariant="primary"
-      hidden={{ projectId: project.id, scopeProjectId, items: JSON.stringify(items), returnTo }}
-      disabled={changedCount === 0}
-      footerNote={changedCount > 0 ? <>{items.length} 个软件包 · {changedCount} 个待测版本</> : "请至少纳入一个待测版本。"}
+      hidden={{ projectId: project.id, scopeProjectId, draftBatchId: draft?.id, expectedDraftRevision: draft?.revision, ...listState, items: JSON.stringify(items), returnTo }}
+      hideSubmit={!canSave}
+      preserveValuesOnSubmit
+      footerNote={<>{items.length} 个软件包 · {changedCount} 个待测版本</>}
     >
       <section className={`${styles.section} workspace-edit-form`} aria-label="批次信息">
         <div className="form-grid">
-          <label className="field"><span className="label">批次号</span><input className="input" name="code" defaultValue={defaultCode} required pattern="[Bb][0-9]{3,}" /></label>
-          <label className="field"><span className="label">批次说明 <span className="muted">（选填）</span></span><input className="input" name="title" placeholder={`${project.name} ${defaultCode} 配套转测`} maxLength={80} /></label>
+          <label className="field"><span className="label">批次号</span><input className="input" name="code" defaultValue={defaultCode} readOnly={Boolean(draft)} required pattern="[Bb][0-9]{3,}" /></label>
+          <label className="field"><span className="label">批次说明 <span className="muted">（选填）</span></span><input className="input" name="title" defaultValue={draft?.title} placeholder={`${project.name} ${defaultCode} 配套转测`} maxLength={80} /></label>
         </div>
       </section>
 
-      <div className="toolbar-spread" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+      <div ref={results} tabIndex={-1} className="toolbar-spread" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <div className={styles.rowActions}>
           <h2 className={styles.tableHeading}>完整配套清单</h2>
           <InfoTooltip label="配套版本选择说明">暂缓的新版留在申请队列。有可用上轮版本时，本轮默认沿用上轮版本。</InfoTooltip>
@@ -93,12 +123,14 @@ export function BatchBuilder({
           </label>
           <button type="button" className="button button-secondary button-sm" onClick={() => setIncludeOverrides(new Map(rows.map(({ candidate }) => [candidate.packageId, true])))}>纳入全部软件包</button>
           <button type="button" className="button button-secondary button-sm" onClick={() => setIncludeOverrides(new Map(rows.map(({ candidate, changed }) => [candidate.packageId, changed])))}>仅纳入待测版本</button>
+          {pendingOnly && <button type="button" className="button button-ghost button-sm" onClick={() => { setPendingOnly(false); setPage(1); }}>显示完整配套</button>}
         </div>
       </div>
 
       {hiddenCount > 0 && <p className="small muted" role="status">待转测列表中被筛选隐藏的 {hiddenCount} 个版本仍纳入本轮。</p>}
       {visibleRows.length === 0 ? (
-        <div className="muted-panel">没有匹配的软件包。</div>
+        <EmptyState title="没有匹配的软件包" action={<button type="button" className="button button-secondary button-sm"
+          onClick={() => { setQuery(""); setPendingOnly(false); setPage(1); }}>清除配套筛选</button>} />
       ) : (
         <div className="table-wrap compact-batch-table" role="region" aria-label="本轮配套软件包表格" tabIndex={0}>
           <table className="data-table">
@@ -184,5 +216,22 @@ export function BatchBuilder({
         <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>下一页</button>
       </nav>}
     </ActionForm>
+    {!canSave && <div className="form-footer">
+      <span className="form-note">{items.length} 个软件包 · 0 个待测版本</span>
+      <button type="button" ref={conditionsTrigger} aria-haspopup="dialog" className="button button-secondary"
+        onClick={() => setShowConditions(true)}>保存草稿并核对</button>
+    </div>}
+    {showConditions && <DialogSurface title="保存转测草稿的条件" returnFocus={conditionsTrigger} onClose={() => setShowConditions(false)}
+      description="至少勾选一个软件包，并在本次转测版本中选择标记为「本次待转测」的版本。">
+      <div className="form-footer">
+        <button type="button" className="button button-secondary" onClick={() => setShowConditions(false)}>关闭</button>
+        {availablePending ? <button type="button" className="button button-primary" onClick={() => {
+          setQuery(""); setPage(1); setPendingOnly(true); setShowConditions(false);
+          requestAnimationFrame(() => results.current?.focus());
+        }}>定位待测版本</button>
+          : <Link href={transfersHref} prefetch={false} className="button button-secondary">查看待安排申请</Link>}
+      </div>
+    </DialogSurface>}
+    </>
   );
 }

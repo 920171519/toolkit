@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { DialogSurface } from "@/components/form-dialog";
 import type { ActionState } from "@/lib/action-state";
@@ -60,8 +60,28 @@ export function ActionForm({
   const [state, formAction, pending] = useActionState(action, initialState);
   const [confirmation, setConfirmation] = useState<{ text: string; danger: boolean } | null>(null);
   const form = useRef<HTMLFormElement>(null);
+  const errorSummary = useRef<HTMLDivElement>(null);
   const submitter = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
   const confirmed = useRef(false);
+  const resettingAfterSuccess = useRef(false);
+  const fieldErrors = Object.entries(state?.fieldErrors ?? {});
+
+  useEffect(() => {
+    if (pending) return;
+    if (state?.error) {
+      errorSummary.current?.focus();
+    } else if (state?.success && !preserveValuesOnSubmit) {
+      resettingAfterSuccess.current = true;
+      form.current?.reset();
+      resettingAfterSuccess.current = false;
+    }
+  }, [pending, preserveValuesOnSubmit, state]);
+
+  function focusField(name: string) {
+    const control = Array.from(form.current?.elements ?? []).find((element) =>
+      element instanceof HTMLElement && element.getAttribute("name") === name && element.getAttribute("type") !== "hidden");
+    if (control instanceof HTMLElement) control.focus();
+  }
 
   function submitConfirmed() {
     setConfirmation(null);
@@ -81,7 +101,10 @@ export function ActionForm({
       action={formAction}
       className={className}
       data-testid={testId}
-      onReset={preserveValuesOnSubmit ? (event) => event.preventDefault() : undefined}
+      onReset={(event) => {
+        // React resets uncontrolled inputs when an action returns, including on validation errors.
+        if (!resettingAfterSuccess.current) event.preventDefault();
+      }}
       onSubmit={(event) => {
         if (!confirmMessage || confirmed.current) return;
         event.preventDefault();
@@ -104,9 +127,16 @@ export function ActionForm({
         )}
       {children}
       {state?.error && (
-        <div className="form-error" role="alert">
+        <div className="form-error" role="alert" ref={errorSummary} tabIndex={-1}>
           <AlertCircle size={14} strokeWidth={2} style={{ marginTop: 1, flex: "none" }} aria-hidden="true" />
-          <span>{state.error}</span>
+          <div>
+            <span>{state.error}</span>
+            {fieldErrors.length > 0 && <ul>
+              {fieldErrors.map(([name, message]) => <li key={name}>
+                <button className="archive-link" type="button" onClick={() => focusField(name)}>{message}</button>
+              </li>)}
+            </ul>}
+          </div>
         </div>
       )}
       {!hideSubmit && (

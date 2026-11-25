@@ -12,6 +12,7 @@ import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { parseFlash } from "@/lib/queries";
 import { getPendingBindingFlowCount, getTrialDetail } from "@/lib/workflow-queries";
+import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import {
   BINDING_FLOW_STATUS_META,
@@ -33,6 +34,8 @@ import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { BindingFlowForm } from "@/components/binding-flow-form";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog, type GuidanceItem } from "@/components/guidance-dialog";
+import { TrialBindingFocus } from "@/components/trial-binding-focus";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { Badge, EmptyState, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
@@ -71,6 +74,9 @@ export default async function TrialDetailPage({
   const pendingDecision = canEditFlows && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
   const identity = packageIdentity({ name: request.packageName, code: request.packageCode });
+  const formalGuidance = canEditFlows ? getFormalReleaseGuidance(user, request.versionId, {
+    projectId: request.projectId, returnTo: listState.returnTo, bindingListState: listState,
+  }) : null;
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
   const transferStatusMeta = TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? {
     label: request.status === "TRIAL" ? "试制中" : request.status === "PENDING_FORMAL" ? "待转正" : request.status === "FORMAL" ? "已转正" : request.status === "VOID" ? "已作废" : request.status,
@@ -79,6 +85,7 @@ export default async function TrialDetailPage({
 
   return (
     <>
+      <TrialBindingFocus detail />
       <PageHeader
         title={`${identity.code} ${request.version} · 绑定验证`}
         description={<>
@@ -115,7 +122,7 @@ export default async function TrialDetailPage({
         </div>
       )}
 
-      {pendingDecision && <section className={styles.nextAction}>
+      {pendingDecision && <section className={styles.nextAction} id="binding-decision" tabIndex={-1}>
         <div className={styles.grow}>
           <h2>{manager ? "绑定推送决策" : "等待软件经理确认绑定方式"}</h2>
           {manager && <p>推送后，所有使用项目的节点责任人会收到待办。</p>}
@@ -130,44 +137,76 @@ export default async function TrialDetailPage({
         </div>}
       </section>}
 
-      {canEditFlows && request.status === "PENDING_FORMAL" && <section className={styles.nextAction}>
-        <h2>{pendingReviews > 0 ? "已进入待转正" : "已满足转正条件"}</h2>
+      {formalGuidance && <section id="binding-formal" tabIndex={-1} className={`${styles.nextAction} ${styles.detailAnchor}`}>
+        <h2>{request.status === "PENDING_FORMAL" ? pendingReviews > 0 ? "已进入待转正" : "已满足转正条件" : "转正发布条件"}</h2>
         {pendingReviews > 0 && <span className="small muted">还有 {pendingReviews} 条绑定电子流待审批，处理后可转正。</span>}
-        {manager
-          ? <Link href={workflowHref(`/formal/${request.versionId}`, request.projectId, { returnTo: listState.returnTo })} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link>
-          : <span className="small muted">版本已移至转正发布，待软件经理发布。</span>}
+        {formalGuidance.href
+          ? <Link href={formalGuidance.href} prefetch={false} className="button button-primary button-sm">前往转正发布 <ArrowRight size={12} aria-hidden="true" /></Link>
+          : <GuidanceDialog label={formalGuidance.canManage ? "前往转正发布" : "查看转正条件"} title="转正发布条件"
+            description={formalGuidance.description} items={formalGuidance.items}
+            triggerClassName="button button-secondary button-sm" />}
       </section>}
 
       <div className={styles.detailColumns}>
         <div className={styles.stack}>
-          <section className="card">
+          <section id="binding-nodes" tabIndex={-1} className={`card ${styles.detailAnchor}`}>
             <div className="card-header"><h2 className={styles.tableHeading}>本项目节点绑定</h2><span className="small muted">{passed}/{requirements.length} 节点通过{waived > 0 ? ` · ${waived} 个节点免绑` : ""}</span></div>
             <div className="card-body" style={{ paddingTop: 12 }}>
               {requirements.length > 0 && <div style={{ marginBottom: 12 }}><ProgressBar value={passed + waived} max={requirements.length} /></div>}
               {requirements.length === 0 ? <EmptyState title="该版本没有节点绑定记录" /> : <div className={styles.nodeList}>
                 {requirements.map((requirement) => {
-                  const open = canEditFlows && requirement.pushedAt !== null && requirement.waivedAt === null
+                  const acceptsBinding = canEditFlows && requirement.waivedAt === null
                     && (requirement.status === "PENDING" || requirement.status === "PASSED");
+                  const open = acceptsBinding && requirement.pushedAt !== null;
+                  const showSubmit = acceptsBinding && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
-                  const canWaive = open && request.status === "TRIAL" && requirement.status === "PENDING" && (manager || requirement.bindingOwnerId === user.id);
+                  const showWaive = acceptsBinding && request.status === "TRIAL" && requirement.status === "PENDING"
+                    && (manager || requirement.bindingOwnerId === user.id);
                   const readyToConfirm = open && requirement.status === "PENDING"
                     && requirement.approvedCount >= requirement.requiredCount;
                   const canConfirm = readyToConfirm && canConfirmNodes;
+                  const showConfirm = acceptsBinding && requirement.status === "PENDING" && canConfirmNodes;
+                  const pushGuidance = [{
+                    title: "该节点的绑定任务尚未推送",
+                    detail: "请先由软件经理决定绑定方式并推送任务。",
+                    href: pendingDecision ? "#binding-decision" : undefined,
+                    actionLabel: "查看绑定方式",
+                  }];
                   const needsWithdrawal = (status: string) => status === "PENDING" || status === "APPROVED";
                   const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
                     && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
                   const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
                     && needsWithdrawal(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
-                  const pendingOpen = canSubmit || canWaive || canConfirm || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
+                  const pendingFlows = requirement.flows.filter((flow) => flow.status === "PENDING");
+                  const missing = Math.max(0, requirement.requiredCount - requirement.submittedCount);
+                  const qualificationHint = pendingFlows.length > 0
+                    ? missing > 0
+                      ? `请处理待审批电子流，并由绑定责任人补充 ${missing} 个条码。`
+                      : "已提交的条码数量达标，等待指定审批人完成审批。"
+                    : `请由绑定责任人补充 ${missing} 个条码并提交电子流。`;
+                  const confirmGuidance: GuidanceItem[] = !requirement.pushedAt ? pushGuidance : [
+                    {
+                      title: "已审批条码尚未达标",
+                      detail: `当前已审批 ${requirement.approvedCount}/${requirement.requiredCount}。${qualificationHint}`,
+                    },
+                    ...pendingFlows.map((flow) => ({
+                      title: `${flow.flowNo} · 待审批`,
+                      href: `#binding-flow-${flow.id}`,
+                      actionLabel: canReview(flow) ? "去审批" : "查看待审批电子流",
+                    })),
+                  ];
+                  const pendingOpen = canSubmit || showWaive || showConfirm || requirement.flows.some((flow) => canReview(flow) || canWithdraw(flow));
                   return (
-                    <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen}>
+                    <details className="binding-table-item binding-requirement" key={requirement.id} id={`binding-node-${requirement.id}`} open={pendingOpen} tabIndex={-1}>
                       <summary className={styles.nodeHeading}>
                         <span><strong>{requirement.nodeName}</strong> <span className="small muted">{requirement.approvedCount}/{requirement.requiredCount} 条码通过</span></span>
                         <span>{requirement.waivedAt ? <Badge tone="slate" dot>节点免绑</Badge>
                           : requirement.confirmedAt ? <Badge tone="emerald" dot>绑定通过</Badge>
                           : requirement.status === "CANCELLED" ? <Badge tone="slate" dot>{request.status === "VOID" ? "已关闭" : "已跳过"}</Badge>
                           : readyToConfirm ? <Badge tone="amber" dot>待确认</Badge>
-                          : canEditFlows && (requirement.pushedAt ? <Badge tone="amber" dot>待绑定</Badge> : <Badge tone="slate" dot>未推送</Badge>)}</span>
+                          : canEditFlows && (requirement.pushedAt
+                            ? <Badge tone="amber" dot>{pendingFlows.length > 0 && missing === 0 ? "待审批" : "待绑定"}</Badge>
+                            : <Badge tone="slate" dot>未推送</Badge>)}</span>
                         <ChevronDown size={16} aria-hidden="true" />
                       </summary>
                       <div className="binding-table-body">
@@ -177,8 +216,11 @@ export default async function TrialDetailPage({
                         </div>
                         {requirement.waivedAt && <p className="small muted" style={{ marginBottom: 8 }}>免绑原因：{requirement.decisionReason} · {requirement.waivedByName ?? "—"} · {formatDateTime(requirement.waivedAt)}</p>}
                         {requirement.confirmedAt && <p className="small muted">{requirement.confirmedByName ?? "—"} 确认通过 · {formatDateTime(requirement.confirmedAt)}</p>}
-                        {(canSubmit || canWaive || canConfirm) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
-                          {canConfirm && <ActionForm action={confirmBindingRequirementAction}
+                        {readyToConfirm && !canConfirmNodes && <p className="small muted">待软件包责任人、本项目软件经理或管理员确认。</p>}
+                        {open && requirement.status === "PENDING" && !readyToConfirm && pendingFlows.length > 0 &&
+                          <p className="small muted">已提交 {requirement.submittedCount}/{requirement.requiredCount} 个条码。{qualificationHint}</p>}
+                        {(showSubmit || showWaive || showConfirm) && <div className={styles.rowActions} style={{ marginTop: 10 }}>
+                          {showConfirm && (canConfirm ? <ActionForm action={confirmBindingRequirementAction}
                             className="inline-action-form"
                             hidden={{
                               ...actionFields,
@@ -187,15 +229,20 @@ export default async function TrialDetailPage({
                             }}
                             submitText="确认节点通过" submitClassName="button-sm"
                             confirmMessage={`确认 ${requirement.nodeName} 的 ${requirement.approvedCount} 个已审批条码均已验证通过。全部在行节点完成后，符合条件的版本会进入待转正。`}
-                          />}
-                          {canSubmit && <FormDialog key={requirement.flows.length} label="新增绑定电子流" title={`${requirement.nodeName} · 提交绑定电子流`} triggerClassName={`button ${canConfirm ? "button-secondary" : "button-primary"} button-sm`} cancelLabel="取消">
-                            <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id} scopeProjectId={scopeProjectId} listState={listState} />
-                          </FormDialog>}
-                          {canWaive && <FormDialog label="节点无需绑定" title={`${requirement.nodeName} · 确认免绑`} description="只影响当前项目的这个节点。待审批电子流会关闭，已登记的记录会保留。" triggerClassName="button button-secondary button-sm" cancelLabel="取消">
+                          /> : <GuidanceDialog label="确认节点通过" title={`${requirement.nodeName} · 节点通过条件`}
+                            items={confirmGuidance} triggerClassName="button button-secondary button-sm" />)}
+                          {showSubmit && (canSubmit ? <FormDialog key={requirement.flows.length} label="新增绑定电子流" title={`${requirement.nodeName} · 提交绑定电子流`} triggerClassName={`button ${canConfirm ? "button-secondary" : "button-primary"} button-sm`} cancelLabel="取消">
+                            <BindingFlowForm requirementId={requirement.id} requestId={requestId} approvers={requirement.approverOptions} currentUserId={user.id}
+                              scopeProjectId={scopeProjectId} listState={listState}
+                              configurationHref={manager ? `/settings/projects/${request.projectId}/nodes/${requirement.nodeId}` : undefined} />
+                          </FormDialog> : <GuidanceDialog label="新增绑定电子流" title={`${requirement.nodeName} · 绑定电子流提交条件`}
+                            items={pushGuidance} triggerClassName="button button-secondary button-sm" />)}
+                          {showWaive && (open ? <FormDialog label="节点无需绑定" title={`${requirement.nodeName} · 确认免绑`} description="只影响当前项目的这个节点。待审批电子流会关闭，已登记的记录会保留。" triggerClassName="button button-secondary button-sm" cancelLabel="取消">
                             <ActionForm action={waiveBindingRequirementAction} hidden={{ ...actionFields, requirementId: requirement.id }} submitText="确认节点免绑">
                               <label className="field"><span className="label">免绑原因 <span className="required-mark">*</span></span><textarea className="textarea" name="reason" required minLength={5} /></label>
                             </ActionForm>
-                          </FormDialog>}
+                          </FormDialog> : <GuidanceDialog label="节点无需绑定" title={`${requirement.nodeName} · 节点免绑条件`}
+                            items={pushGuidance} triggerClassName="button button-secondary button-sm" />)}
                         </div>}
                         <div className="binding-flow-list">
                           {requirement.flows.length === 0 ? (
@@ -205,7 +252,7 @@ export default async function TrialDetailPage({
                             const canApprove = canReview(flow);
                             const canCancel = canWithdraw(flow);
                             return (
-                              <div className={`binding-flow-row ${styles.detailAnchor}`} key={flow.id} id={`binding-flow-${flow.id}`}>
+                              <div className={`binding-flow-row ${styles.detailAnchor}`} key={flow.id} id={`binding-flow-${flow.id}`} tabIndex={-1}>
                                 <div className="toolbar" style={{ gap: 7, flexWrap: "wrap" }}>
                                   <Link2 size={13} style={{ color: "var(--muted-light)" }} />
                                   <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{flow.flowNo}</span>
@@ -226,7 +273,7 @@ export default async function TrialDetailPage({
                                   {flow.reviewComment ? ` · ${flow.reviewComment}` : ""}
                                 </div>
                                 {flow.cancelReason && <p className="small muted">撤销原因：{flow.cancelReason}</p>}
-                                {(canApprove || canCancel) && (
+                                {(canApprove || canCancel || (open && flow.status === "PENDING")) && (
                                   <div className="binding-flow-actions">
                                     {canApprove && (
                                       <FormDialog label="审批电子流" title={`${requirement.nodeName} · 审批 ${flow.flowNo}`} description={`${flow.submittedByName ?? "未知提交人"} · ${formatDateTime(flow.submittedAt)}`} triggerClassName="button button-primary button-sm" cancelLabel="取消">
@@ -239,6 +286,12 @@ export default async function TrialDetailPage({
                                             <label className="field"><span className="label">审批意见 <span className="required-mark" aria-hidden="true">*</span></span><textarea className="textarea" name="comment" required minLength={2} /></label>
                                           </ActionForm>
                                       </FormDialog>
+                                    )}
+                                    {!canApprove && open && flow.status === "PENDING" && (
+                                      <GuidanceDialog label="查看审批条件" title={`审批 ${flow.flowNo} 的条件`}
+                                        items={[{ title: flow.submittedById === user.id ? "提交人不能审批自己的电子流" : "由指定审批人或管理员审批",
+                                          detail: `指定审批人：${flow.approverName ?? "未配置"}。` }]}
+                                        triggerClassName="button button-secondary button-sm" />
                                     )}
                                     {canCancel && (
                                       <FormDialog label="撤销电子流" title={`撤销 ${flow.flowNo}`}

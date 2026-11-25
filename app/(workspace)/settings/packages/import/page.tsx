@@ -40,7 +40,8 @@ export default async function ImportLegacyVersionPage({ searchParams }: {
         actions={<Link href={back} className="button button-secondary" prefetch={false}><ArrowLeft size={14} aria-hidden="true" /> 返回软件包配置</Link>}
       />
       {packages.length === 0 ? (
-        <EmptyState title="没有可导入历史版本的软件包" />
+        <EmptyState title="没有可导入历史版本的软件包" description="可先在有权维护的责任田下新建软件包，再补录历史版本。"
+          action={<Link href={back} className="button button-secondary" prefetch={false}>前往软件包配置</Link>} />
       ) : (
         <section className="card" style={{ maxWidth: 860 }}>
           <div className="card-body">

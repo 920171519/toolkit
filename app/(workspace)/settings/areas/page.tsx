@@ -145,7 +145,10 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
                 </tr>
               )) : <tr><td colSpan={6}>
                 <div className={styles.stickyContent}>
-                  <EmptyState title="没有匹配的责任田" />
+                  <EmptyState
+                    title={scope && myAreaIds.size === 0 ? "你尚未分配责任田" : areas.length ? "没有匹配的责任田" : "尚未创建责任田"}
+                    description={scope && myAreaIds.size === 0 ? "可切换到全部责任田查看现有分工。" : areas.length || isAdmin ? undefined : "请联系系统管理员创建责任田。"}
+                  />
                 </div>
               </td></tr>}
             </tbody>

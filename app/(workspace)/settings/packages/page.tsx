@@ -18,6 +18,7 @@ import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-d
 import directoryStyles from "@/components/settings-directory.module.css";
 import { SettingsSelect } from "@/components/settings-select";
 import { FormDialog } from "@/components/form-dialog";
+import { GuidanceDialog } from "@/components/guidance-dialog";
 import styles from "./package-settings.module.css";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,7 @@ export default async function PackagesSettingsPage({
     <>
       <PageHeader title="软件包配置" actions={<>
         <Link href={directoryHref(`${path}/import`, listParams)} className="button button-secondary" prefetch={false}>导入历史版本</Link>
+        {areas.length > 0 && people.length > 0 ? (
         <FormDialog label={<><Plus size={15} aria-hidden="true" />新建软件包</>} title="新建软件包" testId="new-package-trigger">
           <ActionForm action={savePackageAction} hidden={listParams} submitText="创建并配置使用范围" testId="new-package-form">
             <div className={`form-grid ${styles.formGrid}`}>
@@ -114,6 +116,16 @@ export default async function PackagesSettingsPage({
             </div>
           </ActionForm>
         </FormDialog>
+        ) : (
+          <GuidanceDialog label="新建软件包" title="新建软件包"
+            items={areas.length === 0 ? [{
+              title: "尚未配置责任田", detail: "新建软件包时需要指定所属责任田。",
+              href: "/settings/areas", actionLabel: "前往责任田配置",
+            }] : [{
+              title: "没有启用的责任人账号", detail: isAdmin ? "请先启用可担任软件包责任人的账号。" : "请联系管理员启用可担任软件包责任人的账号。",
+              href: isAdmin ? "/settings/users" : undefined, actionLabel: "查看人员与角色",
+            }]} />
+        )}
       </>} />
       <FlashMessage notice={notice} />
 
