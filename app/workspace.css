@@ -21,6 +21,29 @@ html:has(dialog:modal) { overflow: hidden; }
 .workspace-navigation .topbar-mobile-user .sidebar-logout { color: var(--muted); }
 .workspace-mobile-menu { display: none; }
 
+.workspace-link-pending,
+.workspace-mobile-menu > summary::after {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 1.5px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+}
+.sidebar-link > .workspace-link-pending { margin-inline-start: auto; }
+.sidebar-link-count + .workspace-link-pending { margin-inline-start: 0; }
+.workspace-back-icon { display: grid; place-items: center; flex: none; }
+.workspace-back-icon > * { grid-area: 1 / 1; }
+.workspace-back-icon:has([data-navigation-pending]) > svg { animation: workspace-pending-hide 100ms step-end forwards; }
+.workspace-link-pending[data-navigation-pending],
+.workspace-mobile-menu:not([open]) > summary[data-navigation-pending]::after {
+  animation: workspace-pending-reveal 100ms step-end forwards, var(--workspace-pending-motion, workspace-pending-spin 800ms linear infinite);
+}
+@keyframes workspace-pending-reveal { to { opacity: 1; } }
+@keyframes workspace-pending-hide { to { opacity: 0; } }
+@keyframes workspace-pending-spin { to { transform: rotate(1turn); } }
+
 .workspace .sidebar-logout { min-width: 36px; min-height: 36px; align-items: center; justify-content: center; }
 .sidebar .brand + .sidebar-group { margin-top: 16px; }
 
@@ -74,7 +97,8 @@ dialog.workspace-package-drawer::backdrop { background: var(--dialog-backdrop); 
   .workspace .sidebar { display: none; }
   .workspace-navigation .topbar { min-height: 60px; }
   .workspace-mobile-menu { display: block; flex: none; }
-  .workspace-mobile-menu summary { cursor: pointer; display: grid; place-items: center; list-style: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+  .workspace-mobile-menu summary { position: relative; cursor: pointer; display: grid; place-items: center; list-style: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+  .workspace-mobile-menu > summary::after { content: ""; position: absolute; inset-block-start: 4px; inset-inline-end: 4px; width: 10px; height: 10px; color: var(--brand); }
   .workspace-mobile-menu summary::-webkit-details-marker { display: none; }
   .workspace-mobile-links { position: absolute; z-index: 2; top: calc(100% - 1px); left: var(--workspace-padding); width: min(288px, calc(100vw - var(--workspace-padding) * 2)); max-height: calc(100dvh - 80px); overflow: auto; padding: 8px 12px 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md); background: var(--navigation-surface); }
   .workspace-mobile-area { margin: 0; padding: 8px; color: var(--navigation-caption); font-size: 12px; overflow-wrap: anywhere; }
@@ -102,5 +126,6 @@ dialog.workspace-package-drawer::backdrop { background: var(--dialog-backdrop); 
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .workspace { --workspace-pending-motion: none; }
   .workspace .button, .workspace .sidebar-link, .workspace-package-drawer, .package-drawer { animation: none; transition: none; }
 }

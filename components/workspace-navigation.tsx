@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronRight, ChevronsUpDown, Menu } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { FormDialog } from "@/components/form-dialog";
+import { NavigationPending } from "@/components/navigation-pending";
 import { SidebarNav, type SidebarGroup, type SidebarItem } from "@/components/sidebar-nav";
 import { workflowHref } from "@/lib/workflow-links";
 import { safeOverviewReturnPath } from "@/lib/return-to";
@@ -45,6 +46,7 @@ function Breadcrumb({ items }: { items: Crumb[] }) {
 function MobileWorkspaceMenu({ groups, areaLabel }: { groups: SidebarGroup[]; areaLabel: string }) {
   const details = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement>(null);
+  const [pending, setPending] = useState(false);
   const close = () => { if (details.current) details.current.open = false; };
   useEffect(() => {
     const dismissOutside = (event: PointerEvent) => {
@@ -53,20 +55,24 @@ function MobileWorkspaceMenu({ groups, areaLabel }: { groups: SidebarGroup[]; ar
     document.addEventListener("pointerdown", dismissOutside);
     return () => document.removeEventListener("pointerdown", dismissOutside);
   }, []);
-  return (
+  return <>
     <details className="workspace-mobile-menu" ref={details} onKeyDown={(event) => {
       if (event.key === "Escape") {
         close();
         trigger.current?.focus();
       }
     }}>
-      <summary ref={trigger} aria-label="主导航"><Menu size={19} aria-hidden="true" /></summary>
+      <summary ref={trigger} aria-label="主导航" data-navigation-pending={pending || undefined}><Menu size={19} aria-hidden="true" /></summary>
       <div className="workspace-mobile-links">
         <p className="workspace-mobile-area">{areaLabel}</p>
-        <SidebarNav groups={groups} onNavigate={close} />
+        <SidebarNav groups={groups} onPendingChange={setPending} onNavigate={() => {
+          close();
+          trigger.current?.focus({ preventScroll: true });
+        }} />
       </div>
     </details>
-  );
+    <span className="sr-only" role="status">{pending && "正在加载页面"}</span>
+  </>;
 }
 
 function ProjectChoices({ projects, section, filters }: { projects: Project[]; section: SidebarItem; filters?: Record<string, string | undefined> }) {
@@ -116,6 +122,7 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
   const pathname = usePathname();
   const router = useRouter();
   const params = useSearchParams();
+  const [isReturning, startReturning] = useTransition();
   const section = workflow.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const match = section ?? groups.flatMap((group) => group.items).find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const detailId = /^\/projects\/(\d+)$/.exec(pathname)?.[1];
@@ -169,14 +176,20 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
           <div className="topbar">
             <div className="topbar-location">
               {visibleGroups.length > 0 && <MobileWorkspaceMenu key={project?.id ?? "global"} groups={visibleGroups} areaLabel={areaLabel} />}
-              {(detailId || project) && <Link href={returnPath ?? "/overview"} prefetch={false} className="topbar-project-back" onClick={(event) => {
+              {(detailId || project) && <Link href={returnPath ?? "/overview"} prefetch={false} className="topbar-project-back" aria-label="项目总览" onClick={(event) => {
                 if (returnPath || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 let previous: string | undefined;
                 try { previous = safeOverviewReturnPath(sessionStorage.getItem(catalogViewKey)); } catch { /* storage can be unavailable */ }
                 if (!previous || previous === "/overview") return;
                 event.preventDefault();
-                router.push(previous);
-              }}><ArrowLeft size={15} aria-hidden="true" /><span>项目总览</span></Link>}
+                startReturning(() => router.push(previous));
+              }}>
+                <span className="workspace-back-icon">
+                  <ArrowLeft size={15} aria-hidden="true" />
+                  <NavigationPending transitionPending={isReturning} />
+                </span>
+                <span>项目总览</span>
+              </Link>}
               {crumbs.length > 0 && <Breadcrumb items={crumbs} />}
             </div>
             <div className="topbar-right">

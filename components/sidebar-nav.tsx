@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NavigationPending } from "@/components/navigation-pending";
 import {
   Boxes,
   ClipboardCheck,
@@ -48,20 +49,32 @@ const iconMap = {
   checks: ClipboardCheck,
 } as const;
 
-function Item({ item, pathname, onNavigate }: { item: SidebarItem; pathname: string; onNavigate?: () => void }) {
+function Item({ item, pathname, onNavigate, onPendingChange }: {
+  item: SidebarItem;
+  pathname: string;
+  onNavigate?: () => void;
+  onPendingChange?: (pending: boolean) => void;
+}) {
   const Icon = iconMap[item.icon as keyof typeof iconMap] ?? Boxes;
   const route = item.href.split("?", 1)[0];
   const active = pathname === route || (route !== "/" && pathname.startsWith(route + "/"));
+  const count = item.count && item.count > 0 ? item.count : undefined;
   return (
-    <Link href={item.href} className="sidebar-link" data-active={active} aria-current={active ? pathname === route ? "page" : "location" : undefined} prefetch={false} onClick={onNavigate}>
+    <Link href={item.href} className="sidebar-link" data-active={active} aria-current={active ? pathname === route ? "page" : "location" : undefined}
+      aria-label={count === undefined ? item.label : `${item.label} ${count}`} prefetch={false} onNavigate={onNavigate}>
       <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
       <span>{item.label}</span>
-      {item.count !== undefined && item.count > 0 && <span className="sidebar-link-count">{item.count}</span>}
+      {count !== undefined && <span className="sidebar-link-count">{count}</span>}
+      <NavigationPending onPendingChange={onPendingChange} />
     </Link>
   );
 }
 
-export function SidebarNav({ groups, onNavigate }: { groups: SidebarGroup[]; onNavigate?: () => void }) {
+export function SidebarNav({ groups, onNavigate, onPendingChange }: {
+  groups: SidebarGroup[];
+  onNavigate?: () => void;
+  onPendingChange?: (pending: boolean) => void;
+}) {
   const pathname = usePathname();
   return (
     <>
@@ -71,7 +84,7 @@ export function SidebarNav({ groups, onNavigate }: { groups: SidebarGroup[]; onN
             {index > 0 && <div className="sidebar-section-label">{group.label}</div>}
             <nav className="sidebar-nav" aria-label={group.label}>
               {group.items.map((item) => (
-                <Item key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+                <Item key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} onPendingChange={onPendingChange} />
               ))}
             </nav>
           </div>

@@ -1,5 +1,64 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { login } from "./helpers";
+
+async function holdNavigationResponse(page: Page, matches: (url: URL) => boolean) {
+  const responseGate = Promise.withResolvers<void>();
+  let requested = false;
+  await page.route((url) => url.searchParams.has("_rsc") && matches(url), async (route) => {
+    requested = true;
+    await responseGate.promise;
+    await route.continue();
+  }, { times: 1 });
+  return {
+    waitForRequest: () => expect.poll(() => requested).toBe(true),
+    release: () => responseGate.resolve(),
+  };
+}
+
+test("侧栏切页等待时保留当前内容，只提示被选中的入口", async ({ page }) => {
+  await login(page, "ADMIN001");
+  await page.goto("/overview");
+  const sidebar = page.locator("aside.sidebar");
+  const current = sidebar.getByRole("link", { name: "项目总览", exact: true });
+  const destination = sidebar.getByRole("link", { name: "项目配置", exact: true });
+  const main = page.getByRole("main");
+  const request = await holdNavigationResponse(page, (url) => url.pathname === "/settings/projects");
+  try {
+    await destination.click();
+    await request.waitForRequest();
+    await expect(main.getByRole("heading", { name: "项目总览", level: 1 })).toBeVisible();
+    await expect(current).toHaveAttribute("aria-current", "page");
+    await expect(destination).not.toHaveAttribute("aria-current");
+    const status = destination.locator("[data-navigation-pending]").and(destination.getByRole("status"));
+    await expect(status).toHaveText("正在加载页面");
+    await expect(sidebar.locator("[data-navigation-pending]")).toHaveCount(1);
+  } finally {
+    request.release();
+  }
+  await expect(main.getByRole("heading", { name: "项目与测试节点", level: 1 })).toBeVisible();
+  await expect(destination).toHaveAttribute("aria-current", "page");
+  await expect(current).not.toHaveAttribute("aria-current");
+  await expect(sidebar.locator("[data-navigation-pending]")).toHaveCount(0);
+});
+
+test("从项目深链可返回上次的项目筛选，等待时显示反馈", async ({ page }) => {
+  await login(page, "ADMIN001");
+  await page.goto("/projects/1");
+  await page.evaluate(() => sessionStorage.setItem("toolkit.lastProjectCatalogView", "/overview?pageSize=10"));
+  const back = page.locator(".topbar").getByRole("link", { name: "项目总览", exact: true });
+  await expect(back).toHaveAttribute("href", "/overview");
+  const request = await holdNavigationResponse(page, (url) => url.pathname === "/overview" && url.searchParams.get("pageSize") === "10");
+  try {
+    await back.press("Enter");
+    await request.waitForRequest();
+    await expect(page.getByRole("heading", { name: "星云 N1", level: 1 })).toBeVisible();
+    await expect(back.getByRole("status")).toHaveText("正在加载页面");
+  } finally {
+    request.release();
+  }
+  await expect(page).toHaveURL(/\/overview\?pageSize=10$/);
+  await expect(back).toHaveCount(0);
+});
 
 test("项目总览与独立项目工作区分别显示对应入口，流程保留项目范围", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -226,8 +285,25 @@ test("窄屏菜单随项目切换，支持键盘操作和返回项目总览", as
   await expect(menuButton).toBeFocused();
   await expect(menu).not.toHaveAttribute("open", "");
   await menuButton.click();
-  await menu.getByRole("link", { name: "软件版本总览" }).click();
+  const request = await holdNavigationResponse(page, (url) => url.pathname === "/packages" && url.searchParams.get("project") === "2");
+  const menuSpinnerVisible = () => menuButton.evaluate((button) => {
+    const styles = getComputedStyle(button, "::after");
+    return styles.content !== "none" && styles.opacity === "1";
+  });
+  try {
+    await menu.getByRole("link", { name: "软件版本总览" }).click();
+    await request.waitForRequest();
+    await expect(menu).not.toHaveAttribute("open", "");
+    await expect(menuButton).toBeFocused();
+    await expect(page.getByRole("heading", { name: "极光 M2", level: 1 })).toBeVisible();
+    await expect(page.locator(".workspace-navigation").getByRole("status").filter({ hasText: "正在加载页面" })).toHaveCount(1);
+    await expect.poll(menuSpinnerVisible).toBe(true);
+  } finally {
+    request.release();
+  }
   await expect(page).toHaveURL(/\/packages\?project=2$/);
+  await expect.poll(menuSpinnerVisible).toBe(false);
+  await expect(page.locator(".workspace-navigation").getByRole("status").filter({ hasText: "正在加载页面" })).toHaveCount(0);
   await expect(menu).not.toHaveAttribute("open", "");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.locator(".topbar").getByRole("link", { name: "项目总览" }).click();

@@ -392,17 +392,6 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .project-select-form { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 620px) { .project-select-form { flex-wrap: wrap; } }
 
-/* Static loading structure for workspace pages. */
-.workspace-loading { display: grid; gap: 24px; padding-block: 4px 24px; }
-.skeleton-line { background: var(--bg-deep); border-radius: 4px; }
-.skeleton-title { width: min(224px, 64%); height: 32px; }
-.skeleton-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.skeleton-row { min-height: 48px; padding: 12px 16px; display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--line); }
-.skeleton-row:first-child { min-height: 40px; border-top: 0; background: var(--surface-muted); }
-.skeleton-row::before, .skeleton-row::after { content: ""; background: var(--bg-deep); border-radius: 4px; height: 12px; }
-.skeleton-row::before { width: min(144px, 44%); }
-.skeleton-row::after { width: min(80px, 26%); margin-inline-start: auto; }
-
 /* Modal dialogs */
 .modal-backdrop { position: fixed; inset: 0; z-index: 80; background: var(--dialog-backdrop); display: flex; align-items: flex-start; justify-content: center; padding: 7vh 20px 30px; overflow-y: auto; }
 .modal-panel { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-md); }
