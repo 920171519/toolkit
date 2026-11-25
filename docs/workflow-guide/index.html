@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16372d">
+  <title>工程协同台 · 软件包流程快速上手</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182a23;
+      --muted: #485f55;
+      --page: #f3f5f0;
+      --surface: #fff;
+      --line: #d3dfd6;
+      --green: #17614c;
+      --wash: #eaf4ed;
+      --amber: #754619;
+      --amber-wash: #fff5e3;
+      font: 16px/1.6 "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+      background: var(--page);
+      color: var(--ink);
+    }
+    * { box-sizing: border-box; }
+    body, h1, h2, h3, p, li { margin: 0; }
+    a { color: var(--green); text-underline-offset: .2em; }
+    button { font: inherit; }
+    a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #0c7b64; outline-offset: 3px; }
+    .skip { position: absolute; left: 12px; top: -100px; z-index: 10; padding: 8px 12px; background: white; }
+    .skip:focus { top: 12px; }
+    .wrap { width: min(calc(100% - 56px), 1280px); margin-inline: auto; }
+    .hero { padding: clamp(32px, 5vw, 66px) 0 38px; background: #16372d; color: #f5fcf7; }
+    .product { color: #c3e1d0; font-weight: 700; }
+    h1 { margin: 9px 0 13px; max-width: 860px; font-size: clamp(33px, 5vw, 62px); line-height: 1.2; letter-spacing: -.025em; }
+    .intro { max-width: 850px; color: #e0ede5; }
+    .map { margin-top: 25px; }
+    .map ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+    .map a { display: grid; grid-template-columns: auto 1fr; gap: 1px 9px; align-items: center; padding: 11px 14px; min-height: 72px; border: 1px solid #5e8072; border-radius: 9px; color: inherit; text-decoration: none; }
+    .map a:hover, .map a:focus-visible { background: #264c3e; }
+    .map a:focus-visible { outline-color: #b1e1c9; }
+    .map span { grid-row: 1 / 3; color: #b1e1c9; font: 700 16px ui-monospace, Consolas, monospace; }
+    .map small { grid-column: 2; color: #d4e6da; font-size: .83rem; }
+    main { padding: 30px 0 46px; }
+    .layout { display: grid; grid-template-columns: 245px minmax(0, 1fr); align-items: start; gap: 25px; }
+    aside { position: sticky; top: 16px; display: grid; gap: 16px; min-width: 0; }
+    .panel, .stage, .faq { background: var(--surface); border: 1px solid var(--line); border-radius: 11px; }
+    .panel { padding: 15px; }
+    .panel h2 { font-size: 1rem; margin-bottom: 10px; }
+    .role-pick { display: grid; gap: 5px; }
+    .role-pick button { width: 100%; display: flex; justify-content: space-between; gap: 6px; align-items: center; text-align: start; min-height: 37px; border: 1px solid transparent; background: transparent; color: var(--ink); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+    .role-pick button:hover { background: var(--page); }
+    .role-pick button[aria-pressed="true"] { background: var(--wash); border-color: #9dbfad; color: #114936; font-weight: 700; }
+    [hidden] { display: none !important; }
+    #role-status { margin-top: 10px; font-size: .85rem; color: var(--muted); }
+    .shortcuts { display: grid; gap: 7px; font-size: .88rem; }
+    .stages { display: grid; gap: 18px; min-width: 0; }
+    .stage { scroll-margin-top: 16px; }
+    .stage-top { padding: 20px 23px 16px; border-bottom: 1px solid var(--line); }
+    .stage-title { display: flex; align-items: baseline; gap: 11px; }
+    .stage-title span { color: var(--green); font: 700 19px ui-monospace, Consolas, monospace; }
+    h2 { font-size: 1.55rem; line-height: 1.32; }
+    .path { margin-top: 8px; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+    .body { padding: 17px 22px 20px; }
+    .steps { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+    .step { display: grid; grid-template-columns: minmax(128px, 163px) minmax(0, 1fr); gap: 11px; border: 1px solid transparent; border-radius: 8px; padding: 9px 10px; }
+    .step + .step { border-top-color: #e9eee9; }
+    .step.match { border-color: #a6c7b5; background: var(--wash); }
+    .actor { font-size: .88rem; font-weight: 700; color: var(--green); }
+    .action { overflow-wrap: anywhere; }
+    .action strong { font-weight: 750; }
+    .action p + p { margin-top: 4px; }
+    .muted { color: var(--muted); font-size: .90rem; }
+    .result { margin-top: 13px; background: #f1f6ef; border-left: 3px solid var(--green); padding: 9px 12px; border-radius: 0 6px 6px 0; overflow-wrap: anywhere; }
+    .result strong { color: #134b3a; }
+    .option { margin: 13px 0 0; background: var(--amber-wash); border: 1px solid #ebd8b7; border-radius: 7px; padding: 8px 11px; }
+    summary { cursor: pointer; font-weight: 700; }
+    .option summary { color: var(--amber); }
+    details > p { margin: 6px 0 3px; }
+    .faq { padding: 20px 23px; scroll-margin-top: 16px; }
+    .faq h2 { margin: 0 0 11px; }
+    .faq details { padding: 9px 0; border-top: 1px solid var(--line); }
+    .faq details p { color: var(--muted); }
+    @media (max-width: 930px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { position: static; }
+      .role-pick { display: flex; flex-wrap: wrap; }
+      .role-pick button { width: auto; border-color: var(--line); }
+      .shortcuts { display: none; }
+    }
+    @media (max-width: 590px) {
+      .wrap { width: calc(100% - 24px); }
+      .hero { padding-bottom: 25px; }
+      .map ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .map a { padding: 8px; min-height: 67px; gap: 0 6px; font-size: .91rem; }
+      .map small { font-size: .76rem; }
+      main { padding-top: 16px; }
+      .layout { gap: 16px; }
+      .step { grid-template-columns: 1fr; gap: 1px; padding: 8px 7px; }
+      .stage-top, .body, .faq { padding-inline: 13px; }
+    }
+    @media print {
+      :root { background: white; font-size: 11pt; }
+      .wrap { width: 100%; }
+      .hero { padding: 0 0 12pt; color: #182a23; background: white; }
+      .product, .intro { color: #182a23; }
+      .layout { display: block; }
+      .map, aside, .skip { display: none; }
+      .stage, .faq { break-inside: avoid; margin-block: 7pt; }
+      .stages { gap: 0; }
+      .stage-top, .body { padding: 8pt 12pt; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#workflow">跳到操作流程</a>
+  <header class="hero">
+    <div class="wrap">
+      <p class="product">工程协同台</p>
+      <h1>从转测申请到正式发布</h1>
+      <p class="intro">登录后，从「项目总览」进入对应项目，也可直接打开工作台待办。转测和集成测试按项目处理，试制和转正按软件包版本各发布一次。</p>
+      <nav class="map" aria-label="四个流程阶段">
+        <ol>
+          <li><a href="#transfer"><span aria-hidden="true">01</span><strong>待转测申请</strong><small>提交版本 · 发起批次</small></a></li>
+          <li><a href="#integration"><span aria-hidden="true">02</span><strong>集成测试</strong><small>验证配套 · 提交结论</small></a></li>
+          <li><a href="#trial"><span aria-hidden="true">03</span><strong>试制与绑定验证</strong><small>发布试制 · 确认节点</small></a></li>
+          <li><a href="#formal"><span aria-hidden="true">04</span><strong>转正发布</strong><small>核对证据 · 发布正式版</small></a></li>
+        </ol>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap layout" id="workflow">
+    <aside aria-label="阅读导航">
+      <section class="panel" id="role-panel" hidden aria-labelledby="roles-title">
+        <h2 id="roles-title">按角色突出步骤</h2>
+        <div class="role-pick" role="group" aria-label="选择你的职责">
+          <button type="button" data-role="all" aria-pressed="true">全部角色</button>
+          <button type="button" data-role="submitter" aria-pressed="false">软件包责任田成员</button>
+          <button type="button" data-role="manager" aria-pressed="false">项目软件经理</button>
+          <button type="button" data-role="tester" aria-pressed="false">集成测试责任田负责人</button>
+          <button type="button" data-role="binder" aria-pressed="false">节点绑定责任人</button>
+          <button type="button" data-role="approver" aria-pressed="false">绑定电子流审批人</button>
+          <button type="button" data-role="owner" aria-pressed="false">软件包责任人</button>
+          <button type="button" data-role="admin" aria-pressed="false">系统管理员</button>
+        </div>
+        <p id="role-status" aria-live="polite">当前显示全部流程。</p>
+      </section>
+      <nav class="panel shortcuts" aria-label="页面内入口">
+        <a href="#transfer">提交软件包或发起转测</a>
+        <a href="#integration">提交集成测试结论</a>
+        <a href="#trial">发布试制并确认节点</a>
+        <a href="#formal">发布正式版本</a>
+        <a href="#faq">卡在某一步时</a>
+      </nav>
+    </aside>
+    <div class="stages">
+      <section class="stage" id="transfer" aria-labelledby="transfer-title">
+        <header class="stage-top">
+          <h2 class="stage-title" id="transfer-title"><span aria-hidden="true">01</span>待转测申请</h2>
+          <p class="path">项目工作区 → 待转测申请 → 待安排申请 / 待发起批次</p>
+        </header>
+        <div class="body">
+          <ol class="steps">
+            <li class="step" data-roles="submitter admin">
+              <div class="actor">软件包所属责任田人员<br>或管理员</div>
+              <div class="action"><p>点 <strong>提交转测申请</strong>，选择软件包，填写版本号、变更说明、包归档链接和构建地址，再点 <strong>提交申请</strong>。</p>
+                <p class="muted">责任田主管、项目负责人或成员按所属责任田申请。软件包需启用并关联至少一个在行项目节点。版本号不能重复，变更说明至少 5 个字符，两个链接均使用 HTTP(S)。</p></div>
+            </li>
+            <li class="step" data-roles="manager admin">
+              <div class="actor">本项目软件经理<br>或管理员</div>
+              <div class="action"><p>在「待安排申请」勾选本轮要测的版本，点 <strong>准备转测批次</strong>。填批次号，核对完整配套，再点 <strong>保存草稿并核对</strong>。</p>
+                <p class="muted">批次号以 B 开头，后接至少 3 位数字，且全局唯一。每批至少选一份待转测申请，同包只选一个版本。筛选隐藏的已勾选项仍计入本轮。</p></div>
+            </li>
+            <li class="step" data-roles="manager admin">
+              <div class="actor">本项目软件经理<br>或管理员</div>
+              <div class="action"><p>核对批次草稿后点 <strong>发起转测</strong>。稍后继续时，从「待发起批次」点 <strong>核对并发起</strong>。</p></div>
+            </li>
+          </ol>
+          <p class="result"><strong>交接</strong> 提交版本会为所有在行使用项目生成转测申请。发起批次后，项目的集成测试负责人接手，暂缓的申请留待下一轮。</p>
+        </div>
+      </section>
+
+      <section class="stage" id="integration" aria-labelledby="integration-title">
+        <header class="stage-top">
+          <h2 class="stage-title" id="integration-title"><span aria-hidden="true">02</span>集成测试</h2>
+          <p class="path">项目工作区 → 集成测试 → 在测批次</p>
+        </header>
+        <div class="body">
+          <ol class="steps">
+            <li class="step" data-roles="tester admin">
+              <div class="actor">集成测试责任田主管、本项目负责人或管理员</div>
+              <div class="action"><p>点 <strong>处理测试批次</strong>，按批次中的软件包和版本做验证。测试过程中可用 <strong>记录进展</strong> 留下阶段结果。</p></div>
+            </li>
+            <li class="step" data-roles="tester admin">
+              <div class="actor">集成测试责任田主管、本项目负责人或管理员</div>
+              <div class="action"><p>点 <strong>提交测试结论</strong>，选择「测试通过」「测试不通过」或「无法完成验证」。填写测试总结、上传验证报告，再点 <strong>提交验证结论</strong>。选「测试不通过」时填写问题归属。</p>
+                <p class="muted">总结至少 10 个字符，报告不超过 15 MB。软件经理可点「查看批次进展」。完成后的批次和报告可在「历史批次」查阅。</p></div>
+            </li>
+          </ol>
+          <p class="result"><strong>交接</strong> 单项目包通过后自动进入「待发布试制」。共享包等最后一个在行使用项目通过，再进入普通试制队列。</p>
+        </div>
+      </section>
+
+      <section class="stage" id="trial" aria-labelledby="trial-title">
+        <header class="stage-top">
+          <h2 class="stage-title" id="trial-title"><span aria-hidden="true">03</span>试制与绑定验证</h2>
+          <p class="path">项目工作区 → 试制与绑定验证 → 待发布试制 / 节点绑定</p>
+        </header>
+        <div class="body">
+          <ol class="steps">
+            <li class="step" data-roles="manager admin">
+              <div class="actor">在行使用项目的软件经理或管理员</div>
+              <div class="action"><p>在「待发布试制」点 <strong>发布</strong>，核对验收依据，填写试制电子流网址（HTTP(S)）和试制评审纪要，再点击 <strong>发布全项目共享试制版本</strong> 并确认。</p>
+                <p class="muted">同一软件包版本发布一次，各在行使用项目同步进入试制。</p></div>
+            </li>
+            <li class="step" data-roles="manager admin">
+              <div class="actor">该项目软件经理<br>或管理员</div>
+              <div class="action"><p>切换到「节点绑定」，点 <strong>决定绑定方式</strong>，再点 <strong>推送绑定任务</strong>。需要免绑时，按下方对应场景登记。</p></div>
+            </li>
+            <li class="step" data-roles="binder admin">
+              <div class="actor">节点绑定责任人、绑定验证员或管理员</div>
+              <div class="action"><p>在绑定详情展开节点，点 <strong>新增绑定电子流</strong>，选审批人，录入设备条码和网页电子流地址，再点 <strong>提交绑定电子流</strong>。条码可逐行录入。</p></div>
+            </li>
+            <li class="step" data-roles="approver admin">
+              <div class="actor">指定电子流审批人<br>或管理员</div>
+              <div class="action"><p>点 <strong>审批电子流</strong>，核对条码和电子流，填写审批意见，再点 <strong>审批通过</strong> 或 <strong>审批驳回</strong>。提交人不能审批自己提交的电子流。</p></div>
+            </li>
+            <li class="step" data-roles="binder owner manager admin">
+              <div class="actor">节点确认人<br>按部署版本</div>
+              <div class="action"><p>已审批条码达到节点要求后，核对验证结果，点击 <strong>确认节点通过</strong>。系统记录确认人和时间。</p>
+                <p class="muted">在<strong>仓库版本 5944e50</strong>中，由试制发布时指定的节点绑定责任人确认。这个人可从工作台打开确认待办。</p>
+                <p class="muted">在<strong>已采用确认权限调整的版本</strong>中，由软件包当前责任人、该节点所属项目的软件经理或管理员确认。绑定责任人负责提交条码和电子流。</p></div>
+            </li>
+          </ol>
+          <p class="result"><strong>交接</strong> 全部在行项目的节点确认通过或登记免绑，且已安排的集成测试结束后，版本自动进入「转正发布」。</p>
+          <details class="option">
+            <summary>整版或单节点无需绑定</summary>
+            <p>整版免绑由软件经理或管理员在推送前选择「无需绑定」并填写原因。推送后若仅个别节点无需绑定，本项目软件经理、管理员或该节点的绑定责任人可点「节点无需绑定」，填写该节点的免绑原因。</p>
+          </details>
+          <details class="option">
+            <summary>需要提前试制</summary>
+            <p>本项目软件经理或管理员可在待转测申请、在测批次或测试未通过的记录中「登记风险原因」，再从试制队列发布。已安排的测试继续进行，未结束前无法转正。</p>
+            <p>风险试制期间，如果测试不通过且确认是软件包问题，提交结论会作废其中勾选的风险试制版本。相关绑定电子流需要撤销。</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="stage" id="formal" aria-labelledby="formal-title">
+        <header class="stage-top">
+          <h2 class="stage-title" id="formal-title"><span aria-hidden="true">04</span>转正发布</h2>
+          <p class="path">项目工作区 → 转正发布 → 核对并转正</p>
+        </header>
+        <div class="body">
+          <ol class="steps">
+            <li class="step" data-roles="manager admin">
+              <div class="actor">在行使用项目的软件经理或管理员</div>
+              <div class="action"><p>找到待转正版本，点 <strong>核对并转正</strong>，核对各项目验收、节点确认、免绑和电子流。需要回查时点 <strong>查看绑定验证记录</strong>。待审批的绑定电子流须先处理。</p></div>
+            </li>
+            <li class="step" data-roles="manager admin">
+              <div class="actor">在行使用项目的软件经理或管理员</div>
+              <div class="action"><p>点 <strong>发布正式版本</strong>，填写转正电子流网址（HTTP(S)）和转正评审纪要，再点 <strong>提交转正电子流并发布</strong>。</p></div>
+            </li>
+          </ol>
+          <p class="result"><strong>结果</strong> 发布一次，所有在行使用项目同步使用该正式版本。可从「软件版本总览」或「版本全链路」查阅结果。</p>
+        </div>
+      </section>
+
+      <section class="faq" id="faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">卡在某一步时</h2>
+        <details>
+          <summary>本项目测试通过了，版本还没进待发布试制</summary>
+          <p>在「软件版本总览」查看软件包的在行使用范围。显示「待其他项目验收」时，查看其他使用项目的最新批次结论。显示「待补转测申请」时，联系配置人员核对软件包使用范围和各项目的转测记录。</p>
+        </details>
+        <details>
+          <summary>条码达标了，节点为什么还是待确认？</summary>
+          <p>电子流审批与节点确认是两步。按「试制与绑定验证」一节的版本说明，由有权确认的人在绑定详情完成确认。新增审批通过的电子流，或撤销已通过的电子流后，受影响的节点需要重新确认。</p>
+        </details>
+        <details>
+          <summary>版本已待转正，为什么没有发布按钮？</summary>
+          <p>先查看转正核对页有无待审批电子流提示。有待审批项时，从「查看绑定验证记录」处理审批或撤销。发布权限由在行使用项目的软件经理和管理员持有。</p>
+        </details>
+      </section>
+    </div>
+  </main>
+  <script>
+    const rolePanel = document.querySelector("#role-panel");
+    const roleButtons = [...rolePanel.querySelectorAll("button[data-role]")];
+    const steps = [...document.querySelectorAll(".step[data-roles]")];
+    const roleStatus = document.querySelector("#role-status");
+    rolePanel.hidden = false;
+    for (const button of roleButtons) {
+      button.addEventListener("click", () => {
+        const role = button.dataset.role;
+        let matches = 0;
+        for (const choice of roleButtons) {
+          choice.setAttribute("aria-pressed", String(choice === button));
+        }
+        for (const step of steps) {
+          const match = role !== "all" && step.dataset.roles.split(" ").includes(role);
+          step.classList.toggle("match", match);
+          if (match) matches += 1;
+        }
+        roleStatus.textContent = role === "all"
+          ? "当前显示全部流程。"
+          : `已突出显示 ${matches} 个与「${button.textContent.trim()}」相关的操作。`;
+      });
+    }
+  </script>
+</body>
+</html>
