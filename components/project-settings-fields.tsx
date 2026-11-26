@@ -15,7 +15,7 @@ export function ProjectSettingsFields({ people, project, canManagePeople }: { pe
   return (
     <div className="form-grid">
       <label className="field"><span className="label">项目名称</span><input className="input" name="name" defaultValue={project?.name} placeholder="例如 星云 N2" minLength={2} required /></label>
-      <label className="field"><span className="label">项目编码</span><input className="input" name="code" defaultValue={project?.code} placeholder="例如 N2" maxLength={20} pattern="[A-Za-z0-9_\-]{2,20}" required /></label>
+      <label className="field"><span className="label">项目编码</span><input className="input" name="code" defaultValue={project?.code} required /></label>
       <ProjectContactPicker label="PM" name="pmUserIds" options={people} defaultSelectedIds={project?.pms.map((person) => person.id)} className="span-2"
         emptyHelp={canManagePeople ? <>没有启用的候选人员。 <Link href="/settings/users" prefetch={false}>查看人员与角色</Link></> : "请联系管理员启用可担任 PM 的账号。"} />
       <ProjectContactPicker label="软件经理" name="softwareManagerIds" options={softwareManagers} defaultSelectedIds={project?.softwareManagers.map((person) => person.id)} className="span-2"

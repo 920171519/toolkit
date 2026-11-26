@@ -280,8 +280,9 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
   } else {
     assert(isAdmin(actor), "只有系统管理员可以新建项目。", "FORBIDDEN");
   }
+  const code = input.code.trim();
   assert(input.name.trim().length >= 2, "项目名称至少需要 2 个字符。");
-  assert(/^[A-Za-z0-9_-]{2,20}$/.test(input.code.trim()), "项目编码需为 2-20 位字母、数字、下划线或中划线。");
+  assert(code.length > 0, "请填写项目编码。");
   const duplicateName = one<{ id: number }>(
     "SELECT id FROM projects WHERE LOWER(name) = LOWER(?) AND id != ?",
     input.name.trim(),
@@ -290,7 +291,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
   assert(!duplicateName, "项目名称已存在。");
   const duplicateCode = one<{ id: number }>(
     "SELECT id FROM projects WHERE UPPER(code) = UPPER(?) AND id != ?",
-    input.code.trim(),
+    code,
     input.id ?? -1,
   );
   assert(!duplicateCode, "项目编码已存在。");
@@ -327,7 +328,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
              status = ?, stage = ?, sort_order = ?
          WHERE id = ?`,
         input.name.trim(),
-        input.code.trim().toUpperCase(),
+        code,
         input.description.trim(),
         pmUserIds[0],
         softwareManagerIds[0],
@@ -351,7 +352,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
           (name, code, description, pm_user_id, software_manager_id, status, stage, sort_order, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         input.name.trim(),
-        input.code.trim().toUpperCase(),
+        code,
         input.description.trim(),
         pmUserIds[0],
         softwareManagerIds[0],

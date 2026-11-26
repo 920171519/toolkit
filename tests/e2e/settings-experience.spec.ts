@@ -66,8 +66,10 @@ test("新建项目校验失败后保留录入并可补齐重试", async ({ page 
   const pm = form.getByRole("group", { name: /^PM/ }).getByRole("checkbox", { name: /王磊/ });
   const manager = form.getByRole("group", { name: /^软件经理/ }).getByRole("checkbox", { name: /林澈/ });
   const submit = form.getByRole("button", { name: "创建项目" });
+  const projectCode = "北区联调 Beta / 交付评审 R1 + 设备兼容性验证";
+  const paddedCode = `  ${projectCode}  `;
   await name.fill("保留录入验收项目");
-  await code.fill("DRAFTQA");
+  await code.fill(paddedCode);
   await stage.selectOption("TR4");
   await description.fill("保留已填写的项目说明");
   await pm.check();
@@ -75,30 +77,52 @@ test("新建项目校验失败后保留录入并可补齐重试", async ({ page 
   await submit.click();
   await expect(form.getByRole("alert")).toContainText("请至少为项目指定一位软件经理。");
   await expect(name).toHaveValue("保留录入验收项目", { timeout: 2_000 });
-  await expect(code).toHaveValue("DRAFTQA");
+  await expect(code).toHaveValue(paddedCode);
   await expect(stage).toHaveValue("TR4");
   await expect(description).toHaveValue("保留已填写的项目说明");
   await expect(pm).toBeChecked();
 
   await manager.check();
-  await code.fill("N1");
+  await code.fill("   ");
+  await submit.click();
+  await expect(form.getByRole("alert")).toContainText("请填写项目编码。");
+
+  await code.fill("n1");
   await submit.click();
   await expect(form.getByRole("alert")).toContainText("项目编码已存在。");
-  await expect(code).toHaveValue("N1");
+  await expect(code).toHaveValue("n1");
   await expect(pm).toBeChecked();
   await expect(manager).toBeChecked();
 
-  await code.fill("DRAFTQA");
+  await code.fill(paddedCode);
   await submit.click();
   await expect(page).toHaveURL(/\/settings\/projects\/\d+/);
   await expectFlash(page, "项目已创建");
+  const settingsPath = new URL(page.url()).pathname;
   await expect(page.getByRole("heading", { level: 1, name: "保留录入验收项目" })).toBeVisible();
   await expect(page.getByText("保留已填写的项目说明", { exact: true })).toBeVisible();
   await expect(page.getByText("TR4", { exact: true })).toBeVisible();
   await expect(page.getByText("王磊", { exact: true })).toBeVisible();
   await expect(page.getByText("林澈", { exact: true })).toBeVisible();
+
+  await page.getByTestId("edit-project-trigger").click();
+  const editForm = page.getByTestId(/^edit-project-form-/);
+  const editCode = editForm.getByLabel("项目编码");
+  await expect(editCode).toHaveValue(projectCode);
+  await editCode.fill("  q  ");
+  await editForm.getByRole("button", { name: "保存项目配置" }).click();
+  await expectFlash(page, "项目配置已更新");
+  await page.getByTestId("edit-project-trigger").click();
+  await expect(editCode).toHaveValue("q");
+
   await page.goto("/settings/projects");
-  await expect(page.getByRole("row", { name: /保留录入验收项目/ })).toHaveCount(1);
+  const createdRow = page.getByRole("row", { name: /保留录入验收项目/ });
+  await expect(createdRow.getByText("q", { exact: true })).toBeVisible();
+
+  await page.goto(settingsPath);
+  await page.getByRole("button", { name: "删除项目", exact: true }).click();
+  await confirmAction(page);
+  await expectFlash(page, "项目已删除");
 });
 
 test("项目阶段可在新建和编辑时保存，独立于流程状态", async ({ page }) => {

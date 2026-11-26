@@ -327,6 +327,11 @@
   display: none;
 }
 
+.settings-usage-project > summary > :is(strong, span) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .settings-usage-project[open] > summary .settings-usage-chevron {
   transform: rotate(90deg);
 }
