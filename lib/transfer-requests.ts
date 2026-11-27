@@ -3,6 +3,7 @@ import { createAuditLogWriter } from "./audit-log";
 import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
+export const TRIAL_USABLE_REQUEST_STATUSES_SQL = "('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')";
 
 // These SQL fragments read the current transfer request under alias r.
 export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
@@ -161,7 +162,7 @@ export function findMissingTrialTransferRequests(database: DatabaseSync, scope: 
        AND EXISTS (
          SELECT 1 FROM version_transfer_requests r
          WHERE r.package_version_id = pv.id
-           AND r.status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')
+           AND r.status IN ${TRIAL_USABLE_REQUEST_STATUSES_SQL}
        )
        AND NOT EXISTS (
          SELECT 1 FROM version_transfer_requests r

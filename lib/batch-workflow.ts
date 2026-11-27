@@ -10,7 +10,14 @@ import { integrationAttributionRules, integrationConclusionImpact, PARALLEL_RISK
 import { packageIdentity } from "./package-identity";
 import { discardReportFile, reportArchivePath, resolveReportPath, writeReportFile } from "./report-storage";
 import { readTestReport } from "./test-report-validation";
-import { getPreviousBatchVersions, OPEN_BATCH_RESERVATION_SQL, OTHER_OPEN_BATCH_RESERVATION_SQL, PENDING_BATCH_REQUEST_SQL, refreshVersionAggregate } from "./transfer-requests";
+import {
+  getPreviousBatchVersions,
+  OPEN_BATCH_RESERVATION_SQL,
+  OTHER_OPEN_BATCH_RESERVATION_SQL,
+  PENDING_BATCH_REQUEST_SQL,
+  refreshVersionAggregate,
+  TRIAL_PENDING_VERSION_STATUSES_SQL,
+} from "./transfer-requests";
 import { refreshTrialReadiness } from "./trial-readiness";
 import type { SessionUser } from "./types";
 import { voidVersionRecords } from "./version-void-workflow";
@@ -407,7 +414,7 @@ export async function completeBatchTest(
             `UPDATE trial_risk_admissions SET invalidated_at = ?
              WHERE package_version_id = ? AND invalidated_at IS NULL
                AND EXISTS (SELECT 1 FROM package_versions pv WHERE pv.id = package_version_id
-                 AND pv.status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL'))`,
+                 AND pv.status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL})`,
             timestamp, item.version_id,
           );
         }
