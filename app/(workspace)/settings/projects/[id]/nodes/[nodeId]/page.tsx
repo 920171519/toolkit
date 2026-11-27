@@ -15,7 +15,7 @@ import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { SettingsNodeFields } from "@/components/settings-node-fields";
+import { formatNodePersonOptions, SettingsNodeFields } from "@/components/settings-node-fields";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
 import { FlashMessage, PageHeader } from "@/components/ui";
 
@@ -39,8 +39,8 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
   const people = getActivePersonOptions();
   const nodeCandidateBlocker = getNodeCandidateGuidance(user, people.length);
   const approverIds = new Set(node.approvers.map(({ userId }) => userId));
-  const availableApprovers = people.filter(({ id }) => !approverIds.has(id))
-    .map(({ id, name, employeeId }) => ({ id, label: `${name} · ${employeeId}` }));
+  const options = formatNodePersonOptions(nodeCandidateBlocker ? people.filter(({ id }) => !approverIds.has(id)) : people);
+  const excludedIds = options.flatMap(({ id }) => approverIds.has(id) ? [id] : []);
   const projectPath = `/settings/projects/${projectId}`;
   const listContext = projectDirectoryDetailParams(projectDirectoryListParams(search, true));
   const deletion = getNodeDeletionBlockers(nodeId);
@@ -64,7 +64,7 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
         <div className="card-body">
           {nodeCandidateBlocker ? <GuidanceDialog label="保存节点配置" title="保存节点配置" items={[nodeCandidateBlocker]} /> : (
             <ActionForm key={JSON.stringify(node)} action={updateProjectNodeAction} hidden={{ ...listContext, nodeId }} submitText="保存节点配置" testId="edit-node-form">
-              <SettingsNodeFields people={people} node={node} />
+              <SettingsNodeFields options={options} node={node} />
             </ActionForm>
           )}
         </div>
@@ -75,10 +75,10 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
             <h2 id="node-approvers">审批人范围</h2>
             <InfoTooltip label="审批人范围说明">主审批人自动加入。试制发布时记录此范围，已有绑定任务继续使用发布时的范围。</InfoTooltip>
           </div>
-          {availableApprovers.length > 0 ? (
+          {options.length > excludedIds.length ? (
             <FormDialog key={node.approvers.length} label={<><Plus size={13} aria-hidden="true" /> 添加审批人</>} title="添加节点审批人" triggerClassName="button button-secondary button-sm">
               <ActionForm action={addProjectNodeApproverAction} hidden={{ ...listContext, nodeId }} submitText="加入审批人范围">
-                <SettingsPersonPicker name="userId" label="审批人" options={availableApprovers} />
+                <SettingsPersonPicker name="userId" label="审批人" options={options} excludedIds={excludedIds} />
               </ActionForm>
             </FormDialog>
           ) : (

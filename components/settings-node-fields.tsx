@@ -1,4 +1,5 @@
 import { SettingsSelect } from "@/components/settings-select";
+import type { SettingsPerson } from "@/components/settings-person-picker";
 import type { ProjectConfig } from "@/lib/project-queries";
 import type { PersonOption } from "@/lib/organization-queries";
 
@@ -7,8 +8,11 @@ type NodeFieldDefaults = Pick<
   "name" | "description" | "bindingOwnerId" | "bindingApproverId" | "requiredBindingCount"
 >;
 
-export function SettingsNodeFields({ people, node }: { people: PersonOption[]; node?: NodeFieldDefaults }) {
-  const options = people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }));
+export function formatNodePersonOptions(people: PersonOption[]): SettingsPerson[] {
+  return people.map(({ id, name, employeeId }) => ({ id, label: `${name} · ${employeeId}` }));
+}
+
+export function SettingsNodeFields({ options, node }: { options: SettingsPerson[]; node?: NodeFieldDefaults }) {
   return (
     <div className="form-grid">
       <label className="field"><span className="label">节点名称</span><input className="input" name="name" defaultValue={node?.name} placeholder="例如 EVT" maxLength={20} required /></label>

@@ -17,7 +17,7 @@ import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog, type GuidanceItem } from "@/components/guidance-dialog";
 import { ProjectSettingsFields } from "@/components/project-settings-fields";
-import { SettingsNodeFields } from "@/components/settings-node-fields";
+import { formatNodePersonOptions, SettingsNodeFields } from "@/components/settings-node-fields";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -100,7 +100,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
             items={[nodeCandidateBlocker]} triggerClassName="button button-primary button-sm" /> : (
               <FormDialog key={project.nodes.length} label={<><Plus size={14} aria-hidden="true" /> 添加节点</>} title="添加测试节点" triggerClassName="button button-primary button-sm" testId={"add-node-trigger-" + project.id}>
                 <ActionForm action={addProjectNodeAction} testId={"add-node-form-" + project.id} hidden={{ ...listContext, projectId: project.id }} submitText="添加节点">
-                  <SettingsNodeFields people={people} />
+                  <SettingsNodeFields options={formatNodePersonOptions(people)} />
                 </ActionForm>
               </FormDialog>
             )}

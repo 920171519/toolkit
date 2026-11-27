@@ -86,6 +86,7 @@
 | 人员选择接口附带未使用的职位、角色和包含停用账号参数 | [组织查询](../../lib/organization-queries.ts)、[选择回归](../../tests/e2e/settings-experience.spec.ts) | 选人共用启用账号字段，人员管理与指派详情保留各自完整投影。 |
 | 软件包设置目录先读取全站摘要和试制状态再裁减责任田范围 | [软件包读取](../../lib/package-queries.ts)、[设置目录回归](../../tests/e2e/package-settings-directory.spec.ts) | 将责任田范围下推，复用当前版本和试制进展规则，删除无调用的完整管理列表。 |
 | 绑定电子流按节点要求读取时多处扫描单据 | [索引定义](../../lib/schema.ts)、[待办及审批](../../lib/workbench-queries.ts)、[启动回归](../../tests/e2e/binding-approver-snapshot.spec.ts) | 支持单节点查找。保留审批时间排序及原有的电子流优先联接。 |
+| 项目节点配置与添加审批人分别序列化人员选项 | [节点表单](../../components/settings-node-fields.tsx)、[人员选择](../../components/settings-person-picker.tsx) | 共用当前页面原先可见的选项，保留已有审批人排除、服务端表单提交和空状态。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |
