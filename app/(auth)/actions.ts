@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { changeCurrentPassword, destroySession, getCurrentUser, loginWithPassword, registerMember } from "@/lib/auth";
+import { isValidAccountDisplayName, isValidEmployeeId, normalizeEmployeeId } from "@/lib/account-identity";
 import type { ActionState } from "@/lib/action-state";
-import { failure, text } from "@/lib/action-helpers";
+import { failure, raw, text } from "@/lib/action-helpers";
 import { safeWorkspacePath } from "@/lib/return-to";
 
 function passwordLengthError(password: string): string | undefined {
@@ -13,12 +14,12 @@ function passwordLengthError(password: string): string | undefined {
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const name = text(formData, "name");
-  const employeeId = text(formData, "employeeId").toUpperCase();
+  const employeeId = normalizeEmployeeId(raw(formData, "employeeId"));
   const password = text(formData, "password");
   const confirmPassword = text(formData, "confirmPassword");
   const fieldErrors: Record<string, string> = {};
-  if (name.length < 2 || name.length > 30) fieldErrors.name = "请输入 2-30 个字符的姓名。";
-  if (!/^[A-Za-z0-9_-]{3,32}$/.test(employeeId)) {
+  if (!isValidAccountDisplayName(name)) fieldErrors.name = "请输入 2-30 个字符的姓名。";
+  if (!isValidEmployeeId(employeeId)) {
     fieldErrors.employeeId = "工号需为 3-32 位字母、数字、下划线或中划线。";
   }
   const passwordError = passwordLengthError(password);

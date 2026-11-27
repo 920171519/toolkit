@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isValidAccountDisplayName } from "./account-identity";
 import { createAuditLogWriter } from "./audit-log";
 import { ROLES, type Role } from "./constants";
 import { db, one, run, transaction } from "./db";
@@ -61,11 +62,12 @@ export function setUserActive(actor: SessionUser, userId: number, active: boolea
 
 export function saveUserProfile(actor: SessionUser, userId: number, name: string, title: string) {
   assert(isAdmin(actor), "只有系统管理员可以编辑人员资料。", "FORBIDDEN");
-  assert(name.trim().length >= 2 && name.trim().length <= 30, "姓名需为 2-30 个字符。");
+  const displayName = name.trim();
+  assert(isValidAccountDisplayName(displayName), "姓名需为 2-30 个字符。");
   const target = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ?", userId);
   assert(target, "人员不存在。", "NOT_FOUND");
   transaction(() => {
-    run("UPDATE users SET name = ?, title = ? WHERE id = ?", name.trim(), title.trim(), userId);
-    audit(actor.id, "UPDATE_USER_PROFILE", "USER", userId, `更新人员资料：${name.trim()}`);
+    run("UPDATE users SET name = ?, title = ? WHERE id = ?", displayName, title.trim(), userId);
+    audit(actor.id, "UPDATE_USER_PROFILE", "USER", userId, `更新人员资料：${displayName}`);
   });
 }

@@ -1,3 +1,5 @@
+import { isValidEmployeeId, normalizeEmployeeId } from "../lib/account-identity";
+import { DEPARTMENT_NAME } from "../lib/constants";
 import { hashPassword } from "../lib/password";
 import { one, run } from "../lib/db";
 
@@ -13,7 +15,7 @@ if (name.trim().length < 2) {
   console.error("姓名至少需要 2 个字符。");
   process.exit(1);
 }
-if (!/^[A-Za-z0-9_-]{3,32}$/.test(employeeId)) {
+if (!isValidEmployeeId(employeeId)) {
   console.error("工号需为 3-32 位字母、数字、下划线或中划线。");
   process.exit(1);
 }
@@ -39,9 +41,9 @@ if (existing) {
     `INSERT INTO users (name, employee_id, password_hash, role, department, title, is_active, created_at)
      VALUES (?, ?, ?, 'ADMIN', ?, '系统管理员', 1, ?)`,
     name.trim(),
-    employeeId.trim().toUpperCase(),
+    normalizeEmployeeId(employeeId),
     hashPassword(password),
-    process.env.NEXT_PUBLIC_DEPARTMENT_NAME || "软件工程部",
+    DEPARTMENT_NAME,
     new Date().toISOString(),
   );
   console.log(`已创建系统管理员 ${name.trim()}（${employeeId}），用户 ID：${result.lastInsertRowid}。`);

@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { normalizeEmployeeId } from "./account-identity";
 import { createAuditLogWriter } from "./audit-log";
 import { DEPARTMENT_NAME, type Role } from "./constants";
 import { db, one, run, transaction } from "./db";
@@ -25,7 +26,7 @@ const audit = createAuditLogWriter(db);
 export async function loginWithPassword(employeeId: string, password: string): Promise<boolean> {
   const user = one<{ id: number; password_hash: string }>(
     "SELECT id, password_hash FROM users WHERE employee_id = ? COLLATE NOCASE AND is_active = 1",
-    employeeId.trim().toUpperCase(),
+    normalizeEmployeeId(employeeId),
   );
   if (!user || !verifyPassword(password, user.password_hash)) return false;
   const writeCookie = await prepareSessionCookie();
