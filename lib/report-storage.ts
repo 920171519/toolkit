@@ -2,8 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { isAbsolute, posix, relative, resolve, sep, win32 } from "node:path";
-
-const reportsDirectory = "data/uploads/reports";
+import { REPORT_STORAGE_KEY_PREFIX, resolveReportStoragePath } from "./runtime-config";
 
 function readableSegment(value: string, limit: number, fallback: string) {
   const sanitized = Array.from(value.normalize("NFC"), (character) =>
@@ -20,16 +19,15 @@ export function reportArchivePath(
   const projectFolder = `${batch.project_id}-${readableSegment(batch.project_name, 36, "项目")}`;
   const batchFolder = /^B\d{3,24}$/.test(batch.code) ? batch.code : `批次-${batch.id}`;
   const filename = readableSegment(win32.parse(originalName).name, 36, "验证报告");
-  return posix.join(reportsDirectory, projectFolder, batchFolder, `${filename}-${randomUUID()}${extension}`);
+  return posix.join(REPORT_STORAGE_KEY_PREFIX, projectFolder, batchFolder, `${filename}-${randomUUID()}${extension}`);
 }
 
 export function resolveReportPath(storedPath: string) {
-  const reportsRoot = resolve(process.cwd(), reportsDirectory);
+  const storedRoot = resolve(/* turbopackIgnore: true */ process.cwd(), REPORT_STORAGE_KEY_PREFIX);
   const normalizedPath = storedPath.replaceAll("\\", "/");
   if (posix.isAbsolute(normalizedPath) || win32.isAbsolute(normalizedPath)) return null;
   const storagePath = resolve(/* turbopackIgnore: true */ process.cwd(), normalizedPath);
-  const insideRoot = relative(reportsRoot, storagePath);
+  const insideRoot = relative(storedRoot, storagePath);
   if (!insideRoot || insideRoot === ".." || insideRoot.startsWith(`..${sep}`) || isAbsolute(insideRoot)) return null;
-  const configuredRoot = process.env.TOOLKIT_REPORTS_PATH;
-  return configuredRoot ? resolve(configuredRoot, insideRoot) : storagePath;
+  return resolveReportStoragePath(storagePath, insideRoot);
 }

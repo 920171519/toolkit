@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/auth-forms";
 import { FlashMessage } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { safeWorkspacePath } from "@/lib/return-to";
+import { shouldSeedDemoData } from "@/lib/runtime-config";
 import styles from "../auth.module.css";
 
 export const metadata: Metadata = { title: "登录" };
@@ -28,7 +29,7 @@ export default async function LoginPage({
         <FlashMessage notice={{ tone: "success", message: "密码已修改，请使用新密码登录。" }} />
       )}
       <LoginForm next={next} />
-      {process.env.TOOLKIT_SKIP_SEED !== "1" && <details className={styles.demo}>
+      {shouldSeedDemoData() && <details className={styles.demo}>
         <summary>本地演示账号</summary>
         <div className={styles.demoAccounts}>
           <span>系统管理员 · ADMIN001</span>

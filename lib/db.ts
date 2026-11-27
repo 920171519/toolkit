@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
 import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
@@ -12,7 +13,7 @@ let localDb: DatabaseSync | undefined;
 
 function createDatabase(): DatabaseSync {
   const databasePath = getDatabasePath();
-  mkdirSync(path.dirname(databasePath), { recursive: true });
+  mkdirSync(dirname(databasePath), { recursive: true });
   const database = new DatabaseSync(databasePath);
   database.exec("PRAGMA busy_timeout = 5000;");
   database.exec("PRAGMA foreign_keys = ON;");
@@ -27,7 +28,7 @@ function createDatabase(): DatabaseSync {
     database.close();
     throw error;
   }
-  if (process.env.TOOLKIT_SKIP_SEED !== "1") {
+  if (shouldSeedDemoData()) {
     seedDatabase(database);
   }
   return database;
@@ -239,10 +240,4 @@ export function transaction<T>(fn: () => T): T {
     }
     throw error;
   }
-}
-
-export function getDatabasePath(): string {
-  return process.env.DATABASE_PATH
-    ? path.resolve(process.env.DATABASE_PATH)
-    : path.join(process.cwd(), "data", "toolkit.db");
 }

@@ -417,7 +417,7 @@ pnpm typecheck        # TypeScript 类型检查
 pnpm lint             # ESLint
 pnpm test:e2e         # 运行 Playwright E2E（使用系统临时目录中的独立数据）
 pnpm test:e2e:full    # 构建后运行 E2E
-pnpm db:seed          # 确保数据库表和演示数据存在
+pnpm db:seed          # 初始化数据库，按启动配置决定是否写入演示数据
 pnpm db:reset         # 删除数据库（谨慎！会清空全部数据）
 pnpm admin:create -- <姓名> <工号> <密码>  # 创建或提升一个管理员
 ```
@@ -433,6 +433,8 @@ pnpm admin:create -- <姓名> <工号> <密码>  # 创建或提升一个管理�
 | `TOOLKIT_REPORTS_PATH` | `./data/uploads/reports` | 验证报告的实际存放目录。数据库中的报告路径格式保持一致 |
 | `SESSION_COOKIE_SECURE` | 按请求协议自动判断 | HTTPS 反代请转发 `X-Forwarded-Proto: https` 或显式设为 true；HTTP 验收不要设为 true |
 | `TOOLKIT_SKIP_SEED` | `0` | 设为 `1` 时不写入演示数据 |
+
+数据库和报告的相对路径以进程工作目录为准。Next.js 会加载项目的环境文件，独立维护命令读取执行进程的环境变量。对已有部署运行维护命令时，先核对服务的工作目录和存储配置，再通过 `DATABASE_PATH` 传入实际数据库的绝对路径。需要关闭演示数据时，同时传入 `TOOLKIT_SKIP_SEED=1`。
 
 ## 测试与验证
 
@@ -517,7 +519,7 @@ data/                         # SQLite 数据文件与上传报告（部署需�
 
 ### Ubuntu 24 生产部署
 
-- 当前为单机 SQLite 方案，适合部门级 < 1000 人使用。必须持久化 `data/` 目录和通过 `TOOLKIT_REPORTS_PATH` 单独指定的报告目录。新上传的验证报告按「项目 ID-项目名 / 批次号」归档，历史报告沿用原路径。
+- 当前为单机 SQLite 方案，适合部门级 < 1000 人使用。持久化实际使用的数据库和报告目录，包括通过 `DATABASE_PATH` 和 `TOOLKIT_REPORTS_PATH` 单独配置的路径。systemd 服务的工作目录和环境变量由服务单元指定。新上传的验证报告按「项目 ID-项目名 / 批次号」归档，历史报告沿用原路径。
 - **不要使用 `pnpm dev` 作为生产服务**。生产必须 `pnpm build` 后 `pnpm start`。
 - **部署时禁止在旧服务运行期间覆盖 `.next`**：旧进程可能继续返回旧 HTML，而浏览器请求到新构建的静态 chunk，表现为“点击按钮没反应 / 弹窗不出现 / 点击空白处不关闭 / 登录后被踢回登录页”。正确顺序是：
   1. 停止旧服务；
@@ -535,7 +537,7 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 - 若使用 pm2 等进程管理器，把 `STOP_CMD` / `START_CMD` 传给脚本，确保构建前停止、构建后启动。
 - 反向代理不要跨构建长期缓存 HTML/RSC；`/_next/static/` 是内容哈希文件，可长缓存，但部署后浏览器仍建议强刷一次。
 - 登录后点击任意页面被踢回登录页，另一个常见原因是 **HTTP 部署却设置了 Secure 会话 Cookie**。当前系统会优先读取 `SESSION_COOKIE_SECURE`，未设置时根据 `X-Forwarded-Proto: https` 自动判断；Nginx 反代 HTTPS 时必须转发该头，直接用 HTTP 验收时不要设置 `SESSION_COOKIE_SECURE=true`。若之前已经用错误配置登录过，请清除该站点 Cookie 或用无痕窗口重新登录。
-- 数据库升级或清空演示数据前先备份 `data/toolkit.db` 与 `data/uploads/`。
+- 数据库升级或清空演示数据前先备份实际使用的 SQLite 数据库和报告目录。
 - 试制和转正使用用户填写的 HTTP(S) 电子流网址，已有电子流编号仍可查阅。新发布的试制和正式版本需分别填写评审纪要，可从版本全链路查看。绑定电子流在本系统生成编号并完成审批，尚未对接企业 OA/BPM。
 - 个人工作台通知为系统内派生展示，暂未接入邮件、短信或即时通讯推送。
 

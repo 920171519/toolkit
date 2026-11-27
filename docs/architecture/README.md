@@ -14,7 +14,7 @@
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 会话识别用户。业务授权按项目、责任田、软件包、节点和单据检查。版本对象读取、项目工作区和写入办理各有权限。 |
 | 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/seed.ts`、`lib/report-storage.ts` | `db` 统一连接、事务和启动迁移。演示数据经显式环境变量关闭。报告服务拥有路径校验，报告元数据存入 SQLite。 |
-| 配置与部署 | `package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh`、README 环境变量表 | pnpm 固定依赖，Next.js 处理构建和运行，Node 原生 SQLite 提供存储。部署脚本接入现有进程管理器。生产路径和会话选项逐步归档至任务池。 |
+| 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境和工作目录。部署脚本接入现有进程管理器。 |
 | 错误、日志与测试 | `lib/domain-error.ts`、`lib/action-helpers.ts`、`lib/audit-log.ts`、`tests/e2e` | 业务校验使用同一错误类型。`audit-log` 在调用方现有事务和连接上写入操作历史。Playwright 从真实页面、权限及数据库状态验证契约。测试服务与夹具共享同一运行目录中的数据库和报告。 |
 
 ## 状态所有权
