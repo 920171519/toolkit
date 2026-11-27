@@ -16,27 +16,29 @@ import { readTraceListState, traceListParams } from "@/lib/version-trace-list";
 import { directoryActionHref } from "@/lib/settings-directory";
 import { hasVersionRequest } from "@/lib/workflow-queries";
 import {
-  addBatchProgress,
   cancelBindingFlow,
+  confirmBindingRequirement,
+  decideBindingFlow,
+  pushBindingTasks,
+  saveBindingBarcodeResults,
+  skipBindingAndEnterFormal,
+  submitBindingFlow,
+  waiveBindingRequirement,
+} from "@/lib/binding-workflow";
+import {
+  addBatchProgress,
   cancelTransfer,
   completeBatchTest,
-  confirmBindingRequirement,
   createBatchDraft,
   type CreateBatchInput,
-  decideBindingFlow,
   deleteDraftBatch,
   releaseFormal,
   releaseTrial,
-  saveBindingBarcodeResults,
   sendBatch,
-  submitBindingFlow,
   submitTransfer,
   terminateBatch,
   abandonTrialRelease,
-  pushBindingTasks,
-  skipBindingAndEnterFormal,
   voidPackageVersion,
-  waiveBindingRequirement,
 } from "@/lib/workflow";
 
 function workflowSuccessRedirect(

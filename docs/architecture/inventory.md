@@ -51,6 +51,7 @@
 | 待转测清单、计数和预览留在聚合查询中并被转正复用项目范围 | [待转测读模型](../../lib/pending-transfer-queries.ts)、[转测申请规则](../../lib/transfer-requests.ts) | 项目范围归入申请规则，其余投影由待转测模块维护。 |
 | 实例迁移、应用事务和补派各自执行写事务，命令回滚失败会覆盖写入错误 | [即时写事务](../../lib/sqlite-lifecycle.ts)、[补派命令](../../scripts/backfill-trial-transfer-requests.ts)、[生命周期回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 同一实现处理提交和错误传播，调用方拥有连接、事务边界与输出。 |
 | 试制、待转正计数与历史访问留在聚合工作流查询 | [发布队列查询](../../lib/release-queue-queries.ts)、[转正详情](../../app/(workspace)/formal/[id]/page.tsx) | 读取按已有范围投影，队列与历史的不同条件由发布查询模块维护。 |
+| 绑定命令、转测和转正发布共处一个写入模块，推送和跳过重复读取目标 | [绑定写入](../../lib/binding-workflow.ts)、[工作台事务入口](../../lib/actions/workflow.ts)、[授权](../../lib/access.ts) | 命令直接由绑定模块执行，共用记录定位与版本管理规则。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/workflow-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

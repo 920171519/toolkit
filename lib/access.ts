@@ -1,6 +1,7 @@
 import "server-only";
 
 import { all, one } from "./db";
+import { assert } from "./domain-error";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 
@@ -143,6 +144,12 @@ export function versionProjectManagementBlocker(
   );
   if (!scope?.eligible) return "NO_PROJECT";
   return scope.managed > 0 ? null : "FORBIDDEN";
+}
+
+export function assertVersionProjectManager(actor: SessionUser, versionId: number) {
+  const blocker = versionProjectManagementBlocker(actor, versionId);
+  assert(blocker !== "NO_PROJECT", "该版本没有可操作的项目记录。", "NOT_FOUND");
+  assert(blocker !== "FORBIDDEN", "只有使用该软件包的项目软件经理或系统管理员可以执行该操作。", "FORBIDDEN");
 }
 
 export function canConfirmBindingNodeForProject(

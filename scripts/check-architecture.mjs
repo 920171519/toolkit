@@ -46,6 +46,7 @@ function importSpecifiers(source) {
 }
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
+const workflowMutationModules = new Set(["lib/workflow.ts", "lib/binding-workflow.ts"]);
 const workflowPageQueries = new Set([
   "lib/workflow-queries.ts",
   "lib/binding-queries.ts",
@@ -73,7 +74,7 @@ for (const file of files.sort()) {
         `${name} imports ${specifier} directly. Use the corresponding server-side service or query module.`,
       );
     }
-    if (workspacePagePattern.test(name) && dependency === "lib/workflow.ts") {
+    if (workspacePagePattern.test(name) && workflowMutationModules.has(dependency)) {
       dependencyBoundaryErrors.push(
         `${name} imports the workflow mutation module directly. Use actions for writes and domain modules for reads.`,
       );
@@ -90,9 +91,9 @@ for (const file of files.sort()) {
         `${name} imports session storage directly. Use authentication or account settings.`,
       );
     }
-    if (name === "lib/workflow.ts" && workflowPageQueries.has(dependency)) {
+    if (workflowMutationModules.has(name) && workflowPageQueries.has(dependency)) {
       dependencyBoundaryErrors.push(
-        "lib/workflow.ts depends on a page query. Read transaction facts from their owning domain module.",
+        `${name} depends on a page query. Read transaction facts from their owning domain module.`,
       );
     }
   }
