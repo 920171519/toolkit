@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import type { BindingBarcodeRow } from "@/lib/workflow-queries";
+import type { BindingBarcodeRow } from "@/lib/binding-queries";
 import styles from "./binding-barcode-list.module.css";
 
 const outcomes = {

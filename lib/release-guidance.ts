@@ -14,7 +14,7 @@ import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignm
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-import type { TrialDetailReader } from "./workflow-queries";
+import type { TrialDetailReader } from "./binding-queries";
 
 type ReleaseGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 type GuidanceContext = {

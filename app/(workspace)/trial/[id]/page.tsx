@@ -13,7 +13,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { parseFlash } from "@/lib/queries";
-import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/workflow-queries";
+import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import {

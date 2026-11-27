@@ -21,7 +21,8 @@ import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { getReadableTrialQueueCounts, getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getReadableTrialQueueCounts } from "@/lib/binding-queries";
+import { getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
 import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";

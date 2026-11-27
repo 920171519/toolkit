@@ -12,6 +12,7 @@
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
 | 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。准备转测与草稿事务在 `lib/transfer-requests.ts` 共用上次转测版本读取。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
+| 绑定读取 | `lib/binding-queries.ts` | 为试制、转正和版本追溯提供授权后的节点、条码与电子流证据，缓存同一页面读取期间的详情。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务负责注册和会话写入。`access` 管理项目、责任田、软件包、节点和单据的读写范围及批次证据权限。版本对象读取、项目工作区和写入办理各有权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
@@ -43,7 +44,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截它直接依赖聚合页面查询 `lib/workflow-queries.ts`，也拦截工作区页面直接导入该写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。 设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。
+`lib/workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截它直接依赖 `lib/workflow-queries.ts` 和 `lib/binding-queries.ts`，也拦截工作区页面直接导入该写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。 设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 

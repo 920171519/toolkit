@@ -46,6 +46,7 @@ function importSpecifiers(source) {
 }
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
+const workflowPageQueries = new Set(["lib/workflow-queries.ts", "lib/binding-queries.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();
 const routeSources = new Map();
@@ -76,7 +77,7 @@ for (const file of files.sort()) {
         `${name} imports the settings mutation module directly. Use settings actions for writes and settings queries for reads.`,
       );
     }
-    if (name === "lib/workflow.ts" && dependency === "lib/workflow-queries.ts") {
+    if (name === "lib/workflow.ts" && workflowPageQueries.has(dependency)) {
       dependencyBoundaryErrors.push(
         "lib/workflow.ts depends on a page query. Read transaction facts from their owning domain module.",
       );
