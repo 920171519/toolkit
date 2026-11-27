@@ -12,28 +12,10 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/actions/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", {
         patterns: [packageDrawerQueryRestriction],
-      }],
-    },
-  },
-  {
-    files: [
-      "app/(workspace)/**/*.{ts,tsx}",
-      "app/(auth)/actions.ts",
-      "app/**/{page,layout}.{ts,tsx}",
-      "app/api/**/*.{ts,tsx}",
-      "components/**/*.{ts,tsx}",
-      "lib/actions/**/*.{ts,tsx}",
-    ],
-    rules: {
-      "no-restricted-imports": ["error", {
-        patterns: [packageDrawerQueryRestriction, {
-          regex: "^(?:node:)?sqlite$|(?:^|/)db(?:\\.ts)?$",
-          message: "Use the corresponding server-side service or query module.",
-        }],
       }],
     },
   },

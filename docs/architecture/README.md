@@ -34,12 +34,12 @@
 
 ## 依赖约束
 
-`pnpm lint` 同时运行 ESLint 和 `pnpm architecture:check`。检查器使用当前 TypeScript 配置解析源码中的静态导入、导出、类型导入和字面量动态导入。JS/TS 源码循环会导致命令失败，同时打印可定位的路径。检查覆盖应用、交互、业务、脚本、测试和根目录源码配置。生成文件、外部包与 CSS 资源不进入模块图。
+`pnpm lint` 同时运行 ESLint 和 `pnpm architecture:check`。检查器使用当前 TypeScript 配置解析源码中的静态导入、导出、类型导入、字面量动态导入和 CommonJS 导入。JS/TS 源码循环会导致命令失败，同时打印可定位的路径。检查覆盖应用、交互、业务、脚本、测试和根目录源码配置。生成文件、外部包与 CSS 资源不进入模块图。
 
 运行 `node scripts/check-architecture.mjs --graph` 可导出当前完整的内部模块依赖表。基线扫描覆盖 187 个模块、773 条含类型引用的内部依赖，未发现循环。后续约束以实际依赖和被保留的契约为依据。
 
 软件包抽屉的授权投影由 `getPackageDrawerData` 提供。ESLint 会拦截页面和客户端模块直接导入通用查询中的底层详情读取函数。
 
-页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。ESLint 拦截这些入口直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
+页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。

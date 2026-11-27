@@ -45,17 +45,25 @@ function importSpecifiers(source) {
   return specifiers;
 }
 
+const entrypointDirectories = ["app/", "components/", "lib/actions/"];
 const graph = new Map();
 const routeSources = new Map();
+const databaseBoundaryErrors = [];
 for (const file of files.sort()) {
   const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
   const name = displayPath(file);
   if (name === "proxy.ts" || name === "lib/return-to.ts") routeSources.set(name, source);
   const dependencies = new Set();
+  const isEntrypoint = entrypointDirectories.some((directory) => name.startsWith(directory));
   for (const specifier of importSpecifiers(source)) {
     const resolved = ts.resolveModuleName(specifier, file, options, ts.sys, cache).resolvedModule;
     const dependency = resolved && ownedFiles.get(canonicalPath(resolved.resolvedFileName));
     if (dependency) dependencies.add(dependency);
+    if (isEntrypoint && (dependency === "lib/db.ts" || specifier === "node:sqlite" || specifier === "sqlite")) {
+      databaseBoundaryErrors.push(
+        `${name} imports ${specifier} directly. Use the corresponding server-side service or query module.`,
+      );
+    }
   }
   graph.set(name, [...dependencies].sort());
 }
@@ -128,14 +136,15 @@ function workspaceRouteErrors() {
 }
 
 const showGraph = process.argv.includes("--graph");
-const routeErrors = workspaceRouteErrors();
+const architectureErrors = [...workspaceRouteErrors(), ...databaseBoundaryErrors];
 if (showGraph) console.log(JSON.stringify(Object.fromEntries(graph), null, 2));
-if (cycles.length || routeErrors.length) {
+if (cycles.length || architectureErrors.length) {
   for (const cycle of cycles) console.error(`Circular dependency: ${cycle.join(" -> ")}`);
-  for (const error of routeErrors) console.error(error);
+  for (const error of architectureErrors) console.error(error);
   process.exitCode = 1;
 } else if (!showGraph) {
   const edges = [...graph.values()].reduce((sum, dependencies) => sum + dependencies.length, 0);
   console.log(`Architecture check: ${graph.size} modules, ${edges} dependencies, no cycles.`);
   console.log("Workspace route coverage matches the return path policy.");
+  console.log("Application entrypoints access the database through services and queries.");
 }
