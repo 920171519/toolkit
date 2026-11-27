@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { integrationConclusionImpact } from "@/lib/integration-conclusion";
+import { ATTRIBUTION_META, CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
+import { integrationAttributionRules, integrationConclusionImpact, isBatchConclusion } from "@/lib/integration-conclusion";
 import { packageIdentity } from "@/lib/package-identity";
 import { readTestReport, testReportAccept, testReportHint } from "@/lib/test-report-validation";
 import styles from "./workflow-queue.module.css";
@@ -15,9 +16,10 @@ type TestedVersion = {
 };
 
 export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
-  const [conclusion, setConclusion] = useState("");
+  const [conclusion, setConclusion] = useState<BatchConclusion | "">("");
   const [attribution, setAttribution] = useState("");
   const [affected, setAffected] = useState(new Set<number>());
+  const { choices } = integrationAttributionRules[conclusion || "PASS"];
   const { requiresAffectedVersions: showAffectedVersions } = integrationConclusionImpact(conclusion, attribution, items);
 
   return (
@@ -25,27 +27,25 @@ export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
       <label className="field">
         <span className="label">测试结论</span>
         <select className="select" name="conclusion" value={conclusion} required onChange={(event) => {
-          setConclusion(event.target.value);
+          const value = event.currentTarget.value;
+          setConclusion(isBatchConclusion(value) ? value : "");
           setAttribution("");
           setAffected(new Set());
         }}>
           <option value="" disabled>请选择</option>
-          <option value="PASS">测试通过</option>
-          <option value="FAIL">测试不通过</option>
-          <option value="BLOCKED">无法完成验证</option>
+          {Object.entries(CONCLUSION_META).map(([value, { label }]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
-      {conclusion === "FAIL" ? <label className="field">
+      {choices.length > 1 ? <label className="field">
         <span className="label">问题归属</span>
         <select className="select" name="issueAttribution" value={attribution} required onChange={(event) => {
           setAttribution(event.target.value);
           setAffected(new Set());
         }}>
           <option value="" disabled>请选择</option>
-          <option value="PACKAGE_RELATED">问题与软件包相关</option>
-          <option value="NOT_PACKAGE_RELATED">问题与软件包无关</option>
+          {choices.map((value) => <option key={value} value={value}>{ATTRIBUTION_META[value].label}</option>)}
         </select>
-      </label> : <input type="hidden" name="issueAttribution" value={conclusion === "BLOCKED" ? "UNKNOWN" : "NONE"} />}
+      </label> : <input type="hidden" name="issueAttribution" value={choices[0]} />}
       {showAffectedVersions && (
         <fieldset className="field">
           <legend className="label">受影响的软件包版本 · 至少选择一项</legend>

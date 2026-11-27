@@ -10,7 +10,8 @@ import { packageIdentity } from "./package-identity";
 import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
-import { integrationConclusionImpact, PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
+import type { BatchConclusion } from "./constants";
+import { integrationAttributionRules, integrationConclusionImpact, PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
 import { getActiveReleaseRequests, getFormalReleaseCheck, refreshTrialReadiness } from "./trial-readiness";
 import {
   findReadyTrialProject,
@@ -457,8 +458,8 @@ export async function completeBatchTest(
   actor: SessionUser,
   batchId: number,
   input: {
-    conclusion: "PASS" | "FAIL" | "BLOCKED";
-    issueAttribution: "NONE" | "PACKAGE_RELATED" | "NOT_PACKAGE_RELATED" | "UNKNOWN";
+    conclusion: BatchConclusion;
+    issueAttribution: string;
     testSummary: string;
     reportFile: File | null;
     affectedVersionIds?: number[];
@@ -477,9 +478,8 @@ export async function completeBatchTest(
   );
   assert(batch.status === "IN_TEST", "只有集成测试中的批次可以提交测试结论。");
   assert(input.testSummary.trim().length >= 10, "请填写测试总结（至少 10 个字符）。");
-  if (input.conclusion === "PASS") assert(input.issueAttribution === "NONE", "测试通过时问题归属应为“未发现问题”。");
-  if (input.conclusion === "FAIL") assert(input.issueAttribution === "PACKAGE_RELATED" || input.issueAttribution === "NOT_PACKAGE_RELATED", "测试不通过时需要判断问题是否与软件包相关。");
-  if (input.conclusion === "BLOCKED") assert(input.issueAttribution === "UNKNOWN", "无法完成验证时问题归属应为“原因待定位”。");
+  const { choices, errorMessage } = integrationAttributionRules[input.conclusion];
+  assert(choices.some((choice) => choice === input.issueAttribution), errorMessage);
   assert(input.reportFile, "请上传验证报告。", "INVALID_TEST_REPORT");
   const file = input.reportFile;
   const report = readTestReport(file);

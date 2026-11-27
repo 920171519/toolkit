@@ -11,6 +11,7 @@ import { DomainError } from "@/lib/domain-error";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
+import { isBatchConclusion } from "@/lib/integration-conclusion";
 import { readTraceListState, traceListParams } from "@/lib/version-trace-list";
 import { directoryActionHref } from "@/lib/settings-directory";
 import { hasVersionRequest } from "@/lib/workflow-queries";
@@ -194,15 +195,15 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
   const conclusion = text(formData, "conclusion");
   const issueAttribution = text(formData, "issueAttribution");
   if (!batchId) return { error: "批次参数无效。" };
-  if (!["PASS", "FAIL", "BLOCKED"].includes(conclusion)) return { error: "请补齐测试结论。", fieldErrors: { conclusion: "请选择测试结论。" } };
+  if (!isBatchConclusion(conclusion)) return { error: "请补齐测试结论。", fieldErrors: { conclusion: "请选择测试结论。" } };
   const uploaded = formData.get("reportFile");
   const reportFile = uploaded instanceof File && uploaded.size > 0 ? uploaded : null;
   if (!reportFile) return { error: "请补齐验证报告。", fieldErrors: { reportFile: "请上传非空的验证报告。" } };
   let voidedCount = 0;
   try {
     const result = await completeBatchTest(user, batchId, {
-      conclusion: conclusion as "PASS" | "FAIL" | "BLOCKED",
-      issueAttribution: issueAttribution as "NONE" | "PACKAGE_RELATED" | "NOT_PACKAGE_RELATED" | "UNKNOWN",
+      conclusion,
+      issueAttribution,
       testSummary: text(formData, "testSummary"),
       reportFile,
       affectedVersionIds: idList(formData, "affectedVersionId"),
