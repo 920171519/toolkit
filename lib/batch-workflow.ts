@@ -287,18 +287,18 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
 
 export function addBatchProgress(actor: SessionUser, batchId: number, content: string) {
   assert(content.trim().length >= 2, "请填写进展说明（至少 2 个字符）。");
-  const batch = one<{ id: number; code: string; project_id: number; project_name: string; status: string }>(
-    `SELECT b.id, b.code, b.project_id, p.name AS project_name, b.status
-     FROM integration_batches b JOIN projects p ON p.id = b.project_id WHERE b.id = ?`,
-    batchId,
-  );
-  assert(batch, "转测批次不存在。", "NOT_FOUND");
-  assert(
-    canSubmitIntegrationConclusionForProject(actor, batch.project_id),
-    "只有本项目集成测试责任田负责人或系统管理员可以提交进展说明。",
-    "FORBIDDEN",
-  );
   transaction(() => {
+    const batch = one<{ id: number; code: string; project_id: number; project_name: string; status: string }>(
+      `SELECT b.id, b.code, b.project_id, p.name AS project_name, b.status
+       FROM integration_batches b JOIN projects p ON p.id = b.project_id WHERE b.id = ?`,
+      batchId,
+    );
+    assert(batch, "转测批次不存在。", "NOT_FOUND");
+    assert(
+      canSubmitIntegrationConclusionForProject(actor, batch.project_id),
+      "只有本项目集成测试责任田负责人或系统管理员可以提交进展说明。",
+      "FORBIDDEN",
+    );
     const timestamp = now();
     run(
       "INSERT INTO batch_progress_notes (batch_id, author_id, content, created_at) VALUES (?, ?, ?, ?)",
@@ -309,6 +309,14 @@ export function addBatchProgress(actor: SessionUser, batchId: number, content: s
     );
     audit(actor.id, "ADD_BATCH_PROGRESS", "BATCH", batchId, `${batch.code} 提交集成测试进展说明：${content.trim().slice(0, 80)}`);
   });
+}
+
+function assertBatchConclusionDuty(actor: SessionUser, projectId: number) {
+  assert(
+    canSubmitIntegrationConclusionForProject(actor, projectId),
+    "只有本项目集成测试责任田负责人或系统管理员可以提交测试结论。",
+    "FORBIDDEN",
+  );
 }
 
 export async function completeBatchTest(
@@ -328,11 +336,7 @@ export async function completeBatchTest(
     batchId,
   );
   assert(batch, "转测批次不存在。", "NOT_FOUND");
-  assert(
-    canSubmitIntegrationConclusionForProject(actor, batch.project_id),
-    "只有本项目集成测试责任田负责人或系统管理员可以提交测试结论。",
-    "FORBIDDEN",
-  );
+  assertBatchConclusionDuty(actor, batch.project_id);
   assert(batch.status === "IN_TEST", "只有集成测试中的批次可以提交测试结论。");
   assert(input.testSummary.trim().length >= 10, "请填写测试总结（至少 10 个字符）。");
   const { choices, errorMessage } = integrationAttributionRules[input.conclusion];
@@ -348,8 +352,12 @@ export async function completeBatchTest(
   let reportWritten = false;
   try {
     return transaction(() => {
-      const current = one<{ status: string }>("SELECT status FROM integration_batches WHERE id = ?", batchId);
+      const current = one<{ status: string; project_id: number }>(
+        "SELECT status, project_id FROM integration_batches WHERE id = ?",
+        batchId,
+      );
       assert(current?.status === "IN_TEST", "该批次状态已变化，请刷新后重试。");
+      assertBatchConclusionDuty(actor, current.project_id);
       const items = all<{
         version_id: number;
         version_status: string;
