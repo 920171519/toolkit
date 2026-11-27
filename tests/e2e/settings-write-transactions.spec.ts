@@ -38,6 +38,7 @@ function loadCommands(connection: DatabaseSync) {
     return {
       ...load(resolve("lib/area-settings.ts")) as typeof import("../../lib/area-settings"),
       ...load(resolve("lib/package-settings.ts")) as typeof import("../../lib/package-settings"),
+      ...load(resolve("lib/project-settings.ts")) as typeof import("../../lib/project-settings"),
       ...load(resolve("lib/transfer-workflow.ts")) as typeof import("../../lib/transfer-workflow"),
       ...load(resolve("lib/user-settings.ts")) as typeof import("../../lib/user-settings"),
     };
@@ -256,6 +257,48 @@ test("删除责任田按写入时的软件包归属核对是否允许删除", ({
       .toEqual({ area_id: areaId, is_active: 0 });
     expect(second.prepare("SELECT entity_id FROM audit_logs WHERE action = 'DELETE_AREA' ORDER BY id").all())
       .toEqual([{ entity_id: emptyAreaId }]);
+    expect(second.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+});
+
+test("项目和节点写入按同一事务核对目标、指派与重名", ({}, testInfo) => {
+  withConnections(testInfo, (first, second) => {
+    const writer = loadCommands(first);
+    const competingWriter = loadCommands(second);
+    const owners = { bindingOwnerId: 2, bindingApproverId: 1, requiredBindingCount: 1 };
+    second.exec(`
+      INSERT INTO users (id, name, employee_id, password_hash, role, created_at)
+      VALUES (3, '验收审批人', 'QA003', 'fixture', 'MEMBER', '2026-11-28');
+    `);
+
+    // Check the real service statements before allowing any dependent read.
+    const prepare = first.prepare.bind(first);
+    first.prepare = (statement) => {
+      if (/^SELECT[\s\S]*\bFROM (projects|project_nodes|project_node_approvers|users)\b/.test(statement.trim())) {
+        expect(first.isTransaction).toBe(true);
+      }
+      return prepare(statement);
+    };
+
+    beforeNextWrite(first, () => competingWriter.addProjectNode(actor, 1, "DVT", "", owners));
+    expect(() => writer.addProjectNode(actor, 1, "dvt", "", owners)).toThrow("该项目下已存在同名测试节点。");
+    const created = second.prepare("SELECT id FROM project_nodes WHERE project_id = 1 AND name = 'DVT'").get() as { id: number } | undefined;
+    assert(created);
+
+    expect(writer.updateProjectNode(actor, created.id, "PVT", "", owners)).toBe(1);
+    expect(writer.addProjectNodeApprover(actor, created.id, 3)).toBe(1);
+    expect(writer.deleteProjectNode(actor, created.id)).toBe(1);
+    writer.deleteProject(actor, 1);
+
+    expect(second.prepare("SELECT id FROM projects WHERE id = 1").get()).toBeUndefined();
+    expect(second.prepare("SELECT action FROM audit_logs WHERE entity_type = 'PROJECT' AND entity_id = 1 ORDER BY id").all())
+      .toEqual([
+        { action: "ADD_PROJECT_NODE" },
+        { action: "UPDATE_PROJECT_NODE" },
+        { action: "ADD_NODE_APPROVER" },
+        { action: "DELETE_PROJECT_NODE" },
+        { action: "DELETE_PROJECT" },
+      ]);
     expect(second.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 });

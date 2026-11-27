@@ -190,21 +190,21 @@ export function addProjectNode(
   owners: NodeOwnersInput,
 ) {
   assert(name.trim().length >= 1 && name.trim().length <= 20, "节点名称需为 1-20 个字符。");
-  const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
-  assert(project, "项目不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, projectId);
-  validateNodeOwners(owners);
-  const duplicate = one<{ id: number }>(
-    "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?)",
-    projectId,
-    name.trim(),
-  );
-  assert(!duplicate, "该项目下已存在同名测试节点。");
-  const maxOrder = one<{ value: number }>(
-    "SELECT COALESCE(MAX(sort_order), 0) AS value FROM project_nodes WHERE project_id = ?",
-    projectId,
-  );
   transaction(() => {
+    const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
+    assert(project, "项目不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, projectId);
+    validateNodeOwners(owners);
+    const duplicate = one<{ id: number }>(
+      "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?)",
+      projectId,
+      name.trim(),
+    );
+    assert(!duplicate, "该项目下已存在同名测试节点。");
+    const maxOrder = one<{ value: number }>(
+      "SELECT COALESCE(MAX(sort_order), 0) AS value FROM project_nodes WHERE project_id = ?",
+      projectId,
+    );
     const result = run(
       `INSERT INTO project_nodes
         (project_id, name, description, binding_owner_id, binding_approver_id, required_binding_count, sort_order)
@@ -242,22 +242,22 @@ export function updateProjectNode(
   owners: NodeOwnersInput,
 ) {
   assert(name.trim().length >= 1 && name.trim().length <= 20, "节点名称需为 1-20 个字符。");
-  const node = one<{ id: number; project_id: number; project_name: string; old_name: string }>(
-    `SELECT n.id, n.project_id, n.name AS old_name, p.name AS project_name
-     FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
-    nodeId,
-  );
-  assert(node, "项目节点不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, node.project_id);
-  validateNodeOwners(owners);
-  const duplicate = one<{ id: number }>(
-    "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?) AND id != ?",
-    node.project_id,
-    name.trim(),
-    nodeId,
-  );
-  assert(!duplicate, "该项目下已存在同名测试节点。");
-  transaction(() => {
+  return transaction(() => {
+    const node = one<{ id: number; project_id: number; project_name: string; old_name: string }>(
+      `SELECT n.id, n.project_id, n.name AS old_name, p.name AS project_name
+       FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
+      nodeId,
+    );
+    assert(node, "项目节点不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, node.project_id);
+    validateNodeOwners(owners);
+    const duplicate = one<{ id: number }>(
+      "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?) AND id != ?",
+      node.project_id,
+      name.trim(),
+      nodeId,
+    );
+    assert(!duplicate, "该项目下已存在同名测试节点。");
     run(
       `UPDATE project_nodes
        SET name = ?, description = ?, binding_owner_id = ?, binding_approver_id = ?, required_binding_count = ?
@@ -282,27 +282,27 @@ export function updateProjectNode(
       node.project_id,
       `更新 ${node.project_name} 节点 ${node.old_name} 的绑定责任人、审批人与通过数量`,
     );
+    return node.project_id;
   });
-  return node.project_id;
 }
 
 export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userId: number) {
-  const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
-    `SELECT n.id, n.name, n.project_id, p.name AS project_name
-     FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
-    nodeId,
-  );
-  assert(node, "项目节点不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, node.project_id);
-  const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
-  assert(person, "审批人不存在或已停用。");
-  const existing = one<{ id: number }>(
-    "SELECT id FROM project_node_approvers WHERE node_id = ? AND user_id = ?",
-    nodeId,
-    userId,
-  );
-  assert(!existing, "该人员已在此节点的审批人范围内。");
-  transaction(() => {
+  return transaction(() => {
+    const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
+      `SELECT n.id, n.name, n.project_id, p.name AS project_name
+       FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
+      nodeId,
+    );
+    assert(node, "项目节点不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, node.project_id);
+    const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
+    assert(person, "审批人不存在或已停用。");
+    const existing = one<{ id: number }>(
+      "SELECT id FROM project_node_approvers WHERE node_id = ? AND user_id = ?",
+      nodeId,
+      userId,
+    );
+    assert(!existing, "该人员已在此节点的审批人范围内。");
     run(
       "INSERT INTO project_node_approvers (node_id, user_id, created_at) VALUES (?, ?, ?)",
       nodeId,
@@ -310,8 +310,8 @@ export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userI
       new Date().toISOString(),
     );
     audit(actor.id, "ADD_NODE_APPROVER", "PROJECT", node.project_id, `${node.project_name}/${node.name} 添加绑定电子流审批人 ${person.name}`);
+    return node.project_id;
   });
-  return node.project_id;
 }
 
 export function removeProjectNodeApprover(actor: SessionUser, assignmentId: number) {
@@ -347,28 +347,28 @@ export function removeProjectNodeApprover(actor: SessionUser, assignmentId: numb
 }
 
 export function deleteProjectNode(actor: SessionUser, nodeId: number) {
-  const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
-    `SELECT n.id, n.name, n.project_id, p.name AS project_name
-     FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
-    nodeId,
-  );
-  assert(node, "项目节点不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, node.project_id);
-  transaction(() => {
+  return transaction(() => {
+    const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
+      `SELECT n.id, n.name, n.project_id, p.name AS project_name
+       FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
+      nodeId,
+    );
+    assert(node, "项目节点不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, node.project_id);
     const blockers = getNodeDeletionBlockers(nodeId);
     assert(blockers.packages.length === 0, "该节点已被软件包使用，请先调整软件包使用范围后再删除节点。");
     assert(!blockers.hasBindingHistory, "该节点存在绑定验证历史，不能删除。");
     run("DELETE FROM project_nodes WHERE id = ?", nodeId);
     audit(actor.id, "DELETE_PROJECT_NODE", "PROJECT", node.project_id, `删除 ${node.project_name} 的节点 ${node.name}`);
+    return node.project_id;
   });
-  return node.project_id;
 }
 
 export function deleteProject(actor: SessionUser, projectId: number) {
-  const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
-  assert(project, "项目不存在。", "NOT_FOUND");
-  assertProjectConfigurationAccess(actor, projectId);
   transaction(() => {
+    const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
+    assert(project, "项目不存在。", "NOT_FOUND");
+    assertProjectConfigurationAccess(actor, projectId);
     const blockers = getProjectDeletionBlockers(projectId);
     assert(blockers.packages.length === 0, "项目仍关联软件包使用范围，不能删除。请先将项目归档。");
     assert(blockers.batches.length === 0 && !blockers.hasBindingHistory, "项目存在测试批次或绑定历史，请使用归档保留记录。");
