@@ -11,6 +11,7 @@ import {
 } from "./binding-barcode-results";
 import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
+import { PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
 import { getPageWindow } from "./list-pagination";
 import { getReadNotificationKeys } from "./notification-reads";
 import { packageCodeSql, packageIdentity } from "./package-identity";
@@ -475,7 +476,7 @@ export function getBatchDetail(user: SessionUser, batchId: number, projectId?: n
   const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious" | "parallelRiskTrial" | "issueAffected"> & {
     isChanged: number;
     changedVsPrevious: number;
-    parallelRiskTrial: number;
+    parallelRiskTrial: number | null;
     issueAffected: number;
   }>(
     `SELECT bi.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
@@ -492,8 +493,7 @@ export function getBatchDetail(user: SessionUser, batchId: number, projectId?: n
             bi.formal_version AS formalVersion, bi.trial_versions AS trialVersions,
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
             u.name AS ownerName, bi.issue_affected AS issueAffected,
-            bi.transfer_request_id IS NOT NULL AND pv.release_mode = 'RISK'
-              AND pv.status IN ('TRIAL','PENDING_FORMAL') AS parallelRiskTrial
+            ${PARALLEL_RISK_TRIAL_ITEM_SQL} AS parallelRiskTrial
      FROM batch_items bi
      JOIN packages p ON p.id = bi.package_id
      JOIN package_versions pv ON pv.id = bi.package_version_id

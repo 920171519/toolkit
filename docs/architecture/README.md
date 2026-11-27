@@ -26,7 +26,7 @@
 | 软件包身份和使用范围 | `packages`、`package_usages` | `settings` 写入。`package-identity` 投影旧资料中的编码与名称，流程关联继续按 ID。 |
 | 共享版本状态 | `package_versions` | `workflow` 更新共享试制、转正及作废。 |
 | 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `workflow` 更新。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
-| 批次与完整配套 | `integration_batches`、`batch_items` | `workflow` 保存状态和版本快照。批次对比读取两份快照。 |
+| 批次与完整配套 | `integration_batches`、`batch_items` | `workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
 | 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `workflow` 写入。`binding-availability` 定义绑定办理所需的发布阶段和节点状态，`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |

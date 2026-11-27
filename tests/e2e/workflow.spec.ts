@@ -842,6 +842,10 @@ test.describe("工程协同台项目维度流程", () => {
     await chooseByText(builder.getByLabel("1001OTA 本次转测版本"), version);
     const otherPackages = builder.getByRole("checkbox", { name: /本轮转测 (?!1001OTA)/ });
     for (const checkbox of await otherPackages.all()) await checkbox.uncheck();
+    await builder.getByRole("checkbox", { name: "本轮转测 1002CFG", exact: true }).check();
+    const formalVersion = builder.getByLabel("1002CFG 本次转测版本");
+    await chooseByText(formalVersion, "2.2.0");
+    const formalVersionId = Number(await formalVersion.inputValue());
     await builder.locator('input[name="code"]').fill("B953");
     await builder.getByRole("button", { name: "保存草稿并核对" }).click();
     await expectFlash(page, "转测草稿已保存");
@@ -902,7 +906,8 @@ test.describe("工程协同台项目维度流程", () => {
     await page.locator('select[name="conclusion"]').selectOption("FAIL");
     await page.locator('select[name="issueAttribution"]').selectOption("PACKAGE_RELATED");
     await page.getByRole("checkbox", { name: /1001OTA.*9.3.0-e2e/ }).check();
-    await page.locator('textarea[name="testSummary"]').fill("集成测试确认升级异常由本轮 1001OTA 版本引起。");
+    await page.getByRole("checkbox", { name: /1002CFG.*2.2.0/ }).check();
+    await page.locator('textarea[name="testSummary"]').fill("集成测试确认升级异常由本轮 1001OTA 版本引起，并影响随批验证的 1002CFG。");
     await page.locator('input[name="reportFile"]').setInputFiles({
       name: "B953-rollback.txt",
       mimeType: "text/plain",
@@ -911,6 +916,18 @@ test.describe("工程协同台项目维度流程", () => {
     await page.getByRole("button", { name: "提交验证结论" }).click();
     await expectFlash(page, "受影响的风险试制版本已作废");
     await expect(page.getByRole("link", { name: "B953-rollback.txt" })).toBeVisible();
+    const db = openE2eDatabase();
+    try {
+      const formal = db.prepare(
+        `SELECT bi.issue_affected, bi.transfer_request_id, pv.status
+         FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+         JOIN package_versions pv ON pv.id = bi.package_version_id
+         WHERE b.code = 'B953' AND bi.package_version_id = ?`,
+      ).get(formalVersionId);
+      expect(formal).toMatchObject({ issue_affected: 1, transfer_request_id: null, status: "FORMAL" });
+    } finally {
+      db.close();
+    }
 
     await login(page, "VALID001");
     await expect(page.locator(".personal-alert").filter({ hasText: version }).filter({ hasText: "撤销" }).first()).toBeVisible();

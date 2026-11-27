@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { integrationConclusionImpact } from "@/lib/integration-conclusion";
 import { packageIdentity } from "@/lib/package-identity";
 import { readTestReport, testReportAccept, testReportHint } from "@/lib/test-report-validation";
 import styles from "./workflow-queue.module.css";
@@ -17,8 +18,7 @@ export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
   const [conclusion, setConclusion] = useState("");
   const [attribution, setAttribution] = useState("");
   const [affected, setAffected] = useState(new Set<number>());
-  const showAffectedVersions =
-    conclusion === "FAIL" && attribution === "PACKAGE_RELATED" && items.some((item) => item.parallelRiskTrial);
+  const { requiresAffectedVersions: showAffectedVersions } = integrationConclusionImpact(conclusion, attribution, items);
 
   return (
     <>

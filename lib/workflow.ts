@@ -10,6 +10,7 @@ import { packageIdentity } from "./package-identity";
 import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
+import { integrationConclusionImpact, PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
 import { getActiveReleaseRequests, getFormalReleaseCheck, refreshTrialReadiness } from "./trial-readiness";
 import {
   findReadyTrialProject,
@@ -496,21 +497,20 @@ export async function completeBatchTest(
         version_id: number;
         version_status: string;
         request_id: number | null;
-        parallel_risk_trial: number;
+        parallelRiskTrial: number | null;
         package_name: string;
         version: string;
       }>(
         `SELECT bi.package_version_id AS version_id, pv.status AS version_status, bi.transfer_request_id AS request_id,
-                bi.transfer_request_id IS NOT NULL AND pv.release_mode = 'RISK'
-                  AND pv.status IN ('TRIAL','PENDING_FORMAL') AS parallel_risk_trial,
+                ${PARALLEL_RISK_TRIAL_ITEM_SQL} AS parallelRiskTrial,
                 p.name AS package_name, bi.version
          FROM batch_items bi JOIN package_versions pv ON pv.id = bi.package_version_id
          JOIN packages p ON p.id = bi.package_id WHERE bi.batch_id = ?`,
         batchId,
       );
-      const affected = new Set(input.conclusion === "FAIL" && input.issueAttribution === "PACKAGE_RELATED"
-        ? input.affectedVersionIds : []);
-      if (input.conclusion === "FAIL" && input.issueAttribution === "PACKAGE_RELATED" && items.some((item) => item.parallel_risk_trial)) {
+      const impact = integrationConclusionImpact(input.conclusion, input.issueAttribution, items);
+      const affected = new Set(impact.acceptsAffectedVersions ? input.affectedVersionIds : []);
+      if (impact.requiresAffectedVersions) {
         assert(affected.size > 0, "请选择本次问题影响的软件包版本。");
       }
       assert([...affected].every((id) => items.some((item) => item.version_id === id)), "问题影响的软件包必须属于当前批次。");
@@ -535,7 +535,7 @@ export async function completeBatchTest(
       for (const item of items) {
         if (affected.has(item.version_id)) {
           run("UPDATE batch_items SET issue_affected = 1 WHERE batch_id = ? AND package_version_id = ?", batchId, item.version_id);
-          if (item.parallel_risk_trial) {
+          if (item.parallelRiskTrial) {
             const reason = `${batch.code} ${batch.project_name} 集成测试发现该软件包版本存在问题：${input.testSummary.trim()}`;
             voidParallelRiskTrial(actor, item, reason, timestamp);
             voidedCount++;
