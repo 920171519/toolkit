@@ -11,6 +11,7 @@ import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 import { refreshProjectTrialReadiness } from "./trial-readiness";
 import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
+import { revokeUserSessions } from "./session-store";
 import {
   getLegacyVersionForCorrection,
   getNodeApproverRemovalBlocker,
@@ -1017,7 +1018,7 @@ export function setUserActive(actor: SessionUser, userId: number, active: boolea
       assert(getSettingsPackageReferences({ enabledOwnerId: userId }).length === 0, "该人员仍负责启用中的软件包，请先转移责任人。");
     }
     run("UPDATE users SET is_active = ? WHERE id = ?", active ? 1 : 0, userId);
-    if (!active) run("DELETE FROM sessions WHERE user_id = ?", userId);
+    if (!active) revokeUserSessions(userId);
     audit(
       actor.id,
       active ? "ENABLE_USER" : "DISABLE_USER",

@@ -47,6 +47,7 @@ function importSpecifiers(source) {
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
 const workflowPageQueries = new Set(["lib/workflow-queries.ts", "lib/binding-queries.ts"]);
+const sessionStoreCallers = new Set(["lib/auth.ts", "lib/settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();
 const routeSources = new Map();
@@ -75,6 +76,12 @@ for (const file of files.sort()) {
       && (isEntrypoint || name === "lib/package-drawer-data.ts")) {
       dependencyBoundaryErrors.push(
         `${name} imports the settings mutation module directly. Use settings actions for writes and settings queries for reads.`,
+      );
+    }
+    if (dependency === "lib/session-store.ts" && (isEntrypoint || name.startsWith("lib/"))
+      && !sessionStoreCallers.has(name)) {
+      dependencyBoundaryErrors.push(
+        `${name} imports session storage directly. Use authentication or account settings.`,
       );
     }
     if (name === "lib/workflow.ts" && workflowPageQueries.has(dependency)) {
