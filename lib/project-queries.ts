@@ -151,7 +151,7 @@ type NodeApprover = {
 };
 
 export type ProjectConfig = ProjectRecord & ProjectAssignments & {
-  nodes: Array<ProjectNode & { approvers: NodeApprover[] }>;
+  nodes: Array<ProjectNode & { approverCount: number }>;
 };
 
 const projectNodeConfigColumns = `${projectNodeOptionColumns}, n.binding_owner_id AS bindingOwnerId,
@@ -161,23 +161,18 @@ const projectNodeConfigFrom = `FROM project_nodes n
   LEFT JOIN users bo ON bo.id = n.binding_owner_id
   LEFT JOIN users ba ON ba.id = n.binding_approver_id`;
 
-function readNodeApprovers(nodeId: number): NodeApprover[] {
-  return all<NodeApprover>(
-    `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
-     FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
-     WHERE pna.node_id = ? ORDER BY pna.id`,
-    nodeId,
-  );
-}
+const nodeApproversFrom = `FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id`;
 
 export function getProjectConfig(projectId: number): ProjectConfig | null {
   const [project] = readProjectsWithContacts<ProjectRecord>(projectRecordColumns, { projectId, includeArchived: true });
   if (!project) return null;
-  const nodes = all<ProjectNode>(
-    `SELECT ${projectNodeConfigColumns} ${projectNodeConfigFrom}
+  const nodes = all<ProjectConfig["nodes"][number]>(
+    `SELECT ${projectNodeConfigColumns},
+            (SELECT COUNT(*) ${nodeApproversFrom} WHERE pna.node_id = n.id) AS approverCount
+     ${projectNodeConfigFrom}
      WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
     projectId,
-  ).map((node) => ({ ...node, approvers: readNodeApprovers(node.id) }));
+  );
   return { ...project, nodes };
 }
 
@@ -192,8 +187,14 @@ export function getProjectNodeConfig(projectId: number, nodeId: number) {
   );
   if (!row) return null;
   const { projectName, projectCode, ...node } = row;
+  const approvers = all<NodeApprover>(
+    `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+     ${nodeApproversFrom}
+     WHERE pna.node_id = ? ORDER BY pna.id`,
+    nodeId,
+  );
   return {
     project: { name: projectName, code: projectCode },
-    node: { ...node, approvers: readNodeApprovers(nodeId) },
+    node: { ...node, approvers },
   };
 }

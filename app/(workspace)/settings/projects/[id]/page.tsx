@@ -116,7 +116,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
                   <div><dt>绑定责任人</dt><dd>{node.bindingOwnerName ?? "待指定"}</dd></div>
                   <div><dt>主审批人</dt><dd>{node.bindingApproverName ?? "待指定"}</dd></div>
                   <div><dt>通过数量</dt><dd>{node.requiredBindingCount}</dd></div>
-                  <div><dt>审批人范围</dt><dd>{node.approvers.length} 人</dd></div>
+                  <div><dt>审批人范围</dt><dd>{node.approverCount} 人</dd></div>
                 </dl>
                 <div className="settings-record-actions">
                   <Link href={directoryHref(`${path}/nodes/${node.id}`, listContext)} aria-label={"配置节点 " + node.name} className="button button-secondary button-sm" prefetch={false}>配置节点</Link>

@@ -2,7 +2,12 @@ import { SettingsSelect } from "@/components/settings-select";
 import type { ProjectConfig } from "@/lib/project-queries";
 import type { PersonOption } from "@/lib/queries";
 
-export function SettingsNodeFields({ people, node }: { people: PersonOption[]; node?: ProjectConfig["nodes"][number] }) {
+type NodeFieldDefaults = Pick<
+  ProjectConfig["nodes"][number],
+  "name" | "description" | "bindingOwnerId" | "bindingApproverId" | "requiredBindingCount"
+>;
+
+export function SettingsNodeFields({ people, node }: { people: PersonOption[]; node?: NodeFieldDefaults }) {
   const options = people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }));
   return (
     <div className="form-grid">
