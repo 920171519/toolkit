@@ -12,7 +12,9 @@
 | 绑定写入 | `lib/actions/workflow.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
-| 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、试制、转正和追溯生成视图。准备转测与草稿事务在 `lib/transfer-requests.ts` 共用上次转测版本读取。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
+| 工作台读取 | `lib/workbench-queries.ts` | 按角色和项目组合待办、提醒、个人版本和电子流，复用各队列及通知模块。 |
+| 版本追溯读取 | `lib/version-trace-queries.ts` | 负责版本列表、追溯标签和项目版本活动，按原权限投影批次、报告及绑定证据。 |
+| 工作流规则和引导 | `lib/batch-comparison.ts`、`lib/release-guidance.ts` | 准备转测与草稿事务在 `lib/transfer-requests.ts` 共用上次转测版本读取。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
 | 批次读取 | `lib/batch-queries.ts` | 为转测准备、集成测试、项目最近批次和报告接口生成带读取权限的视图。 |
 | 待转测读取 | `lib/pending-transfer-queries.ts`、`lib/transfer-requests.ts` | 管理申请清单、项目计数和工作台预览，复用现有申请范围及草稿占用规则。 |
 | 发布队列读取 | `lib/release-queue-queries.ts` | 为已发试制、待转正、项目计数和可读历史提供查询。 |
@@ -48,7 +50,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/workflow.ts` 和 `lib/binding-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这两个写入模块直接依赖 `lib/workflow-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入这两个写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。 设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
+`lib/workflow.ts` 和 `lib/binding-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这两个写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入这两个写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 

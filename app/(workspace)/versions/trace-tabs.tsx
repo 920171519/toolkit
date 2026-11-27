@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { X } from "lucide-react";
 import { packageIdentity } from "@/lib/package-identity";
-import type { TraceVersionRow } from "@/lib/workflow-queries";
+import type { TraceVersionRow } from "@/lib/version-trace-queries";
 import { traceHref, type TraceListState } from "@/lib/version-trace-list";
 import styles from "./versions.module.css";
 

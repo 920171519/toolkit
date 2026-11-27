@@ -30,3 +30,10 @@ export function canVoidPackageVersion(user: SessionUser, versionId: number) {
   const version = getVersionForVoid(versionId);
   return Boolean(version?.kind) && versionProjectManagementBlocker(user, versionId) === null;
 }
+
+export function hasVersionRequest(requestId: number, versionId: number): boolean {
+  return Boolean(one(
+    "SELECT id FROM version_transfer_requests WHERE id = ? AND package_version_id = ?",
+    requestId, versionId,
+  ));
+}

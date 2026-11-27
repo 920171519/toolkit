@@ -7,7 +7,7 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
-import { getPersonalDashboard, type PersonalAlert } from "@/lib/workflow-queries";
+import { getPersonalDashboard, type PersonalAlert } from "@/lib/workbench-queries";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import styles from "./dashboard.module.css";

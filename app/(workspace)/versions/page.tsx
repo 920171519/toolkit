@@ -8,7 +8,7 @@ import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { readTraceListState, traceColumnFields, traceHref, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { workflowHref } from "@/lib/workflow-links";
-import { getTraceVersionPage, getTraceVersionTabs } from "@/lib/workflow-queries";
+import { getTraceVersionPage, getTraceVersionTabs } from "@/lib/version-trace-queries";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import { EmptyState, PageHeader, StatusPill } from "@/components/ui";

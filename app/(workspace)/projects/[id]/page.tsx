@@ -17,7 +17,7 @@ import { getProjectBatchCounts, getRecentProjectBatches } from "@/lib/batch-quer
 import { getProjectPendingTransferCount } from "@/lib/pending-transfer-queries";
 import { getProjectTrialAndFormalCounts } from "@/lib/release-queue-queries";
 import { workflowHref } from "@/lib/workflow-links";
-import { getProjectVersionRows } from "@/lib/workflow-queries";
+import { getProjectVersionRows } from "@/lib/version-trace-queries";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, SectionHeading } from "@/components/ui";
 import styles from "../projects.module.css";
 

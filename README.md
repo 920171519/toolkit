@@ -506,8 +506,13 @@ lib/
   schema.ts                   # SQLite 表结构
   seed.ts                     # 演示数据
   queries.ts                  # 通用读取查询（含项目维度软件包总览）
-  workflow-queries.ts         # 项目测试、试制、绑定、个人工作台查询
-  workflow.ts                 # 转测、批次、试制、绑定、报告、转正服务
+  batch-queries.ts            # 集成测试与批次证据查询
+  binding-queries.ts          # 绑定队列与授权详情查询
+  release-queue-queries.ts    # 试制与转正队列查询
+  workbench-queries.ts        # 个人工作台查询
+  version-trace-queries.ts    # 版本全链路与项目版本活动查询
+  workflow.ts                 # 转测、批次、试制、报告和转正服务
+  binding-workflow.ts         # 节点与电子流写入
   access.ts                   # 责任田层级与集成测试责任田权限
   permissions.ts              # 角色/项目软件经理/责任田权限判断
   settings.ts                 # 基础配置与责任田层级维护

@@ -14,7 +14,7 @@ import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integrat
 import { isBatchConclusion } from "@/lib/integration-conclusion";
 import { readTraceListState, traceListParams } from "@/lib/version-trace-list";
 import { directoryActionHref } from "@/lib/settings-directory";
-import { hasVersionRequest } from "@/lib/workflow-queries";
+import { hasVersionRequest } from "@/lib/version-void";
 import {
   cancelBindingFlow,
   confirmBindingRequirement,

@@ -48,7 +48,8 @@ function importSpecifiers(source) {
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
 const workflowMutationModules = new Set(["lib/workflow.ts", "lib/binding-workflow.ts"]);
 const workflowPageQueries = new Set([
-  "lib/workflow-queries.ts",
+  "lib/workbench-queries.ts",
+  "lib/version-trace-queries.ts",
   "lib/binding-queries.ts",
   "lib/batch-queries.ts",
   "lib/pending-transfer-queries.ts",
