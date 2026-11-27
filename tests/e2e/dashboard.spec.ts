@@ -2,6 +2,61 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 import { openE2eDatabase } from "./storage";
 
+test("待安排转测显示完整数量和按时间排列的四个版本", async ({ page }) => {
+  await page.goto("/");
+  const db = openE2eDatabase();
+  const name = "工作台转测预览项目";
+  const submittedAt = "2026-11-28T00:00:00.000Z";
+  const packageRow = db.prepare("SELECT id FROM packages WHERE name = '1002CFG' AND code = 'CFG'").get() as { id: number };
+  const manager = db.prepare("SELECT id FROM users WHERE employee_id = 'MGR001'").get() as { id: number };
+  const versionIds: number[] = [];
+  let projectId: number | undefined;
+  try {
+    projectId = Number(db.prepare("INSERT INTO projects (name, code, created_at) VALUES (?, ?, ?)")
+      .run(name, "PW-WB-TRANSFER", submittedAt).lastInsertRowid);
+    const nodeId = Number(db.prepare("INSERT INTO project_nodes (project_id, name) VALUES (?, 'EVT')")
+      .run(projectId).lastInsertRowid);
+    db.prepare("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)")
+      .run(projectId, manager.id, submittedAt);
+    db.prepare("INSERT INTO package_usages (package_id, project_id, node_id) VALUES (?, ?, ?)")
+      .run(packageRow.id, projectId, nodeId);
+    const insertVersion = db.prepare(
+      `INSERT INTO package_versions (package_id, version, change_summary, archive_url, submitted_at, updated_at)
+       VALUES (?, ?, '待转测预览验证', 'https://example.test/archive', ?, ?)`,
+    );
+    const insertRequest = db.prepare(
+      `INSERT INTO version_transfer_requests (package_version_id, project_id, status, integration_status, submitted_at, updated_at)
+       VALUES (?, ?, 'PENDING', 'PENDING', ?, ?)`,
+    );
+    for (const [version, day] of [["91.0.4", "28"], ["91.0.2", "27"], ["91.0.5", "28"], ["91.0.3", "27"], ["91.0.1", "26"]]) {
+      const at = `2026-11-${day}T00:00:00.000Z`;
+      const versionId = Number(insertVersion.run(packageRow.id, version, at, at).lastInsertRowid);
+      versionIds.push(versionId);
+      insertRequest.run(versionId, projectId, at, at);
+    }
+
+    const task = page.getByRole("region", { name: "转测与集成测试", exact: true }).getByRole("link", { name: /工作台转测预览项目/ });
+    await login(page, "MGR002");
+    await expect(task).toHaveCount(0);
+    for (const account of ["ADMIN001", "MGR001"]) {
+      await login(page, account);
+      await expect(task.locator("strong")).toHaveText(`${name} · 5 项待安排转测`);
+      await expect(task.locator("strong + span")).toHaveText("1002CFG 91.0.5、1002CFG 91.0.4、1002CFG 91.0.3、1002CFG 91.0.2 等");
+      await expect(task).toHaveAttribute("href", `/submissions?project=${projectId}`);
+    }
+    await task.click();
+    const queue = page.getByRole("region", { name: `${name}待转测申请表格`, exact: true });
+    await expect(queue.getByRole("row").filter({ hasText: "91.0.1" })).toBeVisible();
+  } finally {
+    try {
+      for (const versionId of versionIds) db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+      if (projectId !== undefined) db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("管理员只看到一条需要提交结论的在测批次任务", async ({ page }) => {
   await login(page, "ADMIN001");
   const tasks = page.getByRole("region", { name: "待我处理", exact: true });

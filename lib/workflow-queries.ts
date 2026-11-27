@@ -78,6 +78,7 @@ const activePendingTransfer = `pv.status != 'VOID' AND ${PENDING_BATCH_REQUEST_S
 const unreservedTransferInUse = `draft.id IS NULL AND EXISTS (
   SELECT 1 FROM package_usages u WHERE u.package_id = p.id AND u.project_id = r.project_id
 )`;
+const pendingTransferVersionOrder = "pv.submitted_at DESC, pv.id DESC";
 
 export function getProjectPendingTransferCount(projectId: number): number {
   return one<{ total: number }>(
@@ -109,7 +110,7 @@ export function getPendingTransferGroups(
      WHERE ${activePendingTransfer}
        ${scope.predicate}
        AND ((${unreservedTransferInUse}) OR ${guideScope})
-     ORDER BY pr.sort_order, pr.id, pv.submitted_at DESC, pv.id DESC`,
+     ORDER BY pr.sort_order, pr.id, ${pendingTransferVersionOrder}`,
     ...scope.params, ...(guidanceProjectIds ?? []),
   );
   const groups = new Map<number, PendingTransferGroup>();
@@ -122,6 +123,29 @@ export function getPendingTransferGroups(
     group.items.push(row);
   }
   return [...groups.values()];
+}
+
+function getPendingTransferPreviews(projectIds: number[] | null) {
+  if (projectIds?.length === 0) return [];
+  const scope = pendingRequestProjectScope(projectIds);
+  const rows = all<Pick<PendingTransferItem, "packageName" | "packageCode" | "version"> & {
+    projectId: number; projectName: string; total: number;
+  }>(
+    `SELECT projectId, projectName, packageName, packageCode, version, total FROM (
+       SELECT pr.id AS projectId, pr.name AS projectName, pr.sort_order AS projectOrder,
+              p.name AS packageName, p.code AS packageCode, pv.version,
+              COUNT(*) OVER (PARTITION BY pr.id) AS total,
+              ROW_NUMBER() OVER (PARTITION BY pr.id ORDER BY ${pendingTransferVersionOrder}) AS position
+       ${pendingTransferFrom}
+       WHERE ${activePendingTransfer} ${scope.predicate} AND ${unreservedTransferInUse}
+     ) WHERE position <= 4
+     ORDER BY projectOrder, projectId, position`,
+    ...scope.params,
+  );
+  return [...Map.groupBy(rows, (row) => row.projectId).values()].map((versions) => {
+    const { projectId, projectName, total } = versions[0];
+    return { projectId, projectName, total, versions };
+  });
 }
 
 export type BatchCandidatePackage = {
@@ -1416,14 +1440,12 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   }
 
   if (managerScope === null || managerScope.length > 0) {
-    const pendingGroups = getPendingTransferGroups(managerScope);
-    for (const group of pendingGroups) {
+    for (const { projectId, projectName, total, versions } of getPendingTransferPreviews(managerScope)) {
       tasks.push({
-        key: `transfer-${group.projectId}`,
-        title: `${group.projectName} · ${group.items.length} 项待安排转测`,
-        description: group.items.slice(0, 4).map(workbenchVersionLabel).join("、")
-          + (group.items.length > 4 ? " 等" : ""),
-        href: workflowHref("/submissions", group.projectId),
+        key: `transfer-${projectId}`,
+        title: `${projectName} · ${total} 项待安排转测`,
+        description: versions.map(workbenchVersionLabel).join("、") + (total > versions.length ? " 等" : ""),
+        href: workflowHref("/submissions", projectId),
         category: "test",
       });
     }
