@@ -6,6 +6,7 @@ import { GuidanceDialog } from "@/components/guidance-dialog";
 import { PackageNameToggle } from "@/components/package-name-toggle";
 import { submitTransferAction } from "@/lib/actions/workflow";
 import type { ActionState } from "@/lib/action-state";
+import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import nameVisibility from "./package-name-toggle.module.css";
 import styles from "./workflow-queue.module.css";
@@ -25,7 +26,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(submitTransferAction, {});
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [requestedPage, setPage] = useState(1);
   const [packageId, setPackageId] = useState<number | null>(initialPackageId ?? null);
   const [version, setVersion] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
@@ -46,8 +47,8 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
     );
   }, [packages, search]);
   const pageSize = 12;
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const { current: page, pages, offset, end } = getPageWindow(filtered.length, pageSize, requestedPage);
+  const visible = filtered.slice(offset, end);
   const conditions = [
     !selected ? { title: "选择软件包", detail: "按编码、名称或责任人搜索并选择软件包。" } : null,
     !version.trim() ? { title: "填写版本号" } : null,
@@ -105,9 +106,9 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                 })}
               </div>
               {pages > 1 && <nav className={styles.pagination} aria-label="可提交软件包分页">
-                <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+                <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
                 <span>第 {page} / {pages} 页</span>
-                <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+                <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>下一页</button>
               </nav>}
             </>
           )}

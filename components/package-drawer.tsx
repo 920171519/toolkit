@@ -8,6 +8,7 @@ import type { PersonOption } from "@/lib/queries";
 import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
+import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
@@ -43,13 +44,11 @@ function useDrawerFilter<Row>(rows: Row[], searchable: (row: Row) => string) {
     const text = normalized(searchable(row));
     return terms.every((term) => text.includes(term));
   });
-  const pageCount = Math.max(1, Math.ceil(matching.length / listPageSize));
-  const page = Math.min(requestedPage, pageCount);
-  const start = (page - 1) * listPageSize;
+  const { current: page, pages: pageCount, offset: start, end } = getPageWindow(matching.length, listPageSize, requestedPage);
   return {
     query,
     setQuery: (value: string) => { setQuery(value); setPage(1); },
-    rows: matching.slice(start, start + listPageSize),
+    rows: matching.slice(start, end),
     count: matching.length,
     start,
     page,

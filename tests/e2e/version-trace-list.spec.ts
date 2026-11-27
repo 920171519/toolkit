@@ -81,6 +81,13 @@ test("分页状态随证据标签保留，无关项目的版本不显示为标�
   const secondPageRows = await body.getByRole("row").allTextContents();
   expect(secondPageRows.length).toBeGreaterThan(0);
   expect(secondPageRows.length).toBeLessThanOrEqual(10);
+
+  await page.goto("/versions?pageSize=10&sort=package&page=2e0");
+  await expect(body.getByRole("row")).toHaveText(firstPageRows);
+  await page.goto("/versions?pageSize=10&sort=package&page=999");
+  await expect(pagination).toContainText("第 2 页 / 共 2 页");
+  await expect(body.getByRole("row")).toHaveText(secondPageRows);
+
   await body.getByRole("link", { name: "全链路追溯", exact: true }).first().click();
   await page.getByRole("link", { name: "返回版本列表", exact: true }).click();
   await expect(pagination).toContainText("第 2 页 / 共 2 页");

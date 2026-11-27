@@ -1,5 +1,5 @@
 import { columnFilterKeys, readColumnFilters, type ColumnFilterField } from "./column-filters";
-import { LIST_PAGE_SIZES } from "./list-pagination";
+import { getListPageSize, readListPage } from "./list-pagination";
 
 export const trialQueueColumns = {
   release: ["package", "version", "project", "batch", "submitter", "status"],
@@ -82,15 +82,11 @@ export function trialQueueParams(search: TrialSearchParams): Record<string, stri
       Object.assign(result, filter);
     }
     const sizeKey = trialQueueKey(kind, "size");
-    if (typeof search[sizeKey] === "string") {
-      const pageSize = LIST_PAGE_SIZES.find((size) => size === Number(search[sizeKey]));
-      if (pageSize && pageSize !== trialDefaultPageSize) result[sizeKey] = String(pageSize);
-    }
+    const pageSize = getListPageSize(search[sizeKey], trialDefaultPageSize);
+    if (pageSize !== trialDefaultPageSize) result[sizeKey] = String(pageSize);
     const pageKey = trialQueueKey(kind, "page");
-    const pageNumber = Number(search[pageKey]);
-    if (typeof search[pageKey] === "string" && Number.isSafeInteger(pageNumber) && pageNumber > 1) {
-      result[pageKey] = String(pageNumber);
-    }
+    const page = readListPage(search[pageKey]);
+    if (page > 1) result[pageKey] = String(page);
     const sortKey = trialQueueKey(kind, "sort");
     const sort = search[sortKey];
     if (typeof sort === "string" && columns.includes(sort)) {

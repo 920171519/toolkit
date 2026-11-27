@@ -1,3 +1,5 @@
+import { getPageWindow, readListPage } from "./list-pagination";
+
 export type DirectoryParams = Record<string, string | string[] | undefined>;
 export type Directory = "areas" | "packages" | "users";
 
@@ -47,11 +49,11 @@ export function areaDirectoryDetailParams(params: DirectoryParams) {
 export function projectDirectoryListParams(params: DirectoryParams, fromDetail = false) {
   const q = directoryValue(fromDetail ? params.listQ : params.q);
   const status = fromDetail ? params.listStatus : params.status;
-  const page = Number(directoryValue(fromDetail ? params.listPage : params.page));
+  const page = readListPage(directoryValue(fromDetail ? params.listPage : params.page));
   return {
     q: q || undefined,
     status: status === "ACTIVE" || status === "PAUSED" || status === "ARCHIVED" ? status : undefined,
-    page: Number.isSafeInteger(page) && page > 1 ? String(page) : undefined,
+    page: page > 1 ? String(page) : undefined,
   };
 }
 
@@ -78,11 +80,8 @@ export function matchesDirectorySearch(search: string, ...values: Array<string |
 }
 
 export function directoryPage<T>(items: T[], value: string | string[] | undefined, pageSize: number) {
-  const requested = Number(directoryValue(value));
-  const pages = Math.max(1, Math.ceil(items.length / pageSize));
-  const page = Number.isSafeInteger(requested) ? Math.min(pages, Math.max(1, requested)) : 1;
-  const start = (page - 1) * pageSize;
-  return { items: items.slice(start, start + pageSize), page, pages, total: items.length };
+  const { current: page, pages, offset, end } = getPageWindow(items.length, pageSize, readListPage(directoryValue(value)));
+  return { items: items.slice(offset, end), page, pages, total: items.length };
 }
 
 export function directoryOrder<T extends { id: number }>(

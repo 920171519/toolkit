@@ -6,11 +6,11 @@ import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject, getNarrowVersionRequestIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowPage, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import {
   getBatchCount,
   getBatches,
@@ -74,7 +74,7 @@ export default async function SubmissionsPage({
   const draftScope = project ? [project.id] : managerScope;
   const draftsCount = canPrepare ? getBatchCount(draftScope, draftFilters) : 0;
   const matchingDrafts = showDrafts && query ? getBatchCount(draftScope, { ...draftFilters, query }) : draftsCount;
-  const page = getWorkflowPage(matchingDrafts, pageSize, params.page);
+  const page = getPageWindow(matchingDrafts, pageSize, readListPage(params.page));
   const drafts = showDrafts ? getBatches(pageSize, draftScope, { ...draftFilters, query, offset: page.offset }) : [];
   const queueHref = (draft: boolean, searchTerm = query, nextPage = 1) => workflowHref("/submissions", project?.id, {
     view: draft ? "drafts" : undefined,

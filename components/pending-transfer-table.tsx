@@ -15,6 +15,7 @@ import { rememberPendingReview, usePendingBatchChoices } from "@/components/pend
 import { Badge, EmptyState, ExternalLink } from "@/components/ui";
 import { cancelTransferAction } from "@/lib/actions/workflow";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesDateFilter, matchesTextFilter, type ColumnFilterField } from "@/lib/column-filters";
+import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import type { RiskTrialEntry } from "@/lib/trial-risk-entry";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -81,9 +82,8 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
     matchesDateFilter(filters, "submitted", formatDate(item.submittedAt)) &&
     matchesTextFilter(filters, "archive", item.archiveUrl),
   );
-  const pages = Math.max(1, Math.ceil(matchingRows.length / pageSize));
-  const currentPage = Math.min(page, pages);
-  const visibleRows = matchingRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const { current: currentPage, pages, offset, end } = getPageWindow(matchingRows.length, pageSize, page);
+  const visibleRows = matchingRows.slice(offset, end);
   const matchingVersionIds = new Set(matchingRows.map(({ item }) => item.versionId));
   const hiddenVersions = Object.entries(selection?.versionPackages ?? {}).flatMap(([id, packageId]) => {
     const versionId = Number(id);

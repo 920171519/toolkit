@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import type { ProjectOption } from "@/lib/project-queries";
 import type { BatchCandidatePackage } from "@/lib/workflow-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { Badge, EmptyState } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
@@ -61,7 +62,7 @@ export function BatchBuilder({
   ));
   const [includeOverrides, setIncludeOverrides] = useState<Map<number, boolean>>(() => new Map());
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
+  const [requestedPage, setPage] = useState(1);
   const [pendingOnly, setPendingOnly] = useState(false);
   const [showConditions, setShowConditions] = useState(false);
   const conditionsTrigger = useRef<HTMLButtonElement>(null);
@@ -92,8 +93,8 @@ export function BatchBuilder({
   const hasPendingVersion = (candidate: BatchCandidatePackage) => candidate.versions.some(({ status, requestStatus }) => status !== "VOID" && requestStatus === "PENDING");
   const matches = rows.filter(({ candidate, identity }) => (!pendingOnly || hasPendingVersion(candidate)) && `${identity.code} ${identity.name} ${candidate.ownerName ?? ""}`.toLocaleLowerCase().includes(term));
   const pageSize = 25;
-  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
-  const visibleRows = matches.slice((page - 1) * pageSize, page * pageSize);
+  const { current: page, pages, offset, end } = getPageWindow(matches.length, pageSize, requestedPage);
+  const visibleRows = matches.slice(offset, end);
   const availablePending = candidates.some(hasPendingVersion);
   const canSave = changedCount > 0;
 
@@ -222,9 +223,9 @@ export function BatchBuilder({
         </div>
       )}
       {pages > 1 && <nav className={styles.pagination} aria-label="配套软件包分页">
-        <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
+        <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
         <span>第 {page} / {pages} 页</span>
-        <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>下一页</button>
+        <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>下一页</button>
       </nav>}
     </ActionForm>
     {!canSave && <div className="form-footer">

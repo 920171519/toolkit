@@ -4,12 +4,12 @@ import { ArrowRight } from "lucide-react";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowPage, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import { getPendingFormalVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -41,7 +41,7 @@ export default async function FormalPage({ searchParams }: {
   const matching = [...groups.values()]
     .filter((group) => group.some((version) => matches(version.packageName, version.packageCode, version.version, version.projectName, version.projectCode, version.trialFormNo)))
     .sort((left, right) => right[0].isOverdue - left[0].isOverdue);
-  const page = getWorkflowPage(matching.length, pageSize, params.page);
+  const page = getPageWindow(matching.length, pageSize, readListPage(params.page));
   const listHref = (searchTerm = query, nextPage = 1) => workflowHref("/formal", project?.id, {
     q: searchTerm || undefined,
     page: nextPage > 1 ? nextPage : undefined,

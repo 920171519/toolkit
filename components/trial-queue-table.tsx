@@ -6,7 +6,7 @@ import { DirectoryPageSize } from "@/components/directory-page-size";
 import { DirectoryFilterBar } from "@/components/settings-directory";
 import { EmptyState } from "@/components/ui";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, type ColumnFilterOption } from "@/lib/column-filters";
-import { getListPageSize } from "@/lib/list-pagination";
+import { getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialColumnFilter, trialDefaultPageSize, trialLegacyFilter, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
 import styles from "./trial-queue-table.module.css";
@@ -42,7 +42,7 @@ export function TrialQueueTable<Row>({
   emptyTitle: string;
 }) {
   const field = (name: string) => trialQueueKey(kind, name);
-  const pageSize = query[field("size")] ? getListPageSize(query[field("size")]) : trialDefaultPageSize;
+  const pageSize = getListPageSize(query[field("size")], trialDefaultPageSize);
   const search = query[field("q")] ?? "";
   const terms = normalize(search).split(/\s+/).filter(Boolean);
   const columnFilters = columns.map((column) => {
@@ -81,10 +81,8 @@ export function TrialQueueTable<Row>({
       return descending ? -comparison : comparison;
     });
   }
-  const pages = Math.max(1, Math.ceil(matching.length / pageSize));
-  const page = Math.min(Number(query[field("page")] ?? 1), pages);
-  const offset = (page - 1) * pageSize;
-  const visible = matching.slice(offset, offset + pageSize);
+  const { current: page, pages, offset, end } = getPageWindow(matching.length, pageSize, readListPage(query[field("page")]));
+  const visible = matching.slice(offset, end);
   const titleId = kind + "-trial-title";
   const hash = kind === "binding" ? "#binding-queue" : "";
   const href = (changes: Record<string, string | number | undefined>) => workflowHref("/trial", projectId, { ...query, ...changes }) + hash;

@@ -10,7 +10,7 @@ import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter
 import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
@@ -90,10 +90,8 @@ export function PackageOverviewTable({
         ...pkg.usages.flatMap((usage) => [usage.projectName, usage.projectCode, ...usage.nodeNames]));
   });
   const pageSize = getListPageSize(params.get("pageSize"));
-  const lastPage = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const requestedPage = Number(params.get("page"));
-  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, lastPage) : 1;
-  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const { current: page, pages: lastPage, offset, end } = getPageWindow(filtered.length, pageSize, readListPage(params.get("page")));
+  const visible = filtered.slice(offset, end);
 
   function urlWith(entries: Record<string, string | number | null>) {
     const next = new URLSearchParams(params.toString());

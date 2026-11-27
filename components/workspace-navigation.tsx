@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { FormDialog } from "@/components/form-dialog";
 import { NavigationPending } from "@/components/navigation-pending";
 import { SidebarNav, type SidebarGroup, type SidebarItem } from "@/components/sidebar-nav";
+import { getPageWindow } from "@/lib/list-pagination";
 import { workflowHref } from "@/lib/workflow-links";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 
@@ -80,9 +81,7 @@ function ProjectChoices({ projects, section, filters }: { projects: Project[]; s
   const [page, setPage] = useState(1);
   const terms = query.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
   const matches = projects.filter((project) => terms.every((term) => `${project.code} ${project.name}`.normalize("NFKC").toLowerCase().includes(term)));
-  const lastPage = Math.max(1, Math.ceil(matches.length / projectListPageSize));
-  const current = Math.min(page, lastPage);
-  const offset = (current - 1) * projectListPageSize;
+  const { current, pages: lastPage, offset, end } = getPageWindow(matches.length, projectListPageSize, page);
   return (
     <>
       <label className="field">
@@ -90,7 +89,7 @@ function ProjectChoices({ projects, section, filters }: { projects: Project[]; s
         <input className="input" type="search" data-dialog-autofocus value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="名称或代号" />
       </label>
       <ul className="project-switch-list">
-        {matches.slice(offset, offset + projectListPageSize).map((project) => (
+        {matches.slice(offset, end).map((project) => (
           <li key={project.id}>
             <Link className="project-switch-option" prefetch={false} href={workflowHref(section.href, project.id, filters)}>
               <strong>{project.name}</strong><small>{project.code}{project.status === "ARCHIVED" ? " · 已归档" : ""}</small>

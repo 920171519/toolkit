@@ -1,6 +1,6 @@
 import { readColumnFilters, type ColumnFilterField } from "./column-filters";
 import { BATCH_STATUS_META, CONCLUSION_META } from "./constants";
-import { getListPageSize } from "./list-pagination";
+import { getListPageSize, readListPage } from "./list-pagination";
 
 export const historyStatuses = ["COMPLETED", "TERMINATED"] as const;
 
@@ -20,8 +20,7 @@ export const historyFields = {
 
 export function readIntegrationHistory(params: Record<string, string | string[] | undefined>) {
   const filters = readColumnFilters(params, Object.values(historyFields));
-  const requestedPage = typeof params.page === "string" ? Number(params.page) : 1;
-  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const page = readListPage(params.page);
   const pageSize = getListPageSize(params.pageSize);
   const open = params.history === "1" || page > 1 || Object.keys(filters).length > 0;
   return { filters, page, pageSize, open };

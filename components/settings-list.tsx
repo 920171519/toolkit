@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { getPageWindow } from "@/lib/list-pagination";
 
 export function searchValue(value: string | string[] | undefined) {
   return typeof value === "string" ? value.trim().slice(0, 120) : "";
@@ -11,11 +12,9 @@ export function matchesSearch(search: string, ...values: Array<string | null | u
 }
 
 export function settingsPage<T>(items: T[], value: string | string[] | undefined, pageSize = 20) {
-  const requested = Number(searchValue(value)) || 1;
-  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
-  const page = Math.min(pageCount, Math.max(1, Math.floor(requested)));
-  const start = (page - 1) * pageSize;
-  return { items: items.slice(start, start + pageSize), page, pageCount, total: items.length };
+  const requested = Math.floor(Number(searchValue(value)) || 1);
+  const { current: page, pages: pageCount, offset, end } = getPageWindow(items.length, pageSize, requested);
+  return { items: items.slice(offset, end), page, pageCount, total: items.length };
 }
 
 export function SettingsFilters({ action, search, placeholder, children, hasFilters, clearHref = action }: {

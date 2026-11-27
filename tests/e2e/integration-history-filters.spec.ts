@@ -63,6 +63,16 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       await history.getByRole("link", { name: "下一页", exact: true }).click();
       await expect(page).toHaveURL((url) => url.searchParams.get("page") === "2");
       await expect(rows).toHaveCount(1);
+
+      const filteredHistoryUrl = new URL(page.url());
+      filteredHistoryUrl.searchParams.set("page", "1.5");
+      await page.goto(filteredHistoryUrl.toString());
+      await expect(rows).toHaveCount(10);
+      filteredHistoryUrl.searchParams.set("page", "999");
+      await page.goto(filteredHistoryUrl.toString());
+      await expect(rows).toHaveCount(1);
+      await expect(history.getByRole("link", { name: "下一页", exact: true })).toHaveCount(0);
+
       await table.getByRole("link", { name: target + "1", exact: true }).click();
       await expect(page.getByRole("heading", { level: 1, name: target + "1 · 旧历史批次" })).toBeVisible();
       await page.getByRole("link", { name: "返回历史批次", exact: true }).click();

@@ -8,11 +8,11 @@ import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-d
 import { filterOptions } from "@/lib/column-filters";
 import { historyFields, integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { requireUser } from "@/lib/auth";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowPage, getWorkflowSearch } from "@/lib/workflow-list";
+import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";
 import { getBatchCount, getBatches, getIntegrationHistoryPage, getManagedProjectIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
@@ -49,7 +49,7 @@ export default async function IntegrationPage({
   const filters = { statuses: activeStatuses, query, activeProjectsOnly: true };
   const total = inHistory ? 0 : query ? getBatchCount(scope, filters) : activeCount;
   const pageSize = getListPageSize(params.pageSize);
-  const page = getWorkflowPage(total, pageSize, params.page);
+  const page = getPageWindow(total, pageSize, readListPage(params.page));
   const visible = inHistory ? [] : getBatches(pageSize, scope, { ...filters, offset: page.offset });
   const history = inHistory ? getIntegrationHistoryPage(historyState, scope, { statuses: historyStatuses, query }) : undefined;
   const historyParams = { ...integrationHistoryParams({ ...historyState, page: history?.page ?? 1 }), view: "history", q: query || undefined, returnTo };

@@ -3,6 +3,7 @@ import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjec
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
 import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
+import { getPageWindow } from "./list-pagination";
 import { packageCodeSql, packageIdentity } from "./package-identity";
 import { getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
@@ -430,12 +431,11 @@ export function getIntegrationHistoryPage(
 
   const where = conditions.join(" AND ");
   const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${batchSummaryFrom} WHERE ${where}`, ...values)?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(state.page, pages);
+  const { current: page, pages, offset } = getPageWindow(total, pageSize, state.page);
   const rows = total === 0 ? [] : all<BatchSummaryRow>(
     `SELECT ${batchSummaryColumns} ${batchSummaryFrom}
      WHERE ${where} ${batchSummaryOrder} LIMIT ? OFFSET ?`,
-    ...values, pageSize, (page - 1) * pageSize,
+    ...values, pageSize, offset,
   );
   return { rows, total, page, pages };
 }
@@ -1770,13 +1770,12 @@ export function getTraceVersionPage(state: TraceListState, projectId?: number, r
 
   const where = conditions.join(" AND ");
   const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${traceVersionsFrom} WHERE ${where}`, ...params)?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
-  const page = Math.min(state.page, pageCount);
+  const { current: page, pages: pageCount, offset } = getPageWindow(total, state.pageSize, state.page);
   const direction = state.direction === "asc" ? "ASC" : "DESC";
   const rows = all<TraceVersionRow>(
     `${traceVersionFields} ${traceVersionsFrom} WHERE ${where}
      ORDER BY ${traceSortSql[state.sort]} ${direction}, pv.id DESC LIMIT ? OFFSET ?`,
-    ...params, state.pageSize, (page - 1) * state.pageSize,
+    ...params, state.pageSize, offset,
   );
   return { rows, total, page, pageCount };
 }

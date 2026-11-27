@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import styles from "@/app/public-contacts.module.css";
+import { getPageWindow } from "@/lib/list-pagination";
 import type { ProjectContact, PublicProject } from "@/lib/project-queries";
 import { EmptyState } from "./ui";
 
@@ -47,10 +48,8 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
   })), [projects]);
   const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
   const filtered = index.filter((entry) => terms.every((term) => entry.terms.includes(term)));
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const offset = (currentPage - 1) * pageSize;
-  const visible = filtered.slice(offset, offset + pageSize);
+  const { current: currentPage, pages: pageCount, offset, end } = getPageWindow(filtered.length, pageSize, page);
+  const visible = filtered.slice(offset, end);
 
   function changeSearch(value: string) {
     setQuery(value);
