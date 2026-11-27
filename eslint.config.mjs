@@ -22,6 +22,7 @@ const eslintConfig = defineConfig([
   {
     files: [
       "app/(workspace)/**/*.{ts,tsx}",
+      "app/(auth)/actions.ts",
       "app/**/{page,layout}.{ts,tsx}",
       "app/api/reports/**/*.{ts,tsx}",
       "components/**/*.{ts,tsx}",
@@ -30,7 +31,7 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": ["error", {
         patterns: [packageDrawerQueryRestriction, {
           regex: "^(?:node:)?sqlite$|(?:^|/)db(?:\\.ts)?$",
-          message: "Read through the corresponding server-side query module.",
+          message: "Use the corresponding server-side service or query module.",
         }],
       }],
     },

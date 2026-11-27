@@ -5,7 +5,7 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAuditLogWriter } from "./audit-log";
-import type { Role } from "./constants";
+import { DEPARTMENT_NAME, type Role } from "./constants";
 import { db, one, run, transaction } from "./db";
 import { hashPassword, verifyPassword } from "./password";
 import type { SessionUser } from "./types";
@@ -36,38 +36,69 @@ export async function loginWithPassword(employeeId: string, password: string): P
     employeeId.trim().toUpperCase(),
   );
   if (!user || !verifyPassword(password, user.password_hash)) return false;
-  return createSession(user.id, user.password_hash);
+  const writeCookie = await prepareSessionCookie();
+  const session = transaction(() => persistSession(user.id, user.password_hash));
+  if (!session) return false;
+  writeCookie(session);
+  return true;
 }
 
-export async function createSession(userId: number, verifiedPasswordHash?: string): Promise<boolean> {
+function persistSession(userId: number, verifiedPasswordHash: string) {
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   // Issue a session only while the password verified at login is still current.
   const inserted = run(
     `INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
-     SELECT ?, id, ?, ? FROM users WHERE id = ? AND is_active = 1 AND password_hash = COALESCE(?, password_hash)`,
+     SELECT ?, id, ?, ? FROM users WHERE id = ? AND is_active = 1 AND password_hash = ?`,
     hashToken(token),
     expiresAt.toISOString(),
     now.toISOString(),
     userId,
-    verifiedPasswordHash ?? null,
+    verifiedPasswordHash,
   );
-  if (!inserted.changes) return false;
+  if (!inserted.changes) return null;
   run("DELETE FROM sessions WHERE expires_at < ?", now.toISOString());
+  return { token, expiresAt };
+}
+
+async function prepareSessionCookie() {
   const cookieStore = await cookies();
   const requestHeaders = await headers();
   const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
   const secureCookie = process.env.SESSION_COOKIE_SECURE
     ? process.env.SESSION_COOKIE_SECURE === "true"
     : forwardedProto === "https";
-  cookieStore.set(SESSION_COOKIE, token, {
+  return ({ token, expiresAt }: { token: string; expiresAt: Date }) => cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: secureCookie,
     path: "/",
     expires: expiresAt,
   });
+}
+
+export async function registerMember({ name, employeeId, password }: { name: string; employeeId: string; password: string }): Promise<boolean> {
+  const writeCookie = await prepareSessionCookie();
+  const passwordHash = hashPassword(password);
+  const session = transaction(() => {
+    const inserted = run(
+      `INSERT INTO users (name, employee_id, password_hash, role, department, title, is_active, created_at)
+       VALUES (?, ?, ?, 'MEMBER', ?, '', 1, ?)
+       ON CONFLICT(employee_id) DO NOTHING`,
+      name,
+      employeeId,
+      passwordHash,
+      DEPARTMENT_NAME,
+      new Date().toISOString(),
+    );
+    if (!inserted.changes) return null;
+    const created = persistSession(Number(inserted.lastInsertRowid), passwordHash);
+    if (!created) throw new Error("Session issuance did not match the newly registered member.");
+    return created;
+  });
+  if (!session) return false;
+  writeCookie(session);
   return true;
 }
 

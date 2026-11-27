@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test.describe("公开项目联系人与账号", () => {
   test("未登录可以访问公开首页，只展示项目 PM 与软件经理", async ({ page }) => {
@@ -126,6 +127,68 @@ test.describe("公开项目联系人与账号", () => {
     await page.getByRole("button", { name: /登录工作台/ }).click();
     await page.waitForURL("**/dashboard**");
     await expect(page.locator(".sidebar-user-name")).toContainText("测试成员");
+  });
+
+  test("注册时会话写入失败可用同一工号重试，登录失败可就地重试", async ({ page }) => {
+    const employeeId = "E2EAUTHRETRY";
+    const password = "StrongRetry123";
+    await page.goto("/");
+    const database = openE2eDatabase();
+    database.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+    const failSessionWrite = () => database.exec(`
+      CREATE TRIGGER e2e_fail_auth_session BEFORE INSERT ON sessions
+      WHEN (SELECT employee_id FROM users WHERE id = NEW.user_id) = 'E2EAUTHRETRY'
+      BEGIN SELECT RAISE(ABORT, 'e2e session write failure'); END;
+    `);
+    const restoreSessionWrites = () => database.exec("DROP TRIGGER IF EXISTS e2e_fail_auth_session");
+    const registered = () => database.prepare("SELECT id FROM users WHERE employee_id = ?").get(employeeId);
+    const sessionCount = () => database.prepare(
+      "SELECT COUNT(*) AS count FROM sessions WHERE user_id = (SELECT id FROM users WHERE employee_id = ?)",
+    ).get(employeeId)?.count;
+
+    try {
+      failSessionWrite();
+      await page.goto("/register");
+      const form = page.getByTestId("register-form");
+      await form.locator('input[name="name"]').fill("重试测试账号");
+      await form.locator('input[name="employeeId"]').fill(employeeId);
+      await form.locator('input[name="password"]').fill(password);
+      await form.locator('input[name="confirmPassword"]').fill(password);
+      const register = form.getByRole("button", { name: "注册并进入工作台", exact: true });
+      await register.click();
+      await expect(form.getByRole("alert")).toContainText("操作未完成，系统出现异常，请稍后重试。");
+      expect(registered()).toBeUndefined();
+
+      restoreSessionWrites();
+      await form.locator('input[name="password"]').fill(password);
+      await form.locator('input[name="confirmPassword"]').fill(password);
+      await register.click();
+      await expect(page.getByRole("heading", { name: "我的工作台" })).toBeVisible();
+      expect(registered()).toBeDefined();
+      expect(sessionCount()).toBe(1);
+
+      await page.getByRole("button", { name: "退出登录" }).click();
+      await expect(page).toHaveURL(/\/$/);
+      failSessionWrite();
+      await page.goto("/login");
+      const loginForm = page.getByTestId("login-form");
+      await loginForm.locator('input[name="employeeId"]').fill(employeeId);
+      await loginForm.locator('input[name="password"]').fill(password);
+      const submitLogin = loginForm.getByRole("button", { name: "登录工作台", exact: true });
+      await submitLogin.click();
+      await expect(loginForm.getByRole("alert")).toContainText("操作未完成，系统出现异常，请稍后重试。");
+      expect(sessionCount()).toBe(0);
+
+      restoreSessionWrites();
+      await loginForm.locator('input[name="password"]').fill(password);
+      await submitLogin.click();
+      await expect(page.getByRole("heading", { name: "我的工作台" })).toBeVisible();
+      expect(sessionCount()).toBe(1);
+    } finally {
+      restoreSessionWrites();
+      database.prepare("DELETE FROM users WHERE employee_id = ?").run(employeeId);
+      database.close();
+    }
   });
 
   test("内部账号登录后从公开首页可以进入工作台", async ({ page }) => {

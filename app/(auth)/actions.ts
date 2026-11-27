@@ -1,13 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { changeCurrentPassword, createSession, destroySession, getCurrentUser, loginWithPassword } from "@/lib/auth";
-import { hashPassword } from "@/lib/password";
-import { one, run } from "@/lib/db";
-import { DEPARTMENT_NAME } from "@/lib/constants";
+import { changeCurrentPassword, destroySession, getCurrentUser, loginWithPassword, registerMember } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
-import { text } from "@/lib/action-helpers";
-import { failure } from "@/lib/action-helpers";
+import { failure, text } from "@/lib/action-helpers";
 import { safeWorkspacePath } from "@/lib/return-to";
 
 function passwordLengthError(password: string): string | undefined {
@@ -31,19 +27,9 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   if (Object.keys(fieldErrors).length > 0) return { error: "请检查注册信息。", fieldErrors };
 
   try {
-    const existing = one<{ id: number }>("SELECT id FROM users WHERE employee_id = ? COLLATE NOCASE", employeeId);
-    if (existing) return { error: "该工号已注册，请直接登录。", fieldErrors: { employeeId: "该工号已被使用。" } };
-    const result = run(
-      `INSERT INTO users (name, employee_id, password_hash, role, department, title, is_active, created_at)
-       VALUES (?, ?, ?, 'MEMBER', ?, '', 1, ?)`,
-      name,
-      employeeId,
-      hashPassword(password),
-      DEPARTMENT_NAME,
-      new Date().toISOString(),
-    );
-    const userId = Number(result.lastInsertRowid);
-    await createSession(userId);
+    if (!await registerMember({ name, employeeId, password })) {
+      return { error: "该工号已注册，请直接登录。", fieldErrors: { employeeId: "该工号已被使用。" } };
+    }
   } catch (error) {
     return failure(error);
   }
@@ -55,7 +41,11 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   const password = text(formData, "password");
   const next = text(formData, "next");
   if (!employeeId || !password) return { error: "请输入工号和密码。" };
-  if (!await loginWithPassword(employeeId, password)) return { error: "工号或密码不正确，或账号已停用。" };
+  try {
+    if (!await loginWithPassword(employeeId, password)) return { error: "工号或密码不正确，或账号已停用。" };
+  } catch (error) {
+    return failure(error);
+  }
   redirect(safeWorkspacePath(next) ?? "/dashboard");
 }
 
