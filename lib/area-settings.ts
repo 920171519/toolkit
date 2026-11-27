@@ -233,14 +233,14 @@ export function removeAreaProjectLead(actor: SessionUser, assignmentId: number) 
 
 export function deleteArea(actor: SessionUser, areaId: number) {
   assert(canManageAreas(actor), "只有系统管理员可以删除责任田。", "FORBIDDEN");
-  const area = one<{ id: number; name: string }>("SELECT id, name FROM areas WHERE id = ?", areaId);
-  assert(area, "责任田不存在。", "NOT_FOUND");
-  const packageCount = one<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM packages WHERE area_id = ?",
-    areaId,
-  );
-  assert(Number(packageCount?.count ?? 0) === 0, "该责任田下仍有软件包，请先调整软件包归属后再删除。");
   transaction(() => {
+    const area = one<{ id: number; name: string }>("SELECT id, name FROM areas WHERE id = ?", areaId);
+    assert(area, "责任田不存在。", "NOT_FOUND");
+    const packageCount = one<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM packages WHERE area_id = ?",
+      areaId,
+    );
+    assert(Number(packageCount?.count ?? 0) === 0, "该责任田下仍有软件包，请先调整软件包归属后再删除。");
     run("DELETE FROM areas WHERE id = ?", areaId);
     audit(actor.id, "DELETE_AREA", "AREA", areaId, `删除责任田：${area.name}`);
   });

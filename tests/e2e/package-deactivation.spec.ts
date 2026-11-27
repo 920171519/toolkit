@@ -36,6 +36,7 @@ function loadCommands(connection: DatabaseSync) {
     const { db } = load(resolve("lib/db.ts")) as typeof import("../../lib/db");
     db.prepare("SELECT 1").get();
     return {
+      ...load(resolve("lib/area-settings.ts")) as typeof import("../../lib/area-settings"),
       ...load(resolve("lib/package-settings.ts")) as typeof import("../../lib/package-settings"),
       ...load(resolve("lib/transfer-workflow.ts")) as typeof import("../../lib/transfer-workflow"),
       ...load(resolve("lib/user-settings.ts")) as typeof import("../../lib/user-settings"),
@@ -178,5 +179,52 @@ test("账号停用保留停用软件包的责任人历史，重新保存时仍�
     expect(() => packages.savePackage(actor, { ...historical, id, areaId: 999 })).toThrow(ownerUnavailable);
     expect(() => packages.updatePackageResponsibility(actor, id, historical)).toThrow(ownerUnavailable);
     expect(() => packages.savePackage(actor, { ...historical, id, isActive: true })).toThrow(ownerUnavailable);
+  });
+});
+
+test("删除责任田按写入时的软件包归属核对是否允许删除", ({}, testInfo) => {
+  withConnections(testInfo, (first, second) => {
+    const areas = loadCommands(first);
+    const packages = loadCommands(second);
+    const areaId = areas.saveArea(actor, { name: "归属验证责任田", description: "" });
+    const emptyAreaId = areas.saveArea(actor, { name: "待删除责任田", description: "" });
+    const missingAreaMessage = "责任田不存在。";
+    const blockedMessage = "该责任田下仍有软件包，请先调整软件包归属后再删除。";
+    const packageInArea = { ...packageInput, areaId };
+    let packageId: number | undefined;
+
+    // The existence and reference checks must run after the write lock is acquired.
+    const prepare = first.prepare.bind(first);
+    first.prepare = (statement) => {
+      if (statement === "SELECT id, name FROM areas WHERE id = ?"
+        || statement === "SELECT COUNT(*) AS count FROM packages WHERE area_id = ?") {
+        expect(first.isTransaction).toBe(true);
+      }
+      return prepare(statement);
+    };
+
+    beforeNextWrite(first, () => {
+      packageId = packages.savePackage(actor, packageInArea);
+    });
+    expect(() => areas.deleteArea(actor, areaId)).toThrow(blockedMessage);
+    assert(packageId !== undefined);
+    expect(first.isTransaction).toBe(false);
+    expect(second.prepare("SELECT area_id FROM packages WHERE id = ?").get(packageId)).toEqual({ area_id: areaId });
+    expect(second.prepare("SELECT id FROM areas WHERE id = ?").get(areaId)).toEqual({ id: areaId });
+
+    packages.savePackage(actor, { ...packageInArea, id: packageId, isActive: false });
+    expect(() => areas.deleteArea(actor, areaId)).toThrow(blockedMessage);
+    expect(() => areas.deleteArea({ ...actor, id: 2, role: "MEMBER" }, emptyAreaId))
+      .toThrow("只有系统管理员可以删除责任田。");
+
+    const deletedAreaEdit = { ...packageInArea, id: packageId, areaId: emptyAreaId };
+    beforeNextWrite(second, () => areas.deleteArea(actor, emptyAreaId));
+    expect(() => packages.savePackage(actor, deletedAreaEdit)).toThrow(missingAreaMessage);
+    expect(() => areas.deleteArea(actor, emptyAreaId)).toThrow(missingAreaMessage);
+    expect(second.prepare("SELECT area_id, is_active FROM packages WHERE id = ?").get(packageId))
+      .toEqual({ area_id: areaId, is_active: 0 });
+    expect(second.prepare("SELECT entity_id FROM audit_logs WHERE action = 'DELETE_AREA' ORDER BY id").all())
+      .toEqual([{ entity_id: emptyAreaId }]);
+    expect(second.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 });
