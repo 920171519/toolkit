@@ -11,7 +11,7 @@ import { getProjectCatalogEntries, type ProjectCatalogEntry } from "@/lib/projec
 import { projectOverviewFields } from "@/lib/project-overview-filters";
 import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import styles from "../projects/projects.module.css";
 import { directoryHref, directoryPage } from "@/lib/settings-directory";
 import { wordSearchMatcher } from "@/lib/search-text";

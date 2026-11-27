@@ -17,7 +17,7 @@ import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";

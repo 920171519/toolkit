@@ -2,7 +2,7 @@ import "server-only";
 
 import { canManagePackageArea, canManageProjectWorkflowForProject, canReadPackageWorkflow, canSubmitTransferForArea, getTransferAreaIds } from "./access";
 import { db, one } from "./db";
-import { getTransferPackageOptions } from "./queries";
+import { getTransferPackageOptions } from "./package-queries";
 import { getActiveTransferProjects } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";

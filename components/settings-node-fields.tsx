@@ -1,6 +1,6 @@
 import { SettingsSelect } from "@/components/settings-select";
 import type { ProjectConfig } from "@/lib/project-queries";
-import type { PersonOption } from "@/lib/queries";
+import type { PersonOption } from "@/lib/organization-queries";
 
 type NodeFieldDefaults = Pick<
   ProjectConfig["nodes"][number],

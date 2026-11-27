@@ -17,7 +17,8 @@ import {
   readColumnFilters,
 } from "@/lib/column-filters";
 import { getListPageSize } from "@/lib/list-pagination";
-import { getAreaDirectory, getAreaMemberships, parseFlash } from "@/lib/queries";
+import { getAreaDirectory, getAreaMemberships } from "@/lib/organization-queries";
+import { parseFlash } from "@/lib/flash";
 import {
   areaDirectoryDetailParams,
   directoryColumnFields,

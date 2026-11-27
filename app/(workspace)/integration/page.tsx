@@ -10,7 +10,7 @@ import { historyFields, integrationHistoryParams, readIntegrationHistory } from 
 import { requireUser } from "@/lib/auth";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";

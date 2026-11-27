@@ -3,7 +3,7 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 const packageDrawerQueryRestriction = {
-  regex: "(?:^|/)queries(?:\\.ts)?$",
+  regex: "(?:^|/)package-queries(?:\\.ts)?$",
   importNames: ["getReadablePackageDetail"],
   message: "Use getPackageDrawerData for the authorized package drawer projection.",
 };

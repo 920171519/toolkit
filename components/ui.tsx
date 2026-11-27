@@ -8,7 +8,7 @@ import {
   type PackageProgressStatus,
 } from "@/lib/constants";
 import { initials } from "@/lib/format";
-import type { Notice } from "@/lib/queries";
+import type { Notice } from "@/lib/flash";
 
 export function Badge({
   children,

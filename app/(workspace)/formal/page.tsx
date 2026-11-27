@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import { getPendingFormalVersions } from "@/lib/release-queue-queries";

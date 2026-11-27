@@ -17,7 +17,7 @@ import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";

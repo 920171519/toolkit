@@ -3,7 +3,7 @@ import { ProjectContactPicker } from "@/components/project-contact-picker";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES, PROJECT_STAGE_META } from "@/lib/project-stage";
 import type { ProjectConfig } from "@/lib/project-queries";
-import type { PersonOption } from "@/lib/queries";
+import type { PersonOption } from "@/lib/organization-queries";
 
 export const PROJECT_STATUS_OPTIONS = [
   { value: "ACTIVE", label: "进行中" },

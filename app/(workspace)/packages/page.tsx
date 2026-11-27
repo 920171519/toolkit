@@ -4,12 +4,9 @@ import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getPackageDrawerData } from "@/lib/package-drawer-data";
-import {
-  getReadablePackageOverviewRows,
-  getPeople,
-  getTransferPackageOptions,
-  parseFlash,
-} from "@/lib/queries";
+import { getReadablePackageOverviewRows, getTransferPackageOptions } from "@/lib/package-queries";
+import { getPeople } from "@/lib/organization-queries";
+import { parseFlash } from "@/lib/flash";
 import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { GuidanceDialog } from "@/components/guidance-dialog";

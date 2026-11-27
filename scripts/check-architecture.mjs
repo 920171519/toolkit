@@ -60,6 +60,8 @@ const workflowPageQueries = new Set([
   "lib/batch-queries.ts",
   "lib/pending-transfer-queries.ts",
   "lib/release-queue-queries.ts",
+  "lib/package-queries.ts",
+  "lib/organization-queries.ts",
 ]);
 const settingsMutationModules = new Set(["lib/area-settings.ts", "lib/package-settings.ts", "lib/project-settings.ts", "lib/user-settings.ts"]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/user-settings.ts"]);

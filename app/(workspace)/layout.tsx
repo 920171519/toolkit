@@ -3,7 +3,7 @@ import { KeyRound, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
 import { getLedAreaIds, getManagedProjectScope } from "@/lib/access";
-import { getAccountAreaLabel } from "@/lib/queries";
+import { getAccountAreaLabel } from "@/lib/organization-queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { getProjectOptions } from "@/lib/project-queries";
 import { Avatar } from "@/components/ui";

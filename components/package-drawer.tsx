@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState, useTransition, type Ke
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, LoaderCircle, Pencil, Search, X } from "lucide-react";
-import type { PersonOption } from "@/lib/queries";
+import type { PersonOption } from "@/lib/organization-queries";
 import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";

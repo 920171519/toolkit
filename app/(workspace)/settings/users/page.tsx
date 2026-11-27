@@ -15,7 +15,8 @@ import {
 } from "@/lib/column-filters";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { getListPageSize } from "@/lib/list-pagination";
-import { getAdminUsers, getResponsibilityAreaOptions, parseFlash, type AdminUser } from "@/lib/queries";
+import { getAdminUsers, getResponsibilityAreaOptions, type AdminUser } from "@/lib/organization-queries";
+import { parseFlash } from "@/lib/flash";
 import {
   directoryColumnFields,
   directoryHref,

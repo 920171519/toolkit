@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage } from "@/lib/access";
-import { getTransferPackageOptions } from "@/lib/queries";
+import { getTransferPackageOptions } from "@/lib/package-queries";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { safeOverviewReturnPath } from "@/lib/return-to";

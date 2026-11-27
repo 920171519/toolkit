@@ -505,7 +505,9 @@ components/                   # UI、表单、导航、批次编辑器、抽屉�
 lib/
   schema.ts                   # SQLite 表结构
   seed.ts                     # 演示数据
-  queries.ts                  # 通用读取查询（含项目维度软件包总览）
+  package-queries.ts          # 软件包总览、配置与授权详情查询
+  organization-queries.ts     # 人员、责任田与分工查询
+  project-queries.ts          # 项目目录、联系人与配置查询
   batch-queries.ts            # 集成测试与批次证据查询
   binding-queries.ts          # 绑定队列与授权详情查询
   release-queue-queries.ts    # 试制与转正队列查询

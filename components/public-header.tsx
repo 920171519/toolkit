@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, LogIn } from "lucide-react";
 import { Brand } from "./brand";
-import { getAccountAreaLabel } from "@/lib/queries";
+import { getAccountAreaLabel } from "@/lib/organization-queries";
 import type { SessionUser } from "@/lib/types";
 import styles from "@/app/public-contacts.module.css";
 

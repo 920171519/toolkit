@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getReadablePackageDetail } from "./queries";
+import { getReadablePackageDetail } from "./package-queries";
 import { getPackageDeactivationBlockingVersions } from "./settings-queries";
 import type { SessionUser } from "./types";
 

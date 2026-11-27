@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage, canManageProjectWorkflowForProject, getReadableVersionIds } from "@/lib/access";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/queries";
+import { parseFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";

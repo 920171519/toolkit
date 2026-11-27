@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";
-import { getPackagesOverview } from "@/lib/queries";
+import { getPackagesOverview } from "@/lib/package-queries";
 import { importLegacyVersionAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { InfoTooltip } from "@/components/info-tooltip";

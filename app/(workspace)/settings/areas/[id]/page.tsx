@@ -6,7 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref, directoryValue } from "@/lib/settings-directory";
-import { getAreaConfig, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
+import { getAreaConfig, getPeople, type AreaProjectLead, type AreaProjectMember } from "@/lib/organization-queries";
+import { parseFlash } from "@/lib/flash";
 import { getProjectOptions, type ProjectOption } from "@/lib/project-queries";
 import {
   addAreaLeaderAction,

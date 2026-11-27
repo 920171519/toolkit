@@ -1,9 +1,9 @@
 import "server-only";
 
-import { all, one } from "./db";
+import { all } from "./db";
 import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
-import type { PackageProgressStatus, Role } from "./constants";
+import type { PackageProgressStatus } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
 import { packageCodeSql } from "./package-identity";
 import type { PackageSummary, PackageVersionSummary, SessionUser } from "./types";
@@ -119,7 +119,7 @@ export function getTransferPackageOptions(user: SessionUser, projectId?: number)
 }
 
 
-export type PackageUsageScope = {
+type PackageUsageScope = {
   projectId: number;
   projectName: string;
   projectCode: string;
@@ -303,207 +303,7 @@ function readPackageOverviewRows(projectId?: number, selection?: PackageSelectio
   return withTrialProgress(rows, projectId);
 }
 
-export type AdminUser = {
-  id: number;
-  name: string;
-  employeeId: string;
-  role: Role;
-  title: string;
-  department: string;
-  isActive: boolean;
-  createdAt: string;
-  ownedPackages: number;
-  activeOwnedPackages: number;
-  areas: Array<{ id: number; name: string }>;
-};
-
-export function getAdminUsers(userId?: number): AdminUser[] {
-  const memberships = getAreaMemberships(userId);
-  const areasByUser = Map.groupBy(memberships, (membership) => membership.userId);
-  return all<Omit<AdminUser, "isActive" | "areas"> & { isActive: number }>(
-    `SELECT u.id, u.name, u.employee_id AS employeeId, u.role, u.title, u.department,
-            u.is_active AS isActive, u.created_at AS createdAt,
-            (SELECT COUNT(*) FROM packages p WHERE p.owner_id = u.id) AS ownedPackages,
-            (SELECT COUNT(*) FROM packages p WHERE p.owner_id = u.id AND p.is_active = 1) AS activeOwnedPackages
-     FROM users u
-     ${userId === undefined ? "" : "WHERE u.id = ?"}
-     ORDER BY u.is_active DESC, u.created_at, u.id`,
-    ...(userId === undefined ? [] : [userId]),
-  ).map((row) => ({
-    ...row,
-    isActive: Boolean(row.isActive),
-    ownedPackages: Number(row.ownedPackages),
-    activeOwnedPackages: Number(row.activeOwnedPackages),
-    areas: (areasByUser.get(row.id) ?? []).map(({ areaId, name }) => ({ id: areaId, name })),
-  }));
-}
-
-export type PersonOption = {
-  id: number;
-  name: string;
-  employeeId: string;
-  title: string;
-  role: Role;
-};
-
-export function getPeople(includeInactive = false): PersonOption[] {
-  return all<PersonOption>(
-    `SELECT id, name, employee_id AS employeeId, title, role FROM users
-     ${includeInactive ? "" : "WHERE is_active = 1"} ORDER BY name`,
-  );
-}
-
-export type AreaProjectLead = {
-  id: number;
-  projectId: number;
-  projectName: string;
-  projectCode: string;
-  projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
-  userId: number;
-  userName: string;
-  userEmployeeId: string;
-  userTitle: string;
-};
-
-export type AreaLeader = {
-  id: number;
-  userId: number;
-  userName: string;
-  userEmployeeId: string;
-  userTitle: string;
-};
-
-export type AreaProjectMember = {
-  id: number;
-  areaId: number;
-  projectId: number;
-  projectName: string;
-  projectCode: string;
-  userId: number;
-  userName: string;
-  userEmployeeId: string;
-  userTitle: string;
-};
-
-type AreaConfig = {
-  id: number;
-  name: string;
-  description: string;
-  isIntegration: boolean;
-  packageCount: number;
-  leaders: AreaLeader[];
-  projectLeads: AreaProjectLead[];
-  projectMembers: AreaProjectMember[];
-};
-
-export function getAreaMemberships(userId?: number) {
-  return all<{ userId: number; areaId: number; name: string }>(
-    `WITH memberships AS (
-      SELECT user_id, area_id FROM area_leaders
-      UNION
-      SELECT user_id, area_id FROM area_project_leads
-      UNION
-      SELECT user_id, area_id FROM area_project_members
-    )
-    SELECT m.user_id AS userId, m.area_id AS areaId, a.name
-    FROM memberships m JOIN areas a ON a.id = m.area_id
-    ${userId === undefined ? "" : "WHERE m.user_id = ?"}
-    ORDER BY a.name, a.id`,
-    ...(userId === undefined ? [] : [userId]),
-  );
-}
-
-export function getAccountAreaLabel(userId: number): string {
-  return getAreaMemberships(userId).map(({ name }) => name).join("、") || "未分配责任田";
-}
-
-export function getResponsibilityAreaOptions({ orderBy = "name" }: { orderBy?: "name" | "id" } = {}) {
-  const order = orderBy === "id" ? "id" : "name, id";
-  return all<{ id: number; name: string }>(`SELECT id, name FROM areas ORDER BY ${order}`);
-}
-
-export function getAreaDirectory() {
-  const supervisors = all<AreaLeader & { areaId: number }>(
-    `SELECT al.id, al.area_id AS areaId, u.id AS userId, u.name AS userName,
-            u.employee_id AS userEmployeeId, u.title AS userTitle
-     FROM area_leaders al JOIN users u ON u.id = al.user_id
-     ORDER BY al.id`,
-  );
-  const supervisorsByArea = Map.groupBy(supervisors, (leader) => leader.areaId);
-
-  return all<{
-    id: number;
-    name: string;
-    description: string;
-    isIntegration: number;
-    packageCount: number;
-    projectCount: number;
-  }>(
-    `SELECT a.id, a.name, a.description, a.is_integration AS isIntegration,
-            (SELECT COUNT(*) FROM packages p WHERE p.area_id = a.id) AS packageCount,
-            (SELECT COUNT(*) FROM area_project_leads apl WHERE apl.area_id = a.id) AS projectCount
-     FROM areas a ORDER BY a.id`,
-  ).map((area) => ({
-    ...area,
-    isIntegration: Boolean(area.isIntegration),
-    leaders: supervisorsByArea.get(area.id) ?? [],
-  }));
-}
-
-export function getAreaConfig(areaId: number): AreaConfig | null {
-  const area = one<{
-    id: number;
-    name: string;
-    description: string;
-    isIntegration: number;
-    packageCount: number;
-  }>(
-    `SELECT a.id, a.name, a.description, a.is_integration AS isIntegration,
-            (SELECT COUNT(*) FROM packages p WHERE p.area_id = a.id) AS packageCount
-     FROM areas a WHERE a.id = ?`,
-    areaId,
-  );
-  if (!area) return null;
-
-  const leaders = all<AreaLeader>(
-    `SELECT al.id, u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
-     FROM area_leaders al JOIN users u ON u.id = al.user_id
-     WHERE al.area_id = ? ORDER BY al.id`,
-    area.id,
-  );
-  const projectMembers = all<AreaProjectMember>(
-    `SELECT apm.id, apm.area_id AS areaId, apm.project_id AS projectId, pr.name AS projectName,
-            pr.code AS projectCode, u.id AS userId, u.name AS userName,
-            u.employee_id AS userEmployeeId, u.title AS userTitle
-     FROM area_project_members apm
-     JOIN projects pr ON pr.id = apm.project_id
-     JOIN users u ON u.id = apm.user_id
-     WHERE apm.area_id = ?
-     ORDER BY pr.sort_order, u.name`,
-    area.id,
-  );
-  const projectLeads = all<AreaProjectLead>(
-    `SELECT apl.id, apl.project_id AS projectId, pr.name AS projectName,
-            pr.code AS projectCode, pr.status AS projectStatus,
-            u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
-     FROM area_project_leads apl
-     JOIN projects pr ON pr.id = apl.project_id
-     JOIN users u ON u.id = apl.user_id
-     WHERE apl.area_id = ?
-     ORDER BY pr.sort_order, pr.id`,
-    area.id,
-  );
-  return {
-    ...area,
-    isIntegration: Boolean(area.isIntegration),
-    packageCount: Number(area.packageCount),
-    leaders,
-    projectLeads,
-    projectMembers,
-  };
-}
-
-export type AdminPackage = PackageSummary & {
+type AdminPackage = PackageSummary & {
   versionCount: number;
   usageCount: number;
   usageLabel: string | null;
@@ -537,7 +337,7 @@ export function getAdminPackages(): AdminPackage[] {
   });
 }
 
-export type PackageDetailData = {
+type PackageDetailData = {
   package: PackageSummary;
   usages: Array<{
     projectId: number;
@@ -655,7 +455,7 @@ export function getPackageConfiguration(packageId: number) {
   return pkg ? { package: pkg, usages: readPackageDetailUsages(packageId) } : null;
 }
 
-export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
+function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
   const base = projectId
     ? readPackageOverviewRows(projectId, packageId)[0]
     : readGlobalPackageSummary(packageId, includeInactive);
@@ -727,17 +527,4 @@ export function getPackageDetail(packageId: number, includeInactive = false, pro
     versions,
     audits,
   };
-}
-
-export type Notice = {
-  tone: "success" | "error" | "info";
-  message: string;
-};
-
-export function parseFlash(
-  flash: string | string[] | undefined,
-  fallbackTone: "success" | "error" | "info" = "success",
-): Notice | null {
-  if (!flash) return null;
-  return { tone: fallbackTone, message: Array.isArray(flash) ? flash[0] : flash };
 }
