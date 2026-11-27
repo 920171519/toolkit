@@ -12,7 +12,7 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
-import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/workflow-queries";
+import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/batch-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";

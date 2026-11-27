@@ -13,13 +13,12 @@ import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getProjectPackagePreview, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { getProjectTrialReadyCount } from "@/lib/trial-eligibility";
+import { getProjectBatchCounts, getRecentProjectBatches } from "@/lib/batch-queries";
 import { workflowHref } from "@/lib/workflow-links";
 import {
-  getProjectBatchCounts,
   getProjectPendingTransferCount,
   getProjectTrialAndFormalCounts,
   getProjectVersionRows,
-  getRecentProjectBatches,
 } from "@/lib/workflow-queries";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, SectionHeading } from "@/components/ui";
 import styles from "../projects.module.css";

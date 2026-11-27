@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { ProjectOption } from "@/lib/project-queries";
-import type { BatchCandidatePackage } from "@/lib/workflow-queries";
+import type { BatchCandidatePackage } from "@/lib/batch-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";

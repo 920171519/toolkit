@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { getReadableTestReport } from "@/lib/batch-queries";
 import { readReportFile, resolveReportPath } from "@/lib/report-storage";
-import { getReadableTestReport } from "@/lib/workflow-queries";
 
 export async function GET(
   _request: Request,

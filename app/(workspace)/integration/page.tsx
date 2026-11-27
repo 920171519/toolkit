@@ -14,7 +14,7 @@ import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";
-import { getBatchCount, getBatches, getIntegrationHistoryPage } from "@/lib/workflow-queries";
+import { getBatchCount, getBatches, getIntegrationHistoryPage } from "@/lib/batch-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";

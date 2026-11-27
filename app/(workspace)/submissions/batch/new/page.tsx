@@ -10,7 +10,7 @@ import { batchSelectionKey, draftRequestListState, readTransferRequestId } from 
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { getBatchCandidatesForProject, getBatchCount, getBatchDetail, getNextBatchCode } from "@/lib/workflow-queries";
+import { getBatchCandidatesForProject, getBatchCount, getBatchDetail, getNextBatchCode } from "@/lib/batch-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";
 
 export const dynamic = "force-dynamic";
