@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useTransition, type KeyboardEvent, type RefObject } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, LoaderCircle, Pencil, Search, X } from "lucide-react";
@@ -17,6 +17,7 @@ import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/component
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
 import { SettingsPackageActivation } from "@/components/settings-package-activation";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
+import { useModalDialog } from "@/components/use-modal-dialog";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import styles from "./package-drawer.module.css";
 
@@ -147,12 +148,13 @@ function UsageList({ usages }: { usages: PackageDrawerData["usages"] }) {
   );
 }
 
-export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = true, people, onClose, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
+export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = true, people, onClose, returnFocus, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
   packageId: number;
   projectId?: number;
   hasProjectWorkflowScope?: boolean;
   people: PersonOption[];
   onClose: () => void;
+  returnFocus?: RefObject<HTMLElement | null>;
   initialDetail?: PackageDrawerData | null;
   readOnly?: boolean;
   initialPanel?: DrawerPanel;
@@ -165,7 +167,7 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
   const [editing, setEditing] = useState(false);
   const [state, setState] = useState<ActionState>(initialActionState);
   const [pending, startTransition] = useTransition();
-  const drawer = useRef<HTMLDialogElement>(null);
+  const dialog = useModalDialog(dismiss, returnFocus);
   const body = useRef<HTMLDivElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -194,18 +196,6 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
   }, [initialDetail, loadDetail]);
 
   useEffect(() => {
-    const dialog = drawer.current;
-    if (!dialog) return;
-    const previousFocus = document.activeElement;
-    dialog.close();
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
-    };
-  }, []);
-
-  useEffect(() => {
     if (editing) body.current?.querySelector<HTMLInputElement>("input[type=search]")?.focus();
   }, [editing]);
 
@@ -224,7 +214,7 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
     event.preventDefault();
     const nextPanel = panels[nextIndex].id;
     activate(nextPanel);
-    drawer.current?.querySelector<HTMLButtonElement>(`[data-package-panel="${nextPanel}"]`)?.focus();
+    dialog.ref.current?.querySelector<HTMLButtonElement>(`[data-package-panel="${nextPanel}"]`)?.focus();
   }
 
   function cancelEdit() {
@@ -257,19 +247,12 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
   const currentTabId = `${id}-tab-${panel}`;
 
   return (
-    <dialog ref={drawer} open className="package-drawer workspace-package-drawer" aria-label="软件包详情" aria-describedby={identity ? titleId : undefined} data-testid="package-drawer"
+    <dialog {...dialog} open className="package-drawer workspace-package-drawer" aria-label="软件包详情" aria-describedby={identity ? titleId : undefined} data-testid="package-drawer"
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;
         const bounds = event.currentTarget.getBoundingClientRect();
         if (event.clientX < bounds.left || event.clientX > bounds.right ||
           event.clientY < bounds.top || event.clientY > bounds.bottom) dismiss();
-      }}
-      onCancel={(event) => { event.preventDefault(); event.stopPropagation(); dismiss(); }}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
-        event.preventDefault();
-        event.stopPropagation();
-        dismiss();
       }}>
       <header className={styles.header}>
         <div>

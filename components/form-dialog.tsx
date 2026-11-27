@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
+import { useModalDialog } from "./use-modal-dialog";
 
 export function DialogSurface({ title, description, children, onClose, returnFocus, wide = false, alert = false }: {
   title: string;
@@ -12,32 +13,13 @@ export function DialogSurface({ title, description, children, onClose, returnFoc
   wide?: boolean;
   alert?: boolean;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialog = useModalDialog(onClose, returnFocus);
   const titleId = useId();
   const descriptionId = useId();
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const previous = returnFocus?.current ?? document.activeElement;
-    dialog.showModal();
-    dialog.querySelector<HTMLElement>("[data-dialog-autofocus]")?.focus();
-    return () => {
-      dialog.close();
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
-    };
-  }, [returnFocus]);
-
   return (
-    <dialog ref={dialogRef} className={`workspace-dialog modal-panel ${wide ? "modal-panel-wide" : ""}`}
-      role={alert ? "alertdialog" : undefined} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
-      onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-      }}>
+    <dialog {...dialog} className={`workspace-dialog modal-panel ${wide ? "modal-panel-wide" : ""}`}
+      role={alert ? "alertdialog" : undefined} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
       <header className="modal-header">
         <h2 id={titleId}>{title}</h2>
         <button type="button" className="drawer-close" aria-label="关闭弹窗" onClick={onClose}><X size={18} aria-hidden="true" /></button>

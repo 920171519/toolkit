@@ -200,10 +200,8 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
         <span className="small muted">第 {currentPage} / {pages} 页</span>
         <button className="button button-secondary button-sm" type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>下一页</button>
       </nav>}
-      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} hasProjectWorkflowScope={hasProjectWorkflowScope} people={[]} readOnly onClose={() => {
-        setActivePackage(null);
-        requestAnimationFrame(() => detailTrigger.current?.focus());
-      }} />}
+      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} hasProjectWorkflowScope={hasProjectWorkflowScope}
+        people={[]} readOnly returnFocus={detailTrigger} onClose={() => setActivePackage(null)} />}
     </section>
   );
 }

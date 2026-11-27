@@ -32,7 +32,8 @@ test("软件包详情按资料分类，版本和节点可以搜索，关闭后�
 test("责任信息编辑使用独立面板，并能搜索人员和返回原位置", async ({ page }) => {
   await login(page, "ADMIN001");
   await page.goto("/packages?project=1");
-  await page.getByRole("link", { name: "查看 1001OTA 详情" }).click();
+  const trigger = page.getByRole("link", { name: "查看 1001OTA 详情" });
+  await trigger.click();
   const drawer = page.getByRole("dialog", { name: "软件包详情" });
   const edit = drawer.getByRole("button", { name: "编辑责任信息" });
   await edit.click();
@@ -44,6 +45,15 @@ test("责任信息编辑使用独立面板，并能搜索人员和返回原位�
   await drawer.getByRole("button", { name: "取消", exact: true }).click();
   await expect(edit).toBeFocused();
   await expect(drawer.getByRole("tab", { name: "概览" })).toHaveAttribute("aria-selected", "true");
+
+  await edit.press("Enter");
+  await expect(search).toBeFocused();
+  await search.press("Escape");
+  await expect(edit).toBeFocused();
+  await expect(drawer).toBeVisible();
+  await edit.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(trigger).toBeFocused();
 });
 
 test("责任田项目负责人可编辑软件包责任信息，项目软件经理仅可读取", async ({ page }) => {
