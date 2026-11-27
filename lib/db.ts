@@ -48,9 +48,14 @@ function migrateSchema(database: DatabaseSync) {
   }
   // Backfill the current node pool from the primary approver in older databases.
   database.exec(
-    `INSERT OR IGNORE INTO project_node_approvers (node_id, user_id, created_at)
-     SELECT id, binding_approver_id, datetime('now')
-     FROM project_nodes WHERE binding_approver_id IS NOT NULL`,
+    `INSERT INTO project_node_approvers (node_id, user_id, created_at)
+     SELECT n.id, n.binding_approver_id, datetime('now')
+     FROM project_nodes n
+     WHERE n.binding_approver_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM project_node_approvers a
+         WHERE a.node_id = n.id AND a.user_id = n.binding_approver_id
+       )`,
   );
   const flowColumns = database
     .prepare("PRAGMA table_info(binding_flows)")

@@ -39,6 +39,7 @@
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |
 | 多个绑定入口分别组合指定审批人与自审判断 | [审批人判定](../../lib/permissions.ts)、[绑定回归](../../tests/e2e/binding-controls.spec.ts) | 详情、转正引导与事务共用人员判定。工作台在数据库过滤待办，由端到端测试核对与审批入口一致。 |
 | 启动迁移和试制发布同时写审批人快照 | [试制发布](../../lib/workflow.ts)、[启动迁移](../../lib/db.ts) | 发布事务持有快照写入权，旧记录使用已持久化的主审批人。冷启动回归覆盖保存快照和兼容回退。 |
+| 每次启动对既有节点主审批人配置重复尝试插入 | [节点配置迁移](../../lib/db.ts)、[冷启动回归](../../tests/e2e/binding-approver-snapshot.spec.ts) | 查询排除存在的配置，保留旧库补齐，冷启动回归核对编号和历史快照。 |
 | 多套弹窗焦点、筛选和回跳处理 | [弹窗钩子](../../components/use-modal-dialog.ts)、[表头筛选](../../components/column-filter-header.tsx)、[回跳校验](../../lib/return-to.ts) | 界面入口可有不同的信息结构，键盘行为、控件契约和合法站内跳转有共用实现。 |
 | 已无调用的表单错误助手及旧展示数据 | [Action 助手](../../lib/action-helpers.ts)、[状态元数据](../../lib/constants.ts) | 删除闲置声明和字段，错误反馈、标签和样式沿用当前页面引用的内容。 |
 | 风险表单三处入口与 Action 会话检查 | [风险表单](../../components/risk-trial-entry-action.tsx)、[Action 助手](../../lib/action-helpers.ts) | 三处入口共用一个服务端表单。配置和流程 Action 共用会话与刷新规则。 |

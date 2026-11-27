@@ -65,3 +65,46 @@ test("重新启动保留既有审批快照及旧记录主审批人", ({}, testIn
     }
   }
 });
+
+function readNodeApproverSequence(database: DatabaseSync) {
+  const sequence = database.prepare(
+    "SELECT seq FROM sqlite_sequence WHERE name = 'project_node_approvers'",
+  ).get() as { seq: number } | undefined;
+  return sequence?.seq ?? 0;
+}
+
+test("仅补齐缺失的主审批人，重复启动不消耗新的记录编号", ({}, testInfo) => {
+  const databasePath = testInfo.outputPath("toolkit.db");
+  openInNewProcess(databasePath);
+  const database = new DatabaseSync(databasePath);
+  const fixture = (() => {
+    try {
+      const primary = database.prepare(
+        `SELECT a.id, a.node_id AS nodeId, a.user_id AS userId
+         FROM project_nodes n
+         JOIN project_node_approvers a ON a.node_id = n.id AND a.user_id = n.binding_approver_id
+         ORDER BY a.id LIMIT 1`,
+      ).get() as { id: number; nodeId: number; userId: number } | undefined;
+      if (!primary) throw new Error("演示数据库缺少主审批人配置。");
+      const sequence = readNodeApproverSequence(database);
+      database.prepare("DELETE FROM project_node_approvers WHERE id = ?").run(primary.id);
+      return { ...primary, sequence };
+    } finally {
+      database.close();
+    }
+  })();
+
+  for (let restart = 0; restart < 2; restart += 1) {
+    openInNewProcess(databasePath);
+    const reopened = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const restored = reopened.prepare(
+        "SELECT id FROM project_node_approvers WHERE node_id = ? AND user_id = ?",
+      ).get(fixture.nodeId, fixture.userId);
+      expect(restored).toEqual({ id: fixture.sequence + 1 });
+      expect(readNodeApproverSequence(reopened)).toBe(fixture.sequence + 1);
+    } finally {
+      reopened.close();
+    }
+  }
+});
