@@ -10,7 +10,7 @@ import { packageIdentity } from "@/lib/package-identity";
 import identityStyles from "@/components/package-identity.module.css";
 import { getProjectCatalogEntries } from "@/lib/project-queries";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
-import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
+import { getProjectPackagePreview, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { getProjectTrialReadyCount } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
@@ -93,7 +93,7 @@ export default async function ProjectOverviewPage({
   const scopedHref = (path: string, values?: Record<string, string | number | undefined>) => workflowHref(path, projectId, { ...values, returnTo });
 
   const recentBatches = getRecentProjectBatches(projectId, previewLength, canPrepare);
-  const packageRows = getPackageOverviewRows(projectId, true);
+  const { rows: packageRows, total: packageTotal } = getProjectPackagePreview(projectId, previewLength);
   const projectVersions = getProjectVersionRows(projectId, previewLength);
   const batchScope = getBatchEvidenceReadScope(user);
   const pending = currentProject ? getProjectPendingTransferCount(projectId) : 0;
@@ -211,9 +211,9 @@ export default async function ProjectOverviewPage({
 
       <section id="packages" className={`card ${styles.panel}`} aria-label="软件包与全局使用范围">
         <div className={styles.panelHead}>
-          <SectionHeading title="软件包" actions={packageRows.length > 0 && (
+          <SectionHeading title="软件包" actions={packageTotal > 0 && (
             <Link href={scopedHref("/packages")} className="button button-ghost button-sm" prefetch={false}>
-              全部 {packageRows.length} 个软件包 <ArrowRight size={13} aria-hidden="true" />
+              全部 {packageTotal} 个软件包 <ArrowRight size={13} aria-hidden="true" />
             </Link>
           )} />
         </div>
@@ -228,7 +228,7 @@ export default async function ProjectOverviewPage({
             <table className={`data-table ${styles.packageTable}`}>
               <thead><tr><th scope="col">软件包编码</th><th scope="col">正式版</th><th scope="col">试制版</th><th scope="col">本项目节点</th><th scope="col">全部项目使用范围</th></tr></thead>
               <tbody>
-                {packageRows.slice(0, previewLength).map((pkg) => {
+                {packageRows.map((pkg) => {
                   const localUsage = pkg.usages.find((usage) => usage.projectId === projectId);
                   const { code, name } = packageIdentity(pkg);
                   return (

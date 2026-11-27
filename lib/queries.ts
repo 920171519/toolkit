@@ -124,44 +124,26 @@ export type PackageOverviewRow = PackageSummary & {
   usages: PackageUsageScope[];
 };
 
-export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
-  return readPackageOverviewRows({ projectId, includeArchivedUsage });
-}
+const packageUsageFrom = `
+  FROM package_usages u
+  JOIN projects pr ON pr.id = u.project_id
+  JOIN project_nodes n ON n.id = u.node_id
+`;
 
-function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }: {
-  projectId?: number;
-  includeArchivedUsage: boolean;
-  packageId?: number;
-}): PackageOverviewRow[] {
-  let packages = readPackagesOverview(true, packageId);
-  if (packages.length === 0) return [];
-  const packageValues = packageId === undefined ? [] : [packageId];
-  const usageRows = all<{
-    packageId: number;
-    projectId: number;
-    projectName: string;
-    projectCode: string;
-    projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
-    nodeName: string;
-  }>(
+type PackageOverviewUsage = Omit<PackageUsageScope, "nodeNames"> & { packageId: number; nodeName: string };
+
+function readPackageOverviewUsages(where: string, ...values: (string | number | null)[]) {
+  return all<PackageOverviewUsage>(
     `SELECT u.package_id AS packageId, pr.id AS projectId, pr.name AS projectName,
             pr.code AS projectCode, pr.status AS projectStatus, n.name AS nodeName
-     FROM package_usages u
-     JOIN projects pr ON pr.id = u.project_id
-     JOIN project_nodes n ON n.id = u.node_id
-     WHERE ${includeArchivedUsage ? "1 = 1" : "(pr.status != 'ARCHIVED' OR pr.id = ?)"}
-       ${packageId === undefined ? "" : "AND u.package_id = ?"}
-     ORDER BY pr.sort_order, n.sort_order`,
-    ...(includeArchivedUsage ? [] : [projectId ?? null]),
-    ...packageValues,
+     ${packageUsageFrom}
+     WHERE ${where}
+     ORDER BY pr.sort_order, n.sort_order, u.id`,
+    ...values,
   );
-  if (projectId) {
-    const allowed = new Set(
-      usageRows.filter((row) => row.projectId === projectId).map((row) => row.packageId),
-    );
-    packages = packages.filter((pkg) => allowed.has(pkg.id));
-  }
-  if (packages.length === 0) return [];
+}
+
+function groupPackageOverviewUsages(usageRows: PackageOverviewUsage[], includeArchivedUsage: boolean) {
   const usageMap = new Map<number, PackageUsageScope[]>();
   for (const row of usageRows) {
     if (!includeArchivedUsage && row.projectStatus === "ARCHIVED") continue;
@@ -180,39 +162,113 @@ function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }:
     }
     scope.nodeNames.push(row.nodeName);
   }
-  const requestPackageCondition = packageId === undefined ? "" : "AND pv.package_id = ?";
-  const requestRows = all<{
-    packageId: number;
-    versionId: number;
-    version: string;
-    status: string;
-    formalReleasedAt: string | null;
-    trialReleasedAt: string | null;
-    updatedAt: string;
-    standalone: number;
-  }>(
+  return usageMap;
+}
+
+type PackageOverviewRequest = {
+  packageId: number;
+  versionId: number;
+  version: string;
+  status: string;
+  formalReleasedAt: string | null;
+  trialReleasedAt: string | null;
+  updatedAt: string;
+  standalone: number;
+};
+
+function readPackageOverviewRequests(
+  projectId: number | undefined,
+  packageCondition: string,
+  packageValues: (number | string)[],
+  releasesOnly = false,
+) {
+  return all<PackageOverviewRequest>(
     `SELECT pv.package_id AS packageId, pv.id AS versionId, pv.version, r.status,
             r.formal_released_at AS formalReleasedAt, r.trial_released_at AS trialReleasedAt,
             r.updated_at AS updatedAt, 0 AS standalone
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE ${projectId ? "r.project_id = ?" : "pr.status != 'ARCHIVED'"} ${requestPackageCondition}
+     WHERE ${projectId ? "r.project_id = ?" : "pr.status != 'ARCHIVED'"} ${packageCondition}
+     ${releasesOnly ? "AND r.status IN ('FORMAL','TRIAL','PENDING_FORMAL')" : ""}
      ${projectId ? `UNION ALL
        SELECT pv.package_id, pv.id, pv.version, pv.status, pv.formal_released_at,
               pv.trial_released_at, COALESCE(pv.formal_released_at, pv.trial_released_at, pv.updated_at), 1
-       FROM package_versions pv WHERE ${STANDALONE_VERSION_IN_PROJECT_SQL} ${requestPackageCondition}` : ""}
+       FROM package_versions pv WHERE ${STANDALONE_VERSION_IN_PROJECT_SQL} ${packageCondition}` : ""}
      ORDER BY updatedAt DESC, versionId DESC`,
     ...(projectId ? [projectId] : []),
     ...packageValues,
     ...(projectId ? [projectId, ...packageValues] : []),
   );
-  const byPackage = new Map<number, typeof requestRows>();
-  for (const row of requestRows) {
-    const list = byPackage.get(row.packageId) ?? [];
-    list.push(row);
-    byPackage.set(row.packageId, list);
+}
+
+function packageOverviewReleaseLabels(requests: PackageOverviewRequest[], projectId?: number) {
+  const formal = requests.filter((request) => request.status === "FORMAL");
+  if (projectId) {
+    formal.sort((first, second) =>
+      (second.formalReleasedAt ?? second.updatedAt).localeCompare(first.formalReleasedAt ?? first.updatedAt),
+    );
   }
+  const trial = requests.filter((request) => request.status === "TRIAL" || request.status === "PENDING_FORMAL");
+  return { formalVersion: formal[0]?.version, trialVersions: [...new Set(trial.map((request) => request.version))] };
+}
+
+export function getProjectPackagePreview(projectId: number, limit: number) {
+  const packages = all<Pick<PackageSummary, "id" | "name" | "code" | "areaName"> & { total: number }>(
+    `SELECT p.id, p.name, p.code, a.name AS areaName, COUNT(*) OVER() AS total
+     FROM packages p
+     JOIN (
+       SELECT DISTINCT u.package_id ${packageUsageFrom} WHERE u.project_id = ?
+     ) membership ON membership.package_id = p.id
+     LEFT JOIN areas a ON a.id = p.area_id
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id
+     LIMIT ?`,
+    projectId,
+    limit,
+  );
+  if (packages.length === 0) return { total: 0, rows: [] };
+  const ids = JSON.stringify(packages.map(({ id }) => id));
+  const selectedIds = "SELECT value FROM json_each(?)";
+  const usages = readPackageOverviewUsages(`u.package_id IN (${selectedIds})`, ids);
+  const usageByPackage = groupPackageOverviewUsages(usages, true);
+  const requests = readPackageOverviewRequests(projectId, `AND pv.package_id IN (${selectedIds})`, [ids], true);
+  const requestsByPackage = Map.groupBy(requests, (request) => request.packageId);
+  const rows = packages.map(({ id, name, code, areaName }) => {
+    const { formalVersion, trialVersions } = packageOverviewReleaseLabels(requestsByPackage.get(id) ?? [], projectId);
+    return { id, name, code, areaName, formalVersion: formalVersion ?? null, trialVersions, usages: usageByPackage.get(id) ?? [] };
+  });
+  return { total: packages[0].total, rows };
+}
+
+export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
+  return readPackageOverviewRows({ projectId, includeArchivedUsage });
+}
+
+function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }: {
+  projectId?: number;
+  includeArchivedUsage: boolean;
+  packageId?: number;
+}): PackageOverviewRow[] {
+  let packages = readPackagesOverview(true, packageId);
+  if (packages.length === 0) return [];
+  const packageValues = packageId === undefined ? [] : [packageId];
+  const usageRows = readPackageOverviewUsages(
+    `${includeArchivedUsage ? "1 = 1" : "(pr.status != 'ARCHIVED' OR pr.id = ?)"}
+       ${packageId === undefined ? "" : "AND u.package_id = ?"}`,
+    ...(includeArchivedUsage ? [] : [projectId ?? null]),
+    ...packageValues,
+  );
+  if (projectId) {
+    const allowed = new Set(
+      usageRows.filter((row) => row.projectId === projectId).map((row) => row.packageId),
+    );
+    packages = packages.filter((pkg) => allowed.has(pkg.id));
+  }
+  if (packages.length === 0) return [];
+  const usageMap = groupPackageOverviewUsages(usageRows, includeArchivedUsage);
+  const requestPackageCondition = packageId === undefined ? "" : "AND pv.package_id = ?";
+  const requestRows = readPackageOverviewRequests(projectId, requestPackageCondition, packageValues);
+  const byPackage = Map.groupBy(requestRows, (request) => request.packageId);
   const projectStatusMap: Record<string, PackageProgressStatus> = {
     PENDING: "PENDING_TRANSFER",
     IN_TEST: "IN_TEST",
@@ -226,22 +282,14 @@ function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }:
   };
   const rows = packages.map((pkg) => {
     const requests = byPackage.get(pkg.id) ?? [];
-    const formalRequests = requests.filter((request) => request.status === "FORMAL");
-    const trialRequests = requests.filter((request) => request.status === "TRIAL" || request.status === "PENDING_FORMAL");
+    const { formalVersion, trialVersions } = packageOverviewReleaseLabels(requests, projectId);
     const current = requests.find((request) => !request.standalone && !["FORMAL", "VOID"].includes(request.status));
     const inTest = requests.find((request) => request.status === "IN_TEST");
     const pendingTransfer = requests.find((request) => request.status === "PENDING");
-    const trialVersions = [...new Set(trialRequests.map((request) => request.version))];
     const useAggregate = projectId === undefined && requests.length === 0;
-    if (projectId) {
-      formalRequests.sort((first, second) =>
-        (second.formalReleasedAt ?? second.updatedAt).localeCompare(first.formalReleasedAt ?? first.updatedAt),
-      );
-    }
-    const formalVersion = formalRequests[0]?.version ?? (projectId === undefined ? pkg.formalVersion : null);
     return {
       ...pkg,
-      formalVersion,
+      formalVersion: formalVersion ?? (projectId === undefined ? pkg.formalVersion : null),
       trialVersion: trialVersions[0] ?? (useAggregate ? pkg.trialVersion : null),
       trialVersions: useAggregate ? pkg.trialVersions : trialVersions,
       currentVersion: current?.version ?? (useAggregate ? pkg.currentVersion : null),
