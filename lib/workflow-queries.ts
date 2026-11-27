@@ -31,10 +31,11 @@ export function getNextBatchCode(): string {
   return `B${String(Math.max(120, batch?.highest ?? 0) + 1).padStart(3, "0")}`;
 }
 
-function filterByProject<T extends { projectId: number | null }>(rows: T[], projectIds: number[] | null): T[] {
-  if (projectIds === null) return rows;
-  const allowed = new Set(projectIds);
-  return rows.filter((row) => row.projectId !== null && allowed.has(row.projectId));
+function pendingRequestProjectScope(projectIds: number[] | null) {
+  return projectIds === null ? { predicate: "", params: [] } : {
+    predicate: "AND r.project_id IN (SELECT value FROM json_each(?))",
+    params: [JSON.stringify(projectIds)],
+  };
 }
 
 export type PendingTransferItem = {
@@ -69,6 +70,8 @@ export function getPendingTransferGroups(
   projectIds: number[] | null = null,
   guidanceProjectIds: number[] | null = [],
 ): PendingTransferGroup[] {
+  if (projectIds?.length === 0) return [];
+  const scope = pendingRequestProjectScope(projectIds);
   const guideScope = guidanceProjectIds === null ? "1" : guidanceProjectIds.length
     ? `pr.id IN (${guidanceProjectIds.map(() => "?").join(", ")})` : "0";
   const rows = all<PendingTransferItem & { projectId: number; projectName: string; projectCode: string }>(
@@ -93,14 +96,15 @@ export function getPendingTransferGroups(
      )
      WHERE pv.status != 'VOID' AND ${PENDING_BATCH_REQUEST_SQL}
        AND pr.status != 'ARCHIVED'
+       ${scope.predicate}
        AND ((draft.id IS NULL AND EXISTS (
          SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id
        )) OR ${guideScope})
      ORDER BY pr.sort_order, pr.id, pv.submitted_at DESC, pv.id DESC`,
-    ...(guidanceProjectIds ?? []),
+    ...scope.params, ...(guidanceProjectIds ?? []),
   );
   const groups = new Map<number, PendingTransferGroup>();
-  for (const row of filterByProject(rows, projectIds)) {
+  for (const row of rows) {
     let group = groups.get(row.projectId);
     if (!group) {
       group = { projectId: row.projectId, projectName: row.projectName, projectCode: row.projectCode, items: [] };
@@ -1013,35 +1017,35 @@ export type PendingFormalVersion = {
 };
 
 export function getPendingFormalVersions(projectIds: number[] | null = null, versionId?: number): PendingFormalVersion[] {
-  return filterByProject(
-    all<PendingFormalVersion>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
-              pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-              pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
-              r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
-              pv.binding_mode AS bindingMode, r.release_mode AS releaseMode,
-              o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
-              pg.trial_overdue_days AS trialOverdueDays,
-              CASE WHEN r.trial_released_at IS NOT NULL
-                   AND datetime(r.trial_released_at, '+' || pg.trial_overdue_days || ' days') < datetime('now')
-                   THEN 1 ELSE 0 END AS isOverdue,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
-               AND br.confirmed_at IS NOT NULL) AS requirementPassed,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived
-       FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
-       JOIN packages p ON p.id = pv.package_id
-       JOIN projects pr ON pr.id = r.project_id
-       JOIN packages pg ON pg.id = p.id
-       LEFT JOIN users o ON o.id = p.owner_id
-       LEFT JOIN users sm ON sm.id = pr.software_manager_id
-       WHERE pv.status = 'PENDING_FORMAL' AND r.status = 'PENDING_FORMAL' AND pr.status != 'ARCHIVED'
-         ${versionId === undefined ? "" : "AND pv.id = ?"}
-       ORDER BY r.trial_released_at DESC, r.id DESC`,
-      ...(versionId === undefined ? [] : [versionId]),
-    ),
-    projectIds,
+  if (projectIds?.length === 0) return [];
+  const scope = pendingRequestProjectScope(projectIds);
+  return all<PendingFormalVersion>(
+    `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+            pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
+            pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
+            r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
+            pv.binding_mode AS bindingMode, r.release_mode AS releaseMode,
+            o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
+            pg.trial_overdue_days AS trialOverdueDays,
+            CASE WHEN r.trial_released_at IS NOT NULL
+                 AND datetime(r.trial_released_at, '+' || pg.trial_overdue_days || ' days') < datetime('now')
+                 THEN 1 ELSE 0 END AS isOverdue,
+            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
+            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
+             AND br.confirmed_at IS NOT NULL) AS requirementPassed,
+            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived
+     FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN packages p ON p.id = pv.package_id
+     JOIN projects pr ON pr.id = r.project_id
+     JOIN packages pg ON pg.id = p.id
+     LEFT JOIN users o ON o.id = p.owner_id
+     LEFT JOIN users sm ON sm.id = pr.software_manager_id
+     WHERE pv.status = 'PENDING_FORMAL' AND r.status = 'PENDING_FORMAL' AND pr.status != 'ARCHIVED'
+       ${versionId === undefined ? "" : "AND pv.id = ?"}
+       ${scope.predicate}
+     ORDER BY r.trial_released_at DESC, r.id DESC`,
+    ...(versionId === undefined ? [] : [versionId]), ...scope.params,
   ).map((version) => ({
     ...version,
     requirementTotal: Number(version.requirementTotal),
