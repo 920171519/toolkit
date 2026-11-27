@@ -12,7 +12,7 @@
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
 | 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
-| 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务负责注册和会话写入。业务授权按项目、责任田、软件包、节点和单据检查。版本对象读取、项目工作区和写入办理各有权限。 |
+| 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务负责注册和会话写入。`access` 管理项目、责任田、软件包、节点和单据的读写范围及批次证据权限。版本对象读取、项目工作区和写入办理各有权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
 | 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/seed.ts`、`lib/report-storage.ts` | `db` 统一连接、事务和启动迁移。演示数据经显式环境变量关闭。报告服务拥有路径校验，报告元数据存入 SQLite。 |
 | 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境和工作目录。部署脚本接入现有进程管理器。 |

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { all } from "./db";
-import { canEditPackageResponsibility, getManagedProjectScope, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
+import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, Role } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
@@ -549,18 +549,11 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
   const canEdit = canEditPackageResponsibility(user, data.package.areaId);
   if (versionIds === null) return { ...data, canEdit };
   const versions = data.versions.filter((version) => versionIds.includes(version.id));
-  const projectIds = getProjectWorkflowProjectIds(user, true);
-  const managed = getManagedProjectScope(user, { includeArchived: true }) ?? [];
-  const readableBatches = new Set(all<{ id: number }>(
-    `SELECT id FROM integration_batches
-     WHERE id IN (SELECT value FROM json_each(?)) AND project_id IN (SELECT value FROM json_each(?))
-       AND (status != 'DRAFT' OR project_id IN (SELECT value FROM json_each(?)))`,
-    JSON.stringify(versions.flatMap((version) => version.batchId ?? [])), JSON.stringify(projectIds), JSON.stringify(managed),
-  ).map(({ id }) => id));
+  const readableBatches = getReadableBatchEvidenceIds(user, versions.flatMap((version) => version.batchId ?? []));
   return {
     ...data,
     package: restrictPackageSummary(data.package, new Set(versions.map(({ version }) => version))),
-    versions: versions.map((version) => version.batchId === null || readableBatches.has(version.batchId) ? version : {
+    versions: versions.map((version) => version.batchId === null || readableBatches === null || readableBatches.has(version.batchId) ? version : {
       ...version, batchId: null, batchCode: null, batchStatus: null, batchConclusion: null,
     }),
     canEdit,

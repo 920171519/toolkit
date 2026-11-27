@@ -2,7 +2,9 @@ import {
   canAccessProjectPage,
   canManagePackageArea,
   canManageProjectWorkflowForProject,
+  canReadBatchEvidence,
   canReadPackageWorkflow,
+  getBatchEvidenceReadScope,
 } from "./access";
 import { bindingBarcodeProgress } from "./binding-barcode-results";
 import { isBindingReleaseOpen } from "./binding-availability";
@@ -74,8 +76,9 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
   if (!eligibility) return null;
   const { projects: evidence, releaseMode } = eligibility;
   if (context.projectId && !evidence.some((row) => row.projectId === context.projectId)) return null;
-  const readableProjectIds = new Set(evidence.filter(({ projectId }) => canAccessProjectPage(user, projectId)).map(({ projectId }) => projectId));
-  const canRead = (projectId: number) => readableProjectIds.has(projectId);
+  const batchScope = getBatchEvidenceReadScope(user);
+  const readableProjectIds = batchScope.projectIds;
+  const canRead = (projectId: number) => readableProjectIds === null || readableProjectIds.includes(projectId);
   const readable = evidence.filter((row) => canRead(row.projectId));
   if (readable.length === 0 && user.role !== "ADMIN" && !canReadPackageWorkflow(user, version.packageId, context.projectId)) return null;
   const manageable = readable.filter((row) => canManageProjectWorkflowForProject(user, row.projectId));
@@ -108,7 +111,7 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
       q: identity.code,
       request: row.requestStatus === "PENDING" ? row.requestId : undefined,
     });
-    const canInspectBatch = row.batchStatus !== "DRAFT" || mayArrange;
+    const canInspectBatch = canReadBatchEvidence(user, row.projectId, row.batchStatus, batchScope);
     const batchHref = row.batchId && canInspectBatch
       ? workflowHref(`/integration/${row.batchId}`, row.projectId, args) : undefined;
     const stage = canInspectBatch && row.batchStatus === "DRAFT" ? "批次待发起"

@@ -192,8 +192,50 @@ export function getProjectWorkflowProjectIds(user: SessionUser, includeArchived 
   ).map(({ id }) => id);
 }
 
-export function canReadBatchEvidence(user: SessionUser, projectId: number, status: string): boolean {
-  return status === "DRAFT" ? canManageProjectWorkflowForProject(user, projectId) : canAccessProjectPage(user, projectId);
+const draftBatchStatus = "DRAFT";
+
+export function getBatchEvidenceReadScope(user: SessionUser) {
+  return {
+    projectIds: getProjectWorkflowProjectIds(user, true),
+    managedProjectIds: getManagedProjectScope(user, { includeArchived: true }),
+  };
+}
+
+export function canReadBatchEvidence(
+  user: SessionUser,
+  projectId: number,
+  status: string | null,
+  scope?: ReturnType<typeof getBatchEvidenceReadScope>,
+): boolean {
+  const draft = status === draftBatchStatus;
+  if (!scope) {
+    return draft ? canManageProjectWorkflowForProject(user, projectId) : canAccessProjectPage(user, projectId);
+  }
+  const ids = draft ? scope.managedProjectIds : scope.projectIds;
+  return ids === null || ids.includes(projectId);
+}
+
+const batchEvidenceScopeCtes = `readable_projects AS (SELECT value AS id FROM json_each(?)),
+  managed_projects AS (SELECT value AS id FROM json_each(?))`;
+
+// Restrict stored batch rows to real workflow projects, including when testing draft evidence.
+const batchEvidenceInScopeSql = `b.project_id IN (SELECT id FROM readable_projects)
+  AND (b.status != '${draftBatchStatus}' OR b.project_id IN (SELECT id FROM managed_projects))`;
+
+function batchEvidenceScopeSqlParams(user: SessionUser) {
+  const { projectIds, managedProjectIds } = getBatchEvidenceReadScope(user);
+  return [JSON.stringify(projectIds), JSON.stringify(managedProjectIds)];
+}
+
+export function getReadableBatchEvidenceIds(user: SessionUser, batchIds: readonly number[]): Set<number> | null {
+  if (user.role === "ADMIN") return null;
+  if (batchIds.length === 0) return new Set();
+  return new Set(all<{ id: number }>(
+    `WITH ${batchEvidenceScopeCtes}
+     SELECT b.id FROM integration_batches b
+     WHERE b.id IN (SELECT value FROM json_each(?)) AND ${batchEvidenceInScopeSql}`,
+    ...batchEvidenceScopeSqlParams(user), JSON.stringify(batchIds),
+  ).map(({ id }) => id));
 }
 
 const bindingReadAssignment = `(br.binding_owner_id = ? AND br.pushed_at IS NOT NULL)
@@ -211,11 +253,8 @@ export function getAssignedTrialRequestIds(user: SessionUser): number[] {
 
 export function getReadableVersionIds(user: SessionUser): number[] | null {
   if (user.role === "ADMIN") return null;
-  const projectIds = JSON.stringify(getProjectWorkflowProjectIds(user, true));
-  const managementIds = JSON.stringify(getManagedProjectScope(user, { includeArchived: true }) ?? []);
   return all<{ id: number }>(
-    `WITH readable_projects AS (SELECT value AS id FROM json_each(?)),
-          managed_projects AS (SELECT value AS id FROM json_each(?)),
+    `WITH ${batchEvidenceScopeCtes},
           package_assignments AS (
             SELECT area_id, project_id FROM area_project_leads WHERE user_id = ?
             UNION SELECT area_id, project_id FROM area_project_members WHERE user_id = ?
@@ -228,8 +267,7 @@ export function getReadableVersionIds(user: SessionUser): number[] | null {
              OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id AND duty.project_id = r.project_id))
        ) OR EXISTS (
          SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.package_version_id = pv.id AND b.project_id IN (SELECT id FROM readable_projects)
-           AND (b.status != 'DRAFT' OR b.project_id IN (SELECT id FROM managed_projects))
+         WHERE bi.package_version_id = pv.id AND ${batchEvidenceInScopeSql}
        ) OR EXISTS (SELECT 1 FROM readable_projects visible WHERE ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "visible.id")})
        OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id
          AND ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "duty.project_id")})
@@ -237,7 +275,7 @@ export function getReadableVersionIds(user: SessionUser): number[] | null {
          SELECT 1 FROM binding_requirements br WHERE br.package_version_id = pv.id
            AND (${bindingReadAssignment})
        )`,
-    projectIds, managementIds, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id,
+    ...batchEvidenceScopeSqlParams(user), user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id,
   ).map(({ id }) => id);
 }
 

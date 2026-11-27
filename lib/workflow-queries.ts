@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import { OPEN_BINDING_RELEASE_STATUSES_SQL, OPEN_BINDING_REQUIREMENT_STATUSES_SQL } from "./binding-availability";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
@@ -1577,12 +1577,10 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
     );
     if (!standalone) return null;
   }
-  const readableProjects = getProjectWorkflowProjectIds(user, true);
-  const managedProjects = getManagedProjectScope(user, { includeArchived: true });
+  const batchScope = getBatchEvidenceReadScope(user);
+  const readableProjects = batchScope.projectIds;
   const hasProjectEvidence = (id: number) => readableProjects === null || readableProjects.includes(id);
-  const hasBatchEvidence = (id: number, status: string | null) => status === "DRAFT"
-    ? managedProjects === null || managedProjects.includes(id)
-    : hasProjectEvidence(id);
+  const hasBatchEvidence = (id: number, status: string | null) => canReadBatchEvidence(user, id, status, batchScope);
   const readableBatches = batches.filter((batch) => hasBatchEvidence(batch.projectId, batch.status));
   if (projectId && requests.length === 0 && readableBatches.length === 0 && batches.length > 0) return null;
   const narrowRequests = readableProjects === null ? [] : getNarrowVersionRequestIds(user, versionId);

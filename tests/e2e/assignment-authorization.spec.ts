@@ -92,6 +92,47 @@ test("共享转正确认同步范围，同时只展开有权项目的原始证�
   await expect(page.getByRole("dialog", { name: /转正 1004NET/ })).toContainText("星云 N1、极光 M2、磐石 T3 将同步使用该正式版本");
 });
 
+test("版本追溯隐藏最新草稿的批次字段，仍保留项目申请和可读历史", async ({ page }) => {
+  await login(page, "MGR001");
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON");
+  const draftCode = "E2E-TRACE-LATEST-DRAFT";
+  try {
+    const prior = db.prepare(
+      `SELECT bi.id AS itemId, bi.package_version_id AS versionId, b.project_id AS projectId
+       FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+       WHERE b.code = 'B119' AND bi.transfer_request_id IS NOT NULL`,
+    ).get() as { itemId: number; versionId: number; projectId: number };
+    const draft = db.prepare(
+      `INSERT INTO integration_batches (code, project_id, title, status, created_at)
+       VALUES (?, ?, '版本追溯草稿权限验证', 'DRAFT', '2026-11-28T00:00:00Z')`,
+    ).run(draftCode, prior.projectId);
+    const snapshot = db.prepare(
+      `INSERT INTO batch_items (batch_id, package_id, package_version_id, version, archive_url, transfer_request_id)
+       SELECT ?, package_id, package_version_id, version, archive_url, transfer_request_id FROM batch_items WHERE id = ?`,
+    ).run(draft.lastInsertRowid, prior.itemId);
+    expect(snapshot.changes).toBe(1);
+
+    const href = `/versions/${prior.versionId}?project=${prior.projectId}`;
+    const request = page.getByRole("region", { name: "项目版本证据表格" }).getByRole("row", { name: /星云 N1/ });
+    const history = page.getByRole("region", { name: "集成测试证据表格" });
+    await page.goto(href);
+    await expect(request.getByRole("link", { name: draftCode, exact: true })).toBeVisible();
+
+    await login(page, "TEST001");
+    await page.goto(href);
+    await expect(request.getByText("无关联批次", { exact: true })).toBeVisible();
+    await expect(history.getByRole("link", { name: "B119", exact: true })).toBeVisible();
+    await expect(history.getByText(draftCode, { exact: true })).toHaveCount(0);
+  } finally {
+    try {
+      db.prepare("DELETE FROM integration_batches WHERE code = ?").run(draftCode);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("仅负责归档项目的软件经理保留配置和历史读取权限", async ({ page }) => {
   await login(page, "MEMBER001");
   const db = openE2eDatabase();
