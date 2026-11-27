@@ -415,7 +415,7 @@ pnpm build            # 生产构建
 pnpm start            # 启动生产服务（需先 build）
 pnpm typecheck        # TypeScript 类型检查
 pnpm lint             # ESLint
-pnpm test:e2e         # 运行 Playwright E2E（使用独立 data/e2e.db）
+pnpm test:e2e         # 运行 Playwright E2E（使用系统临时目录中的独立数据）
 pnpm test:e2e:full    # 构建后运行 E2E
 pnpm db:seed          # 确保数据库表和演示数据存在
 pnpm db:reset         # 删除数据库（谨慎！会清空全部数据）
@@ -430,12 +430,13 @@ pnpm admin:create -- <姓名> <工号> <密码>  # 创建或提升一个管理�
 | --- | --- | --- |
 | `NEXT_PUBLIC_DEPARTMENT_NAME` | 软件工程部 | 部门名称展示 |
 | `DATABASE_PATH` | `./data/toolkit.db` | SQLite 文件路径 |
+| `TOOLKIT_REPORTS_PATH` | `./data/uploads/reports` | 验证报告的实际存放目录。数据库中的报告路径格式保持一致 |
 | `SESSION_COOKIE_SECURE` | 按请求协议自动判断 | HTTPS 反代请转发 `X-Forwarded-Proto: https` 或显式设为 true；HTTP 验收不要设为 true |
 | `TOOLKIT_SKIP_SEED` | `0` | 设为 `1` 时不写入演示数据 |
 
 ## 测试与验证
 
-E2E 使用独立 `data/e2e.db`，启动时清空该文件。请在开发或隔离检出中运行，测试报告会写入检出目录的 `data/uploads/reports/`。用例覆盖以下场景：
+E2E 在 Windows 和 Linux 上使用同一组 pnpm 命令。每次启动测试服务时，使用系统临时目录中独立的 `toolkit-e2e-*` 目录保存 SQLite 数据库和上传报告，默认监听 `127.0.0.1:3100`。测试结束后保留该目录用于排查，确认测试服务退出后可按需清理。Playwright UI 重跑用例会沿用当前测试服务的数据，需要恢复演示数据时请退出并重新启动 UI。并行验证时请使用独立检出并设置不同的 `TOOLKIT_QA_PORT`，各检出分别保存 `test-results/` 与 `playwright-report/`。自定义 Playwright 配置沿用项目的全局设置时，在 `webServer.env` 中配置测试服务的 `DATABASE_PATH` 和 `TOOLKIT_REPORTS_PATH`。独立配置可为测试进程显式设置 `TOOLKIT_QA_DB` 和 `TOOLKIT_REPORTS_PATH`，指向测试服务使用的同一组路径。用例覆盖以下场景：
 
 1. 公开首页只展示项目 PM 和软件经理，支持按经理搜索。
 2. 未登录访问内部页面跳转登录，错误密码有提示。
@@ -516,7 +517,7 @@ data/                         # SQLite 数据文件与上传报告（部署需�
 
 ### Ubuntu 24 生产部署
 
-- 当前为单机 SQLite 方案，适合部门级 < 1000 人使用；必须持久化 `data/` 目录（含 `data/uploads/reports`）。新上传的验证报告按「项目 ID-项目名 / 批次号」归档，历史报告沿用原路径。
+- 当前为单机 SQLite 方案，适合部门级 < 1000 人使用。必须持久化 `data/` 目录和通过 `TOOLKIT_REPORTS_PATH` 单独指定的报告目录。新上传的验证报告按「项目 ID-项目名 / 批次号」归档，历史报告沿用原路径。
 - **不要使用 `pnpm dev` 作为生产服务**。生产必须 `pnpm build` 后 `pnpm start`。
 - **部署时禁止在旧服务运行期间覆盖 `.next`**：旧进程可能继续返回旧 HTML，而浏览器请求到新构建的静态 chunk，表现为“点击按钮没反应 / 弹窗不出现 / 点击空白处不关闭 / 登录后被踢回登录页”。正确顺序是：
   1. 停止旧服务；

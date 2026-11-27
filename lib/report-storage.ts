@@ -30,5 +30,6 @@ export function resolveReportPath(storedPath: string) {
   const storagePath = resolve(/* turbopackIgnore: true */ process.cwd(), normalizedPath);
   const insideRoot = relative(reportsRoot, storagePath);
   if (!insideRoot || insideRoot === ".." || insideRoot.startsWith(`..${sep}`) || isAbsolute(insideRoot)) return null;
-  return storagePath;
+  const configuredRoot = process.env.TOOLKIT_REPORTS_PATH;
+  return configuredRoot ? resolve(configuredRoot, insideRoot) : storagePath;
 }

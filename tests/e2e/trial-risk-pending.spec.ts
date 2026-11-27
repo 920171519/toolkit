@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { confirmAction, expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("待转测版本经软件经理登记才进入风险试制，撤回风险试制后仍能转测", async ({ page }) => {
   await login(page, "MGR001");
@@ -37,7 +36,7 @@ test("待转测版本经软件经理登记才进入风险试制，撤回风险�
 });
 
 test.afterEach(() => {
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   try {
     db.exec("PRAGMA busy_timeout = 5000");
     const fixture = db.prepare("SELECT id FROM package_versions WHERE package_id = 2 AND version = '6.6.41'").get();

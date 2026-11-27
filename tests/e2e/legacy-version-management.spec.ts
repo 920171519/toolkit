@@ -1,13 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { DatabaseSync } from "node:sqlite";
-import { resolve } from "node:path";
 import { confirmAction, expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 const packageId = 2;
 const settingsUrl = `/settings/packages/${packageId}`;
 
 test.afterEach(() => {
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   try {
     db.exec("PRAGMA busy_timeout = 5000");
     const fixtures = db.prepare(
@@ -76,7 +75,7 @@ test("历史试制不阻挡项目范围编辑，允许管理员更正并保留�
 
   const traceLink = await imported.getByRole("link", { name: "全链路追溯" }).getAttribute("href");
   const versionId = Number(traceLink?.split("/").at(-1));
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"), { readOnly: true });
+  const db = openE2eDatabase({ readOnly: true });
   try {
     const entry = db.prepare("SELECT actor_id, detail FROM audit_logs WHERE entity_type = 'PACKAGE_VERSION' AND entity_id = ? AND action = 'CORRECT_LEGACY_VERSION'")
       .get(versionId) as { actor_id: number; detail: string };

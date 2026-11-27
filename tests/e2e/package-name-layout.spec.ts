@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Locator } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 async function horizontalOverflow(box: Locator) {
   return box.evaluate((element) => element.scrollWidth - element.clientWidth);
@@ -43,7 +42,7 @@ test("新建软件包的责任田与责任人控件等高且支持搜索", async
 
 test("项目软件包编码和风险弹窗操作不被长名称挤出", async ({ page }) => {
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const original = db.prepare("SELECT id, name, code FROM packages WHERE id IN (1, 5)").all() as { id: number; name: string; code: string }[];
   const update = db.prepare("UPDATE packages SET name = ?, code = ? WHERE id = ?");
   const chineseName = "整车多域协同网关及设备诊断服务软件组件".repeat(5);

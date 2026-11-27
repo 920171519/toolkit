@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("试制版本保留转正入口，按当前权限定位实际的节点与电子流", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -37,7 +36,7 @@ test("试制版本保留转正入口，按当前权限定位实际的节点与�
   await expect(page.locator(nodeTarget.hash)).toBeFocused();
   await expect(page.locator(nodeTarget.hash)).toHaveAttribute("open", "");
 
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const node = db.prepare(`SELECT br.id, br.required_count AS requiredCount,
       (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b
        JOIN binding_flows f ON f.id = b.flow_id AND f.status IN ('PENDING','APPROVED')

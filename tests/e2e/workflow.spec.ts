@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { basename, dirname, join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { getE2eReportsDirectory, openE2eDatabase } from "./storage";
 import {
   confirmAction,
   confirmBindingNode,
@@ -465,21 +465,23 @@ test.describe("工程协同台项目维度流程", () => {
     expect(await report.body()).toEqual(reportContents);
     expect((await request.get(reportPath)).status()).toBe(401);
 
-    const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+    const db = openE2eDatabase();
     try {
       const stored = db.prepare("SELECT stored_path FROM report_files WHERE id = ?")
         .get(Number(reportPath.split("/").at(-1))) as { stored_path: string };
       expect(dirname(stored.stored_path).replaceAll("\\", "/")).toBe("data/uploads/reports/1-星云 N1/B120");
-      expect(await readFile(resolve(stored.stored_path))).toEqual(reportContents);
+      const reportsDirectory = getE2eReportsDirectory();
+      expect(await readFile(join(reportsDirectory, "1-星云 N1", "B120", basename(stored.stored_path)))).toEqual(reportContents);
 
       const legacyName = `legacy-${randomUUID()}.txt`;
-      const legacyPath = join("data", "uploads", "reports", legacyName);
+      const legacyPath = join(reportsDirectory, legacyName);
+      const legacyStoredPath = ["data", "uploads", "reports", legacyName].join("\\");
       await writeFile(legacyPath, "旧验证报告", { flag: "wx" });
       try {
         const legacy = db.prepare(
           `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at, uploaded_by)
            VALUES (?, ?, ?, ?, ?, (SELECT id FROM users WHERE employee_id = 'TEST001'))`,
-        ).run(legacyName, legacyPath.replaceAll("/", "\\"), "text/plain; charset=utf-8", Buffer.byteLength("旧验证报告"), new Date().toISOString());
+        ).run(legacyName, legacyStoredPath, "text/plain; charset=utf-8", Buffer.byteLength("旧验证报告"), new Date().toISOString());
         try {
           const legacyDownload = await page.request.get(`/api/reports/${legacy.lastInsertRowid}`);
           expect(legacyDownload.ok()).toBe(true);

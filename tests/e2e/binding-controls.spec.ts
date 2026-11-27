@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
-import { resolve } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { bindingBarcodeResult, confirmBindingNode, expectFlash, login, saveBindingBarcodeResults, savePassedBindingBarcodes } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 const testVersion = "2.0.0-binding-controls-e2e";
 
@@ -78,7 +78,7 @@ async function withdrawFlow(page: Page, barcode: string) {
 
 test("绑定权限按节点和单据指派，审批人只查看指派给自己的电子流", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-binding-assignment-scope-e2e", ["N1"]);
   const trial = `/trial/${requestId}?project=1`;
@@ -128,7 +128,7 @@ test("绑定权限按节点和单据指派，审批人只查看指派给自己�
 
 test("只有软件包责任人、本项目软件经理和管理员可确认节点，通过记录可追溯", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const version = "2.0.0-node-confirmation-e2e";
   const { versionId, requestIds: [requestId] } = setupBindingFixture(db, version, ["N1"]);
@@ -225,7 +225,7 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
 
 test("逐条记录混合判定，原因可先保存，补齐获批 PASS 后确认节点", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-mixed-barcodes-e2e", ["N1"], 2);
   const trial = `/trial/${requestId}?project=1`;
@@ -328,7 +328,7 @@ test("逐条记录混合判定，原因可先保存，补齐获批 PASS 后确�
 
 test("兼任外项目经理的软件包责任人可确认本包节点，其他项目资料仍受限", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const version = "2.0.0-cross-project-owner-e2e";
   const { versionId, requestIds: [requestId] } = setupBindingFixture(db, version, ["N1"]);
@@ -380,7 +380,7 @@ test("兼任外项目经理的软件包责任人可确认本包节点，其他�
 
 test("额外审批或撤销已审批电子流后须重新确认，共享版本重新校验转正", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const { versionId, requestIds: [n1Request, m2Request] } = setupBindingFixture(db);
   const n1 = `/trial/${n1Request}?project=1`;
@@ -520,7 +520,7 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
 
 test("已确认节点可立即判定新提交的待审批条码，审批后保留判定并重新确认", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-append-barcode-result-e2e", ["N1"]);
   const trial = `/trial/${requestId}?project=1`;
@@ -590,7 +590,7 @@ async function setProjectStatus(page: Page, projectId: number, status: "ACTIVE" 
 
 test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑定", async ({ page }) => {
   await login(page, "VALID001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const version = "2.0.0-archived-binding-e2e";
   const archived = db.prepare("SELECT id, status FROM projects WHERE code = 'X0'").get() as { id: number; status: string };

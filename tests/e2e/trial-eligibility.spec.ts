@@ -1,7 +1,7 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { expect, test as base, type Page } from "@playwright/test";
 import { confirmAction, expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 function createSample(db: DatabaseSync, suffix: number, projects: number[], packages: number[]) {
   const code = `98${suffix}TQA`;
@@ -52,7 +52,7 @@ const test = base.extend<{
 }>({
   trialData: async ({ page }, provide) => {
     await login(page, "ADMIN001");
-    const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+    const db = openE2eDatabase();
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const packages: number[] = [];
     const archivedProjects: number[] = [];

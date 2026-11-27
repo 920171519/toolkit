@@ -1,9 +1,18 @@
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://127.0.0.1:3100";
+const port = Number(process.env.TOOLKIT_QA_PORT ?? "3100");
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error("TOOLKIT_QA_PORT 必须是有效的端口号。");
+}
+const baseURL = `http://127.0.0.1:${port}`;
+const runDirectory = join(tmpdir(), `toolkit-e2e-${randomUUID()}`);
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: join(__dirname, "tests", "e2e", "setup.ts"),
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -26,8 +35,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "rm -f data/e2e.db data/e2e.db-shm data/e2e.db-wal && DATABASE_PATH=./data/e2e.db SESSION_COOKIE_SECURE=false pnpm exec next start -p 3100",
+    command: `pnpm exec next start --hostname 127.0.0.1 --port ${port}`,
+    env: {
+      DATABASE_PATH: join(runDirectory, "toolkit.db"),
+      TOOLKIT_REPORTS_PATH: join(runDirectory, "reports"),
+      SESSION_COOKIE_SECURE: "false",
+      TOOLKIT_SKIP_SEED: "0",
+    },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 async function openFilter(page: Page, label: string) {
   const name = "筛选" + label;
@@ -11,7 +10,7 @@ async function openFilter(page: Page, label: string) {
 
 test("历史批次先按项目和列筛选，再分页，较早的详情返回后仍保留页码", async ({ page }) => {
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const prefix = "E2E-HISTORY-";
   const target = prefix + "TARGET-";
   try {

@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("批次对比默认使用前一批次，按方向显示版本变化，并可在窄屏查看全部", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -34,7 +33,7 @@ test("批次对比默认使用前一批次，按方向显示版本变化，并�
 
 test("从历史分页打开后可按标题更换基准，返回时恢复列表条件", async ({ page }) => {
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const fixturePrefix = "E2E-COMPARE-HISTORY-";
   try {
     db.exec("PRAGMA busy_timeout = 5000");
@@ -77,7 +76,7 @@ test("从历史分页打开后可按标题更换基准，返回时恢复列表�
 
 test("草稿与历史快照可核对新增和移出，缺失快照与不允许的基准各自处理", async ({ page }) => {
   await login(page, "MGR001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const fixturePrefix = "E2E-COMPARE-SNAPSHOT-";
   try {
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000");

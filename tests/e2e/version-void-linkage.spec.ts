@@ -1,11 +1,10 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("手动作废共享试制同时关闭归档项目绑定，并提醒已通过电子流提交人", async ({ page }) => {
   await login(page, "ADMIN001");
-  const database = new DatabaseSync(process.env.TOOLKIT_QA_DB ?? resolve("data/e2e.db"));
+  const database = openE2eDatabase();
   database.exec("PRAGMA busy_timeout = 5000");
   let fixtureVersionId: number | undefined;
   try {

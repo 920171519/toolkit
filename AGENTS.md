@@ -44,13 +44,13 @@
 - 目录页使用可搜索、可分页的列表，逐列筛选置于表头。人员选择通过可搜索的弹窗完成，项目和节点的长表单放在独立详情页。验证编辑、取消及返回过程中的焦点和列表条件。
 - 维护 [软件包流程上手指南](docs/workflow-guide/index.html)。转测、集成测试、试制绑定或转正发布的页面入口、按钮、表单要求、角色权限、状态和交接条件变化时，在同一改动中更新指南。同步检查操作步骤、角色高亮和常见问题。公开指南与仓库代码对应，覆盖多个版本时标明各自适用范围。用浏览器验证阶段跳转、角色高亮和离线阅读。
 - 本地开发用 `pnpm install --frozen-lockfile` 和 `pnpm dev`。应用代码变更按影响范围运行 `pnpm lint`、`pnpm build` 和 `pnpm typecheck`。需要在构建前检查类型时，可先用 `pnpm exec next typegen` 生成路由类型。涉及权限、状态、表单或跨页面联动时，验证相关 Playwright 场景，覆盖受影响的角色和状态转换。
-- E2E 首次运行可用 `pnpm exec playwright install chromium` 安装浏览器。`pnpm test:e2e:full` 先构建再运行测试，已有生产构建时可用 `pnpm test:e2e`。当前启动命令使用 POSIX shell 语法，Windows 上可在 WSL 的独立检出中运行。测试会重置 `data/e2e.db`，报告上传仍写入当前检出的 `data/uploads/reports/`，因此应与生产数据目录隔离。
+- E2E 首次运行可用 `pnpm exec playwright install chromium` 安装浏览器。`pnpm test:e2e:full` 先构建再运行测试，已有生产构建时可用 `pnpm test:e2e`。Windows 和 Linux 上的标准命令均为测试服务使用系统临时目录中的独立数据库和报告目录。并行运行时应使用独立检出并设置不同的 `TOOLKIT_QA_PORT`。重启 Playwright UI 可重新初始化演示数据。
 - 仅改文档时检查内容、相对链接和 `git diff --check` 即可。汇报实际完成的验证和因环境限制未执行的项目。
 - 每次完成功能修复或 Issue 修复，交付说明和对应的 Issue 修复留言必须附上修改前后截图或可访问的截图链接。优先用同一操作路径、角色、演示数据和视口截取实际页面，并标明变化和对应版本。没有界面的修复用实际命令、日志或测试结果截图对照。使用隔离或脱敏数据，截图作为交付附件单独保存。
 
 ## 数据、部署与提交
 
-- SQLite 默认使用 `data/toolkit.db`，上传报告保存在 `data/uploads/reports/`。生产部署持久化数据库及报告，使用 `TOOLKIT_SKIP_SEED=1` 跳过演示数据初始化。提交时排除真实数据、上传报告、凭据和构建产物。
+- SQLite 默认使用 `data/toolkit.db`，上传报告默认保存在 `data/uploads/reports/`。生产部署持久化实际使用的数据库和报告目录，包括通过 `TOOLKIT_REPORTS_PATH` 单独配置的目录。使用 `TOOLKIT_SKIP_SEED=1` 跳过演示数据初始化。提交时排除真实数据、上传报告、凭据和构建产物。
 - `pnpm db:reset` 会删除目标数据库及其 WAL 相关文件。执行数据库重置、清理或其他不可逆操作前，先确认目标路径和用户授权。生产数据库升级前备份数据库及上传报告。
 - Ubuntu 生产部署先停止旧服务，再安装依赖、构建并启动。按 [部署说明](README.md#ubuntu-24-生产部署) 使用 `scripts/deploy-ubuntu.sh`。用其他进程管理器部署时，提供 `STOP_CMD` 和 `START_CMD`，或确认停启由部署环境负责。HTTPS 反代转发 `X-Forwarded-Proto: https`，检查登录及页面交互。生产部署和服务重启须有明确授权。
 - 用户要求提交本项目代码时，先检查工作区、待提交差异和远端，验证通过后提交并直接推送到原仓库 `920171519/toolkit` 的 `main`，无需开 PR。保留用户已有改动，遇到远端更新先同步并重新验证。禁止强制推送。

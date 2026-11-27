@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("新建软件包和旧演示包在转测选择、批次配套、试制及转正中沿用正确编码", async ({ page }) => {
   test.setTimeout(120_000);
@@ -10,7 +9,7 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
   const version = "1.0.0-identity";
   const batchCode = "B99991";
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   const removeDraft = () => {
     db.prepare("DELETE FROM audit_logs WHERE entity_type = 'BATCH' AND entity_id IN (SELECT id FROM integration_batches WHERE code = ?)").run(batchCode);
     db.prepare("DELETE FROM integration_batches WHERE code = ?").run(batchCode);

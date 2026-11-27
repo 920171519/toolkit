@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { confirmAction, expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("未选待测版本时可打开保存条件并定位配套", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -22,7 +21,7 @@ test("未选待测版本时可打开保存条件并定位配套", async ({ page 
 
 test("草稿占用可直达，作废配套可在原草稿修正且过期修改被拒绝", async ({ page }) => {
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   const packageIds: number[] = [];
   let draftId: number | undefined;
@@ -97,7 +96,7 @@ test("草稿占用可直达，作废配套可在原草稿修正且过期修改�
 
 test("不支持的测试报告就近提示，且保留测试摘要", async ({ page }) => {
   await login(page, "ADMIN001");
-  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"), { readOnly: true });
+  const db = openE2eDatabase({ readOnly: true });
   const active = db.prepare("SELECT id FROM integration_batches WHERE code = 'B120' AND status = 'IN_TEST'").get();
   db.close();
   if (!active) throw new Error("演示数据缺少在测批次 B120");
