@@ -8,7 +8,7 @@ import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { getBatchCount, getBatches } from "@/lib/batch-queries";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
-import { getTransferPackageOptions } from "@/lib/package-queries";
+import { hasTransferPackageOptions } from "@/lib/package-queries";
 import { parseFlash } from "@/lib/flash";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -48,7 +48,7 @@ export default async function SubmissionsPage({
     .map((group) => !readableRequests || projectScope?.includes(group.projectId) ? group
       : { ...group, items: group.items.filter(({ requestId }) => readableRequests.has(requestId)) })
     .filter((group) => group.items.length > 0);
-  const canRequest = getTransferPackageOptions(user, project?.id).length > 0;
+  const canRequest = hasTransferPackageOptions(user, project?.id);
   if (project && !hasProjectAccess && !canRequest && groups.length === 0) notFound();
   const transferHref = workflowHref("/submissions/transfer", project?.id, { returnTo });
   const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);

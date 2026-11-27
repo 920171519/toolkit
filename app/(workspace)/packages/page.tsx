@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getPackageDrawerData, getReadablePackageOverviewRows, getTransferPackageOptions } from "@/lib/package-queries";
+import { getPackageDrawerData, getReadablePackageOverviewRows, hasTransferPackageOptions } from "@/lib/package-queries";
 import { getPeople } from "@/lib/organization-queries";
 import { parseFlash } from "@/lib/flash";
 import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
@@ -34,7 +34,7 @@ export default async function PackagesPage({
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
   const initialDetail = initialOpenId ? getPackageDrawerData(user, initialOpenId, selectedProject?.id) : null;
-  const canRequest = getTransferPackageOptions(user, selectedProject?.id).length > 0;
+  const canRequest = hasTransferPackageOptions(user, selectedProject?.id);
   const transferHref = workflowHref("/submissions/transfer", workflowProjectId);
 
   return (

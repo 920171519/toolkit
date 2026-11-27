@@ -1,6 +1,6 @@
 import "server-only";
 
-import { all } from "./db";
+import { all, one } from "./db";
 import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus } from "./constants";
@@ -101,22 +101,35 @@ export function getPackagesOverview(includeInactive = false): PackageSummary[] {
   return withTrialProgress(readPackagesOverview(includeInactive));
 }
 
-export function getTransferPackageOptions(user: SessionUser, projectId?: number) {
+function transferPackageFilter(user: SessionUser, projectId?: number) {
   const areaIds = getTransferAreaIds(user);
-  if (areaIds?.length === 0) return [];
-  return all<{ id: number; name: string; code: string; ownerName: string | null }>(
-    `SELECT p.id, p.name, p.code, owner.name AS ownerName
-     FROM packages p LEFT JOIN users owner ON owner.id = p.owner_id
-     WHERE p.is_active = 1
+  if (areaIds?.length === 0) return null;
+  return {
+    where: `WHERE p.is_active = 1
      ${areaIds ? `AND p.area_id IN (${areaIds.map(() => "?").join(",")})` : ""}
      AND EXISTS (
        SELECT 1 FROM package_usages usage JOIN projects pr ON pr.id = usage.project_id
        WHERE usage.package_id = p.id AND pr.status != 'ARCHIVED' ${projectId ? "AND pr.id = ?" : ""}
-     )
+     )`,
+    values: [...(areaIds ?? []), ...(projectId ? [projectId] : [])],
+  };
+}
+
+export function getTransferPackageOptions(user: SessionUser, projectId?: number) {
+  const filter = transferPackageFilter(user, projectId);
+  if (!filter) return [];
+  return all<{ id: number; name: string; code: string; ownerName: string | null }>(
+    `SELECT p.id, p.name, p.code, owner.name AS ownerName
+     FROM packages p LEFT JOIN users owner ON owner.id = p.owner_id
+     ${filter.where}
      ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
-    ...(areaIds ?? []),
-    ...(projectId ? [projectId] : []),
+    ...filter.values,
   );
+}
+
+export function hasTransferPackageOptions(user: SessionUser, projectId?: number) {
+  const filter = transferPackageFilter(user, projectId);
+  return filter !== null && one(`SELECT 1 FROM packages p ${filter.where} LIMIT 1`, ...filter.values) !== undefined;
 }
 
 

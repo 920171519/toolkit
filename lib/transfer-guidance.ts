@@ -2,7 +2,7 @@ import "server-only";
 
 import { canManagePackageArea, canManageProjectWorkflowForProject, canReadPackageWorkflow, canSubmitTransferForArea, getTransferAreaIds } from "./access";
 import { db, one } from "./db";
-import { getTransferPackageOptions } from "./package-queries";
+import { hasTransferPackageOptions } from "./package-queries";
 import { getActiveTransferProjects } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
@@ -69,7 +69,7 @@ export function getTransferEntryGuidance(
     href: "/settings/areas",
     actionLabel: "查看责任田分工",
   }];
-  if (projectId !== undefined && getTransferPackageOptions(user).length > 0) return [{
+  if (projectId !== undefined && hasTransferPackageOptions(user)) return [{
     title: "当前项目没有可提交的软件包",
     detail: "在全局提交页可以选择其他在行项目实际使用的软件包。",
     href: "/submissions/transfer",
