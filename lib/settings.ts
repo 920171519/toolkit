@@ -5,7 +5,7 @@ import { ROLES, type PackageStatus, type Role } from "./constants";
 import { canManageAreas, isAdmin } from "./permissions";
 import { canManagePackageArea, canManageProjectWorkflowForProject, getProjectSoftwareManagerIds, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
-import { assert } from "./services";
+import { assert } from "./domain-error";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 import { refreshProjectTrialReadiness } from "./trial-readiness";

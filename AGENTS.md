@@ -10,7 +10,7 @@
 | --- | --- |
 | 公开首页与登录态 | `app/page.tsx`、`app/(auth)/`、`app/(workspace)/layout.tsx`、`lib/auth.ts` |
 | 页面、表单和接口 | `app/(workspace)/`、`components/`、`lib/actions/`、`app/api/` |
-| 转测、测试、试制、绑定、转正 | 现行 Server Action 从 `lib/actions/workflow.ts` 调用 `lib/workflow.ts`，对应查询见 `lib/workflow-queries.ts`。`lib/services.ts` 包含早期流程的历史实现。 |
+| 转测、测试、试制、绑定、转正 | Server Action 从 `lib/actions/workflow.ts` 调用 `lib/workflow.ts`，对应查询见 `lib/workflow-queries.ts`。领域校验错误统一由 `lib/domain-error.ts` 定义。 |
 | 读取查询与权限 | `lib/queries.ts`、`lib/access.ts`、`lib/permissions.ts` |
 | 基础配置与历史版本补录 | `lib/settings.ts` |
 | SQLite 表结构、启动迁移和演示数据 | `lib/schema.ts`、`lib/db.ts`、`lib/seed.ts` |

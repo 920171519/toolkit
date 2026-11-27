@@ -1499,22 +1499,6 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   };
 }
 
-export function getPersonalTaskCount(user: SessionUser): number {
-  const data = getPersonalDashboard(user);
-  return data.counts.tasks + data.counts.alerts;
-}
-
-export function getWorkflowSidebarCounts(user: SessionUser) {
-  const scope = getWorkflowProjectScope(user);
-  const pendingGroups = getPendingTransferGroups(scope);
-  const pendingSubmissions = pendingGroups.reduce((total, group) => total + group.items.length, 0);
-  const activeBatches = getBatchCount(scope, { statuses: ["IN_TEST"], activeProjectsOnly: true });
-  const trialVersions = getTrialVersions(scope).length;
-  const pendingTrial = getTrialReadyVersions(scope).length;
-  const pendingFormal = getPendingFormalVersions(scope).length;
-  return { pendingSubmissions, pendingGroups: pendingGroups.length, activeBatches, trialQueue: trialVersions + pendingTrial, pendingFormal };
-}
-
 export function getVersionRequestIds(versionId: number): number[] {
   return all<{ id: number }>(
     `SELECT r.id FROM version_transfer_requests r

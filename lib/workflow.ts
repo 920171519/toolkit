@@ -9,7 +9,7 @@ import {
   isBindingOpen,
 } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "./access";
-import { assert } from "./services";
+import { assert } from "./domain-error";
 import { getPendingBindingFlowCount, getTrialReadyVersions } from "./workflow-queries";
 import { getRiskTrialEntries } from "./trial-risk-entry";
 import { trialReleaseStateKey } from "./trial-release-state";

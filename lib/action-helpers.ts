@@ -1,7 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { DomainError } from "./services";
+import { DomainError } from "./domain-error";
 import type { ActionState } from "./action-state";
 
 export function text(formData: FormData, key: string): string {

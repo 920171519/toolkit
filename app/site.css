@@ -95,11 +95,6 @@
   padding-bottom: 0;
 }
 
-.project-contact-line.compact {
-  padding: 0;
-  border: 0;
-}
-
 .project-contact-card .project-contact-role,
 .project-contact-line .project-contact-role {
   display: block;
@@ -114,48 +109,6 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
-}
-
-/* Project view */
-.project-view-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.project-select {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.project-select select {
-  min-height: 34px;
-  padding: 6px 28px 6px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.project-view-contacts {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.archive-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--muted);
 }
 
 /* Settings project leads */
@@ -279,14 +232,12 @@ details[open] > summary .when-closed { display: none; }
 
 @media (max-width: 760px) {
   .package-drawer { width: 100vw; }
-  .project-view-contacts { flex-wrap: wrap; gap: 10px; }
   .project-lead-row { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
 
 @media (max-width: 640px) {
   .project-contact-grid { grid-template-columns: 1fr; }
   .directory-search { width: 100%; }
-  .project-view-switch { align-items: stretch; flex-direction: column; }
 }
 
 
@@ -389,8 +340,6 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .node-approver-range { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
 .node-approver-add { display: inline-flex; align-items: center; }
 .node-approver-add > div { position: fixed; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; box-shadow: var(--shadow-md); }
-.project-select-form { display: flex; align-items: center; gap: 8px; }
-@media (max-width: 620px) { .project-select-form { flex-wrap: wrap; } }
 
 /* Modal dialogs */
 .modal-backdrop { position: fixed; inset: 0; z-index: 80; background: var(--dialog-backdrop); display: flex; align-items: flex-start; justify-content: center; padding: 7vh 20px 30px; overflow-y: auto; }

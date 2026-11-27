@@ -10,7 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
 import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
 import { one } from "@/lib/db";
-import { DomainError } from "@/lib/services";
+import { DomainError } from "@/lib/domain-error";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
