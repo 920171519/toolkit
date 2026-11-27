@@ -19,8 +19,19 @@ const files = ts.sys.readDirectory(
 );
 const ownedFiles = new Map(files.map((file) => [canonicalPath(file), displayPath(file)]));
 
+function isTypeOnlyReference(node) {
+  const importClause = ts.isImportDeclaration(node) ? node.importClause : undefined;
+  if (ts.isImportTypeNode(node) || node.isTypeOnly || importClause?.isTypeOnly) return true;
+  // Verbatim syntax can emit a side-effect import for a list of named type imports.
+  if (options.verbatimModuleSyntax || importClause?.name) return false;
+
+  const bindings = importClause?.namedBindings ?? (ts.isExportDeclaration(node) ? node.exportClause : undefined);
+  return bindings && (ts.isNamedImports(bindings) || ts.isNamedExports(bindings))
+    && bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly);
+}
+
 function importSpecifiers(source) {
-  const specifiers = new Set();
+  const specifiers = new Map();
   function visit(node) {
     let specifier;
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
@@ -38,7 +49,10 @@ function importSpecifiers(source) {
         specifier = node.arguments[0];
       }
     }
-    if (specifier && ts.isStringLiteralLike(specifier)) specifiers.add(specifier.text);
+    if (specifier && ts.isStringLiteralLike(specifier)) {
+      const runtime = !isTypeOnlyReference(node);
+      specifiers.set(specifier.text, runtime || specifiers.get(specifier.text) === true);
+    }
     ts.forEachChild(node, visit);
   }
   visit(source);
@@ -46,12 +60,13 @@ function importSpecifiers(source) {
 }
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
-const workflowMutationModules = new Set([
-  "lib/batch-workflow.ts",
-  "lib/binding-workflow.ts",
-  "lib/release-workflow.ts",
-  "lib/transfer-workflow.ts",
-  "lib/version-void-workflow.ts",
+const workflowAction = "lib/actions/workflow.ts";
+const workflowMutationCallers = new Map([
+  ["lib/batch-workflow.ts", [workflowAction]],
+  ["lib/binding-workflow.ts", [workflowAction]],
+  ["lib/release-workflow.ts", [workflowAction, "lib/actions/risk-trial.ts"]],
+  ["lib/transfer-workflow.ts", [workflowAction]],
+  ["lib/version-void-workflow.ts", ["lib/batch-workflow.ts", "lib/release-workflow.ts"]],
 ]);
 const workflowPageQueries = new Set([
   "lib/workbench-queries.ts",
@@ -75,7 +90,8 @@ for (const file of files.sort()) {
   if (name === "proxy.ts" || name === "lib/return-to.ts") routeSources.set(name, source);
   const dependencies = new Set();
   const isEntrypoint = entrypointDirectories.some((directory) => name.startsWith(directory));
-  for (const specifier of importSpecifiers(source)) {
+  const isApplicationModule = isEntrypoint || name.startsWith("lib/") || name === "proxy.ts";
+  for (const [specifier, runtime] of importSpecifiers(source)) {
     const resolved = ts.resolveModuleName(specifier, file, options, ts.sys, cache).resolvedModule;
     const dependency = resolved && ownedFiles.get(canonicalPath(resolved.resolvedFileName));
     if (dependency) dependencies.add(dependency);
@@ -84,16 +100,18 @@ for (const file of files.sort()) {
         `${name} imports ${specifier} directly. Use the corresponding server-side service or query module.`,
       );
     }
-    if (workspacePagePattern.test(name) && workflowMutationModules.has(dependency)) {
-      dependencyBoundaryErrors.push(
-        `${name} imports the workflow mutation module directly. Use actions for writes and domain modules for reads.`,
-      );
-    }
-    if (settingsMutationModules.has(dependency) && name !== "lib/actions/settings.ts"
-      && (isEntrypoint || name === "lib/package-drawer-data.ts")) {
-      dependencyBoundaryErrors.push(
-        `${name} imports the settings mutation module directly. Use settings actions for writes and settings queries for reads.`,
-      );
+    if (runtime && isApplicationModule) {
+      const workflowCallers = workflowMutationCallers.get(dependency);
+      if (workflowCallers && !workflowCallers.includes(name)) {
+        dependencyBoundaryErrors.push(
+          `${name} imports the workflow mutation module directly (${dependency}). Use its owning Action or domain command.`,
+        );
+      }
+      if (settingsMutationModules.has(dependency) && name !== "lib/actions/settings.ts") {
+        dependencyBoundaryErrors.push(
+          `${name} imports the settings mutation module directly (${dependency}). Use settings actions for writes and settings queries for reads.`,
+        );
+      }
     }
     if (dependency === "lib/session-store.ts" && (isEntrypoint || name.startsWith("lib/"))
       && !sessionStoreCallers.has(name)) {
@@ -101,7 +119,7 @@ for (const file of files.sort()) {
         `${name} imports session storage directly. Use authentication or account settings.`,
       );
     }
-    if (workflowMutationModules.has(name) && workflowPageQueries.has(dependency)) {
+    if (workflowMutationCallers.has(name) && workflowPageQueries.has(dependency)) {
       dependencyBoundaryErrors.push(
         `${name} depends on a page query. Read transaction facts from their owning domain module.`,
       );
