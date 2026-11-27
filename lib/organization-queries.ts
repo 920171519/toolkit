@@ -42,14 +42,12 @@ export type PersonOption = {
   id: number;
   name: string;
   employeeId: string;
-  title: string;
-  role: Role;
 };
 
-export function getPeople(includeInactive = false): PersonOption[] {
+export function getActivePersonOptions(): PersonOption[] {
   return all<PersonOption>(
-    `SELECT id, name, employee_id AS employeeId, title, role FROM users
-     ${includeInactive ? "" : "WHERE is_active = 1"} ORDER BY name`,
+    `SELECT id, name, employee_id AS employeeId FROM users
+     WHERE is_active = 1 ORDER BY name`,
   );
 }
 

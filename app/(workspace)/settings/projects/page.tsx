@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getManagedProjectScope } from "@/lib/access";
 import { getProjectSettingsDirectory } from "@/lib/project-queries";
-import { getPeople } from "@/lib/organization-queries";
+import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
@@ -35,7 +35,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
   const status = PROJECT_STATUS_OPTIONS.find(({ value }) => value === params.status)?.value ?? "";
   const projects = getProjectSettingsDirectory(managedProjectIds);
   const list = settingsPage(projects.filter((project) => (!status || project.status === status) && matchesSearch(query, project.name, project.code, project.pmName, project.softwareManagerName)), params.page);
-  const people = isAdmin ? getPeople() : [];
+  const people = isAdmin ? getActivePersonOptions() : [];
   const listContext = projectDirectoryDetailParams({ q: query, status, page: String(list.page) });
 
   return (

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getPackageDrawerData, getReadablePackageOverviewRows, hasTransferPackageOptions } from "@/lib/package-queries";
-import { getPeople } from "@/lib/organization-queries";
+import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
@@ -30,7 +30,7 @@ export default async function PackagesPage({
   if (params.project && !selectedProject) notFound();
   const workflowProjectId = selectedProject && canAccessProjectPage(user, selectedProject.id) ? selectedProject.id : undefined;
   const packages = getReadablePackageOverviewRows(user, selectedProject?.id);
-  const people = user.role === "ADMIN" || hasAreaLeadership(user.id) ? getPeople() : [];
+  const people = user.role === "ADMIN" || hasAreaLeadership(user.id) ? getActivePersonOptions() : [];
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
   const initialDetail = initialOpenId ? getPackageDrawerData(user, initialOpenId, selectedProject?.id) : null;

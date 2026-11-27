@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowDown, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getProjectConfig } from "@/lib/project-queries";
-import { getPeople } from "@/lib/organization-queries";
+import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
@@ -36,7 +36,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
 
   const search = await searchParams;
   const notice = readFlash(search);
-  const people = getPeople();
+  const people = getActivePersonOptions();
   const status = PROJECT_STATUS_META[project.status];
   const stage = PROJECT_STAGE_META[getProjectStage(project.status, project.stage)];
   const path = "/settings/projects/" + project.id;

@@ -9,7 +9,7 @@ import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { getProjectOptionsWithNodes } from "@/lib/project-queries";
 import { getPackageConfiguration } from "@/lib/package-queries";
-import { getPeople, getResponsibilityAreaOptions } from "@/lib/organization-queries";
+import { getActivePersonOptions, getResponsibilityAreaOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings-queries";
@@ -48,7 +48,7 @@ export default async function PackageSettingsDetailPage({
   const listParams = directoryFilters("packages", search);
   const notice = readFlash(search);
   const areas = isAdmin ? getResponsibilityAreaOptions({ orderBy: "id" }) : [];
-  const people = getPeople();
+  const people = getActivePersonOptions();
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));

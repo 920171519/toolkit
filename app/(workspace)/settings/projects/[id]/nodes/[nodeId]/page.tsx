@@ -5,7 +5,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getProjectNodeConfig } from "@/lib/project-queries";
-import { getPeople } from "@/lib/organization-queries";
+import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { addProjectNodeApproverAction, deleteProjectNodeAction, removeProjectNodeApproverAction, updateProjectNodeAction } from "@/lib/actions/settings";
 import { getNodeApproverRemovalBlocker, getNodeDeletionBlockers } from "@/lib/settings-queries";
@@ -36,7 +36,7 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
   const { project, node } = config;
   const search = await searchParams;
   const notice = readFlash(search);
-  const people = getPeople();
+  const people = getActivePersonOptions();
   const nodeCandidateBlocker = getNodeCandidateGuidance(user, people.length);
   const approverIds = new Set(node.approvers.map(({ userId }) => userId));
   const availableApprovers = people.filter(({ id }) => !approverIds.has(id))

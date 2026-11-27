@@ -7,7 +7,7 @@ import { getLedAreaIds } from "@/lib/access";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters } from "@/lib/column-filters";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { getAdminPackages } from "@/lib/package-queries";
-import { getPeople, getResponsibilityAreaOptions } from "@/lib/organization-queries";
+import { getActivePersonOptions, getResponsibilityAreaOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
@@ -47,7 +47,7 @@ export default async function PackagesSettingsPage({
   const notice = readFlash(params);
   const areas = getResponsibilityAreaOptions({ orderBy: "id" }).filter((area) => isAdmin || ledAreas.has(area.id));
   const packages = getAdminPackages().filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreas.has(pkg.areaId)));
-  const people = getPeople();
+  const people = getActivePersonOptions();
   const areaOptions = areas.map((area) => ({ value: String(area.id), label: area.name }));
   if (packages.some((pkg) => pkg.areaId === null)) {
     areaOptions.push({ value: missing, label: "未归属" });
