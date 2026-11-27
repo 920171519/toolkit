@@ -277,8 +277,8 @@ const batchSummaryColumns = `b.id, b.code, b.title, b.status, b.project_id AS pr
             b.test_report_url AS testReportUrl, b.test_report_name AS testReportName,
             b.test_report_file_id AS testReportFileId, c.name AS createdByName,
             ${batchItemCount} AS itemCount, ${batchChangedCount} AS changedCount`;
-const batchSummaryFrom = `FROM integration_batches b
-     JOIN projects pr ON pr.id = b.project_id
+const batchProjectFrom = `FROM integration_batches b JOIN projects pr ON pr.id = b.project_id`;
+const batchSummaryFrom = `${batchProjectFrom}
      LEFT JOIN users c ON c.id = b.created_by`;
 const batchSummaryOrder = "ORDER BY COALESCE(b.sent_at, b.created_at) DESC, b.id DESC";
 
@@ -317,11 +317,22 @@ export function getBatches(limit = 80, projectIds: number[] | null = null, filte
   );
 }
 
+function getWorkbenchBatches(projectIds: number[] | null, status: "DRAFT" | "IN_TEST") {
+  if (projectIds?.length === 0) return [];
+  const { predicates, values } = batchFilterConditions(projectIds, { statuses: [status], activeProjectsOnly: true });
+  const packageCount = status === "DRAFT" ? batchItemCount : batchChangedCount;
+  return all<Pick<BatchSummaryRow, "id" | "code" | "projectId" | "projectName"> & { packageCount: number }>(
+    `SELECT b.id, b.code, b.project_id AS projectId, pr.name AS projectName, ${packageCount} AS packageCount
+     ${batchProjectFrom} ${batchWhere(predicates)} ${batchSummaryOrder}`,
+    ...values,
+  );
+}
+
 export function getBatchCount(projectIds: number[] | null, filters: BatchFilters): number {
   if (projectIds?.length === 0) return 0;
   const { predicates, values } = batchFilterConditions(projectIds, filters);
   return one<{ count: number }>(
-    `SELECT COUNT(*) AS count FROM integration_batches b JOIN projects pr ON pr.id = b.project_id ${batchWhere(predicates)}`,
+    `SELECT COUNT(*) AS count ${batchProjectFrom} ${batchWhere(predicates)}`,
     ...values,
   )?.count ?? 0;
 }
@@ -1164,8 +1175,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   const notifications: PersonalAlert[] = [];
   const managerScope = getManagedProjectScope(user);
   const managedProjectIdsJson = JSON.stringify(managerScope ?? []);
-  const integrationProjectIds = getIntegrationManagedProjectIds(user.id);
-  const integrationScope = user.role === "ADMIN" ? null : integrationProjectIds;
+  const integrationScope = user.role === "ADMIN" ? null : getIntegrationManagedProjectIds(user.id);
 
   const failedTests = all<{
     requestId: number;
@@ -1417,21 +1427,22 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
         category: "test",
       });
     }
-    const batches = getBatches(-1, managerScope, { statuses: ["DRAFT", "IN_TEST"], activeProjectsOnly: true });
-    for (const batch of batches.filter((entry) => entry.status === "DRAFT")) {
+    for (const batch of getWorkbenchBatches(managerScope, "DRAFT")) {
       tasks.push({
         key: `batch-draft-${batch.id}`,
         title: `核对待发起批次：${batch.code} · ${batch.projectName}`,
-        description: `${batch.itemCount} 个配套软件包`,
+        description: `${batch.packageCount} 个配套软件包`,
         href: workflowHref(`/integration/${batch.id}`, batch.projectId),
         category: "test",
       });
     }
-    for (const batch of batches.filter((entry) => entry.status === "IN_TEST" && integrationScope !== null && !integrationScope.includes(entry.projectId))) {
+    const integrationProjects = new Set(integrationScope);
+    const trackingScope = managerScope?.filter((projectId) => !integrationProjects.has(projectId)) ?? [];
+    for (const batch of getWorkbenchBatches(trackingScope, "IN_TEST")) {
       tasks.push({
         key: `batch-manager-${batch.id}`,
         title: `跟踪测试进度：${batch.code} · ${batch.projectName}`,
-        description: `${batch.changedCount} 个变更包 · 待集成测试负责人出结论`,
+        description: `${batch.packageCount} 个变更包 · 待集成测试负责人出结论`,
         href: workflowHref(`/integration/${batch.id}`, batch.projectId),
         category: "test",
       });
@@ -1484,17 +1495,14 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     }
   }
 
-  if (integrationProjectIds.length > 0 || user.role === "ADMIN") {
-    const testBatches = getBatches(-1, integrationScope, { statuses: ["IN_TEST"], activeProjectsOnly: true });
-    for (const batch of testBatches) {
-      tasks.push({
-        key: `integration-test-${batch.id}`,
-        title: `提交测试结论：${batch.code} · ${batch.projectName}`,
-        description: `${batch.changedCount} 个变更包`,
-        href: workflowHref(`/integration/${batch.id}`, batch.projectId),
-        category: "test",
-      });
-    }
+  for (const batch of getWorkbenchBatches(integrationScope, "IN_TEST")) {
+    tasks.push({
+      key: `integration-test-${batch.id}`,
+      title: `提交测试结论：${batch.code} · ${batch.projectName}`,
+      description: `${batch.packageCount} 个变更包`,
+      href: workflowHref(`/integration/${batch.id}`, batch.projectId),
+      category: "test",
+    });
   }
 
   const myVersions = all<MyVersion>(

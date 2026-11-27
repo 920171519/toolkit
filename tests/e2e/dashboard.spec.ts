@@ -12,6 +12,63 @@ test("管理员只看到一条需要提交结论的在测批次任务", async ({
   await expect(page).toHaveURL(/\/integration\/\d+\?project=1$/);
 });
 
+test("兼任软件经理和集成测试负责人时按项目区分核对、跟踪和提交结论", async ({ page }) => {
+  await page.goto("/");
+  const db = openE2eDatabase();
+  const account = db.prepare("SELECT id FROM users WHERE employee_id = 'TEST002'").get() as { id: number };
+  const n1 = db.prepare("SELECT id FROM projects WHERE code = 'N1'").get() as { id: number };
+  const m2 = db.prepare("SELECT id FROM projects WHERE code = 'M2'").get() as { id: number };
+  const t3 = db.prepare("SELECT id FROM projects WHERE code = 'T3'").get() as { id: number };
+  const now = "2026-11-28T00:00:00.000Z";
+  const assignments: number[] = [];
+  const drafts: number[] = [];
+
+  try {
+    const assign = db.prepare("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)");
+    for (const projectId of [n1.id, m2.id]) {
+      assign.run(projectId, account.id, now);
+      assignments.push(projectId);
+    }
+    const draft = db.prepare("INSERT INTO integration_batches (code, project_id, created_at) VALUES (?, ?, ?)");
+    for (const [code, projectId] of [["PW-WB-N1", n1.id], ["PW-WB-M2", m2.id], ["PW-WB-T3", t3.id]] as const) {
+      drafts.push(Number(draft.run(code, projectId, now).lastInsertRowid));
+    }
+    db.prepare(
+      `INSERT INTO batch_items (batch_id, package_id, package_version_id, version, archive_url, is_changed)
+       SELECT ?, package_id, MIN(id), 'qa', 'https://example.test/archive', 0
+       FROM package_versions GROUP BY package_id ORDER BY package_id LIMIT 2`,
+    ).run(drafts[1]);
+
+    await login(page, "TEST002");
+    const batchTasks = page.getByRole("region", { name: "转测与集成测试", exact: true })
+      .getByRole("link").filter({ hasText: /PW-WB-|B120|B121/ });
+    await expect(batchTasks.locator("strong")).toHaveText([
+      "核对待发起批次：PW-WB-M2 · 极光 M2",
+      "核对待发起批次：PW-WB-N1 · 星云 N1",
+      "跟踪测试进度：B120 · 星云 N1",
+      "提交测试结论：B121 · 极光 M2",
+    ]);
+    await expect(batchTasks.nth(0)).toContainText("2 个配套软件包");
+    await expect(batchTasks.nth(0)).toHaveAttribute("href", `/integration/${drafts[1]}?project=${m2.id}`);
+    await expect(batchTasks.nth(2)).toContainText("待集成测试负责人出结论");
+    await batchTasks.nth(3).click();
+    await expect(page.getByRole("heading", { level: 1, name: /B121/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/integration/\\d+\\?project=${m2.id}$`));
+  } finally {
+    try {
+      for (const draft of drafts) {
+        db.prepare("DELETE FROM batch_items WHERE batch_id = ?").run(draft);
+        db.prepare("DELETE FROM integration_batches WHERE id = ?").run(draft);
+      }
+      for (const projectId of assignments) {
+        db.prepare("DELETE FROM project_software_managers WHERE project_id = ? AND user_id = ?").run(projectId, account.id);
+      }
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("设备绑定责任人可从窄屏工作台直达待处理节点", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, "VALID001");
