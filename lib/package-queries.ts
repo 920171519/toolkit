@@ -97,7 +97,7 @@ function withTrialProgress<T extends PackageSummary>(packages: T[], projectId?: 
   });
 }
 
-export function getPackagesOverview(includeInactive = false): PackageSummary[] {
+function getPackagesOverview(includeInactive = false): PackageSummary[] {
   return withTrialProgress(readPackagesOverview(includeInactive));
 }
 
@@ -315,6 +315,17 @@ function readPackageOverviewRows(projectId?: number, selection?: PackageSelectio
     };
   });
   return withTrialProgress(rows, projectId);
+}
+
+export function getLegacyImportPackageOptions(areaIds: readonly number[] | null) {
+  if (areaIds?.length === 0) return [];
+  const scope = packageSelectionFilter("p.area_id", areaIds ?? undefined);
+  return all<{ id: number; name: string; code: string }>(
+    `SELECT p.id, p.name, p.code FROM packages p
+     ${scope.condition ? `WHERE ${scope.condition}` : ""}
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
+    ...scope.values,
+  );
 }
 
 type AdminPackage = PackageSummary & {

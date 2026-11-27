@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";
-import { getPackagesOverview } from "@/lib/package-queries";
+import { getLegacyImportPackageOptions } from "@/lib/package-queries";
 import { importLegacyVersionAction } from "@/lib/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -22,12 +22,11 @@ export default async function ImportLegacyVersionPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
-  const isAdmin = user.role === "ADMIN";
-  const ledAreaIds = new Set(getLedAreaIds(user.id));
-  if (!isAdmin && ledAreaIds.size === 0) {
+  const ledAreaIds = user.role === "ADMIN" ? null : getLedAreaIds(user.id);
+  if (ledAreaIds?.length === 0) {
     redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
   }
-  const packages = getPackagesOverview(true).filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreaIds.has(pkg.areaId)));
+  const packages = getLegacyImportPackageOptions(ledAreaIds);
   const params = await searchParams;
   const chosen = packages.find((pkg) => String(pkg.id) === params.package);
   const listParams = directoryFilters("packages", params);
