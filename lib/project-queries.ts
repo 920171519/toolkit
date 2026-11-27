@@ -27,19 +27,29 @@ type ProjectRecord = ProjectOption & {
   stage: ProjectStage;
 };
 
-type ProjectSelection = { projectId?: number; includeArchived: boolean };
+type ProjectSelection = { projectId?: number; projectIds?: readonly number[] | null; includeArchived: boolean };
 
 const projectOptionColumns = "p.id, p.name, p.code, p.status";
 const projectRecordColumns = `${projectOptionColumns}, p.description, p.stage`;
 
-function readProjects<T extends ProjectOption>(columns: string, { projectId, includeArchived }: ProjectSelection): T[] {
+function readProjects<T extends ProjectOption>(columns: string, { projectId, projectIds, includeArchived }: ProjectSelection): T[] {
+  if (projectIds?.length === 0) return [];
+
   const predicates: string[] = [];
+  const params: Array<number | string> = [];
   if (!includeArchived) predicates.push("p.status != 'ARCHIVED'");
-  if (projectId !== undefined) predicates.push("p.id = ?");
+  if (projectId !== undefined) {
+    predicates.push("p.id = ?");
+    params.push(projectId);
+  }
+  if (projectIds) {
+    predicates.push("p.id IN (SELECT value FROM json_each(?))");
+    params.push(JSON.stringify(projectIds));
+  }
   const where = predicates.length ? `WHERE ${predicates.join(" AND ")}` : "";
   return all<T>(
     `SELECT ${columns} FROM projects p ${where} ORDER BY p.sort_order, p.id`,
-    ...(projectId === undefined ? [] : [projectId]),
+    ...params,
   );
 }
 
@@ -87,6 +97,24 @@ export function getPublicProjects(): PublicProject[] {
 export function getProjectCatalogEntries(projectId?: number): ProjectCatalogEntry[] {
   return readProjectsWithContacts<ProjectRecord>(projectRecordColumns, { projectId, includeArchived: true })
     .map((project) => ({ ...project, stage: getProjectStage(project.status, project.stage) }));
+}
+
+function projectContactNames({ pms, softwareManagers }: ProjectAssignments) {
+  return {
+    pmName: pms.map((person) => person.name).join(" / ") || null,
+    softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
+  };
+}
+
+export function getProjectSettingsDirectory(projectIds: readonly number[] | null) {
+  return readProjectsWithContacts<Omit<ProjectRecord, "description"> & { nodeCount: number }>(
+    `${projectOptionColumns}, p.stage,
+     (SELECT COUNT(*) FROM project_nodes n WHERE n.project_id = p.id) AS nodeCount`,
+    { projectIds, includeArchived: true },
+  ).map(({ pms, softwareManagers, ...project }) => ({
+    ...project,
+    ...projectContactNames({ pms, softwareManagers }),
+  }));
 }
 
 type ProjectNode = {
@@ -142,8 +170,7 @@ export function getProjectConfigs(projectId?: number): ProjectConfig[] {
     { projectId, includeArchived: true },
   ).map((project) => ({
     ...project,
-    pmName: project.pms.map((person) => person.name).join(" / ") || null,
-    softwareManagerName: project.softwareManagers.map((person) => person.name).join(" / ") || null,
+    ...projectContactNames(project),
     packageCount: Number(project.packageCount),
     nodes: all<ProjectNode>(
       `SELECT ${projectNodeOptionColumns}, n.binding_owner_id AS bindingOwnerId,

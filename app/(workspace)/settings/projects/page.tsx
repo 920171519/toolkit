@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getManagedProjectScope } from "@/lib/access";
-import { getProjectConfigs } from "@/lib/project-queries";
+import { getProjectSettingsDirectory } from "@/lib/project-queries";
 import { getPeople, parseFlash } from "@/lib/queries";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
@@ -32,7 +32,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const query = directoryValue(params.q);
   const status = PROJECT_STATUS_OPTIONS.find(({ value }) => value === params.status)?.value ?? "";
-  const projects = getProjectConfigs().filter((project) => !managedProjectIds || managedProjectIds.includes(project.id));
+  const projects = getProjectSettingsDirectory(managedProjectIds);
   const list = settingsPage(projects.filter((project) => (!status || project.status === status) && matchesSearch(query, project.name, project.code, project.pmName, project.softwareManagerName)), params.page);
   const people = isAdmin ? getPeople() : [];
   const listContext = projectDirectoryDetailParams({ q: query, status, page: String(list.page) });
@@ -78,7 +78,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
                   <td><span className="settings-stage">{stage.label}</span></td>
                   <td><Badge tone={projectStatus.tone} dot>{projectStatus.label}</Badge></td>
                   <td className="settings-project-contacts"><span className="small">PM {project.pmName ?? "待指定"}</span><div className="small muted">软件经理 {project.softwareManagerName ?? "待指定"}</div></td>
-                  <td className="settings-number">{project.nodes.length} 个</td>
+                  <td className="settings-number">{project.nodeCount} 个</td>
                   <td className="cell-actions"><Link href={configHref} aria-label={`配置${project.name}`} className="button button-secondary button-sm" prefetch={false}>配置项目</Link></td>
                 </tr>;
               })}</tbody>
