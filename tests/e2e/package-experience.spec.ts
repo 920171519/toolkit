@@ -2,6 +2,27 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 import { openE2eDatabase } from "./storage";
 
+test("软件包详情接口校验登录和项目参数，成功响应禁用缓存", async ({ page }) => {
+  const detailUrl = "/api/packages/7?project=1";
+  const anonymous = await page.request.get(detailUrl);
+  expect(anonymous.status()).toBe(401);
+  expect(await anonymous.json()).toEqual({ error: "请先登录。" });
+
+  await login(page, "MGR001");
+  const invalidPackage = await page.request.get("/api/packages/unknown?project=1");
+  expect(invalidPackage.status()).toBe(400);
+  expect(await invalidPackage.json()).toEqual({ error: "软件包参数无效。" });
+
+  const duplicateProject = await page.request.get(`${detailUrl}&project=1`);
+  expect(duplicateProject.status()).toBe(404);
+  expect(await duplicateProject.json()).toEqual({ error: "项目不存在或不可查看。" });
+
+  const detail = await page.request.get(detailUrl);
+  expect(detail.status()).toBe(200);
+  expect(detail.headers()["cache-control"]).toBe("no-store");
+  expect(await detail.json()).toMatchObject({ package: { id: 7 }, canEdit: false });
+});
+
 test("软件包详情按资料分类，版本和节点可以搜索，关闭后保留当前筛选", async ({ page }) => {
   await login(page, "MGR001");
   await page.goto("/packages?project=1&q=1001OTA");
