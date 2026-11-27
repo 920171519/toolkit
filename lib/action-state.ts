@@ -3,5 +3,3 @@ export type ActionState = {
   success?: string;
   fieldErrors?: Record<string, string>;
 };
-
-export const EMPTY_ACTION_STATE: ActionState = {};

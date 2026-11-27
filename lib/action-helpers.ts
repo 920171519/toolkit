@@ -57,8 +57,3 @@ export function successRedirect(path: string, message: string): never {
   const separator = path.includes("?") ? "&" : "?";
   redirect(`${path}${separator}flash=${encodeURIComponent(message)}`);
 }
-
-export function errorRedirect(path: string, message: string): never {
-  const separator = path.includes("?") ? "&" : "?";
-  redirect(`${path}${separator}flash=${encodeURIComponent(message)}&tone=error`);
-}

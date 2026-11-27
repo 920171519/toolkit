@@ -32,6 +32,7 @@
 | 从责任田完整配置提取软件包选项 | [责任田选项](../../lib/queries.ts) | 选项共用基础查询，按各入口的原排序显示。完整配置按单个责任田读取。 |
 | 节点状态、条码统计与确认逻辑 | [节点办理状态](../../lib/binding-availability.ts)、[条码判定](../../lib/binding-barcode-results.ts) | 页面和事务使用同一统计与条件，失败原因沿用已有证据。 |
 | 多套弹窗焦点、筛选和回跳处理 | [弹窗钩子](../../components/use-modal-dialog.ts)、[表头筛选](../../components/column-filter-header.tsx)、[回跳校验](../../lib/return-to.ts) | 界面入口可有不同的信息结构，键盘行为、控件契约和合法站内跳转有共用实现。 |
+| 已无调用的表单错误助手及旧展示数据 | [Action 助手](../../lib/action-helpers.ts)、[状态元数据](../../lib/constants.ts) | 删除闲置声明和字段，错误反馈、标签和样式沿用当前页面引用的内容。 |
 | 风险表单三处入口与 Action 会话检查 | [风险表单](../../components/risk-trial-entry-action.tsx)、[Action 助手](../../lib/action-helpers.ts) | 三处入口共用一个服务端表单。配置和流程 Action 共用会话与刷新规则。 |
 | 部署与本机验证的脚本行为 | [部署脚本](../../scripts/deploy-ubuntu.sh)、[模拟回归](../../tests/deploy-ubuntu.sh) | systemd 检测和停启共用完整服务单元名。生产依赖和页面构建由同一个部署入口执行。 |
 
