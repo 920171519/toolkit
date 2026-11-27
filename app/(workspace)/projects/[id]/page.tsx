@@ -16,12 +16,11 @@ import { safeOverviewReturnPath } from "@/lib/return-to";
 import { getTrialReadyVersions } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import {
-  getPendingFormalVersions,
   getPendingTransferGroups,
   getProjectBatchCounts,
+  getProjectTrialAndFormalCounts,
   getProjectVersionRows,
   getRecentProjectBatches,
-  getTrialVersions,
 } from "@/lib/workflow-queries";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, SectionHeading } from "@/components/ui";
 import styles from "../projects.module.css";
@@ -103,10 +102,7 @@ export default async function ProjectOverviewPage({
   const pending = currentProject ? getPendingTransferGroups([projectId])[0]?.items.length ?? 0 : 0;
   const batches = currentProject ? getProjectBatchCounts(projectId, canPrepare) : { draft: 0, inTest: 0 };
   const ready = canPrepare ? getTrialReadyVersions([projectId]).length : 0;
-  const bindings = currentProject ? getTrialVersions([projectId]) : [];
-  const formal = currentProject ? getPendingFormalVersions([projectId]) : [];
-  const lateBindings = bindings.filter((version) => version.isOverdue).length;
-  const lateFormal = formal.filter((version) => version.isOverdue).length;
+  const releaseCounts = currentProject ? getProjectTrialAndFormalCounts(projectId) : null;
   const stages = [
     {
       label: "转测",
@@ -117,8 +113,8 @@ export default async function ProjectOverviewPage({
     },
     { label: "集成测试", metric: { count: batches.inTest, label: "在测" }, href: "/integration" },
     ...(canPrepare ? [{ label: "待发布试制", metric: { count: ready, label: "个版本" }, href: "/trial" }] : []),
-    { label: "节点绑定", metric: { count: bindings.length, label: "个版本" }, href: "/trial", view: "binding", overdue: lateBindings },
-    { label: "待转正", metric: { count: formal.length }, href: "/formal", overdue: lateFormal },
+    { label: "节点绑定", metric: { count: releaseCounts?.binding.total ?? 0, label: "个版本" }, href: "/trial", view: "binding", overdue: releaseCounts?.binding.overdue },
+    { label: "待转正", metric: { count: releaseCounts?.formal.total ?? 0 }, href: "/formal", overdue: releaseCounts?.formal.overdue },
   ];
 
   return (
