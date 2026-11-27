@@ -1,6 +1,6 @@
 import "server-only";
 
-import { all } from "./db";
+import { all, one } from "./db";
 import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, Role } from "./constants";
@@ -337,7 +337,7 @@ export type AreaProjectMember = {
   userTitle: string;
 };
 
-export type AreaConfig = {
+type AreaConfig = {
   id: number;
   name: string;
   description: string;
@@ -369,8 +369,9 @@ export function getAccountAreaLabel(userId: number): string {
   return getAreaMemberships(userId).map(({ name }) => name).join("、") || "未分配责任田";
 }
 
-export function getResponsibilityAreaOptions() {
-  return all<{ id: number; name: string }>("SELECT id, name FROM areas ORDER BY name, id");
+export function getResponsibilityAreaOptions({ orderBy = "name" }: { orderBy?: "name" | "id" } = {}) {
+  const order = orderBy === "id" ? "id" : "name, id";
+  return all<{ id: number; name: string }>(`SELECT id, name FROM areas ORDER BY ${order}`);
 }
 
 export function getAreaDirectory() {
@@ -401,8 +402,8 @@ export function getAreaDirectory() {
   }));
 }
 
-export function getAreaConfigs(areaId?: number): AreaConfig[] {
-  return all<{
+export function getAreaConfig(areaId: number): AreaConfig | null {
+  const area = one<{
     id: number;
     name: string;
     description: string;
@@ -411,46 +412,47 @@ export function getAreaConfigs(areaId?: number): AreaConfig[] {
   }>(
     `SELECT a.id, a.name, a.description, a.is_integration AS isIntegration,
             (SELECT COUNT(*) FROM packages p WHERE p.area_id = a.id) AS packageCount
-     FROM areas a ${areaId === undefined ? "" : "WHERE a.id = ?"} ORDER BY a.id`,
-    ...(areaId === undefined ? [] : [areaId]),
-  ).map((area) => {
-    const leaders = all<AreaLeader>(
-      `SELECT al.id, u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
-       FROM area_leaders al JOIN users u ON u.id = al.user_id
-       WHERE al.area_id = ? ORDER BY al.id`,
-      area.id,
-    );
-    const projectMembers = all<AreaProjectMember>(
-      `SELECT apm.id, apm.area_id AS areaId, apm.project_id AS projectId, pr.name AS projectName,
-              pr.code AS projectCode, u.id AS userId, u.name AS userName,
-              u.employee_id AS userEmployeeId, u.title AS userTitle
-       FROM area_project_members apm
-       JOIN projects pr ON pr.id = apm.project_id
-       JOIN users u ON u.id = apm.user_id
-       WHERE apm.area_id = ?
-       ORDER BY pr.sort_order, u.name`,
-      area.id,
-    );
-    const projectLeads = all<AreaProjectLead>(
-      `SELECT apl.id, apl.project_id AS projectId, pr.name AS projectName,
-              pr.code AS projectCode, pr.status AS projectStatus,
-              u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
-       FROM area_project_leads apl
-       JOIN projects pr ON pr.id = apl.project_id
-       JOIN users u ON u.id = apl.user_id
-       WHERE apl.area_id = ?
-       ORDER BY pr.sort_order, pr.id`,
-      area.id,
-    );
-    return {
-      ...area,
-      isIntegration: Boolean(area.isIntegration),
-      packageCount: Number(area.packageCount),
-      leaders,
-      projectLeads,
-      projectMembers,
-    };
-  });
+     FROM areas a WHERE a.id = ?`,
+    areaId,
+  );
+  if (!area) return null;
+
+  const leaders = all<AreaLeader>(
+    `SELECT al.id, u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
+     FROM area_leaders al JOIN users u ON u.id = al.user_id
+     WHERE al.area_id = ? ORDER BY al.id`,
+    area.id,
+  );
+  const projectMembers = all<AreaProjectMember>(
+    `SELECT apm.id, apm.area_id AS areaId, apm.project_id AS projectId, pr.name AS projectName,
+            pr.code AS projectCode, u.id AS userId, u.name AS userName,
+            u.employee_id AS userEmployeeId, u.title AS userTitle
+     FROM area_project_members apm
+     JOIN projects pr ON pr.id = apm.project_id
+     JOIN users u ON u.id = apm.user_id
+     WHERE apm.area_id = ?
+     ORDER BY pr.sort_order, u.name`,
+    area.id,
+  );
+  const projectLeads = all<AreaProjectLead>(
+    `SELECT apl.id, apl.project_id AS projectId, pr.name AS projectName,
+            pr.code AS projectCode, pr.status AS projectStatus,
+            u.id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.title AS userTitle
+     FROM area_project_leads apl
+     JOIN projects pr ON pr.id = apl.project_id
+     JOIN users u ON u.id = apl.user_id
+     WHERE apl.area_id = ?
+     ORDER BY pr.sort_order, pr.id`,
+    area.id,
+  );
+  return {
+    ...area,
+    isIntegration: Boolean(area.isIntegration),
+    packageCount: Number(area.packageCount),
+    leaders,
+    projectLeads,
+    projectMembers,
+  };
 }
 
 export type AdminPackage = PackageSummary & {

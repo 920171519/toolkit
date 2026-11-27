@@ -27,6 +27,7 @@
 | 逐包与列表查询上次转测版本 | [转测申请](../../lib/transfer-requests.ts) | 一个按项目和软件包范围执行的查询，草稿写入事务重新读取。 |
 | 全量项目设置与软件包节点选择 | [项目选项与节点](../../lib/project-queries.ts) | 选择器复用项目列表与节点基础字段，按范围批量查询。配置详情继续使用带责任人和审批人的完整投影。 |
 | 配置目录先读取再筛选全部项目配置 | [项目设置目录](../../lib/project-queries.ts) | 直接读取可管理项目的摘要。目录与详情共用联系人姓名汇总。 |
+| 从责任田完整配置提取软件包选项 | [责任田选项](../../lib/queries.ts) | 选项共用基础查询，按各入口的原排序显示。完整配置按单个责任田读取。 |
 | 节点状态、条码统计与确认逻辑 | [节点办理状态](../../lib/binding-availability.ts)、[条码判定](../../lib/binding-barcode-results.ts) | 页面和事务使用同一统计与条件，失败原因沿用已有证据。 |
 | 多套弹窗焦点、筛选和回跳处理 | [弹窗钩子](../../components/use-modal-dialog.ts)、[表头筛选](../../components/column-filter-header.tsx)、[回跳校验](../../lib/return-to.ts) | 界面入口可有不同的信息结构，键盘行为、控件契约和合法站内跳转有共用实现。 |
 | 风险表单三处入口与 Action 会话检查 | [风险表单](../../components/risk-trial-entry-action.tsx)、[Action 助手](../../lib/action-helpers.ts) | 三处入口共用一个服务端表单。配置和流程 Action 共用会话与刷新规则。 |

@@ -8,7 +8,7 @@ import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { getProjectOptionsWithNodes } from "@/lib/project-queries";
-import { getAreaConfigs, getPackageDetail, getPeople, parseFlash } from "@/lib/queries";
+import { getPackageDetail, getPeople, getResponsibilityAreaOptions, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
 import { ActionForm } from "@/components/action-form";
@@ -45,8 +45,7 @@ export default async function PackageSettingsDetailPage({
   const search = await searchParams;
   const listParams = directoryFilters("packages", search);
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
-  const allAreas = getAreaConfigs();
-  const areas = isAdmin ? allAreas : allAreas.filter((area) => ledAreaIds.includes(area.id));
+  const areas = isAdmin ? getResponsibilityAreaOptions({ orderBy: "id" }) : [];
   const people = getPeople();
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);

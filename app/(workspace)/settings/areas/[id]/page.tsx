@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref, directoryValue } from "@/lib/settings-directory";
-import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
+import { getAreaConfig, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
 import { getProjectOptions, type ProjectOption } from "@/lib/project-queries";
 import {
   addAreaLeaderAction,
@@ -116,7 +116,7 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
   const user = await requireUser();
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id < 1) notFound();
-  const [area] = getAreaConfigs(id);
+  const area = getAreaConfig(id);
   if (!area) notFound();
 
   const search = await searchParams;

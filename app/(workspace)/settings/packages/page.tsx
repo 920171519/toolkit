@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters } from "@/lib/column-filters";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
-import { getAdminPackages, getAreaConfigs, getPeople, parseFlash } from "@/lib/queries";
+import { getAdminPackages, getPeople, getResponsibilityAreaOptions, parseFlash } from "@/lib/queries";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/settings";
@@ -43,7 +43,7 @@ export default async function PackagesSettingsPage({
   }
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const areas = getAreaConfigs().filter((area) => isAdmin || ledAreas.has(area.id));
+  const areas = getResponsibilityAreaOptions({ orderBy: "id" }).filter((area) => isAdmin || ledAreas.has(area.id));
   const packages = getAdminPackages().filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreas.has(pkg.areaId)));
   const people = getPeople();
   const areaOptions = areas.map((area) => ({ value: String(area.id), label: area.name }));
