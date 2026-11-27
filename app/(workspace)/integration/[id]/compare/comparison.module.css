@@ -1,0 +1,176 @@
+.batchPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.batchCard {
+  min-width: 0;
+  padding: 18px 24px;
+}
+
+.batchCard h2,
+.results h2 {
+  font-size: 16px;
+}
+
+.batchCard > .identity {
+  margin-top: 12px;
+}
+
+.batchName {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.batchName strong {
+  color: var(--ink);
+  margin-right: 6px;
+}
+
+.batchMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.picker {
+  margin-top: 12px;
+}
+
+.picker summary {
+  display: inline-flex;
+  list-style: none;
+  cursor: pointer;
+}
+
+.picker[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.search {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.search input {
+  min-width: 0;
+}
+
+.candidates,
+.counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.candidates {
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.candidates li + li {
+  border-top: 1px solid var(--line);
+}
+
+.candidates a {
+  display: block;
+  padding: 9px 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.candidates a:hover,
+.candidates a[aria-current="true"] {
+  background: var(--surface-muted);
+}
+
+.candidates a:focus-visible {
+  outline-offset: -3px;
+}
+
+.results {
+  min-width: 0;
+}
+
+.results > :global(.card-header) {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 24px 16px;
+}
+
+.table {
+  table-layout: fixed;
+  white-space: normal;
+}
+
+.table th,
+.table td {
+  overflow-wrap: anywhere;
+}
+
+.table thead th:first-child {
+  width: 34%;
+}
+
+.table th[scope="row"] {
+  color: var(--ink);
+  background: none;
+}
+
+.table tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.packageName {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.changedVersion {
+  color: var(--brand);
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .batchPair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .batchCard {
+    padding: 16px;
+  }
+
+  .counts {
+    padding-inline: 16px;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .table thead th:last-child {
+    width: 6rem;
+  }
+}

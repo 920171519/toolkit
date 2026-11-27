@@ -158,6 +158,7 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
       const label = pathname === "/submissions/transfer" ? "提交转测申请"
         : pathname === "/settings/packages/import" ? "导入历史版本"
         : pathname === "/integration/new" ? "准备转测批次"
+        : /^\/integration\/\d+\/compare$/.test(pathname) ? "批次对比"
         : detailLabels[match.href] ?? "详情";
       crumbs.push({ label });
     }

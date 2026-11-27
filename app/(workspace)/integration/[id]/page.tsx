@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, FileText } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, FileText, GitCompareArrows } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { batchSelectionKey, DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
@@ -91,6 +91,11 @@ export default async function BatchDetailPage({
   const editHref = workflowHref("/submissions/batch/new", batch.projectId, { ...listState, ...requestListState, draft: batch.id, from: project ? undefined : "all" });
 
   const historyState = readIntegrationHistory(search);
+  const compareHref = workflowHref(`/integration/${batch.id}/compare`, project?.id, {
+    ...listState,
+    ...requestListState,
+    ...(returnView === "history" ? integrationHistoryParams(historyState) : {}),
+  });
   const backToList = workflowHref(returnPath, project?.id ?? (archived ? batch.projectId : undefined), {
     ...listState,
     request: requestListState.request,
@@ -160,11 +165,12 @@ export default async function BatchDetailPage({
       <div className={showSecondary ? styles.detailColumns : styles.stack}>
         <div className={styles.stack}>
           <section className="card">
-            <div className="card-header">
+            <div className={`card-header ${styles.snapshotHeader}`}>
               <div className={styles.rowActions}>
                 <h2 className={styles.tableHeading}>配套版本快照</h2>
                 <InfoTooltip label="测试结论生效范围">本次测试结论同步到标记为“本轮变更”的软件包版本。</InfoTooltip>
               </div>
+              <Link href={compareHref} prefetch={false} className="button button-secondary button-sm"><GitCompareArrows size={14} aria-hidden="true" />对比批次</Link>
             </div>
             <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
               <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="配套版本快照表格" tabIndex={0}>
