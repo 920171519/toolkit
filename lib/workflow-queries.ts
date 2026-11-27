@@ -1576,9 +1576,8 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     }
   }
 
-  const readKeys = getReadNotificationKeys(user.id);
-  const unreadAlerts = alerts.filter((alert) => !readKeys.has(alert.key)
-    && (!alert.key.startsWith("rejected-flow-") || !readKeys.has(alert.key.replace("rejected-flow-", "flow-notice-"))));
+  const readKeys = getReadNotificationKeys(user.id, [...alerts, ...notifications].map(({ key }) => key));
+  const unreadAlerts = alerts.filter((alert) => !readKeys.has(alert.key));
   const unreadNotifications = notifications.filter((notification) => !readKeys.has(notification.key));
   const activeVersions = one<{ count: number }>(
     "SELECT COUNT(*) AS count FROM package_versions WHERE submitted_by = ? AND status NOT IN ('FORMAL', 'VOID')",

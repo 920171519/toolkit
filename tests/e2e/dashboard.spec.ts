@@ -192,6 +192,52 @@ test("重复打开通知保留首次已读时间，每个账号单独记录", as
   }
 });
 
+test("工作台兼容旧驳回通知的已读键，并保留其他通知", async ({ page }) => {
+  await login(page, "VALID001");
+  const inbox = page.getByRole("region", { name: "通知与提醒", exact: true });
+  const rejected = inbox.getByRole("link", { name: /BF-2026-0006 被驳回/ });
+  const approved = inbox.getByRole("link", { name: /BF-2026-0004 已通过/ });
+  await expect(rejected).toBeVisible();
+  await expect(approved).toBeVisible();
+
+  const rejectedHref = new URL((await rejected.getAttribute("href"))!, page.url());
+  const currentKey = rejectedHref.searchParams.get("key")!;
+  expect(currentKey).toMatch(/^rejected-flow-\d+$/);
+  const legacyKey = currentKey.replace("rejected-flow-", "flow-notice-");
+  const approvedHref = new URL((await approved.getAttribute("href"))!, page.url());
+  const approvedKey = approvedHref.searchParams.get("key")!;
+  const root = openE2eDatabase();
+  const user = root.prepare("SELECT id FROM users WHERE employee_id = 'VALID001'").get() as { id: number };
+
+  try {
+    rejectedHref.searchParams.set("key", legacyKey);
+    const response = await page.request.get(rejectedHref.toString(), { maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    expect(response.headers().location).toBe(rejectedHref.searchParams.get("next"));
+
+    await page.reload();
+    await expect(rejected).toHaveCount(0);
+    await expect(approved).toBeVisible();
+    await approved.click();
+    await expect(page).toHaveURL(/#binding-flow-\d+$/);
+
+    await page.goto("/dashboard");
+    await expect(rejected).toHaveCount(0);
+    await expect(approved).toHaveCount(0);
+    const reads = root.prepare(
+      "SELECT notification_key AS key FROM notification_reads WHERE user_id = ? AND notification_key IN (?, ?, ?)",
+    ).all(user.id, currentKey, legacyKey, approvedKey);
+    expect(reads).toHaveLength(2);
+    expect(reads).toEqual(expect.arrayContaining([{ key: legacyKey }, { key: approvedKey }]));
+  } finally {
+    try {
+      root.prepare("DELETE FROM notification_reads WHERE user_id = ? AND notification_key IN (?, ?)").run(user.id, legacyKey, approvedKey);
+    } finally {
+      root.close();
+    }
+  }
+});
+
 test("通知跳转保留站内路径，拒绝含糊或站外的地址", async ({ page }) => {
   await login(page, "VALID001");
   const cases = [
