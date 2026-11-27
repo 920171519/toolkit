@@ -89,13 +89,10 @@ export default async function VersionsPage({ searchParams }: {
             <tbody>
               {rows.map((row) => {
                 const href = traceHref(withTraceTab(state, row.id), project?.id, row.id);
-                const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
+                const { code } = packageIdentity({ name: row.packageName, code: row.packageCode });
                 return (
                   <tr key={row.id}>
-                    <td>
-                      <strong className="mono">{identity.code}</strong>
-                      {identity.name !== identity.code && <span className={`small muted ${styles.packageName}`} title={identity.name}>{identity.name}</span>}
-                    </td>
+                    <td><strong className="mono">{code}</strong></td>
                     <td><Link href={href} className="version-badge" prefetch={false}>{row.version}</Link></td>
                     <td><StatusPill status={row.status} /></td>
                     <td className="small muted">{formatDateTime(row.submittedAt)}</td>

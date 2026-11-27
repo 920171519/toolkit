@@ -40,14 +40,19 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
     const transfer = page.getByTestId("transfer-form");
     const search = transfer.getByRole("searchbox", { name: "搜索软件包" });
     await search.fill("1001OTA");
-    await expect(transfer.getByRole("button", { name: /^1001OTA\s*·\s*OTA\b/ })).toBeVisible();
+    await expect(transfer.getByRole("button", { name: /^1001OTA\b/ })).toBeVisible();
     await search.fill(name);
     const choice = transfer.getByRole("button", { name: new RegExp("^" + code) });
-    await expect(choice).toContainText(name);
+    await expect(choice.getByText(name, { exact: false })).toBeHidden();
+    const showTransferNames = transfer.getByRole("switch", { name: "显示软件包名称" });
+    await expect(showTransferNames).not.toBeChecked();
+    await showTransferNames.press("Space");
+    await expect(showTransferNames).toBeChecked();
+    await expect(choice.getByText(name, { exact: false })).toBeVisible();
     await choice.click();
     const selected = transfer.getByRole("group", { name: "软件包" });
     await expect(selected.locator("strong")).toHaveText(code);
-    await expect(selected).toContainText(name);
+    await expect(selected.getByText(name, { exact: false })).toBeVisible();
     await transfer.locator('input[name="version"]').fill(version);
     await transfer.locator('textarea[name="changeSummary"]').fill("验证软件包编码及名称显示");
     await transfer.locator('input[name="archiveUrl"]').fill("https://packages.example.com/e2e/package-identity");
@@ -59,7 +64,9 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
     const builder = page.getByTestId("batch-builder-form");
     await expect(builder.getByRole("checkbox", { name: "本轮转测 1001OTA", exact: true })).toBeVisible();
     const newOption = builder.getByRole("row").filter({ hasText: code });
-    await expect(newOption).toContainText(name);
+    await expect(newOption.getByText(name, { exact: false })).toBeHidden();
+    await builder.getByRole("switch", { name: "显示软件包名称" }).check();
+    await expect(newOption.getByText(name, { exact: false })).toBeVisible();
     await expect(newOption.getByRole("checkbox", { name: "本轮转测 " + code, exact: true })).toBeChecked();
     await expect(newOption.getByRole("combobox", { name: code + " 本次转测版本", exact: true }).locator("option:checked")).toContainText(version);
     await builder.locator('input[name="code"]').fill(batchCode);
@@ -69,7 +76,9 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
     const snapshot = page.getByRole("region", { name: "配套版本快照表格" });
     const packageRow = snapshot.getByRole("row").filter({ hasText: code });
     await expect(packageRow.getByRole("link", { name: code, exact: true })).toBeVisible();
-    await expect(packageRow).toContainText(name);
+    await expect(packageRow.getByText(name, { exact: false })).toBeHidden();
+    await page.getByRole("switch", { name: "显示软件包名称" }).check();
+    await expect(packageRow.getByText(name, { exact: false })).toBeVisible();
     await expect(packageRow.getByRole("link", { name: "查看 " + code + " " + version + " 版本全链路", exact: true })).toBeVisible();
 
     await page.goto("/trial?project=1");
@@ -99,7 +108,7 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
     const bindingRows = binding.locator("tbody tr");
     const trialPackage = bindingRows.filter({ hasText: code });
     await expect(trialPackage.getByRole("link", { name: code, exact: true })).toBeVisible();
-    await expect(trialPackage).toContainText(name);
+    await expect(trialPackage).not.toContainText(name);
     await sort.click();
     await expect(binding.locator('th[aria-sort="ascending"]')).toContainText("软件包");
     await expect(bindingRows.first().getByRole("link", { name: "1006KEY", exact: true })).toBeVisible();
@@ -114,7 +123,7 @@ test("新建软件包和旧演示包在转测选择、批次配套、试制及�
     await page.goto("/formal?project=1&q=" + encodeURIComponent(name));
     const formal = page.getByRole("region", { name: "待转正版本列表" });
     await expect(formal.getByRole("link", { name: code + " " + version, exact: true })).toBeVisible();
-    await expect(formal.getByRole("row").filter({ hasText: code })).toContainText(name);
+    await expect(formal.getByRole("row").filter({ hasText: code })).not.toContainText(name);
   } finally {
     try {
       removeDraft();

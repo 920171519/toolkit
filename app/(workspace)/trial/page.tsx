@@ -102,13 +102,9 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
-  const packageLink = (row: TrialReadyVersion | TrialVersionRow) => {
-    const { code, name } = displayPackage(row);
-    return <>
-      <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link mono ${identityStyles.code}`}>{code}</Link>
-      {name !== code && <div className={identityStyles.tableName} title={name}>{name}</div>}
-    </>;
-  };
+  const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
+    <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link mono ${identityStyles.code}`}>{displayPackage(row).code}</Link>
+  );
 
   const identityColumns: TrialTableColumn<TrialReadyVersion | TrialVersionRow>[] = [
     {

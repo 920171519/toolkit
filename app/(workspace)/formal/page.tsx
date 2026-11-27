@@ -14,7 +14,6 @@ import { getPendingFormalVersions, getWorkflowProjectScope } from "@/lib/workflo
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
-import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "转正发布" };
@@ -92,7 +91,7 @@ export default async function FormalPage({ searchParams }: {
               <thead><tr><th scope="col">软件包版本</th><th scope="col">节点验证</th><th scope="col">项目</th><th scope="col">试制发布</th><th scope="col">操作</th></tr></thead>
               <tbody>{versions.map((group) => {
                 const version = group[0];
-                const { code, name } = packageIdentity({ name: version.packageName, code: version.packageCode });
+                const { code } = packageIdentity({ name: version.packageName, code: version.packageCode });
                 const canRelease = group.some((record) => canManageProjectWorkflowForProject(user, record.projectId));
                 const skipped = version.bindingMode === "SKIPPED";
                 const kind = version.releaseMode === "RISK";
@@ -103,7 +102,6 @@ export default async function FormalPage({ searchParams }: {
                 return <tr key={version.versionId}>
                   <th scope="row">
                     <Link href={href} className={`archive-link ${styles.packageName}`} prefetch={false}><span className="mono">{code}</span> <strong className="mono">{version.version}</strong></Link>
-                    {name !== code && <div className={identityStyles.tableName} title={name}>{name}</div>}
                     <p className={styles.tableExcerpt} title={version.changeSummary}>{version.changeSummary}</p>
                   </th>
                   <td><Badge tone={skipped ? "slate" : "emerald"}>{skipped ? "无需绑定" : `${passed}/${total} 节点通过`}</Badge>{waived > 0 && <div className="small muted">{waived} 个节点免绑</div>}</td>

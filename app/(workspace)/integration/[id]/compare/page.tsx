@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown, Search } from "lucide-react";
+import { PackageNameToggle } from "@/components/package-name-toggle";
 import { Badge, BatchStatusPill, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { getBatchComparison, type BatchComparisonChange, type BatchComparisonCurrent } from "@/lib/batch-comparison";
@@ -11,10 +12,12 @@ import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integrat
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import nameVisibility from "@/components/package-name-toggle.module.css";
 import styles from "./comparison.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "批次对比" };
+const comparisonRegionId = "batch-comparison-table";
 
 const comparisonLabels = {
   added: { label: "新增配套", tone: "emerald" },
@@ -115,10 +118,13 @@ export default async function BatchComparisonPage({ params, searchParams }: {
           <BatchIdentity batch={current} />
         </section>
       </div>
-      <section className={`card ${styles.results}`} aria-labelledby="comparison-results-heading">
+      <section className={`card ${styles.results} ${nameVisibility.scope}`} aria-labelledby="comparison-results-heading">
         <div className="card-header">
           <h2 id="comparison-results-heading">配套差异</h2>
-          {rows.length > 0 && <Link href={comparisonHref(selectedBaseId, !showAll)} prefetch={false} className="button button-secondary button-sm">{showAll ? "仅看差异" : "查看全部"}</Link>}
+          {rows.length > 0 && <div className={styles.resultActions}>
+            {visibleRows.some((row) => row.packageName !== row.packageCode) && <PackageNameToggle controls={comparisonRegionId} />}
+            <Link href={comparisonHref(selectedBaseId, !showAll)} prefetch={false} className="button button-secondary button-sm">{showAll ? "仅看差异" : "查看全部"}</Link>
+          </div>}
         </div>
         {missingSnapshots.length > 0 ? <EmptyState title="缺少配套版本快照" description={`${missingSnapshots.join("、")} 无法参与配套差异对比。`} />
           : !base ? <EmptyState title={candidates.length ? "没有更早发起的批次" : "暂无可对比的批次"}
@@ -129,11 +135,14 @@ export default async function BatchComparisonPage({ params, searchParams }: {
                   <Badge tone={tone}>{label} {counts[change as BatchComparisonChange]}</Badge>
                 </li>)}
               </ul>
-              {visibleRows.length ? <div className="table-wrap" role="region" aria-label="批次配套差异表格" tabIndex={0}>
+              {visibleRows.length ? <div id={comparisonRegionId} className="table-wrap" role="region" aria-label="批次配套差异表格" tabIndex={0}>
                 <table className={`data-table ${styles.table}`}>
                   <thead><tr><th scope="col">软件包编码</th><th scope="col">基准版本</th><th scope="col">当前版本</th><th scope="col">差异</th></tr></thead>
                   <tbody>{visibleRows.map((row) => <tr key={row.packageId}>
-                    <th scope="row"><span className="mono">{row.packageCode}</span>{row.packageName !== row.packageCode && <span className={styles.packageName}>{row.packageName}</span>}</th>
+                    <th scope="row">
+                      <span className="mono">{row.packageCode}</span>
+                      {row.packageName !== row.packageCode && <span className={`${styles.packageName} ${nameVisibility.name}`}>{row.packageName}</span>}
+                    </th>
                     <td className="mono">{row.baseVersion ?? "—"}</td>
                     <td className={`mono ${row.change === "changed" || row.change === "added" ? styles.changedVersion : ""}`}>{row.currentVersion ?? "—"}</td>
                     <td><Badge tone={comparisonLabels[row.change].tone}>{comparisonLabels[row.change].label}</Badge></td>

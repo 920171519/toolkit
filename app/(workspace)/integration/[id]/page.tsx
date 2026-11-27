@@ -26,11 +26,14 @@ import { ClearBatchChoices } from "@/components/pending-batch-choices";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { PackageNameToggle } from "@/components/package-name-toggle";
 import { Badge, BatchStatusPill, ExternalLink, FlashMessage, PageHeader } from "@/components/ui";
+import nameVisibility from "@/components/package-name-toggle.module.css";
 import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "转测批次详情" };
+const snapshotRegionId = "batch-snapshot-table";
 
 export default async function BatchDetailPage({
   params,
@@ -49,6 +52,10 @@ export default async function BatchDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { batch, items, progressNotes } = data;
+  const snapshotItems = items.map((item) => ({
+    item,
+    identity: packageIdentity({ name: item.packageName, code: item.packageCode }),
+  }));
   const project = requireWorkflowProject(user, search.project, batch.projectId);
   const listState = getWorkflowListState(search);
   const manager = canManageProjectWorkflowForProject(user, batch.projectId);
@@ -165,27 +172,32 @@ export default async function BatchDetailPage({
 
       <div className={showSecondary ? styles.detailColumns : styles.stack}>
         <div className={styles.stack}>
-          <section className="card">
+          <section className={`card ${nameVisibility.scope}`}>
             <div className={`card-header ${styles.snapshotHeader}`}>
               <div className={styles.rowActions}>
                 <h2 className={styles.tableHeading}>配套版本快照</h2>
                 <InfoTooltip label="测试结论生效范围">本次测试结论同步到标记为“本轮变更”的软件包版本。</InfoTooltip>
               </div>
-              <Link href={compareHref} prefetch={false} className="button button-secondary button-sm"><GitCompareArrows size={14} aria-hidden="true" />对比批次</Link>
+              <div className={styles.rowActions}>
+                {snapshotItems.some(({ identity }) => identity.name !== identity.code) && <PackageNameToggle controls={snapshotRegionId} />}
+                <Link href={compareHref} prefetch={false} className="button button-secondary button-sm"><GitCompareArrows size={14} aria-hidden="true" />对比批次</Link>
+              </div>
             </div>
             <div className="card-body" style={{ padding: 0, marginTop: 13 }}>
-              <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="配套版本快照表格" tabIndex={0}>
+              <div id={snapshotRegionId} className={`table-wrap ${styles.queueTable}`} role="region" aria-label="配套版本快照表格" tabIndex={0}>
                 <table className="data-table">
                   <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th>{showRisk && <th scope="col">风险试制</th>}{showContinuation && <th scope="col">下一步</th>}</tr></thead>
                   <tbody>
-                    {items.map((item) => {
-                      const { code, name } = packageIdentity({ name: item.packageName, code: item.packageCode });
+                    {snapshotItems.map(({ item, identity: { code, name } }) => {
                       const entry = item.transferRequestId ? riskEntries[item.transferRequestId] : undefined;
                       const riskEntry = entry?.stage === riskStage && entry.batchId === batch.id ? entry : undefined;
                       return <tr key={item.id}>
                         <td>
                           <Link href={workflowHref("/packages", project?.id, { open: item.packageId })} prefetch={false} className={`archive-link mono ${styles.packageName}`}>{code}</Link>
-                          <div className={`small muted ${styles.packageName}`}>{name !== code && `${name} · `}{item.ownerName ?? "责任人待定"}</div>
+                          <div className={`small muted ${styles.packageName}`}>
+                            {name !== code && <span className={nameVisibility.name}>{name} · </span>}
+                            {item.ownerName ?? "责任人待定"}
+                          </div>
                         </td>
                         <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
                         <td><span className="mono small">{item.trialVersions || "—"}</span></td>

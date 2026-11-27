@@ -3,9 +3,11 @@
 import { useActionState, useId, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { GuidanceDialog } from "@/components/guidance-dialog";
+import { PackageNameToggle } from "@/components/package-name-toggle";
 import { submitTransferAction } from "@/lib/actions/workflow";
 import type { ActionState } from "@/lib/action-state";
 import { packageIdentity } from "@/lib/package-identity";
+import nameVisibility from "./package-name-toggle.module.css";
 import styles from "./workflow-queue.module.css";
 
 type PackageOption = {
@@ -30,6 +32,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
   const [archiveUrl, setArchiveUrl] = useState("");
   const [buildUrl, setBuildUrl] = useState("");
   const packageLabelId = useId();
+  const packageResultsId = useId();
   const summaryId = useId();
   const submitHintId = useId();
 
@@ -59,13 +62,17 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
       {scopeProjectId !== undefined && <input type="hidden" name="scopeProjectId" value={scopeProjectId} />}
       {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-        <div className="field" role="group" aria-labelledby={packageLabelId}>
-          <span className="label" id={packageLabelId}>软件包 <span className="required-mark" aria-hidden="true">*</span></span>
+        <div className={`field ${nameVisibility.scope}`} role="group" aria-labelledby={packageLabelId}>
+          <div className="toolbar-spread">
+            <span className="label" id={packageLabelId}>软件包 <span className="required-mark" aria-hidden="true">*</span></span>
+            <PackageNameToggle controls={packageResultsId} />
+          </div>
           {selected && selectedIdentity ? (
-            <div className="package-picked">
+            <div className="package-picked" id={packageResultsId}>
               <span className={styles.packageChoiceLabel}>
                 <strong className="mono">{selectedIdentity.code}</strong>
-                <span className="small muted">{selectedIdentity.name !== selectedIdentity.code && ` · ${selectedIdentity.name}`}{selected.ownerName && ` · 责任人 ${selected.ownerName}`}</span>
+                {selectedIdentity.name !== selectedIdentity.code && <span className={`small muted ${nameVisibility.name}`}> · {selectedIdentity.name}</span>}
+                {selected.ownerName && <span className="small muted"> · 责任人 {selected.ownerName}</span>}
               </span>
               <button type="button" className={`button button-ghost button-sm ${styles.packageChoiceAside}`} aria-label="更换软件包" onClick={() => setPackageId(null)}>更换</button>
             </div>
@@ -82,7 +89,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                   data-testid="transfer-package-search"
                 />
               </label>
-              <div className="package-pick-list">
+              <div className="package-pick-list" id={packageResultsId}>
                 {filtered.length === 0 ? <div className="toolbar">
                   <span className="small muted">没有匹配的软件包</span>
                   <button type="button" className="button button-secondary button-sm" onClick={() => { setSearch(""); setPage(1); }}>清除搜索</button>
@@ -91,7 +98,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                   return <button type="button" className="package-pick-item" key={pkg.id} onClick={() => setPackageId(pkg.id)} data-testid={`transfer-package-${pkg.id}`}>
                     <span className={styles.packageChoiceLabel}>
                       <strong className="mono">{code}</strong>
-                      {name !== code && <span className="small muted"> · {name}</span>}
+                      {name !== code && <span className={`small muted ${nameVisibility.name}`}> · {name}</span>}
                     </span>
                     <span className={`small muted ${styles.packageChoiceAside}`}>{pkg.ownerName ?? "待指定责任人"}</span>
                   </button>;

@@ -11,6 +11,12 @@ test("批次对比默认使用前一批次，按方向显示版本变化，并�
 
   const ota = page.getByRole("row", { name: /1001OTA/ });
   await expect(ota.getByRole("cell")).toHaveText(["1.6.0", "1.5.2", "版本变化"]);
+  const showNames = page.getByRole("switch", { name: "显示软件包名称" });
+  await expect(ota.getByText("OTA", { exact: true })).toBeHidden();
+  await showNames.press("Space");
+  await expect(ota.getByText("OTA", { exact: true })).toBeVisible();
+  await showNames.press("Space");
+  await expect(ota.getByText("OTA", { exact: true })).toBeHidden();
   await expect(page.getByRole("row", { name: /1007DIA/ }).getByRole("cell")).toHaveText(["3.0.0", "3.0.1", "版本变化"]);
   const unchanged = page.getByRole("row", { name: /1002CFG/ });
   await expect(unchanged).toHaveCount(0);

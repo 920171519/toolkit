@@ -1,0 +1,21 @@
+.scope:not(:has(.toggle input:checked)) .name {
+  display: none;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  min-height: 36px;
+  padding: 4px 2px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--brand);
+}

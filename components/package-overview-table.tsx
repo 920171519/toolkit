@@ -153,13 +153,12 @@ export function PackageOverviewTable({
                 </tr>
               </thead>
               <tbody>
-                {visible.map(({ pkg, identity: { code, name } }) => {
+                {visible.map(({ pkg, identity: { code } }) => {
                   const href = urlWith({ open: pkg.id, panel: null });
                   return (
                     <tr key={pkg.id}>
                       <th scope="row" className="package-index-name">
                         <Link href={href} className={`mono link-button ${identityStyles.code}`} prefetch={false} onClick={(event) => openPackage(event, pkg.id)} aria-label={`查看 ${code} 详情`}>{code}<ArrowRight size={12} aria-hidden="true" /></Link>
-                        {name !== code && <div className={identityStyles.tableName} title={name}>{name}</div>}
                         {!pkg.isActive && <div className="small muted">已停用</div>}
                       </th>
                       <td>{pkg.areaName ?? "未归属"}<div className="small muted">{pkg.ownerName ?? "责任人待指定"}</div></td>

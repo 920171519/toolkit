@@ -14,6 +14,8 @@ import { directoryHref, directoryPage, matchesDirectorySearch } from "@/lib/sett
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
+import { PackageNameToggle } from "@/components/package-name-toggle";
+import nameVisibility from "@/components/package-name-toggle.module.css";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import directoryStyles from "@/components/settings-directory.module.css";
 import { SettingsSelect } from "@/components/settings-select";
@@ -129,14 +131,17 @@ export default async function PackagesSettingsPage({
       </>} />
       <FlashMessage notice={notice} />
 
-      <section className="card" aria-label="软件包列表">
-        <DirectoryFilterBar {...headerProps} />
+      <section className={`card ${nameVisibility.scope}`} aria-label="软件包列表">
+        <div className={styles.tableControls}>
+          <DirectoryFilterBar {...headerProps} />
+          <PackageNameToggle controls="package-settings-table" />
+        </div>
         <div className="table-wrap" role="region" aria-label="软件包配置表格" tabIndex={0}>
-          <table className="data-table" aria-label="软件包列表">
+          <table className="data-table" id="package-settings-table" aria-label="软件包列表">
             <thead>
               <tr>
-                <ColumnFilterHeader {...headerProps} label="软件包编码" fields={[fields.code]} />
-                <ColumnFilterHeader {...headerProps} label="软件包名称" fields={[fields.name]} />
+                <ColumnFilterHeader {...headerProps} label="软件包编码" fields={[fields.code, fields.name]} />
+                <th className={nameVisibility.name} scope="col">软件包名称</th>
                 <ColumnFilterHeader {...headerProps} label="责任田 / 责任人" fields={[fields.area, fields.owner]} />
                 <ColumnFilterHeader {...headerProps} label="版本记录" fields={[fields.versions]} numeric />
                 <ColumnFilterHeader {...headerProps} label="使用节点" fields={[fields.nodes]} numeric />
@@ -150,7 +155,7 @@ export default async function PackagesSettingsPage({
                 return (
                   <tr key={pkg.id}>
                     <th scope="row" className={styles.code}><Link href={detailHref} className="archive-link" prefetch={false}>{identity.code}</Link></th>
-                    <td><span className={`${styles.name} ${styles.nameExcerpt}`} title={identity.name}>{identity.name}</span></td>
+                    <td className={nameVisibility.name}><span className={`${styles.name} ${styles.nameExcerpt}`} title={identity.name}>{identity.name}</span></td>
                     <td>
                       <span className={styles.name}>{pkg.areaName ?? "未归属"}</span>
                       <span className={`small muted ${styles.name}`}>{pkg.ownerName ?? "待指定"}</span>

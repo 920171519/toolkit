@@ -317,12 +317,6 @@
   font-size: 12px;
 }
 
-.activityPackageName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .activityMeta {
   display: grid;
   justify-items: end;

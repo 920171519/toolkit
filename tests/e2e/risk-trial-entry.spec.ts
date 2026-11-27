@@ -68,7 +68,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await page.getByTestId("submit-transfer-trigger").click();
   const transfer = page.getByTestId("transfer-form");
   await transfer.getByLabel("搜索软件包").fill(packageCode);
-  await transfer.getByTestId(/transfer-package-/).filter({ hasText: packageName }).click();
+  await transfer.getByTestId(/transfer-package-/).filter({ hasText: packageCode }).click();
   await transfer.locator('input[name="version"]').fill(version);
   await transfer.locator('textarea[name="changeSummary"]').fill("验证进行中与不通过风险登记来源。");
   await transfer.locator('input[name="archiveUrl"]').fill("https://packages.example.com/test/risk-rqa.tar.gz");
@@ -95,14 +95,14 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await expectFlash(page, "B117 已发起集成测试");
   await page.goto(batchUrl!);
 
-  const changed = page.getByRole("row").filter({ hasText: packageName });
+  const changed = page.getByRole("row").filter({ hasText: packageCode });
   let dialog = await viewRiskEntry(changed, "集成测试中");
   const earlyReason = "冒烟验证通过，断电恢复验证安排在下一轮。";
   await dialog.getByRole("textbox", { name: "风险试制原因" }).fill(earlyReason);
   await dialog.getByRole("button", { name: "纳入待发布试制" }).click();
   await expect(page).toHaveURL(/\/trial\?project=1/);
   await expectFlash(page, "风险试制原因已登记");
-  const ready = page.getByRole("row").filter({ hasText: packageName });
+  const ready = page.getByRole("row").filter({ hasText: packageCode });
   await ready.getByRole("link", { name: "详情", exact: true }).click();
   await expect(page.getByRole("heading", { name: "风险发布原因" })).toBeVisible();
   await expect(page.getByText(earlyReason, { exact: true })).toBeVisible();
@@ -127,7 +127,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
 
   await login(page, "MGR001");
   await page.goto("/trial?project=1");
-  await expect(page.getByRole("row").filter({ hasText: packageName })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: packageCode })).toHaveCount(0);
   await page.goto(batchUrl!);
   dialog = await viewRiskEntry(changed, "测试未通过");
   const failureReason = "已核对外部台架故障对试制的影响，本轮可复测。";

@@ -166,10 +166,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
                 onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : item.draftBatchId !== null
                   ? <Link href={workflowHref(`/integration/${item.draftBatchId}`, scopeProjectId, { ...returnState, fromRequests: "1" })} prefetch={false} className="archive-link">{item.draftBatchCode} 草稿占用</Link>
                   : <span className="small muted">{item.packageActive ? "不在项目使用范围" : "软件包已停用"}</span>}</td>}
-              <th scope="row">
-                <strong className="mono">{identity.code}</strong>
-                {identity.name !== identity.code && <div className={`small muted ${styles.packageName}`}>{identity.name}</div>}
-              </th>
+              <th scope="row"><strong className="mono">{identity.code}</strong></th>
               <td><Badge tone="slate">{item.version}</Badge><p className={styles.tableExcerpt} title={item.changeSummary}>{item.changeSummary}</p></td>
               <td>{item.submittedByName ?? "未知申请人"}</td>
               <td className={styles.nowrap}><time dateTime={item.submittedAt}>{formatDateTime(item.submittedAt)}</time></td>

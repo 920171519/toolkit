@@ -79,6 +79,13 @@ test("旧软件包的表头筛选按显示的编码和名称分别匹配", async
   const trigger = page.getByRole("link", { name: "查看 1001OTA 详情" });
   await page.goto("/packages?project=1&f_code=1001OTA&f_code_mode=exact&f_name=OTA&f_name_mode=exact");
   await expect(trigger).toBeVisible();
+  const table = page.getByRole("region", { name: "软件版本总览表格" });
+  await expect(table.getByText("OTA", { exact: true })).toHaveCount(0);
+  await trigger.click();
+  const drawer = page.getByRole("dialog", { name: "软件包详情" });
+  const nameField = drawer.locator("dl").filter({ hasText: "软件包名称" });
+  await expect(nameField.locator("dt")).toHaveText("软件包名称");
+  await expect(nameField.locator("dd")).toHaveText("OTA");
   await page.goto("/packages?project=1&f_code=OTA&f_code_mode=exact");
   await expect(trigger).toHaveCount(0);
   await page.goto("/packages?project=1&f_name=1001OTA&f_name_mode=exact");

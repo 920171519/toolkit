@@ -23,7 +23,16 @@ test("软件包配置正确显示旧编码及名称，保留旧编码并校验�
   await codeMenu.getByRole("textbox", { name: "软件包编码", exact: true }).fill("１００１ｏｔａ");
   await codeMenu.getByRole("button", { name: "应用", exact: true }).click();
   await expect(list.getByRole("rowheader", { name: "1001OTA", exact: true })).toBeVisible();
+  const nameToggle = list.getByRole("switch", { name: "显示软件包名称" });
+  await expect(nameToggle).not.toBeChecked();
+  await expect(list.getByRole("columnheader", { name: "软件包名称", exact: true })).toHaveCount(0);
+  await expect(list.getByRole("cell", { name: "OTA", exact: true })).toHaveCount(0);
+  await nameToggle.press("Space");
+  await expect(nameToggle).toBeChecked();
+  await expect(list.getByRole("columnheader", { name: "软件包名称", exact: true })).toBeVisible();
   await expect(list.getByRole("cell", { name: "OTA", exact: true })).toBeVisible();
+  await nameToggle.press("Space");
+  await expect(list.getByRole("cell", { name: "OTA", exact: true })).toHaveCount(0);
   await expect(list.getByRole("rowheader", { name: "1002CFG", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await list.getByRole("link", { name: "1001OTA", exact: true }).click();

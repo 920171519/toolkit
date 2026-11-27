@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { BatchCandidatePackage, ProjectOption } from "@/lib/workflow-queries";
@@ -10,9 +10,11 @@ import { Badge, EmptyState } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { DialogSurface } from "@/components/form-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { PackageNameToggle } from "@/components/package-name-toggle";
 import { usePendingBatchChoices, usePendingReview } from "@/components/pending-batch-choices";
 import type { CreateBatchInput } from "@/lib/workflow";
 import { createBatchAction } from "@/lib/actions/workflow";
+import nameVisibility from "./package-name-toggle.module.css";
 import styles from "./workflow-queue.module.css";
 
 function statusLabel(status: string) {
@@ -63,6 +65,7 @@ export function BatchBuilder({
   const [showConditions, setShowConditions] = useState(false);
   const conditionsTrigger = useRef<HTMLButtonElement>(null);
   const results = useRef<HTMLDivElement>(null);
+  const packageResultsId = useId();
 
   const rows = candidates.map((candidate) => {
     const choice = choices[candidate.packageId];
@@ -94,7 +97,7 @@ export function BatchBuilder({
   const canSave = changedCount > 0;
 
   return (
-    <>
+    <div className={nameVisibility.scope}>
     <ActionForm
       action={createBatchAction}
       testId="batch-builder-form"
@@ -125,15 +128,18 @@ export function BatchBuilder({
           <button type="button" className="button button-secondary button-sm" onClick={() => setIncludeOverrides(new Map(rows.map(({ candidate }) => [candidate.packageId, true])))}>纳入全部软件包</button>
           <button type="button" className="button button-secondary button-sm" onClick={() => setIncludeOverrides(new Map(rows.map(({ candidate, changed }) => [candidate.packageId, changed])))}>仅纳入待测版本</button>
           {pendingOnly && <button type="button" className="button button-ghost button-sm" onClick={() => { setPendingOnly(false); setPage(1); }}>显示完整配套</button>}
+          <PackageNameToggle controls={packageResultsId} />
         </div>
       </div>
 
       {hiddenCount > 0 && <p className="small muted" role="status">待转测列表中被筛选隐藏的 {hiddenCount} 个版本仍纳入本轮。</p>}
       {visibleRows.length === 0 ? (
-        <EmptyState title="没有匹配的软件包" action={<button type="button" className="button button-secondary button-sm"
-          onClick={() => { setQuery(""); setPendingOnly(false); setPage(1); }}>清除配套筛选</button>} />
+        <div id={packageResultsId}>
+          <EmptyState title="没有匹配的软件包" action={<button type="button" className="button button-secondary button-sm"
+            onClick={() => { setQuery(""); setPendingOnly(false); setPage(1); }}>清除配套筛选</button>} />
+        </div>
       ) : (
-        <div className="table-wrap compact-batch-table" role="region" aria-label="本轮配套软件包表格" tabIndex={0}>
+        <div className="table-wrap compact-batch-table" id={packageResultsId} role="region" aria-label="本轮配套软件包表格" tabIndex={0}>
           <table className="data-table">
             <thead>
               <tr>
@@ -161,7 +167,10 @@ export function BatchBuilder({
                   </td>
                   <td>
                     <strong className={`mono ${styles.packageName}`}>{identity.code}</strong>
-                    <div className={`small muted ${styles.packageName}`}>{identity.name !== identity.code && `${identity.name} · `}{candidate.ownerName ?? "责任人待定"}</div>
+                    <div className={`small muted ${styles.packageName}`}>
+                      {identity.name !== identity.code && <span className={nameVisibility.name}>{identity.name} · </span>}
+                      {candidate.ownerName ?? "责任人待定"}
+                    </div>
                   </td>
                   <td className={styles.snapshotColumn}>
                     <div className="small muted">正式 <span className="mono">{candidate.formalVersion ?? "—"}</span></div>
@@ -233,6 +242,6 @@ export function BatchBuilder({
           : <Link href={transfersHref} prefetch={false} className="button button-secondary">查看待安排申请</Link>}
       </div>
     </DialogSurface>}
-    </>
+    </div>
   );
 }

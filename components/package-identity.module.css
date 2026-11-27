@@ -8,16 +8,3 @@
 .code svg {
   flex: none;
 }
-
-.tableName {
-  display: block;
-  /* Let the table determine the column width before the name fills it. */
-  inline-size: 0;
-  min-inline-size: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}

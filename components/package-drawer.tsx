@@ -293,7 +293,10 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
       </div>}
 
       <div ref={body} className={styles.body}>
-        {identity && identity.name !== identity.code && <p className={styles.packageName}>{identity.name}</p>}
+        {identity && <dl className={styles.packageName}>
+          <dt>软件包名称</dt>
+          <dd>{identity.name}</dd>
+        </dl>}
         {loadError && <div className="form-error" role="alert"><span>{loadError}</span><button type="button" className="button button-secondary button-sm" onClick={() => void loadDetail()}>重试</button></div>}
         {!detail && !loadError && <div className="drawer-loading" role="status"><LoaderCircle size={20} className="animate-spin" aria-hidden="true" />正在加载软件包详情…</div>}
 

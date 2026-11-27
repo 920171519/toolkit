@@ -748,9 +748,12 @@ test.describe("工程协同台项目维度流程", () => {
     await editForm.getByRole("button", { name: "保存责任信息" }).click();
     await expectFlash(page, "软件包信息已更新");
     await page.goto("/settings/packages");
-    const packageRow = page.getByRole("row").filter({ hasText: "测试辅助服务" });
-    await expect(packageRow.getByRole("cell", { name: "测试辅助服务", exact: true })).toBeVisible();
+    const packageRow = page.getByRole("row").filter({ hasText: "90002TST" });
     await expect(packageRow.getByRole("rowheader", { name: "90002TST", exact: true })).toBeVisible();
+    const packageNameCell = packageRow.getByRole("cell", { name: "测试辅助服务", exact: true });
+    await expect(packageNameCell).toBeHidden();
+    await page.getByRole("switch", { name: "显示软件包名称" }).check();
+    await expect(packageNameCell).toBeVisible();
   });
   test("风险发布可基于全项目共享试制发布", async ({ page }) => {
     test.setTimeout(90_000);

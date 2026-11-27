@@ -191,14 +191,13 @@ export default async function ProjectOverviewPage({
             <ul className={styles.activityList}>
               {projectVersions.map((version) => {
                 const status = projectVersionStatus(version.status);
-                const { code, name } = packageIdentity({ code: version.packageCode, name: version.packageName });
+                const { code } = packageIdentity({ code: version.packageCode, name: version.packageName });
                 return (
                   <li key={version.requestId} className={styles.activityItem}>
                     <div className={styles.activityMain}>
                       <div>
                         <Link href={scopedHref(`/versions/${version.versionId}`)} className="mono" prefetch={false}>{code} {version.version}</Link>
                       </div>
-                      {name !== code && <p className={styles.activityPackageName} title={name}>{name}</p>}
                       {version.batchCode && <p>集成批次 <span className="mono">{version.batchCode}</span></p>}
                     </div>
                     <div className={styles.activityMeta}>
