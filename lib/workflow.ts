@@ -9,11 +9,11 @@ import {
   isBindingOpen,
 } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "./access";
-import { assert } from "./domain-error";
-import { getPendingBindingFlowCount, getTrialReadyVersions } from "./workflow-queries";
+import { assert, DomainError } from "./domain-error";
+import { getTrialReadyVersions } from "./workflow-queries";
 import { getRiskTrialEntries } from "./trial-risk-entry";
 import { trialReleaseStateKey } from "./trial-release-state";
-import { areFormalBindingsReady, getActiveBindingSummary, getActiveReleaseRequests, hasActiveIntegrationBatch, refreshTrialReadiness } from "./trial-readiness";
+import { getActiveReleaseRequests, getFormalReleaseCheck, refreshTrialReadiness } from "./trial-readiness";
 import { getTrialNodeUsages, missingTrialNodeAssignments } from "./trial-eligibility";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
@@ -1465,16 +1465,10 @@ export function releaseFormal(actor: SessionUser, requestId: number, flowNo: str
       "只有使用该软件包的项目软件经理或系统管理员可以发布转正。",
       "FORBIDDEN",
     );
-    assert(anchor.version_status === "PENDING_FORMAL", "该版本尚未完成绑定验证或已转正。");
-    assert(!hasActiveIntegrationBatch(db, anchor.package_version_id), "该软件包仍有关联转测批次待发起或在测，不能转正。");
-    assert(getPendingBindingFlowCount(anchor.package_version_id) === 0, "仍有绑定电子流待审批。请在绑定验证中完成审批或撤销后再转正。");
-    for (const request of requests) {
-      assert(request.status === "PENDING_FORMAL", `${request.projectName} 尚未完成全部项目绑定验证，不能转正。`);
-    }
-    const binding = getActiveBindingSummary(db, anchor.package_version_id);
-    assert(areFormalBindingsReady(binding, anchor.binding_mode), anchor.binding_mode === "SKIPPED"
-      ? "该版本已标记无需绑定，但仍存在未关闭的绑定要求。"
-      : "该软件包仍有未处理的节点绑定要求，不能转正。");
+    const { blocker } = getFormalReleaseCheck(db, {
+      id: anchor.package_version_id, status: anchor.version_status, bindingMode: anchor.binding_mode,
+    }, requests);
+    if (blocker !== null) throw new DomainError(blocker);
     const timestamp = now();
     run(
       `UPDATE package_versions SET status = 'FORMAL', formal_released_at = ?, form_flow_no = ?, formal_review_minutes = ?, updated_at = ? WHERE id = ?`,

@@ -70,7 +70,6 @@ export default async function TrialDetailPage({
   const actionFields = { requestId, scopeProjectId, ...listState };
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
   const canConfirmNodes = canEditFlows && canConfirmBindingNodeForProject(user, request.packageOwnerId, request.projectId);
-  const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL" ? getPendingBindingFlowCount(request.versionId) : 0;
   const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
   const waived = requirements.filter((requirement) => requirement.waivedAt !== null).length;
   const pendingDecision = canEditFlows && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
@@ -79,6 +78,9 @@ export default async function TrialDetailPage({
   const formalGuidance = canEditFlows ? getFormalReleaseGuidance(user, request.versionId, {
     projectId: request.projectId, returnTo: listState.returnTo, bindingListState: listState,
   }) : null;
+  const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL"
+    ? formalGuidance?.pendingFlowCount ?? getPendingBindingFlowCount(request.versionId)
+    : 0;
   const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
   const transferStatusMeta = TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? {
     label: request.status === "TRIAL" ? "试制中" : request.status === "PENDING_FORMAL" ? "待转正" : request.status === "FORMAL" ? "已转正" : request.status === "VOID" ? "已作废" : request.status,

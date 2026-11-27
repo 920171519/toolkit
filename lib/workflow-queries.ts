@@ -1,4 +1,4 @@
-import { all, one } from "./db";
+import { all, db, one } from "./db";
 import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
 import type { BatchStatus } from "./constants";
@@ -9,6 +9,7 @@ import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
 import { trialEligibilityCtes } from "./trial-eligibility";
+import { getPendingBindingFlowCounts } from "./trial-readiness";
 import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 
 export type ProjectOption = { id: number; name: string; code: string; status: string };
@@ -716,21 +717,8 @@ export type BindingFlowRow = {
   cancelReason: string | null;
 };
 
-function getPendingBindingFlowCounts(versionIds: number[]): Map<number, number> {
-  if (versionIds.length === 0) return new Map();
-  const rows = all<{ versionId: number; count: number }>(
-    `SELECT f.package_version_id AS versionId, COUNT(*) AS count FROM binding_flows f
-     JOIN projects pr ON pr.id = f.project_id
-     WHERE f.package_version_id IN (SELECT value FROM json_each(?))
-       AND f.status = 'PENDING' AND pr.status != 'ARCHIVED'
-     GROUP BY f.package_version_id`,
-    JSON.stringify(versionIds),
-  );
-  return new Map(rows.map(({ versionId, count }) => [versionId, count]));
-}
-
 export function getPendingBindingFlowCount(versionId: number): number {
-  return getPendingBindingFlowCounts([versionId]).get(versionId) ?? 0;
+  return getPendingBindingFlowCounts(db, [versionId]).get(versionId) ?? 0;
 }
 
 export type BindingRequirementRow = {
@@ -1395,7 +1383,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       });
     }
     const pendingFormal = Array.from(new Map(getPendingFormalVersions(managerScope).map((item) => [item.versionId, item])).values());
-    const pendingFlows = getPendingBindingFlowCounts(pendingFormal.map(({ versionId }) => versionId));
+    const pendingFlows = getPendingBindingFlowCounts(db, pendingFormal.map(({ versionId }) => versionId));
     for (const version of pendingFormal) {
       const pending = pendingFlows.get(version.versionId) ?? 0;
       tasks.push({

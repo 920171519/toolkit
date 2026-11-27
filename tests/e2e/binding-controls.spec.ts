@@ -488,6 +488,24 @@ test("额外审批或撤销已审批电子流后须重新确认，共享版本�
     await formalLink.click();
     await expect(page.getByRole("button", { name: "发布正式版本", exact: true })).toBeVisible();
 
+    const staleFormalPage = await page.context().newPage();
+    try {
+      await staleFormalPage.goto(formal);
+      await staleFormalPage.getByRole("button", { name: "发布正式版本", exact: true }).click();
+      const releaseDialog = staleFormalPage.getByRole("dialog", { name: /^转正/ });
+      await releaseDialog.getByLabel("转正电子流网址").fill("https://example.com/formal/stale-check");
+      await releaseDialog.getByLabel("转正评审纪要").fill("核对另一个页面中补交的绑定电子流。");
+      await page.goto(n1);
+      await submitFlow(page, "CONTROL-N1-LATE");
+      expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+      await releaseDialog.getByRole("button", { name: "提交转正电子流并发布" }).click();
+      await expect(releaseDialog.getByRole("alert")).toContainText("仍有绑定电子流待审批");
+      expect(statuses()).toEqual(["PENDING_FORMAL", "PENDING_FORMAL"]);
+      await withdrawFlow(page, "CONTROL-N1-LATE");
+    } finally {
+      await staleFormalPage.close();
+    }
+
     await page.goto(n1);
     await withdrawFlow(page, "CONTROL-N1-FIRST");
     expect(statuses()).toEqual(["TRIAL", "TRIAL"]);

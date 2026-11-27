@@ -8,11 +8,11 @@ import { all, db, one } from "./db";
 import { packageIdentity } from "./package-identity";
 import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "./permissions";
 import { getTrialNodeUsages, missingTrialNodeAssignments, trialEligibilityCtes } from "./trial-eligibility";
-import { areFormalBindingsReady, getActiveBindingSummary, getActiveIntegrationBatches, getActiveReleaseRequests } from "./trial-readiness";
+import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-import { getPendingBindingFlowCount, getReadableTrialDetail } from "./workflow-queries";
+import { getReadableTrialDetail } from "./workflow-queries";
 
 type ReleaseGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 type GuidanceContext = {
@@ -27,6 +27,7 @@ type ReleaseGuidance = {
   description?: string;
   href?: string;
 };
+type FormalReleaseGuidance = ReleaseGuidance & { pendingFlowCount: number };
 
 const pendingTrialStatuses = new Set(["PENDING_TRANSFER", "IN_TEST", "PENDING_TRIAL"]);
 
@@ -162,7 +163,7 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
 }
 
 /** Check the release prerequisites across active released requests, with links only for project records the actor can open. */
-export function getFormalReleaseGuidance(user: SessionUser, versionId: number, context: GuidanceContext = {}): ReleaseGuidance | null {
+export function getFormalReleaseGuidance(user: SessionUser, versionId: number, context: GuidanceContext = {}): FormalReleaseGuidance | null {
   const version = versionRecord(versionId);
   if (!version) return null;
   const requests = getActiveReleaseRequests(db, versionId);
@@ -181,7 +182,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   const projectScope = (projectId: number) => canAccessProjectPage(user, projectId) ? projectId : undefined;
   const traceHref = workflowHref(`/versions/${versionId}`, context.projectId === undefined ? undefined : projectScope(context.projectId), args);
   if (!isBindingOpen(version.status)) return {
-    status: version.status, canManage,
+    status: version.status, canManage, pendingFlowCount: 0,
     description: `${identity.code} ${version.version}`,
     items: [{
       title: version.status === "FORMAL" ? "该版本已转正" : version.status === "VOID" ? "该版本已作废" : "该版本不在转正流程中",
@@ -190,10 +191,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
     }],
   };
 
-  const binding = getActiveBindingSummary(db, versionId);
-  const batches = getActiveIntegrationBatches(db, versionId);
-  const bindingsReady = version.bindingMode !== "PENDING" && areFormalBindingsReady(binding, version.bindingMode);
-  const pendingFlows = getPendingBindingFlowCount(versionId);
+  const { binding, batches, bindingsReady, pendingFlowCount, blocker } = getFormalReleaseCheck(db, version, requests);
   const items: ReleaseGuidanceItem[] = [];
   let shownFlows = 0;
   let shownUnsettled = 0;
@@ -242,7 +240,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
       });
     }
   }
-  if (pendingFlows > shownFlows) items.push({ title: `其他使用项目还有 ${pendingFlows - shownFlows} 条待审批电子流`, detail: "请联系相应项目的软件经理协调处理。" });
+  if (pendingFlowCount > shownFlows) items.push({ title: `其他使用项目还有 ${pendingFlowCount - shownFlows} 条待审批电子流`, detail: "请联系相应项目的软件经理协调处理。" });
   const hiddenNodes = binding.total - binding.settled - shownUnsettled;
   if (!bindingsReady && version.bindingMode === "PUSHED" && hiddenNodes > 0) items.push({
     title: "其他使用项目还有绑定条件待核对",
@@ -262,8 +260,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
     });
   }
   if (hiddenBatches > 0) items.push({ title: `还有 ${hiddenBatches} 个已安排的转测批次未结束`, detail: "请联系相应项目的软件经理核对进度。" });
-  const ready = version.status === "PENDING_FORMAL" && requests.every((request) => request.status === "PENDING_FORMAL")
-    && bindingsReady && batches.length === 0 && pendingFlows === 0;
+  const ready = blocker === null;
   if (!ready && items.length === 0) items.push({
     title: "仍有绑定或测试记录待核对", href: traceHref, actionLabel: "查看版本全链路",
   });
@@ -274,6 +271,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   return {
     status: version.status,
     canManage,
+    pendingFlowCount,
     description: `${identity.code} ${version.version} · ${version.bindingMode === "SKIPPED" ? "整版无需绑定" : `已完成 ${binding.settled}/${binding.total} 个节点`}`,
     href: ready && preferred ? workflowHref(`/formal/${versionId}`, preferred.projectId, args) : undefined,
     items,

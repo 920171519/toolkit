@@ -71,7 +71,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   }
   const manageable = records.find((record) => canManageProjectWorkflowForProject(user, record.projectId));
   const version = manageable ?? records[0];
-  const pendingBindingFlows = getPendingBindingFlowCount(versionId);
+  const pendingBindingFlows = guidance?.pendingFlowCount ?? getPendingBindingFlowCount(versionId);
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
   const evidence = getVersionRequestIds(version.versionId)
     .map((requestId) => getTrialDetail(requestId))
