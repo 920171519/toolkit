@@ -79,3 +79,19 @@ test("重复打开通知保留首次已读时间，每个账号单独记录", as
     }
   }
 });
+
+test("通知跳转保留站内路径，拒绝含糊或站外的地址", async ({ page }) => {
+  await login(page, "VALID001");
+  const cases = [
+    { next: "/trial/32?project=1#binding-flow-5", location: "/trial/32?project=1#binding-flow-5" },
+    { next: "/?q=M2#contacts", location: "/?q=M2#contacts" },
+    { next: "https://example.invalid/", location: "/dashboard" },
+    { next: "/projects/..//", location: "/dashboard" },
+  ];
+
+  for (const { next, location } of cases) {
+    const response = await page.request.get(`/api/notifications/read?${new URLSearchParams({ next })}`, { maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    expect(response.headers().location).toBe(location);
+  }
+});
