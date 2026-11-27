@@ -650,6 +650,58 @@ async function setProjectStatus(page: Page, projectId: number, status: "ACTIVE" 
   await expectFlash(page, "项目配置已更新");
 }
 
+test("项目归档后旧页面不能登记节点免绑，恢复后可办理", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const settingsPage = await page.context().newPage();
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const project = db.prepare("SELECT id, status FROM projects WHERE code = 'X0'").get() as { id: number; status: string };
+  let versionId: number | undefined;
+  try {
+    await setProjectStatus(settingsPage, project.id, "ACTIVE");
+    const fixture = setupBindingFixture(db, "2.0.0-archive-waive-check", ["X0"]);
+    versionId = fixture.versionId;
+    const [requestId] = fixture.requestIds;
+    const trialHref = `/trial/${requestId}?project=${project.id}`;
+    const barcode = "ARCHIVE-WAIVER-QA";
+    const reason = "隔离数据验证归档前已打开的节点免绑表单。";
+    const node = page.locator(".binding-requirement");
+    const flow = flowRow(page, barcode);
+    const waiveButton = node.getByRole("button", { name: "节点无需绑定", exact: true });
+    const dialog = page.getByRole("dialog", { name: /确认免绑/ });
+    const submit = dialog.getByRole("button", { name: "确认节点免绑", exact: true });
+
+    await page.goto(trialHref);
+    await submitFlow(page, barcode);
+    await waiveButton.click();
+    await dialog.getByLabel(/免绑原因/).fill(reason);
+    await setProjectStatus(settingsPage, project.id, "ARCHIVED");
+    await expect(settingsPage.getByRole("link", { name: "查看归档版本" })).toBeVisible();
+
+    await submit.click();
+    await expect(dialog.getByRole("alert")).toContainText("项目已归档，不能登记节点免绑。");
+    await page.goto(trialHref);
+    await expect(waiveButton).toHaveCount(0);
+    await expect(node.getByText("节点免绑", { exact: true })).toHaveCount(0);
+    await node.locator(":scope > summary").click();
+    await expect(flow.getByText("待审批", { exact: true })).toBeVisible();
+
+    await setProjectStatus(settingsPage, project.id, "ACTIVE");
+    await page.goto(trialHref);
+    await waiveButton.click();
+    await dialog.getByLabel(/免绑原因/).fill(reason);
+    await submit.click();
+    await expectFlash(page, "已登记此节点无需绑定");
+    await expect(node.getByText("节点免绑", { exact: true })).toBeVisible();
+    await node.locator(":scope > summary").click();
+    await expect(flow.getByText("已撤销", { exact: true })).toBeVisible();
+  } finally {
+    if (versionId !== undefined) db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.prepare("UPDATE projects SET status = ? WHERE id = ?").run(project.status, project.id);
+    db.close();
+  }
+});
+
 test("归档节点不阻塞共享版本转正，恢复项目后重新校验绑定", async ({ page }) => {
   await login(page, "VALID001");
   const db = openE2eDatabase();

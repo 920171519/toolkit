@@ -901,20 +901,22 @@ export function skipBindingAndEnterFormal(actor: SessionUser, requestId: number,
 export function waiveBindingRequirement(actor: SessionUser, requirementId: number, reason: string) {
   assert(reason.trim().length >= 5, "请填写此节点无需绑定的原因（至少 5 个字符）。");
   return transaction(() => {
-    const requirement = one<{
+    const requirement = one<BindingReleaseFacts & {
       request_id: number;
       package_version_id: number;
       project_id: number;
       node_name: string;
       status: string;
-      request_status: string;
       binding_owner_id: number | null;
       pushed_at: string | null;
     }>(
       `SELECT br.request_id, br.package_version_id, br.project_id, n.name AS node_name,
-              br.status, r.status AS request_status, br.binding_owner_id, br.pushed_at
+              br.status, p.status AS projectStatus, r.status AS requestStatus,
+              pv.status AS versionStatus, br.binding_owner_id, br.pushed_at
        FROM binding_requirements br
        JOIN version_transfer_requests r ON r.id = br.request_id
+       JOIN projects p ON p.id = br.project_id
+       JOIN package_versions pv ON pv.id = br.package_version_id
        JOIN project_nodes n ON n.id = br.node_id WHERE br.id = ?`,
       requirementId,
     );
@@ -924,8 +926,11 @@ export function waiveBindingRequirement(actor: SessionUser, requirementId: numbe
       "只有本项目软件经理、该节点绑定责任人或管理员可以登记无需绑定。",
       "FORBIDDEN",
     );
+    const releaseAvailability = bindingReleaseAvailability(requirement);
+    assert(releaseAvailability !== "ARCHIVED", "项目已归档，不能登记节点免绑。");
     assert(requirement.pushed_at, "请先确认并推送绑定任务，再处理节点绑定。");
-    assert(requirement.request_status === "TRIAL" && requirement.status === "PENDING", "只有待绑定节点可以登记无需绑定。");
+    assert(requirement.requestStatus === "TRIAL" && requirement.status === "PENDING", "只有待绑定节点可以登记无需绑定。");
+    assert(releaseAvailability === "OPEN", "该版本已结束绑定验证，不能登记节点免绑。");
     const timestamp = now();
     run(
       `UPDATE binding_requirements SET status = 'CANCELLED', decision_reason = ?, waived_at = ?, waived_by = ?, updated_at = ? WHERE id = ?`,
