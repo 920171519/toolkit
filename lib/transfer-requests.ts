@@ -14,6 +14,34 @@ export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
 export const EFFECTIVE_INTEGRATION_STATUS_SQL = `CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
   THEN COALESCE(r.integration_status, r.status) ELSE r.status END`;
 
+type PreviousBatchVersion = { versionId: number; version: string; canCarry: number };
+
+export function getPreviousBatchVersions(
+  database: DatabaseSync,
+  projectId: number,
+  packageIds: readonly number[],
+): Map<number, PreviousBatchVersion> {
+  if (packageIds.length === 0) return new Map();
+  const rows = database.prepare(
+    `SELECT packageId, versionId, version, canCarry FROM (
+       SELECT bi.package_id AS packageId, bi.package_version_id AS versionId, bi.version,
+              pv.status != 'VOID' AND COALESCE(
+                (${EFFECTIVE_INTEGRATION_STATUS_SQL}) NOT IN ('VOID','CANCELLED','PENDING'), 1
+              ) AS canCarry,
+              ROW_NUMBER() OVER (
+                PARTITION BY bi.package_id
+                ORDER BY COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC
+              ) AS position
+       FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+       JOIN package_versions pv ON pv.id = bi.package_version_id
+       LEFT JOIN version_transfer_requests r ON r.package_version_id = pv.id AND r.project_id = b.project_id
+       WHERE b.project_id = ? AND b.status IN ('IN_TEST','COMPLETED')
+         AND bi.package_id IN (SELECT value FROM json_each(?))
+     ) WHERE position = 1`,
+  ).all(projectId, JSON.stringify(packageIds)) as Array<PreviousBatchVersion & { packageId: number }>;
+  return new Map(rows.map(({ packageId, ...version }) => [packageId, version]));
+}
+
 export function getActiveTransferProjects(database: DatabaseSync, packageId: number) {
   return database.prepare(
     `SELECT DISTINCT p.id, p.name

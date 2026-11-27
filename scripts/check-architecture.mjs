@@ -48,7 +48,7 @@ function importSpecifiers(source) {
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
 const graph = new Map();
 const routeSources = new Map();
-const databaseBoundaryErrors = [];
+const dependencyBoundaryErrors = [];
 for (const file of files.sort()) {
   const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
   const name = displayPath(file);
@@ -60,8 +60,13 @@ for (const file of files.sort()) {
     const dependency = resolved && ownedFiles.get(canonicalPath(resolved.resolvedFileName));
     if (dependency) dependencies.add(dependency);
     if (isEntrypoint && (dependency === "lib/db.ts" || specifier === "node:sqlite" || specifier === "sqlite")) {
-      databaseBoundaryErrors.push(
+      dependencyBoundaryErrors.push(
         `${name} imports ${specifier} directly. Use the corresponding server-side service or query module.`,
+      );
+    }
+    if (name === "lib/workflow.ts" && dependency === "lib/workflow-queries.ts") {
+      dependencyBoundaryErrors.push(
+        "lib/workflow.ts depends on a page query. Read transaction facts from their owning domain module.",
       );
     }
   }
@@ -136,7 +141,7 @@ function workspaceRouteErrors() {
 }
 
 const showGraph = process.argv.includes("--graph");
-const architectureErrors = [...workspaceRouteErrors(), ...databaseBoundaryErrors];
+const architectureErrors = [...workspaceRouteErrors(), ...dependencyBoundaryErrors];
 if (showGraph) console.log(JSON.stringify(Object.fromEntries(graph), null, 2));
 if (cycles.length || architectureErrors.length) {
   for (const cycle of cycles) console.error(`Circular dependency: ${cycle.join(" -> ")}`);

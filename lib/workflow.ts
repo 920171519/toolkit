@@ -20,10 +20,9 @@ import {
   trialReleaseStateKey,
 } from "./trial-eligibility";
 import type { SessionUser } from "./types";
-import { getPreviousBatchVersion } from "./workflow-queries";
 import { discardReportFile, reportArchivePath, resolveReportPath, writeReportFile } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
-import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggregate, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
+import { getActiveTransferProjects, getPreviousBatchVersions, insertTransferRequest, refreshVersionAggregate, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
 import {
@@ -198,6 +197,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
     }
     const existingCode = one<{ id: number }>("SELECT id FROM integration_batches WHERE UPPER(code) = ? AND id != ?", code, draftId);
     assert(!existingCode, `批次号 ${code} 已存在，请更换批次号。`);
+    const previousByPackage = getPreviousBatchVersions(db, input.projectId, selectedPackages.map(({ packageId }) => packageId));
     const items = selectedPackages.map((pkg) => {
       const packageCode = packageIdentity({ name: pkg.packageName, code: pkg.packageCode }).code;
       const selection = selectedByPackage.get(pkg.packageId);
@@ -223,7 +223,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
         input.projectId,
       );
       assert(usedInProject, `${packageCode} 不在 ${project.name} 项目的使用范围内。`);
-      const previous = getPreviousBatchVersion(input.projectId, pkg.packageId);
+      const previous = previousByPackage.get(pkg.packageId);
       if (selection.carryPrevious) {
         assert(
           previous?.canCarry && previous.versionId === selected.id,

@@ -20,7 +20,7 @@ import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
 import { getTrialReadyVersions } from "./trial-eligibility";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
-import { EFFECTIVE_INTEGRATION_STATUS_SQL, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
+import { EFFECTIVE_INTEGRATION_STATUS_SQL, getPreviousBatchVersions, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
 
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
@@ -131,28 +131,6 @@ export type BatchCandidatePackage = {
   archiveUrl: string;
 };
 
-type PreviousBatchVersion = { versionId: number; version: string; canCarry: number };
-
-const previousBatchVersionFields = `bi.package_version_id AS versionId, bi.version,
-  pv.status != 'VOID' AND COALESCE(
-    (${EFFECTIVE_INTEGRATION_STATUS_SQL}) NOT IN ('VOID','CANCELLED','PENDING'), 1
-  ) AS canCarry`;
-const previousBatchVersionFrom = `FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-  JOIN package_versions pv ON pv.id = bi.package_version_id
-  LEFT JOIN version_transfer_requests r ON r.package_version_id = pv.id AND r.project_id = b.project_id`;
-const previousBatchVersionOrder = "COALESCE(b.completed_at, b.sent_at) DESC, bi.id DESC";
-
-export function getPreviousBatchVersion(projectId: number, packageId: number) {
-  return one<PreviousBatchVersion>(
-    `SELECT ${previousBatchVersionFields}
-     ${previousBatchVersionFrom}
-     WHERE b.project_id = ? AND bi.package_id = ? AND b.status IN ('IN_TEST','COMPLETED')
-     ORDER BY ${previousBatchVersionOrder} LIMIT 1`,
-    projectId,
-    packageId,
-  );
-}
-
 export function getBatchCandidatesForProject(projectId: number, editingBatchId = 0): BatchCandidatePackage[] {
   const packages = all<{
     packageId: number;
@@ -197,19 +175,7 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
     if (group) group.push(version);
     else versionsByPackage.set(version.packageId, [version]);
   }
-  const previousByPackage = new Map(
-    all<PreviousBatchVersion & { packageId: number }>(
-      `SELECT packageId, versionId, version, canCarry FROM (
-         SELECT bi.package_id AS packageId, ${previousBatchVersionFields},
-                ROW_NUMBER() OVER (
-                  PARTITION BY bi.package_id ORDER BY ${previousBatchVersionOrder}
-                ) AS position
-         ${previousBatchVersionFrom}
-         WHERE b.project_id = ? AND b.status IN ('IN_TEST','COMPLETED')
-       ) WHERE position = 1`,
-      projectId,
-    ).map((row) => [row.packageId, row]),
-  );
+  const previousByPackage = getPreviousBatchVersions(db, projectId, packages.map(({ packageId }) => packageId));
   const projectRequests = all<{ requestId: number; versionId: number; status: string; reserved: number }>(
     `SELECT r.id AS requestId, r.package_version_id AS versionId,
             ${EFFECTIVE_INTEGRATION_STATUS_SQL} AS status,

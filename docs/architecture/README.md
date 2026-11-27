@@ -10,7 +10,7 @@
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
 | 工作流写入 | `lib/actions/workflow.ts` → `lib/workflow.ts` | Server Action 解析表单并返回反馈。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
-| 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
+| 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。准备转测与草稿事务在 `lib/transfer-requests.ts` 共用上次转测版本读取。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务负责注册和会话写入。`access` 管理项目、责任田、软件包、节点和单据的读写范围及批次证据权限。版本对象读取、项目工作区和写入办理各有权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
@@ -41,6 +41,8 @@
 软件包抽屉的授权投影由 `getPackageDrawerData` 提供。ESLint 会拦截页面和客户端模块直接导入通用查询中的底层详情读取函数。
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
+
+`lib/workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截它直接依赖聚合页面查询 `lib/workflow-queries.ts`。领域模块可以同时服务工作流事务和页面查询。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 
