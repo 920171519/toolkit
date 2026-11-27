@@ -7,7 +7,7 @@
 | 范围 | 当前方案与契约 | 验证入口 |
 | --- | --- | --- |
 | 界面与状态 | Next.js App Router 负责路由和首屏。React 客户端组件持有表单、筛选控件和选中状态。列表条件用 URL 恢复。Tailwind 与全局样式提供设计规范，原生 `dialog` 管理焦点。 | [界面规范](../../AGENTS.md#界面层级与文案)、[弹窗钩子](../../components/use-modal-dialog.ts)、[窄屏回归](../../tests/e2e/workspace-width.spec.ts) |
-| 业务办理 | Server Action 处理会话、表单反馈和跳转。工作流服务负责权限、阶段、并行变更和事务写入。配置修改引起的范围联动复用转测申请服务。 | [工作流](../../lib/workflow.ts)、[转测申请](../../lib/transfer-requests.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) |
+| 业务办理 | Server Action 处理会话、表单反馈和跳转。工作流服务负责权限、阶段、并行变更和事务写入。配置修改引起的范围联动复用转测申请服务。 | [发布写入](../../lib/release-workflow.ts)、[批次写入](../../lib/batch-workflow.ts)、[转测申请](../../lib/transfer-requests.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) |
 | 软件包详情接口 | `GET /api/packages/[id]` 对未登录请求返回 401，包编号无法解析为整数时返回 400。包或项目不可读、项目参数重复或记录缺失时返回 404。成功 JSON 使用 `no-store`，和页面预加载共享授权投影。 | [接口](../../app/api/packages/[id]/route.ts)、[接口与抽屉回归](../../tests/e2e/package-experience.spec.ts) |
 | 验证报告接口 | `GET /api/reports/[id]` 对未登录请求返回 401。报告权限沿用对应证据读取规则。无效编号、缺失、不可读或无法下载返回 404。成功响应保留 MIME 类型、文件名及 `private, no-store`。 | [接口](../../app/api/reports/[id]/route.ts)、[报告回归](../../tests/e2e/workflow.spec.ts) |
 | 通知入口 | `GET /api/notifications/read` 使用 303 导航。未登录跳到登录。登录后按当前账号记录已读，再跳到校验后的站内路径，默认回工作台。 | [接口](../../app/api/notifications/read/route.ts)、[工作台回归](../../tests/e2e/dashboard.spec.ts) |
@@ -20,7 +20,7 @@
 
 | 原并行路径 | 当前权威入口 | 差异或证据 |
 | --- | --- | --- |
-| 早期服务与现行工作流 | [工作流服务](../../lib/workflow.ts) | 退役无现行调用的 `lib/services.ts`。历史记录仍可读取。 |
+| 早期服务与现行工作流 | [发布写入](../../lib/release-workflow.ts)、[批次写入](../../lib/batch-workflow.ts) | 退役无现行调用的 `lib/services.ts`。历史记录仍可读取。 |
 | 列表预加载与 HTTP 抽屉详情 | [抽屉投影](../../lib/package-drawer-data.ts) | 复用同一授权和投影，保留项目过滤及 HTTP 错误响应。 |
 | 各列表的分页范围与应用入口参数 | [分页窗口](../../lib/list-pagination.ts) | 数组与 SQLite 使用同一窗口计算，各入口保留自己的 URL 参数。 |
 | 不同页面维护的批次证据和试制门槛 | [证据授权](../../lib/access.ts)、[试制资格](../../lib/trial-eligibility.ts)、[转正检查](../../lib/trial-readiness.ts) | 流程条件由服务端复核，证据由实际所属项目授权。资格与证据展示各自保留对应的检查。 |
@@ -57,11 +57,12 @@
 | 三个视图各自计算试制释放时间与超期天数 | [截止时间定义](../../lib/trial-readiness.ts)、[归档回归](../../tests/e2e/trial-queue.spec.ts) | 共用 SQLite 时间条件，保留每处使用结果的业务范围。 |
 | 转测表单将可提交条件与服务端四项字段校验分别实现 | [字段校验](../../lib/transfer-form-validation.ts)、[转测表单](../../components/transfer-request-form.tsx) | 共用字段条件及顺序，界面提示与服务端业务错误分别由调用方呈现。 |
 | 帮助提示与表头筛选重复读取视口、约束横向位置和订阅事件 | [弹层视口](../../components/popover-viewport.ts)、[提示](../../components/info-tooltip.tsx)、[表头筛选](../../components/column-filter-popover.tsx) | 通用定位与事件订阅集中，弹层交互由各组件负责。 |
+| 原跨阶段工作流写入文件只剩发布命令 | [发布写入](../../lib/release-workflow.ts)、[风险登记入口](../../lib/actions/risk-trial.ts) | 现行 Action 直接调用发布模块，写入依赖约束同步迁移。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |
 | 多个绑定入口分别组合指定审批人与自审判断 | [审批人判定](../../lib/permissions.ts)、[绑定回归](../../tests/e2e/binding-controls.spec.ts) | 详情、转正引导与事务共用人员判定。工作台在数据库过滤待办，由端到端测试核对与审批入口一致。 |
-| 启动迁移和试制发布同时写审批人快照 | [试制发布](../../lib/workflow.ts)、[启动迁移](../../lib/db.ts) | 发布事务持有快照写入权，旧记录使用已持久化的主审批人。冷启动回归覆盖保存快照和兼容回退。 |
+| 启动迁移和试制发布同时写审批人快照 | [试制发布](../../lib/release-workflow.ts)、[启动迁移](../../lib/db.ts) | 发布事务持有快照写入权，旧记录使用已持久化的主审批人。冷启动回归覆盖保存快照和兼容回退。 |
 | 每次启动对既有节点主审批人配置重复尝试插入 | [节点配置迁移](../../lib/db.ts)、[冷启动回归](../../tests/e2e/binding-approver-snapshot.spec.ts) | 查询排除存在的配置，保留旧库补齐，冷启动回归核对编号和历史快照。 |
 | 多套弹窗焦点、筛选和回跳处理 | [弹窗钩子](../../components/use-modal-dialog.ts)、[表头筛选](../../components/column-filter-header.tsx)、[回跳校验](../../lib/return-to.ts) | 界面入口可有不同的信息结构，键盘行为、控件契约和合法站内跳转有共用实现。 |
 | 已无调用的表单错误助手及旧展示数据 | [Action 助手](../../lib/action-helpers.ts)、[状态元数据](../../lib/constants.ts) | 删除闲置声明和字段，错误反馈、标签和样式沿用当前页面引用的内容。 |

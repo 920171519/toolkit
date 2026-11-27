@@ -5,7 +5,7 @@ import type { ActionState } from "@/lib/action-state";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import type { RiskTrialEntry } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { admitRiskTrial } from "@/lib/workflow";
+import { admitRiskTrial } from "@/lib/release-workflow";
 
 export async function registerRiskTrial(
   expected: Pick<RiskTrialEntry, "requestId" | "stage" | "batchId">,

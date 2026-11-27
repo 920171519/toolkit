@@ -9,7 +9,7 @@
 | 公开目录、登录和项目导航 | `app/page.tsx`、`app/(auth)`、`app/(workspace)/layout.tsx`、`components/workspace-navigation.tsx` | App Router 组合页面。公开目录读取在行项目联系人。工作区渲染登录状态和已授权的项目入口。 |
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
 | 锚定弹层 | `components/popover-viewport.ts` | 共用视口范围、横向定位和事件清理。帮助提示与表头筛选各自管理打开、关闭和焦点。 |
-| 工作流写入 | `lib/actions/workflow.ts`、`lib/actions/risk-trial.ts` → `lib/workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
+| 发布写入 | `lib/actions/workflow.ts`、`lib/actions/risk-trial.ts` → `lib/release-workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
 | 批次写入 | `lib/actions/workflow.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/workflow.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/workflow.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
@@ -35,10 +35,10 @@
 | --- | --- | --- |
 | 登录和业务分工 | `sessions`、`users`、项目和责任田分工表 | `auth`、`access`、`settings`。Cookie 承载会话，下一次请求按服务端记录校验。 |
 | 软件包身份和使用范围 | `packages`、`package_usages` | `settings` 写入。`package-identity` 投影旧资料中的编码与名称，流程关联继续按 ID。 |
-| 共享版本状态 | `package_versions` | `workflow` 更新共享试制、转正及作废。 |
-| 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `workflow` 更新。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
-| 批次与完整配套 | `integration_batches`、`batch_items` | `workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
-| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `workflow` 写入。`binding-availability` 定义绑定办理所需的发布阶段和节点状态，`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
+| 共享版本状态 | `package_versions` | `release-workflow` 办理共享试制及转正，`version-void-workflow` 负责写入作废记录。 |
+| 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `transfer-workflow` 创建申请，`batch-workflow` 写入验收，`release-workflow` 更新发布状态。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
+| 批次与完整配套 | `integration_batches`、`batch_items` | `batch-workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
+| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `release-workflow` 保存试制时的配置快照，`binding-workflow` 写入后续绑定和节点结果。`binding-availability` 定义绑定办理所需的发布阶段和节点状态，`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |
 | 目录和流程筛选 | URL 参数、浏览器当前页面状态 | 各列表保留既有 URL 参数。`lib/list-pagination.ts` 统一计算筛选后分页范围，数组和 SQLite 分页都使用该结果。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
@@ -53,7 +53,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/workflow.ts`、`lib/binding-workflow.ts`、`lib/transfer-workflow.ts`、`lib/batch-workflow.ts` 和 `lib/version-void-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
+`lib/release-workflow.ts`、`lib/binding-workflow.ts`、`lib/transfer-workflow.ts`、`lib/batch-workflow.ts` 和 `lib/version-void-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 

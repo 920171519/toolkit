@@ -35,7 +35,7 @@ import {
   waiveBindingRequirement,
 } from "@/lib/binding-workflow";
 import { cancelTransfer, submitTransfer } from "@/lib/transfer-workflow";
-import { abandonTrialRelease, releaseFormal, releaseTrial, voidPackageVersion } from "@/lib/workflow";
+import { abandonTrialRelease, releaseFormal, releaseTrial, voidPackageVersion } from "@/lib/release-workflow";
 
 function workflowSuccessRedirect(
   formData: FormData,
