@@ -25,9 +25,9 @@ import {
   submitBindingFlow,
   waiveBindingRequirement,
 } from "@/lib/binding-workflow";
+import { cancelTransfer, submitTransfer } from "@/lib/transfer-workflow";
 import {
   addBatchProgress,
-  cancelTransfer,
   completeBatchTest,
   createBatchDraft,
   type CreateBatchInput,
@@ -35,7 +35,6 @@ import {
   releaseFormal,
   releaseTrial,
   sendBatch,
-  submitTransfer,
   terminateBatch,
   abandonTrialRelease,
   voidPackageVersion,

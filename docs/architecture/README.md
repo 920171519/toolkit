@@ -9,6 +9,7 @@
 | 公开目录、登录和项目导航 | `app/page.tsx`、`app/(auth)`、`app/(workspace)/layout.tsx`、`components/workspace-navigation.tsx` | App Router 组合页面。公开目录读取在行项目联系人。工作区渲染登录状态和已授权的项目入口。 |
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
 | 工作流写入 | `lib/actions/workflow.ts`、`lib/actions/risk-trial.ts` → `lib/workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
+| 转测写入 | `lib/actions/workflow.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/workflow.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
@@ -50,7 +51,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/workflow.ts` 和 `lib/binding-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这两个写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入这两个写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
+`lib/workflow.ts`、`lib/binding-workflow.ts` 和 `lib/transfer-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts` 和 `lib/release-queue-queries.ts`，也拦截工作区页面直接导入写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。设置的页面、组件、软件包抽屉数据适配与其他 Action 从查询模块读取配置证据，通过设置 Action 办理写入。架构检查拦截这些入口直接引用设置写入模块。应用中的会话存储调用来自认证和设置模块。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 
