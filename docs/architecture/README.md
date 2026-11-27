@@ -62,4 +62,6 @@
 
 ## 自动验证
 
+`pnpm lint` 同时运行[架构检查的契约测试](../../tests/architecture-check.test.mjs)。测试在临时项目中调用真实检查器，验证合法依赖、违规导入、类型循环和路由规则偏移。
+
 GitHub Actions 在 Ubuntu 24.04 上先用 `bash tests/deploy-ubuntu.sh` 验证部署顺序，再用 Node.js 24.19.0 和 pnpm 11.19.0 冻结安装，执行 `pnpm lint`、`pnpm test:e2e:full` 和 `pnpm typecheck`。部署测试使用模拟命令，浏览器回归使用隔离的演示数据库和报告目录。本机可用相同命令复验。 [工作流配置](../../.github/workflows/verify.yml)

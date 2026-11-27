@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . && pnpm architecture:check",
+    "lint": "eslint . && pnpm architecture:check && node --test tests/architecture-check.test.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
     "db:reset": "tsx scripts/reset-db.ts",
     "db:seed": "tsx scripts/seed-db.ts",
