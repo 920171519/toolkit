@@ -4,6 +4,22 @@ import { DatabaseSync } from "node:sqlite";
 import { closeDatabaseAfterError, withImmediateTransaction } from "../lib/sqlite-lifecycle";
 import { backfillTrialTransferRequests, findMissingTrialTransferRequests } from "../lib/transfer-requests";
 
+const SQLITE_READONLY = 8;
+
+function assertReadOnlyPreviewSupport() {
+  let probe: DatabaseSync | undefined;
+  try {
+    // Some Node.js versions ignore the option. Verify it before opening the target.
+    probe = new DatabaseSync(":memory:", { readOnly: true });
+    probe.exec("CREATE TABLE read_only_probe (id INTEGER)");
+  } catch (error) {
+    if (probe && error instanceof Error && "errcode" in error && error.errcode === SQLITE_READONLY) return;
+  } finally {
+    probe?.close();
+  }
+  throw new Error("当前 Node.js 运行时无法确认 SQLite 只读模式。请升级到支持该模式的版本后重试预览。");
+}
+
 function main() {
   const [databaseFlag, path, applyFlag, ...extra] = process.argv.slice(2);
   if (databaseFlag !== "--database" || !path || path.startsWith("--") || (applyFlag && applyFlag !== "--apply") || extra.length) {
@@ -13,6 +29,7 @@ function main() {
   const filename = realpathSync(resolve(path));
   if (!statSync(filename).isFile()) throw new Error("请选择已有的数据库文件。");
   const apply = applyFlag === "--apply";
+  if (!apply) assertReadOnlyPreviewSupport();
   const database = new DatabaseSync(filename, { readOnly: !apply });
   try {
     database.exec("PRAGMA busy_timeout = 5000");

@@ -559,7 +559,7 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 
 ### 补齐在途版本的转测申请
 
-旧数据可能在扩大使用范围后缺少个别在行项目的转测申请。使用现有 SQLite 文件的路径先预览。命令会列出受影响的软件包、版本和项目。
+旧数据可能在扩大使用范围后缺少个别在行项目的转测申请。使用现有 SQLite 文件的路径先预览。命令会列出受影响的软件包、版本和项目。预览会先验证当前 Node.js 的 SQLite 只读能力，验证失败时会在打开目标数据库前退出。
 
 ```bash
 pnpm exec tsx scripts/backfill-trial-transfer-requests.ts --database /path/to/toolkit.db

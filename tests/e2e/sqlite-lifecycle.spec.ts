@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { closeDatabaseAfterError, withImmediateTransaction } from "../../lib/sqlite-lifecycle";
@@ -39,4 +41,32 @@ test("SQLite 自动回滚或关闭连接失败后保留原始错误", () => {
 
   const original = new Error("fixture failed before close");
   assert.throws(() => closeDatabaseAfterError(database, original), (error) => error === original);
+});
+
+test("补派预览无法确认 SQLite 只读时在打开目标前退出", ({}, testInfo) => {
+  const target = testInfo.outputPath("toolkit.db");
+  const preloader = testInfo.outputPath("sqlite-ignores-read-only.cjs");
+  writeFileSync(target, "");
+  // Simulate a runtime that accepts the option without enforcing it.
+  writeFileSync(preloader, `
+    const sqlite = require("node:sqlite");
+    const DatabaseSync = sqlite.DatabaseSync;
+    sqlite.DatabaseSync = class extends DatabaseSync {
+      constructor(path, options) {
+        if (path !== ":memory:") throw new Error("fixture target opened");
+        super(path, { ...options, readOnly: false });
+      }
+    };
+    require("node:module").syncBuiltinESMExports();
+  `);
+
+  const preview = spawnSync(process.execPath, [
+    "--require", preloader, "--import", "tsx",
+    "scripts/backfill-trial-transfer-requests.ts", "--database", target,
+  ], { encoding: "utf8", timeout: 15_000 });
+  expect(preview.error).toBeUndefined();
+  expect(preview.status).toBe(1);
+  expect(preview.stdout).toBe("");
+  expect(preview.stderr).toContain("无法确认 SQLite 只读模式");
+  expect(preview.stderr).not.toContain("fixture target opened");
 });
