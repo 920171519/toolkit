@@ -21,7 +21,7 @@
 | 原并行路径 | 当前权威入口 | 差异或证据 |
 | --- | --- | --- |
 | 早期服务与现行工作流 | [发布写入](../../lib/release-workflow.ts)、[批次写入](../../lib/batch-workflow.ts) | 退役无现行调用的 `lib/services.ts`。历史记录仍可读取。 |
-| 列表预加载与 HTTP 抽屉详情 | [抽屉投影](../../lib/package-drawer-data.ts) | 复用同一授权和投影，保留项目过滤及 HTTP 错误响应。 |
+| 列表预加载与 HTTP 抽屉详情 | [抽屉投影](../../lib/package-queries.ts) | 复用同一授权和投影，保留项目过滤及 HTTP 错误响应。 |
 | 各列表的分页范围与应用入口参数 | [分页窗口](../../lib/list-pagination.ts) | 数组与 SQLite 使用同一窗口计算，各入口保留自己的 URL 参数。 |
 | 不同页面维护的批次证据和试制门槛 | [证据授权](../../lib/access.ts)、[试制资格](../../lib/trial-eligibility.ts)、[转正检查](../../lib/trial-readiness.ts) | 流程条件由服务端复核，证据由实际所属项目授权。资格与证据展示各自保留对应的检查。 |
 | 批次详情、表单和事务各自计算测试结论影响与归属 | [集成测试结论规则](../../lib/integration-conclusion.ts) | 批次视图和事务共用并行风险试制识别。表单、Action 与服务共用结论枚举、归属配对和影响选择规则。 |

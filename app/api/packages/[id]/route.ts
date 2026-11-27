@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getPackageDrawerData } from "@/lib/package-drawer-data";
+import { getPackageDrawerData } from "@/lib/package-queries";
 import { getReadablePackageProject } from "@/lib/project-scope";
 
 export const dynamic = "force-dynamic";

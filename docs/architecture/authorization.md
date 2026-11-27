@@ -12,7 +12,7 @@
 | 项目基础资料 | 登录后可浏览所有项目的基础资料和阶段，包括归档项目。 | [`getProjectCatalogEntries`](../../lib/project-queries.ts)、[项目详情](../../app/(workspace)/projects/[id]/page.tsx) |
 | 项目工作区 | 管理员，以及本项目软件经理、集成测试责任田主管或本项目的集成测试责任田负责人和成员。查询可在需要历史记录时显式包含归档项目。 | [`getProjectWorkflowProjectIds`、`canAccessProjectPage`](../../lib/access.ts)、[项目范围路由](../../lib/project-scope.ts) |
 | 批次及其报告 | 已发起批次沿用项目工作区范围，草稿限制为本项目软件经理和管理员。比对分别验证当前批次与基准；报告尚未关联批次时，普通账号仅可下载本人上传的报告。 | [`canReadBatchEvidence`](../../lib/access.ts)、[批次对比](../../lib/batch-comparison.ts)、[报告接口](../../app/api/reports/[id]/route.ts) |
-| 软件包及版本 | 工作区分工、软件包责任人、该版本提交人、该包责任田主管、与使用项目匹配的责任田负责人或成员，以及具体绑定指派，按对象及证据获得读取权限。可读软件包可能在没有可读版本的情况下展示基础资料。项目过滤能匹配可读软件包时，仍可使用项目筛选。 | [`getReadablePackageIds`、`getReadableVersionIds`、`getNarrowVersionRequestIds`](../../lib/access.ts)、[软件包抽屉](../../lib/package-drawer-data.ts)、[版本全链路](../../lib/version-trace-queries.ts) |
+| 软件包及版本 | 工作区分工、软件包责任人、该版本提交人、该包责任田主管、与使用项目匹配的责任田负责人或成员，以及具体绑定指派，按对象及证据获得读取权限。可读软件包可能在没有可读版本的情况下展示基础资料。项目过滤能匹配可读软件包时，仍可使用项目筛选。 | [`getReadablePackageIds`、`getReadableVersionIds`、`getNarrowVersionRequestIds`](../../lib/access.ts)、[软件包抽屉](../../lib/package-queries.ts)、[版本全链路](../../lib/version-trace-queries.ts) |
 | 节点及电子流 | 有项目工作区权限或为软件包责任人时可读完整试制详情。否则节点责任人可看已推送的本节点，电子流审批人及提交人只可看各自关联的电子流。 | [`createTrialDetailReader` 的授权投影](../../lib/binding-queries.ts) |
 
 ## 办理权限
@@ -27,7 +27,7 @@
 | 提交、审批及撤销绑定电子流 | 节点绑定责任人或管理员可提交，从发布时的审批人快照选择指定人。旧要求缺少快照时沿用已保存的主审批人。该电子流指派的审批人或管理员可审批，均不得自审。提交人、本项目软件经理或管理员可在允许的状态下登记撤销。 | [`canSubmitBindingFlow`、`bindingFlowApprovalBlocker`](../../lib/permissions.ts)、[绑定写入](../../lib/binding-workflow.ts) |
 | 判定条码、确认节点 | 软件包责任人、该节点所属项目的软件经理或管理员。 | [`canConfirmBindingNodeForProject`](../../lib/access.ts)、[绑定写入](../../lib/binding-workflow.ts) |
 | 登记单节点免绑 | 该节点绑定责任人、本项目软件经理或管理员。 | [绑定写入](../../lib/binding-workflow.ts) |
-| 修改软件包责任信息 | 管理员、该包责任田主管或该责任田的项目负责人。抽屉编辑资格、软件包审计可见性和保存使用同一权限。 | [`canEditPackageResponsibility`](../../lib/access.ts)、[软件包抽屉](../../lib/package-drawer-data.ts)、[`updatePackageResponsibility`](../../lib/package-settings.ts) |
+| 修改软件包责任信息 | 管理员、该包责任田主管或该责任田的项目负责人。抽屉编辑资格、软件包审计可见性和保存使用同一权限。 | [`canEditPackageResponsibility`](../../lib/access.ts)、[软件包抽屉](../../lib/package-queries.ts)、[`updatePackageResponsibility`](../../lib/package-settings.ts) |
 | 维护软件包配置和补录 | 管理员或相应责任田主管可维护软件包配置和导入历史版本。更正历史补录由管理员执行。 | [`canManagePackageArea`](../../lib/access.ts)、[软件包配置写入](../../lib/package-settings.ts) |
 
 ## 合并规则前需核对的边界

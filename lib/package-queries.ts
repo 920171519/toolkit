@@ -6,6 +6,7 @@ import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_
 import type { PackageProgressStatus } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
 import { packageCodeSql } from "./package-identity";
+import { getPackageDeactivationBlockingVersions } from "./settings-queries";
 import type { PackageSummary, PackageVersionSummary, SessionUser } from "./types";
 
 const PACKAGE_SUMMARY_SQL = `
@@ -390,7 +391,7 @@ export function getReadablePackageOverviewRows(user: SessionUser, projectId?: nu
   return rows.map((row) => restrictPackageSummary(row, versions.get(row.id) ?? new Set<string>()));
 }
 
-export function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): (PackageDetailData & { canEdit: boolean }) | null {
+function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): (PackageDetailData & { canEdit: boolean }) | null {
   const versionIds = getReadableVersionIds(user);
   const packageIds = getReadablePackageIds(user, versionIds);
   if (packageIds !== null && !packageIds.includes(packageId)) return null;
@@ -410,6 +411,18 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
     audits: canEdit ? data.audits : [],
   };
 }
+
+export function getPackageDrawerData(user: SessionUser, packageId: number, projectId?: number) {
+  const detail = getReadablePackageDetail(user, packageId, projectId);
+  if (!detail) return null;
+
+  return {
+    ...detail,
+    deactivationBlockers: detail.canEdit ? getPackageDeactivationBlockingVersions(packageId) : [],
+  };
+}
+
+export type PackageDrawerData = NonNullable<ReturnType<typeof getPackageDrawerData>>;
 
 function readGlobalPackageSummary(packageId: number, includeInactive: boolean) {
   const [pkg] = withTrialProgress(readPackagesOverview(includeInactive, packageId));
