@@ -10,7 +10,7 @@ import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-d
 import { getProjectOptionsWithNodes } from "@/lib/project-queries";
 import { getPackageConfiguration } from "@/lib/package-queries";
 import { getPeople, getResponsibilityAreaOptions } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings-queries";
 import { ActionForm } from "@/components/action-form";
@@ -46,7 +46,7 @@ export default async function PackageSettingsDetailPage({
   }
   const search = await searchParams;
   const listParams = directoryFilters("packages", search);
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const areas = isAdmin ? getResponsibilityAreaOptions({ orderBy: "id" }) : [];
   const people = getPeople();
   const { package: pkg, usages } = data;

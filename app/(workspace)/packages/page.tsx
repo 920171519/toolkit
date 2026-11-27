@@ -5,7 +5,7 @@ import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getPackageDrawerData, getReadablePackageOverviewRows, hasTransferPackageOptions } from "@/lib/package-queries";
 import { getPeople } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { GuidanceDialog } from "@/components/guidance-dialog";
@@ -25,7 +25,7 @@ export default async function PackagesPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const selectedProject = typeof params.project === "string" ? getReadablePackageProject(user, Number(params.project)) : undefined;
   if (params.project && !selectedProject) notFound();
   const workflowProjectId = selectedProject && canAccessProjectPage(user, selectedProject.id) ? selectedProject.id : undefined;

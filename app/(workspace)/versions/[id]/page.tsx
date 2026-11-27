@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canAccessProjectPage, canManageProjectWorkflowForProject, getReadableVersionIds } from "@/lib/access";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
@@ -53,7 +53,7 @@ export default async function VersionTracePage({
   const user = await requireUser();
   const { id } = await params;
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const versionId = Number(id);
   if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
   const project = requireWorkflowProject(user, search.project);

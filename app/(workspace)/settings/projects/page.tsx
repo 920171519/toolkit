@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getManagedProjectScope } from "@/lib/access";
 import { getProjectSettingsDirectory } from "@/lib/project-queries";
 import { getPeople } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
@@ -30,7 +30,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
   const managedProjectIds = getManagedProjectScope(user, { includeArchived: true });
   if (managedProjectIds?.length === 0) notFound();
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const query = directoryValue(params.q);
   const status = PROJECT_STATUS_OPTIONS.find(({ value }) => value === params.status)?.value ?? "";
   const projects = getProjectSettingsDirectory(managedProjectIds);

@@ -6,7 +6,7 @@ import { BINDING_FLOW_STATUS_META, PACKAGE_STATUS_META, ROLE_META, type PackageS
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { hasTransferPackageOptions } from "@/lib/package-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { getPersonalDashboard, type PersonalAlert } from "@/lib/workbench-queries";
 import { Badge, FlashMessage, PageHeader } from "@/components/ui";
@@ -49,7 +49,7 @@ export default async function DashboardPage({ searchParams }: {
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const { tasks, alerts, notifications, myVersions, myBindingFlows, counts } = getPersonalDashboard(user);
   const canSubmit = hasTransferPackageOptions(user);
   const groups = categories.map((category) => ({ ...category, tasks: tasks.filter((task) => task.category === category.key) }))

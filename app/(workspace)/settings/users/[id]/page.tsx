@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { getAdminUsers } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { saveUserProfileAction, setUserActiveAction, updateUserRoleAction } from "@/lib/actions/settings";
 import { getSettingsPackageReferences } from "@/lib/settings-queries";
@@ -31,7 +31,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
   const search = await searchParams;
   const legacyRole = ROLES.find((role) => role === search.role);
   const listParams = directoryFilters("users", { ...search, f_role: search.f_role ?? legacyRole });
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const isSelf = member.id === user.id;
   const activeOwnedPackages = !isSelf && member.isActive ? getSettingsPackageReferences({ enabledOwnerId: userId }) : [];
   return (

@@ -9,7 +9,7 @@ import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparatio
 import { getBatchCount, getBatches } from "@/lib/batch-queries";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { hasTransferPackageOptions } from "@/lib/package-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
@@ -35,7 +35,7 @@ export default async function SubmissionsPage({
   const user = await requireUser();
   const params = await searchParams;
   const { returnTo } = getWorkflowListState(params);
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const managerScope = getManagedProjectScope(user);

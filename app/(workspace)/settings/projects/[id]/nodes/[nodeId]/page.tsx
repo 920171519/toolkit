@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getProjectNodeConfig } from "@/lib/project-queries";
 import { getPeople } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { addProjectNodeApproverAction, deleteProjectNodeAction, removeProjectNodeApproverAction, updateProjectNodeAction } from "@/lib/actions/settings";
 import { getNodeApproverRemovalBlocker, getNodeDeletionBlockers } from "@/lib/settings-queries";
 import { directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
@@ -35,7 +35,7 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
   if (!config) notFound();
   const { project, node } = config;
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const people = getPeople();
   const nodeCandidateBlocker = getNodeCandidateGuidance(user, people.length);
   const approverIds = new Set(node.approvers.map(({ userId }) => userId));

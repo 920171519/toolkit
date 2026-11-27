@@ -11,7 +11,7 @@ import identityStyles from "@/components/package-identity.module.css";
 import { getProjectCatalogEntries } from "@/lib/project-queries";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getProjectPackagePreview } from "@/lib/package-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { getProjectTrialReadyCount } from "@/lib/trial-eligibility";
 import { getProjectBatchCounts, getRecentProjectBatches } from "@/lib/batch-queries";
@@ -48,7 +48,7 @@ export default async function ProjectOverviewPage({
   const [project] = getProjectCatalogEntries(projectId);
   if (!project) notFound();
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const returnTo = safeOverviewReturnPath(search.returnTo);
   const projectStatus = PROJECT_STATUS_META[project.status];
   const stage = PROJECT_STAGE_META[project.stage];

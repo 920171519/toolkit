@@ -16,7 +16,7 @@ import {
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAdminUsers, getResponsibilityAreaOptions, type AdminUser } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import {
   directoryColumnFields,
   directoryHref,
@@ -46,7 +46,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
   const members = getAdminUsers();
   const areas = getResponsibilityAreaOptions();
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const query = directoryValue(search.q);
   const matchesSearch = wordSearchMatcher(query);
   const baseFields = directoryColumnFields.users;

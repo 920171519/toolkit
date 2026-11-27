@@ -17,7 +17,7 @@ import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
@@ -62,7 +62,7 @@ function batchLink(row: Pick<TrialVersionRow, "batchId" | "batchCode">, projectI
 export default async function TrialPage({ searchParams }: { searchParams: Promise<TrialSearchParams> }) {
   const user = await requireUser();
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const project = requireWorkflowProject(user, params.project);
   const projectId = project?.id;
   const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);

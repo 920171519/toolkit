@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import { getPendingFormalVersions } from "@/lib/release-queue-queries";
@@ -24,7 +24,7 @@ export default async function FormalPage({ searchParams }: {
   const user = await requireUser();
   const params = await searchParams;
   const { returnTo } = getWorkflowListState(params);
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const rawVersions = getPendingFormalVersions(project ? [project.id] : getProjectWorkflowProjectIds(user));

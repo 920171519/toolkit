@@ -12,7 +12,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
@@ -63,7 +63,7 @@ export default async function TrialDetailPage({
   const data = trialDetails.getReadableTrialDetail(requestId);
   if (!data) notFound();
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const { request, requirements } = data;
   const releaseAvailability = bindingReleaseAvailability({
     projectStatus: request.projectStatus,

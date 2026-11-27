@@ -18,7 +18,7 @@ import {
 } from "@/lib/column-filters";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAreaDirectory, getAreaMemberships } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import {
   areaDirectoryDetailParams,
   directoryColumnFields,
@@ -48,7 +48,7 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const areas = getAreaDirectory();
   const myAreaIds = new Set(getAreaMemberships(user.id).map(({ areaId }) => areaId));
   const query = directoryValue(search.q);

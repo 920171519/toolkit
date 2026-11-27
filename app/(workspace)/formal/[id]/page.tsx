@@ -17,7 +17,7 @@ import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -38,7 +38,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const versionId = Number(id);
   if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const project = requireWorkflowProject(user, search.project);
   const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);
   const listState = getWorkflowListState(search);

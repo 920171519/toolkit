@@ -5,7 +5,7 @@ import { ArrowLeft, ClipboardCheck, FileText, GitCompareArrows } from "lucide-re
 import { requireUser } from "@/lib/auth";
 import { batchSelectionKey, DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
 import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
@@ -48,7 +48,7 @@ export default async function BatchDetailPage({
   const data = getBatchDetail(user, batchId);
   if (!data) notFound();
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const { batch, items, progressNotes } = data;
   const snapshotItems = items.map((item) => ({
     item,

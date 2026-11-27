@@ -7,7 +7,7 @@ import { getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref, directoryValue } from "@/lib/settings-directory";
 import { getAreaConfig, getPeople, type AreaProjectLead, type AreaProjectMember } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { getProjectOptions, type ProjectOption } from "@/lib/project-queries";
 import {
   addAreaLeaderAction,
@@ -121,7 +121,7 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
   if (!area) notFound();
 
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const isAdmin = user.role === "ADMIN";
   const manageArea = isAdmin || area.leaders.some((leader) => leader.userId === user.id);
   const people = manageArea || area.projectLeads.some((lead) => lead.userId === user.id)

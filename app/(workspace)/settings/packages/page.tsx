@@ -8,7 +8,7 @@ import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFil
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { getAdminPackages } from "@/lib/package-queries";
 import { getPeople, getResponsibilityAreaOptions } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/settings";
@@ -44,7 +44,7 @@ export default async function PackagesSettingsPage({
     redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
   }
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const areas = getResponsibilityAreaOptions({ orderBy: "id" }).filter((area) => isAdmin || ledAreas.has(area.id));
   const packages = getAdminPackages().filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreas.has(pkg.areaId)));
   const people = getPeople();

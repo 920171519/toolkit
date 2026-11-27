@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getProjectConfig } from "@/lib/project-queries";
 import { getPeople } from "@/lib/organization-queries";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { addProjectNodeAction, deleteProjectAction, saveProjectAction } from "@/lib/actions/settings";
@@ -35,7 +35,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
   if (!project) notFound();
 
   const search = await searchParams;
-  const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
+  const notice = readFlash(search);
   const people = getPeople();
   const status = PROJECT_STATUS_META[project.status];
   const stage = PROJECT_STAGE_META[getProjectStage(project.status, project.stage)];

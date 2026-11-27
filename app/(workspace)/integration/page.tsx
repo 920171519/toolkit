@@ -10,7 +10,7 @@ import { historyFields, integrationHistoryParams, readIntegrationHistory } from 
 import { requireUser } from "@/lib/auth";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";
@@ -34,7 +34,7 @@ export default async function IntegrationPage({
   const user = await requireUser();
   const params = await searchParams;
   const { returnTo } = getWorkflowListState(params);
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const canArrange = project ? canManageProjectWorkflowForProject(user, project.id) : getManagedProjectScope(user)?.length !== 0;

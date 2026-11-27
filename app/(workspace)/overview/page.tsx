@@ -11,7 +11,7 @@ import { getProjectCatalogEntries, type ProjectCatalogEntry } from "@/lib/projec
 import { projectOverviewFields } from "@/lib/project-overview-filters";
 import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
 import { getProjectWorkflowProjectIds } from "@/lib/access";
-import { parseFlash } from "@/lib/flash";
+import { readFlash } from "@/lib/flash";
 import styles from "../projects/projects.module.css";
 import { directoryHref, directoryPage } from "@/lib/settings-directory";
 import { wordSearchMatcher } from "@/lib/search-text";
@@ -42,7 +42,7 @@ export default async function OverviewPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
+  const notice = readFlash(params);
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
   const matchesSearch = wordSearchMatcher(query);
   const pageSize = getListPageSize(params.pageSize);
