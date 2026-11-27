@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
 import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
+import { closeDatabaseAfterError, withImmediateTransaction } from "./sqlite-lifecycle";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
@@ -15,21 +16,18 @@ function createDatabase(): DatabaseSync {
   const databasePath = getDatabasePath();
   mkdirSync(dirname(databasePath), { recursive: true });
   const database = new DatabaseSync(databasePath);
-  database.exec("PRAGMA busy_timeout = 5000;");
-  database.exec("PRAGMA foreign_keys = ON;");
-  database.exec("PRAGMA journal_mode = WAL;");
-  database.exec("BEGIN IMMEDIATE");
   try {
-    database.exec(SCHEMA_SQL);
-    migrateSchema(database);
-    refreshProjectTrialReadiness(database, new Date().toISOString());
-    database.exec("COMMIT");
+    database.exec("PRAGMA busy_timeout = 5000;");
+    database.exec("PRAGMA foreign_keys = ON;");
+    database.exec("PRAGMA journal_mode = WAL;");
+    withImmediateTransaction(database, () => {
+      database.exec(SCHEMA_SQL);
+      migrateSchema(database);
+      refreshProjectTrialReadiness(database, new Date().toISOString());
+    });
+    if (shouldSeedDemoData()) seedDatabase(database);
   } catch (error) {
-    database.close();
-    throw error;
-  }
-  if (shouldSeedDemoData()) {
-    seedDatabase(database);
+    closeDatabaseAfterError(database, error);
   }
   return database;
 }
@@ -225,17 +223,5 @@ export function run(sql: string, ...params: SqlValue[]) {
 }
 
 export function transaction<T>(fn: () => T): T {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const result = fn();
-    db.exec("COMMIT");
-    return result;
-  } catch (error) {
-    try {
-      db.exec("ROLLBACK");
-    } catch {
-      // A failed rollback should not hide the original domain/database error.
-    }
-    throw error;
-  }
+  return withImmediateTransaction(db, fn);
 }

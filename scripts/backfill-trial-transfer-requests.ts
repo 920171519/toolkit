@@ -1,6 +1,7 @@
 import { realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { closeDatabaseAfterError, withImmediateTransaction } from "../lib/sqlite-lifecycle";
 import { backfillTrialTransferRequests, findMissingTrialTransferRequests } from "../lib/transfer-requests";
 
 function main() {
@@ -16,15 +17,9 @@ function main() {
   try {
     database.exec("PRAGMA busy_timeout = 5000");
     console.log(`数据库：${filename}`);
-    if (apply) database.exec("BEGIN IMMEDIATE");
-    let requests: ReturnType<typeof findMissingTrialTransferRequests>;
-    try {
-      requests = apply ? backfillTrialTransferRequests(database, null) : findMissingTrialTransferRequests(database);
-      if (apply) database.exec("COMMIT");
-    } catch (error) {
-      if (apply) database.exec("ROLLBACK");
-      throw error;
-    }
+    const requests = apply
+      ? withImmediateTransaction(database, () => backfillTrialTransferRequests(database, null))
+      : findMissingTrialTransferRequests(database);
     if (requests.length) {
       console.table(requests.map((request) => ({
         软件包编码: request.packageCode,
@@ -34,9 +29,10 @@ function main() {
       })));
     }
     console.log(apply ? `已补派 ${requests.length} 条转测申请。` : `预览：待补派 ${requests.length} 条转测申请。`);
-  } finally {
-    database.close();
+  } catch (error) {
+    closeDatabaseAfterError(database, error);
   }
+  database.close();
 }
 
 try {
