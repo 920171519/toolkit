@@ -123,6 +123,30 @@ export function canManageProjectWorkflowForProject(user: SessionUser | null, pro
   return isProjectSoftwareManager(user.id, projectId);
 }
 
+function projectForManagement(projectId: number): {
+  id: number;
+  name: string;
+  status: string;
+} {
+  const project = one<{ id: number; name: string; status: string }>(
+    "SELECT id, name, status FROM projects WHERE id = ?",
+    projectId,
+  );
+  assert(project, "项目不存在。", "NOT_FOUND");
+  return project;
+}
+
+export function assertProjectManager(actor: SessionUser, projectId: number) {
+  const project = projectForManagement(projectId);
+  assert(project.status !== "ARCHIVED", "存档项目不能发起新的版本流程。");
+  assert(
+    canManageProjectWorkflowForProject(actor, project.id),
+    "只有本项目软件经理或系统管理员可以组织项目版本流程。",
+    "FORBIDDEN",
+  );
+  return project;
+}
+
 export function versionProjectManagementBlocker(
   user: SessionUser,
   versionId: number,

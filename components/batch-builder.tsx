@@ -14,7 +14,7 @@ import { DialogSurface } from "@/components/form-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { PackageNameToggle } from "@/components/package-name-toggle";
 import { usePendingBatchChoices, usePendingReview } from "@/components/pending-batch-choices";
-import type { CreateBatchInput } from "@/lib/workflow";
+import type { CreateBatchInput } from "@/lib/batch-workflow";
 import { createBatchAction } from "@/lib/actions/workflow";
 import nameVisibility from "./package-name-toggle.module.css";
 import styles from "./workflow-queue.module.css";

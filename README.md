@@ -511,7 +511,8 @@ lib/
   release-queue-queries.ts    # 试制与转正队列查询
   workbench-queries.ts        # 个人工作台查询
   version-trace-queries.ts    # 版本全链路与项目版本活动查询
-  workflow.ts                 # 批次、试制、报告和转正服务
+  workflow.ts                 # 试制、转正及整版作废
+  batch-workflow.ts           # 批次办理、集成测试和报告
   transfer-workflow.ts        # 提交与撤回转测
   binding-workflow.ts         # 节点与电子流写入
   access.ts                   # 责任田层级与集成测试责任田权限
