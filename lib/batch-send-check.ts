@@ -2,6 +2,7 @@ import "server-only";
 
 import { all } from "./db";
 import { packageIdentity } from "./package-identity";
+import { EFFECTIVE_INTEGRATION_STATUS_SQL } from "./transfer-requests";
 
 type DraftItem = {
   name: string;
@@ -20,8 +21,7 @@ type DraftBlocker = { message: string; batchId?: number };
 export function getBatchSendCheck(batchId: number) {
   const items = all<DraftItem>(
     `SELECT p.name, p.code, bi.version, bi.transfer_request_id AS transferRequestId,
-            CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
-              THEN COALESCE(r.integration_status, r.status) ELSE r.status END AS requestStatus,
+            ${EFFECTIVE_INTEGRATION_STATUS_SQL} AS requestStatus,
             bi.package_version_id AS versionId, pv.status AS versionStatus,
             conflict.id AS conflictingBatchId, conflict.code AS conflictingBatchCode
      FROM batch_items bi JOIN packages p ON p.id = bi.package_id

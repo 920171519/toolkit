@@ -4,6 +4,16 @@ import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
 
+// Both expressions read the current transfer request under alias r.
+export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
+  SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
+)`;
+
+// Pending requests and parallel risk trials use their separate integration status.
+// In other states the request status, including terminal states, takes precedence.
+export const EFFECTIVE_INTEGRATION_STATUS_SQL = `CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
+  THEN COALESCE(r.integration_status, r.status) ELSE r.status END`;
+
 export function getActiveTransferProjects(database: DatabaseSync, packageId: number) {
   return database.prepare(
     `SELECT DISTINCT p.id, p.name

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { all } from "./db";
-import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
+import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL } from "./trial-readiness";
 
 const trialRequestStatuses = "('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')";
@@ -24,9 +24,7 @@ function trialEligibilityCtes(versionScope = "") {
              CASE WHEN r.status = 'PASSED' AND b.status = 'COMPLETED' AND b.conclusion = 'PASS' THEN 1 ELSE 0 END AS passed
       FROM trial_scope s
       LEFT JOIN version_transfer_requests r ON r.package_version_id = s.versionId AND r.project_id = s.projectId
-      LEFT JOIN integration_batches b ON b.id = (
-        SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-      )
+      LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
     ),
     trial_totals AS (
       SELECT v.id AS versionId, COUNT(e.projectId) AS versionProjectCount,

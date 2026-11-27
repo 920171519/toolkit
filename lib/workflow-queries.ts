@@ -18,6 +18,7 @@ import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
 import { getTrialReadyVersions } from "./trial-eligibility";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
+import { EFFECTIVE_INTEGRATION_STATUS_SQL, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
 
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
@@ -131,8 +132,7 @@ type PreviousBatchVersion = { versionId: number; version: string; canCarry: numb
 
 const previousBatchVersionFields = `bi.package_version_id AS versionId, bi.version,
   pv.status != 'VOID' AND COALESCE(
-    CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL') THEN COALESCE(r.integration_status, r.status)
-         ELSE r.status END NOT IN ('VOID','CANCELLED','PENDING'), 1
+    (${EFFECTIVE_INTEGRATION_STATUS_SQL}) NOT IN ('VOID','CANCELLED','PENDING'), 1
   ) AS canCarry`;
 const previousBatchVersionFrom = `FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
   JOIN package_versions pv ON pv.id = bi.package_version_id
@@ -209,8 +209,7 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
   );
   const projectRequests = all<{ requestId: number; versionId: number; status: string; reserved: number }>(
     `SELECT r.id AS requestId, r.package_version_id AS versionId,
-            CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
-              THEN COALESCE(r.integration_status, r.status) ELSE r.status END AS status,
+            ${EFFECTIVE_INTEGRATION_STATUS_SQL} AS status,
             EXISTS (
               SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
               WHERE bi.transfer_request_id = r.id AND b.id != ?
@@ -626,9 +625,7 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
        LEFT JOIN users su ON su.id = pv.submitted_by
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
-       LEFT JOIN integration_batches b ON b.id = (
-         SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-       )
+       LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
        WHERE ${where}
        ORDER BY r.trial_released_at DESC, r.id DESC`,
     ...params,
@@ -781,9 +778,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
-     LEFT JOIN integration_batches b ON b.id = (
-       SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-     )
+     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
      WHERE r.id = ?`,
     requestId,
   );
@@ -1549,9 +1544,7 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
             b.test_report_url AS batchReportUrl
      FROM version_transfer_requests r
      JOIN projects pr ON pr.id = r.project_id
-     LEFT JOIN integration_batches b ON b.id = (
-       SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-     )
+     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
      WHERE r.package_version_id = ? AND (? IS NULL OR pr.id = ?)
      ORDER BY pr.sort_order`,
     versionId,
@@ -1641,9 +1634,7 @@ export function getProjectVersionRows(projectId: number, limit = -1): ProjectVer
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
-     LEFT JOIN integration_batches b ON b.id = (
-       SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
-     )
+     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
      WHERE r.project_id = ?
      ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT ?`,
     projectId,
