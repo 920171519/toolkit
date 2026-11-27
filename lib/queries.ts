@@ -39,26 +39,33 @@ const PACKAGE_SUMMARY_SQL = `
   )
 `;
 
-function readPackagesOverview(includeInactive: boolean, packageId?: number): PackageSummary[] {
-  const conditions: string[] = [];
-  if (!includeInactive) conditions.push("p.is_active = 1");
-  if (packageId !== undefined) conditions.push("p.id = ?");
-  const values = packageId === undefined ? [] : [packageId];
+type PackageSelection = number | readonly number[];
+
+function packageSelectionFilter(column: string, selection?: PackageSelection) {
+  if (selection === undefined) return { condition: "", values: [] };
+  if (typeof selection === "number") return { condition: `${column} = ?`, values: [selection] };
+  return { condition: `${column} IN (SELECT value FROM json_each(?))`, values: [JSON.stringify(selection)] };
+}
+
+function readPackagesOverview(includeInactive: boolean, selection?: PackageSelection): PackageSummary[] {
+  const scope = packageSelectionFilter("p.id", selection);
+  const conditions = [includeInactive ? "" : "p.is_active = 1", scope.condition].filter(Boolean);
   const packages = all<Omit<PackageSummary, "isActive" | "trialVersions"> & { isActive: number }>(
     `${PACKAGE_SUMMARY_SQL} ${conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`}
      ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
-    ...values,
+    ...scope.values,
   ).map((row) => ({
     ...row,
     isActive: Boolean(row.isActive),
   }));
   if (packages.length === 0) return [];
+  const trialScope = packageSelectionFilter("package_id", selection);
   const trials = all<{ packageId: number; version: string }>(
     `SELECT package_id AS packageId, version FROM package_versions
      WHERE status IN ('TRIAL','PENDING_FORMAL')
-     ${packageId === undefined ? "" : "AND package_id = ?"}
+       ${trialScope.condition ? `AND ${trialScope.condition}` : ""}
      ORDER BY package_id, trial_released_at DESC, id DESC`,
-    ...values,
+    ...trialScope.values,
   );
   const trialMap = new Map<number, string[]>();
   for (const trial of trials) {
@@ -240,23 +247,14 @@ export function getProjectPackagePreview(projectId: number, limit: number) {
   return { total: packages[0].total, rows };
 }
 
-export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
-  return readPackageOverviewRows({ projectId, includeArchivedUsage });
-}
-
-function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }: {
-  projectId?: number;
-  includeArchivedUsage: boolean;
-  packageId?: number;
-}): PackageOverviewRow[] {
-  let packages = readPackagesOverview(true, packageId);
+function readPackageOverviewRows(projectId?: number, selection?: PackageSelection): PackageOverviewRow[] {
+  let packages = readPackagesOverview(true, selection);
   if (packages.length === 0) return [];
-  const packageValues = packageId === undefined ? [] : [packageId];
+  const usageScope = packageSelectionFilter("u.package_id", selection);
   const usageRows = readPackageOverviewUsages(
-    `${includeArchivedUsage ? "1 = 1" : "(pr.status != 'ARCHIVED' OR pr.id = ?)"}
-       ${packageId === undefined ? "" : "AND u.package_id = ?"}`,
-    ...(includeArchivedUsage ? [] : [projectId ?? null]),
-    ...packageValues,
+    `(pr.status != 'ARCHIVED' OR pr.id = ?) ${usageScope.condition ? `AND ${usageScope.condition}` : ""}`,
+    projectId ?? null,
+    ...usageScope.values,
   );
   if (projectId) {
     const allowed = new Set(
@@ -265,9 +263,11 @@ function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }:
     packages = packages.filter((pkg) => allowed.has(pkg.id));
   }
   if (packages.length === 0) return [];
-  const usageMap = groupPackageOverviewUsages(usageRows, includeArchivedUsage);
-  const requestPackageCondition = packageId === undefined ? "" : "AND pv.package_id = ?";
-  const requestRows = readPackageOverviewRequests(projectId, requestPackageCondition, packageValues);
+  const usageMap = groupPackageOverviewUsages(usageRows, false);
+  const requestScope = packageSelectionFilter("pv.package_id", selection);
+  const requestRows = readPackageOverviewRequests(
+    projectId, requestScope.condition ? `AND ${requestScope.condition}` : "", requestScope.values,
+  );
   const byPackage = Map.groupBy(requestRows, (request) => request.packageId);
   const projectStatusMap: Record<string, PackageProgressStatus> = {
     PENDING: "PENDING_TRANSFER",
@@ -573,10 +573,12 @@ function restrictPackageSummary<T extends PackageSummary>(pkg: T, visibleVersion
 }
 
 export function getReadablePackageOverviewRows(user: SessionUser, projectId?: number) {
-  const rows = getPackageOverviewRows(projectId);
   const versionIds = getReadableVersionIds(user);
   const packageIds = getReadablePackageIds(user, versionIds);
-  if (versionIds === null || packageIds === null) return rows;
+  if (versionIds === null || packageIds === null) return readPackageOverviewRows(projectId);
+  if (packageIds.length === 0) return [];
+  const rows = readPackageOverviewRows(projectId, packageIds);
+  if (rows.length === 0) return rows;
   const versions = new Map<number, Set<string>>();
   for (const { packageId, version } of all<{ packageId: number; version: string }>(
     `SELECT package_id AS packageId, version FROM package_versions WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(versionIds),
@@ -585,9 +587,7 @@ export function getReadablePackageOverviewRows(user: SessionUser, projectId?: nu
     labels.add(version);
     versions.set(packageId, labels);
   }
-  const readablePackages = new Set(packageIds);
-  return rows.filter(({ id }) => readablePackages.has(id))
-    .map((row) => restrictPackageSummary(row, versions.get(row.id) ?? new Set<string>()));
+  return rows.map((row) => restrictPackageSummary(row, versions.get(row.id) ?? new Set<string>()));
 }
 
 export function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): (PackageDetailData & { canEdit: boolean }) | null {
@@ -657,7 +657,7 @@ export function getPackageConfiguration(packageId: number) {
 
 export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
   const base = projectId
-    ? readPackageOverviewRows({ projectId, includeArchivedUsage: false, packageId })[0]
+    ? readPackageOverviewRows(projectId, packageId)[0]
     : readGlobalPackageSummary(packageId, includeInactive);
   if (!base) return null;
   const usages = readPackageDetailUsages(packageId);

@@ -23,6 +23,64 @@ test("软件包详情接口校验登录和项目参数，成功响应禁用缓�
   expect(await detail.json()).toMatchObject({ package: { id: 7 }, canEdit: false });
 });
 
+test("只可访问旧版本的账号仍能看到软件包，始终隐藏未授权的最新版本", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = openE2eDatabase();
+  const code = "PW-PACKAGE-VERSION-SCOPE";
+  const older = "1.0.0";
+  const latest = "2.0.0";
+  const olderAt = "2026-11-26T01:00:00Z";
+  const latestAt = "2026-11-27T01:00:00Z";
+  let packageId: number | undefined;
+  try {
+    db.exec("PRAGMA busy_timeout = 5000");
+    const submitter = db.prepare("SELECT id FROM users WHERE employee_id = 'VALID001'").get() as { id: number };
+    packageId = Number(db.prepare("INSERT INTO packages (name, code, created_at) VALUES (?, ?, ?)")
+      .run("版本可见范围回归软件包", code, olderAt).lastInsertRowid);
+    const insertVersion = db.prepare(
+      `INSERT INTO package_versions
+        (package_id, version, change_summary, archive_url, status, submitted_by, submitted_at, trial_released_at, updated_at)
+       VALUES (?, ?, '版本可见范围回归', 'https://example.test/archive', 'TRIAL', ?, ?, ?, ?)`,
+    );
+    insertVersion.run(packageId, older, submitter.id, olderAt, olderAt, olderAt);
+    insertVersion.run(packageId, latest, null, latestAt, latestAt, latestAt);
+
+    await page.goto(`/packages?q=${code}`);
+    const link = page.getByRole("link", { name: `查看 ${code} 详情`, exact: true });
+    const row = page.getByRole("row").filter({ has: link });
+    await expect(row.getByText(older, { exact: true })).toBeVisible();
+    await expect(row.getByText(latest, { exact: true })).toHaveCount(0);
+
+    const detailUrl = `/api/packages/${packageId}`;
+    const restricted = await page.request.get(detailUrl);
+    expect(restricted.ok()).toBeTruthy();
+    expect(await restricted.json()).toMatchObject({
+      package: { id: packageId, currentVersion: null, currentVersionId: null, currentStatus: null, trialVersion: null, trialVersions: [older] },
+      versions: [{ version: older }],
+    });
+
+    await link.click();
+    const drawer = page.getByRole("dialog", { name: "软件包详情" });
+    await drawer.getByRole("tab", { name: "版本历史" }).click();
+    await expect(drawer.getByRole("heading", { name: older, exact: true })).toBeVisible();
+    await expect(drawer.getByRole("heading", { name: latest, exact: true })).toHaveCount(0);
+
+    await login(page, "ADMIN001");
+    const unrestricted = await page.request.get(detailUrl);
+    expect(unrestricted.ok()).toBeTruthy();
+    expect(await unrestricted.json()).toMatchObject({
+      package: { id: packageId, currentVersion: latest, trialVersion: latest },
+      versions: [{ version: latest }, { version: older }],
+    });
+  } finally {
+    try {
+      if (packageId !== undefined) db.prepare("DELETE FROM packages WHERE id = ?").run(packageId);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("软件包详情按资料分类，版本和节点可以搜索，关闭后保留当前筛选", async ({ page }) => {
   await login(page, "MGR001");
   await page.goto("/packages?project=1&q=1001OTA");
