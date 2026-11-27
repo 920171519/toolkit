@@ -369,6 +369,8 @@ CREATE INDEX IF NOT EXISTS idx_requests_version ON version_transfer_requests(pac
 CREATE INDEX IF NOT EXISTS idx_requests_project_status ON version_transfer_requests(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_batches_project ON integration_batches(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id);
+CREATE INDEX IF NOT EXISTS idx_batch_items_transfer_request
+  ON batch_items(transfer_request_id) WHERE transfer_request_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_binding_requirements_version ON binding_requirements(package_version_id);
 CREATE INDEX IF NOT EXISTS idx_area_leaders_area ON area_leaders(area_id);
 CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id);
