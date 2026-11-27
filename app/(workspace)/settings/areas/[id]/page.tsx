@@ -5,7 +5,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
-import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref } from "@/lib/settings-directory";
+import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref, directoryValue } from "@/lib/settings-directory";
 import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
 import { getProjectOptions, type ProjectOption } from "@/lib/project-queries";
 import {
@@ -23,7 +23,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { SettingsPersonPicker, type SettingsPerson } from "@/components/settings-person-picker";
-import { matchesSearch, searchValue, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
+import { matchesSearch, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
 import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -130,7 +130,7 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
   const availableLeaders = people.filter(({ id }) => !leaderIds.has(id));
   const leadsByProject = new Map(area.projectLeads.map((lead) => [lead.projectId, lead]));
   const membersByProject = Map.groupBy(area.projectMembers, (member) => member.projectId);
-  const query = searchValue(search.q);
+  const query = directoryValue(search.q);
   const pageSize = getListPageSize(search.pageSize);
   const url = `/settings/areas/${area.id}`;
   const relevantProjects = getProjectOptions(true).filter((project) => {

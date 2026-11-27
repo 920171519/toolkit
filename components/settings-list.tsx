@@ -2,19 +2,15 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { getPageWindow } from "@/lib/list-pagination";
-import { directoryHref } from "@/lib/settings-directory";
+import { directoryHref, directoryValue } from "@/lib/settings-directory";
 import { PageLinks } from "./page-links";
-
-export function searchValue(value: string | string[] | undefined) {
-  return typeof value === "string" ? value.trim().slice(0, 120) : "";
-}
 
 export function matchesSearch(search: string, ...values: Array<string | null | undefined>) {
   return !search || values.some((value) => value?.toLowerCase().includes(search.toLowerCase()));
 }
 
 export function settingsPage<T>(items: T[], value: string | string[] | undefined, pageSize = 20) {
-  const requested = Math.floor(Number(searchValue(value)) || 1);
+  const requested = Math.floor(Number(directoryValue(value)) || 1);
   const { current: page, pages: pageCount, offset, end } = getPageWindow(items.length, pageSize, requested);
   return { items: items.slice(offset, end), page, pageCount, total: items.length };
 }

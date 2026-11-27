@@ -15,12 +15,12 @@ import {
   matchesNumberFilter,
   matchesTextFilter,
   readColumnFilters,
-  type ColumnFilterField,
 } from "@/lib/column-filters";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAreaDirectory, getAreaMemberships, parseFlash } from "@/lib/queries";
 import {
   areaDirectoryDetailParams,
+  directoryColumnFields,
   directoryHref,
   directoryOrder,
   directoryPage,
@@ -53,15 +53,11 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
   const query = directoryValue(search.q);
   const matchesSearch = wordSearchMatcher(query);
   const scope = search.scope === "mine" ? search.scope : "";
+  const baseFields = directoryColumnFields.areas;
   const fields = {
-    name: { key: "name", label: "责任田名称", kind: "text" },
-    description: { key: "description", label: "责任田说明", kind: "text" },
-    type: {
-      key: "type", label: "责任田类型", kind: "choices",
-      options: [{ value: "standard", label: "普通责任田" }, { value: "integration", label: "集成测试责任田" }],
-    },
+    ...baseFields,
     leaders: {
-      key: "leaders", label: "主管", kind: "choices",
+      ...baseFields.leaders,
       options: filterOptions([
         { value: "empty", label: "未指定" },
         ...areas.flatMap((area) => area.leaders.map(({ userId, userName, userEmployeeId }) => ({
@@ -70,19 +66,17 @@ export default async function AreasSettingsPage({ searchParams }: { searchParams
         }))),
       ]),
     },
-    projects: { key: "projects", label: "已设负责人的项目数", kind: "number" },
-    packages: { key: "packages", label: "软件包数量", kind: "number" },
-  } satisfies Record<string, ColumnFilterField>;
+  };
   const legacyType = fields.type.options.find(({ value }) => value === search.type)?.value;
   const selected = readColumnFilters({ ...search, f_type: search.f_type ?? legacyType }, Object.values(fields));
   const filtered = areas.filter((area) =>
     (!scope || myAreaIds.has(area.id)) &&
-    matchesTextFilter(selected, "name", area.name) &&
-    matchesTextFilter(selected, "description", area.description) &&
-    matchesChoiceFilter(selected, "type", [area.isIntegration ? "integration" : "standard"]) &&
-    matchesChoiceFilter(selected, "leaders", area.leaders.length ? area.leaders.map(({ userId }) => String(userId)) : ["empty"]) &&
-    matchesNumberFilter(selected, "projects", area.projectCount) &&
-    matchesNumberFilter(selected, "packages", area.packageCount) &&
+    matchesTextFilter(selected, fields.name.key, area.name) &&
+    matchesTextFilter(selected, fields.description.key, area.description) &&
+    matchesChoiceFilter(selected, fields.type.key, [area.isIntegration ? "integration" : "standard"]) &&
+    matchesChoiceFilter(selected, fields.leaders.key, area.leaders.length ? area.leaders.map(({ userId }) => String(userId)) : ["empty"]) &&
+    matchesNumberFilter(selected, fields.projects.key, area.projectCount) &&
+    matchesNumberFilter(selected, fields.packages.key, area.packageCount) &&
     matchesSearch(area.name, area.description, ...area.leaders.flatMap((leader) => [leader.userName, leader.userEmployeeId])),
   );
   const { sorted, sort, order } = directoryOrder(filtered, columns, search, "name");

@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
-import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
+import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters } from "@/lib/column-filters";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { getAdminPackages, getAreaConfigs, getPeople, parseFlash } from "@/lib/queries";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/settings";
-import { directoryHref, directoryPage } from "@/lib/settings-directory";
+import { directoryColumnFields, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { wordSearchMatcher } from "@/lib/search-text";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
@@ -58,19 +58,15 @@ export default async function PackagesSettingsPage({
     value: pkg.currentStatus ?? missing,
     label: pkg.currentStatus ? PACKAGE_PROGRESS_META[pkg.currentStatus]?.label ?? pkg.currentStatus : "无在途流程",
   }));
+  const { enabled, progress, ...baseFields } = directoryColumnFields.packages;
   const fields = {
-    code: { key: "code", label: "软件包编码", kind: "text" },
-    name: { key: "name", label: "软件包名称", kind: "text" },
-    area: { key: "area", label: "责任田", kind: "choices", options: filterOptions(areaOptions) },
-    owner: { key: "owner", label: "责任人", kind: "choices", options: filterOptions(ownerOptions) },
-    versions: { key: "versions", label: "版本记录", kind: "number" },
-    nodes: { key: "nodes", label: "使用节点", kind: "number" },
-    enabled: { key: "enabled", label: "启停状态", kind: "choices", options: [
-      { value: "active", label: "启用" },
-      { value: "inactive", label: "停用" },
-    ] },
-    progress: { key: "progress", label: "当前流程状态", kind: "choices", options: filterOptions(progressOptions) },
-  } satisfies Record<string, ColumnFilterField>;
+    ...baseFields,
+    area: { ...baseFields.area, options: filterOptions(areaOptions) },
+    owner: { ...baseFields.owner, options: filterOptions(ownerOptions) },
+    // Keep status filters after the counts in the directory list query.
+    enabled,
+    progress: { ...progress, options: filterOptions(progressOptions) },
+  };
 
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
   const matchesSearch = wordSearchMatcher(query);
@@ -84,14 +80,14 @@ export default async function PackagesSettingsPage({
   }, Object.values(fields));
   const pageSize = getListPageSize(params.pageSize);
   const matching = packages.map((pkg) => ({ pkg, identity: packageIdentity(pkg) })).filter(({ pkg, identity }) => {
-    return matchesTextFilter(filters, "code", identity.code)
-      && matchesTextFilter(filters, "name", identity.name)
-      && matchesChoiceFilter(filters, "area", [String(pkg.areaId ?? missing)])
-      && matchesChoiceFilter(filters, "owner", [String(pkg.ownerId ?? missing)])
-      && matchesNumberFilter(filters, "versions", pkg.versionCount)
-      && matchesNumberFilter(filters, "nodes", pkg.usageCount)
-      && matchesChoiceFilter(filters, "enabled", [pkg.isActive ? "active" : "inactive"])
-      && matchesChoiceFilter(filters, "progress", [pkg.currentStatus ?? missing])
+    return matchesTextFilter(filters, fields.code.key, identity.code)
+      && matchesTextFilter(filters, fields.name.key, identity.name)
+      && matchesChoiceFilter(filters, fields.area.key, [String(pkg.areaId ?? missing)])
+      && matchesChoiceFilter(filters, fields.owner.key, [String(pkg.ownerId ?? missing)])
+      && matchesNumberFilter(filters, fields.versions.key, pkg.versionCount)
+      && matchesNumberFilter(filters, fields.nodes.key, pkg.usageCount)
+      && matchesChoiceFilter(filters, fields.enabled.key, [pkg.isActive ? "active" : "inactive"])
+      && matchesChoiceFilter(filters, fields.progress.key, [pkg.currentStatus ?? missing])
       && matchesSearch(identity.code, identity.name, pkg.areaName, pkg.ownerName);
   }).sort((a, b) => a.identity.code.localeCompare(b.identity.code, "zh-CN", { numeric: true }) || a.pkg.id - b.pkg.id);
   const { items: rows, page, pages, total } = directoryPage(matching, params.page, pageSize);

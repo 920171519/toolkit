@@ -12,12 +12,12 @@ import {
   matchesNumberFilter,
   matchesTextFilter,
   readColumnFilters,
-  type ColumnFilterField,
 } from "@/lib/column-filters";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAdminUsers, getResponsibilityAreaOptions, parseFlash, type AdminUser } from "@/lib/queries";
 import {
+  directoryColumnFields,
   directoryHref,
   directoryOrder,
   directoryPage,
@@ -48,28 +48,21 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const query = directoryValue(search.q);
   const matchesSearch = wordSearchMatcher(query);
+  const baseFields = directoryColumnFields.users;
   const fields = {
-    name: { key: "name", label: "姓名", kind: "text" },
-    title: { key: "title", label: "职位", kind: "text" },
-    department: { key: "department", label: "部门", kind: "text" },
-    employeeId: { key: "employeeId", label: "工号", kind: "text" },
+    ...baseFields,
     role: {
-      key: "role", label: "系统角色", kind: "choices",
+      ...baseFields.role,
       options: ROLES.map((role) => ({ value: role, label: ROLE_META[role].label })),
     },
     area: {
-      key: "area", label: "责任田", kind: "choices",
+      ...baseFields.area,
       options: filterOptions([
         { value: "empty", label: "未分配责任田" },
         ...areas.map((area) => ({ value: String(area.id), label: area.name })),
       ]),
     },
-    status: {
-      key: "status", label: "账号状态", kind: "choices",
-      options: [{ value: "active", label: "启用" }, { value: "inactive", label: "停用" }],
-    },
-    packages: { key: "packages", label: "软件包数量", kind: "number" },
-  } satisfies Record<string, ColumnFilterField>;
+  };
   const legacyRole = ROLES.find((role) => role === directoryValue(search.role));
   const legacyArea = search.area === "unassigned" ? "empty" : directoryValue(search.area);
   const legacyStatus = fields.status.options.find(({ value }) => value === search.status)?.value;
@@ -80,14 +73,14 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
     f_status: search.f_status ?? legacyStatus,
   }, Object.values(fields));
   const filtered = members.filter((member) =>
-    matchesTextFilter(selected, "name", member.name) &&
-    matchesTextFilter(selected, "title", member.title) &&
-    matchesTextFilter(selected, "department", member.department) &&
-    matchesTextFilter(selected, "employeeId", member.employeeId) &&
-    matchesChoiceFilter(selected, "role", [member.role]) &&
-    matchesChoiceFilter(selected, "area", member.areas.length ? member.areas.map(({ id }) => String(id)) : ["empty"]) &&
-    matchesChoiceFilter(selected, "status", [member.isActive ? "active" : "inactive"]) &&
-    matchesNumberFilter(selected, "packages", member.ownedPackages) &&
+    matchesTextFilter(selected, fields.name.key, member.name) &&
+    matchesTextFilter(selected, fields.title.key, member.title) &&
+    matchesTextFilter(selected, fields.department.key, member.department) &&
+    matchesTextFilter(selected, fields.employeeId.key, member.employeeId) &&
+    matchesChoiceFilter(selected, fields.role.key, [member.role]) &&
+    matchesChoiceFilter(selected, fields.area.key, member.areas.length ? member.areas.map(({ id }) => String(id)) : ["empty"]) &&
+    matchesChoiceFilter(selected, fields.status.key, [member.isActive ? "active" : "inactive"]) &&
+    matchesNumberFilter(selected, fields.packages.key, member.ownedPackages) &&
     matchesSearch(member.name, member.employeeId, member.title, member.department, ROLE_META[member.role].label, areaNames(member)),
   );
   const { sorted, sort, order } = directoryOrder(filtered, columns, search, "name");

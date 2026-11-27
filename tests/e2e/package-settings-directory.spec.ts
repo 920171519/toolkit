@@ -96,4 +96,10 @@ test("软件包配置按列多选及组合，零结果后仍可调整筛选", as
   await statusMenu.getByRole("button", { name: "应用", exact: true }).click();
   await expect(packageRow("1001OTA")).toBeVisible();
   await expect(packageRow("1002CFG")).toHaveCount(0);
+
+  await page.goto("/settings/packages/1?historyPage=2&f_nodes_min=1&f_enabled=active&f_versions_min=1&state=active&area=1&pageSize=10&unused=ignore");
+  await expect(page.getByRole("link", { name: "返回软件包配置" })).toHaveAttribute(
+    "href",
+    "/settings/packages?pageSize=10&area=1&state=active&f_enabled=active&f_versions_min=1&f_nodes_min=1&historyPage=2",
+  );
 });

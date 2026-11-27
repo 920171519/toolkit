@@ -9,11 +9,11 @@ import { getPeople, parseFlash } from "@/lib/queries";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
-import { directoryHref, projectDirectoryDetailParams } from "@/lib/settings-directory";
+import { directoryHref, directoryValue, projectDirectoryDetailParams } from "@/lib/settings-directory";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { ProjectSettingsFields, PROJECT_STATUS_OPTIONS } from "@/components/project-settings-fields";
-import { matchesSearch, searchValue, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
+import { matchesSearch, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
   if (managedProjectIds?.length === 0) notFound();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const query = searchValue(params.q);
+  const query = directoryValue(params.q);
   const status = PROJECT_STATUS_OPTIONS.find(({ value }) => value === params.status)?.value ?? "";
   const projects = getProjectConfigs().filter((project) => !managedProjectIds || managedProjectIds.includes(project.id));
   const list = settingsPage(projects.filter((project) => (!status || project.status === status) && matchesSearch(query, project.name, project.code, project.pmName, project.softwareManagerName)), params.page);

@@ -1,13 +1,55 @@
+import { columnFilterKeys, type ColumnFilterField } from "./column-filters";
 import { getPageWindow, readListPage } from "./list-pagination";
 
 export type DirectoryParams = Record<string, string | string[] | undefined>;
-export type Directory = "areas" | "packages" | "users";
+
+export const directoryColumnFields = {
+  areas: {
+    name: { key: "name", label: "责任田名称", kind: "text" },
+    description: { key: "description", label: "责任田说明", kind: "text" },
+    type: {
+      key: "type", label: "责任田类型", kind: "choices",
+      options: [{ value: "standard", label: "普通责任田" }, { value: "integration", label: "集成测试责任田" }],
+    },
+    leaders: { key: "leaders", label: "主管", kind: "choices" },
+    projects: { key: "projects", label: "已设负责人的项目数", kind: "number" },
+    packages: { key: "packages", label: "软件包数量", kind: "number" },
+  },
+  packages: {
+    code: { key: "code", label: "软件包编码", kind: "text" },
+    name: { key: "name", label: "软件包名称", kind: "text" },
+    area: { key: "area", label: "责任田", kind: "choices" },
+    owner: { key: "owner", label: "责任人", kind: "choices" },
+    enabled: {
+      key: "enabled", label: "启停状态", kind: "choices",
+      options: [{ value: "active", label: "启用" }, { value: "inactive", label: "停用" }],
+    },
+    progress: { key: "progress", label: "当前流程状态", kind: "choices" },
+    versions: { key: "versions", label: "版本记录", kind: "number" },
+    nodes: { key: "nodes", label: "使用节点", kind: "number" },
+  },
+  users: {
+    name: { key: "name", label: "姓名", kind: "text" },
+    title: { key: "title", label: "职位", kind: "text" },
+    department: { key: "department", label: "部门", kind: "text" },
+    employeeId: { key: "employeeId", label: "工号", kind: "text" },
+    role: { key: "role", label: "系统角色", kind: "choices" },
+    area: { key: "area", label: "责任田", kind: "choices" },
+    status: {
+      key: "status", label: "账号状态", kind: "choices",
+      options: [{ value: "active", label: "启用" }, { value: "inactive", label: "停用" }],
+    },
+    packages: { key: "packages", label: "软件包数量", kind: "number" },
+  },
+} satisfies Record<string, Record<string, ColumnFilterField>>;
+
+export type Directory = keyof typeof directoryColumnFields;
 
 const sharedKeys = ["q", "sort", "order", "page", "pageSize"];
-const filterKeys = {
-  areas: ["type", "scope", "f_name", "f_name_mode", "f_description", "f_description_mode", "f_type", "f_leaders", "f_projects_min", "f_projects_max", "f_packages_min", "f_packages_max"],
-  packages: ["area", "state", "f_code", "f_code_mode", "f_name", "f_name_mode", "f_area", "f_owner", "f_enabled", "f_progress", "f_versions_min", "f_versions_max", "f_nodes_min", "f_nodes_max", "historyPage"],
-  users: ["area", "status", "f_name", "f_name_mode", "f_title", "f_title_mode", "f_department", "f_department_mode", "f_employeeId", "f_employeeId_mode", "f_role", "f_area", "f_status", "f_packages_min", "f_packages_max"],
+const directoryKeys: Record<Directory, string[]> = {
+  areas: [...sharedKeys, "type", "scope", ...Object.values(directoryColumnFields.areas).flatMap(columnFilterKeys)],
+  packages: [...sharedKeys, "area", "state", ...Object.values(directoryColumnFields.packages).flatMap(columnFilterKeys), "historyPage"],
+  users: [...sharedKeys, "area", "status", ...Object.values(directoryColumnFields.users).flatMap(columnFilterKeys)],
 };
 
 export const directoryCollator = new Intl.Collator("zh-Hans-CN", { numeric: true, sensitivity: "base" });
@@ -18,7 +60,7 @@ export function directoryValue(value: string | string[] | undefined) {
 
 export function directoryFilters(directory: Directory, params: DirectoryParams) {
   return Object.fromEntries(
-    [...sharedKeys, ...filterKeys[directory]].flatMap((key) => {
+    directoryKeys[directory].flatMap((key) => {
       const raw = params[key];
       const value = key.startsWith("f_")
         ? typeof raw === "string" && raw.length <= 4096 ? raw.trim() : ""
@@ -64,7 +106,7 @@ export function projectDirectoryDetailParams(params: DirectoryParams) {
 
 export function directoryActionHref(directory: Directory, formData: FormData, id?: number) {
   const filters = directoryFilters(directory, Object.fromEntries(
-    [...sharedKeys, ...filterKeys[directory]].map((key) => {
+    directoryKeys[directory].map((key) => {
       const value = formData.get(key);
       return [key, typeof value === "string" ? value : undefined];
     }),
