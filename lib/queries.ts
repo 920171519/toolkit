@@ -611,11 +611,12 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
   };
 }
 
-export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
-  const [base] = projectId
-    ? readPackageOverviewRows({ projectId, includeArchivedUsage: false, packageId })
-    : withTrialProgress(readPackagesOverview(includeInactive, packageId));
-  if (!base) return null;
+function readGlobalPackageSummary(packageId: number, includeInactive: boolean) {
+  const [pkg] = withTrialProgress(readPackagesOverview(includeInactive, packageId));
+  return pkg;
+}
+
+function readPackageDetailUsages(packageId: number): PackageDetailData["usages"] {
   const usageRows = all<{
     projectId: number;
     projectName: string;
@@ -624,13 +625,11 @@ export function getPackageDetail(packageId: number, includeInactive = false, pro
     nodeId: number;
     nodeName: string;
   }>(
-    `SELECT p.id AS projectId, p.name AS projectName, p.code AS projectCode, p.status AS projectStatus,
+    `SELECT pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
             n.id AS nodeId, n.name AS nodeName
-     FROM package_usages u
-     JOIN projects p ON p.id = u.project_id
-     JOIN project_nodes n ON n.id = u.node_id
-     WHERE u.package_id = ? AND p.status != 'ARCHIVED'
-     ORDER BY p.sort_order, n.sort_order`,
+     ${packageUsageFrom}
+     WHERE u.package_id = ? AND pr.status != 'ARCHIVED'
+     ORDER BY pr.sort_order, n.sort_order`,
     packageId,
   );
   const usageMap = new Map<number, PackageDetailData["usages"][number]>();
@@ -648,6 +647,20 @@ export function getPackageDetail(packageId: number, includeInactive = false, pro
       });
     }
   }
+  return [...usageMap.values()];
+}
+
+export function getPackageConfiguration(packageId: number) {
+  const pkg = readGlobalPackageSummary(packageId, true);
+  return pkg ? { package: pkg, usages: readPackageDetailUsages(packageId) } : null;
+}
+
+export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
+  const base = projectId
+    ? readPackageOverviewRows({ projectId, includeArchivedUsage: false, packageId })[0]
+    : readGlobalPackageSummary(packageId, includeInactive);
+  if (!base) return null;
+  const usages = readPackageDetailUsages(packageId);
   const versions = all<PackageVersionSummary>(
     `SELECT pv.id, pv.package_id AS packageId, p.name AS packageName, p.code AS packageCode,
             pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl, pv.build_url AS buildUrl,
@@ -710,7 +723,7 @@ export function getPackageDetail(packageId: number, includeInactive = false, pro
   );
   return {
     package: base,
-    usages: [...usageMap.values()],
+    usages,
     versions,
     audits,
   };

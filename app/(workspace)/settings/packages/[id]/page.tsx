@@ -8,7 +8,7 @@ import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { getProjectOptionsWithNodes } from "@/lib/project-queries";
-import { getPackageDetail, getPeople, getResponsibilityAreaOptions, parseFlash } from "@/lib/queries";
+import { getPackageConfiguration, getPeople, getResponsibilityAreaOptions, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
 import { ActionForm } from "@/components/action-form";
@@ -37,7 +37,7 @@ export default async function PackageSettingsDetailPage({
   const { id } = await params;
   const packageId = Number(id);
   if (!Number.isSafeInteger(packageId) || packageId < 1) notFound();
-  const data = getPackageDetail(packageId, true);
+  const data = getPackageConfiguration(packageId);
   if (!data) notFound();
   if (!isAdmin && (data.package.areaId === null || !ledAreaIds.includes(data.package.areaId))) {
     redirect(`/dashboard?flash=${encodeURIComponent("当前角色无权访问该页面")}&tone=error`);
