@@ -37,13 +37,18 @@ const fields = {
   archive: { key: "archive", label: "归档地址", kind: "text" },
 } satisfies Record<string, ColumnFilterField>;
 
-function submitterValue(item: PendingTransferItem) {
+function submitterValue(item: TransferRow) {
   return item.submittedById === null ? "unknown" : String(item.submittedById);
 }
 
-type RequestGroup = Omit<PendingTransferGroup, "items"> & {
-  items: Array<PendingTransferItem & { canCancel: boolean; riskEntry?: RiskTrialEntry }>;
+type TransferRow = Omit<PendingTransferItem, "draftBatchId" | "draftBatchProjectId" | "draftBatchCode"> & {
+  draftReserved: boolean;
+  draftBatch: { id: number; projectId: number; code: string | null } | null;
+  canCancel: boolean;
+  riskEntry?: RiskTrialEntry;
 };
+
+type RequestGroup = Omit<PendingTransferGroup, "items"> & { items: TransferRow[] };
 
 export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflowScope, selection, returnState, pageSize }: {
   group: RequestGroup;
@@ -136,8 +141,8 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
           {Object.keys(selection.defaults).length > 0 ? <Link href={prepareHref} prefetch={false} className="button button-primary button-sm" data-testid={`open-batch-${projectId}`} onClick={() => rememberPendingReview(selection.key, hiddenVersions)}>准备转测批次 <ArrowRight size={14} aria-hidden="true" /></Link>
             : <GuidanceDialog label="准备转测批次" title="准备转测批次的条件" fallbackHref={prepareHref}
               items={[{ title: "目前没有可纳入的待转测版本", detail: "先处理已占用的草稿，或提交可在本项目验证的新版本。",
-                href: items.some((item) => item.draftBatchId !== null) ? workflowHref("/submissions", projectId, { view: "drafts", returnTo: returnState.returnTo }) : workflowHref("/submissions/transfer", projectId, { returnTo: returnState.returnTo }),
-                actionLabel: items.some((item) => item.draftBatchId !== null) ? "查看待发起批次" : "查看转测提交条件" }]} />}
+                href: items.some((item) => item.draftReserved) ? workflowHref("/submissions", projectId, { view: "drafts", returnTo: returnState.returnTo }) : workflowHref("/submissions/transfer", projectId, { returnTo: returnState.returnTo }),
+                actionLabel: items.some((item) => item.draftReserved) ? "查看待发起批次" : "查看转测提交条件" }]} />}
           </>}
         </div>
       </div>
@@ -164,9 +169,9 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
               {selection && <td className={styles.selectionCell}>{item.canInclude ? <input type="checkbox"
                 aria-label={`本轮转测 ${identity.code} ${item.version}`}
                 checked={checked}
-                onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : item.draftBatchId !== null
-                  ? <Link href={workflowHref(`/integration/${item.draftBatchId}`, scopeProjectId, { ...returnState, fromRequests: "1" })} prefetch={false} className="archive-link">{item.draftBatchCode} 草稿占用</Link>
-                  : <span className="small muted">{item.packageActive ? "不在项目使用范围" : "软件包已停用"}</span>}</td>}
+                onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : item.draftBatch
+                  ? <Link href={workflowHref(`/integration/${item.draftBatch.id}`, scopeProjectId === undefined ? undefined : item.draftBatch.projectId, { ...returnState, fromRequests: "1" })} prefetch={false} className="archive-link">{item.draftBatch.code} 草稿占用</Link>
+                  : <span className="small muted">{item.draftReserved ? "草稿占用" : item.packageActive ? "不在项目使用范围" : "软件包已停用"}</span>}</td>}
               <th scope="row"><strong className="mono">{identity.code}</strong></th>
               <td><Badge tone="slate">{item.version}</Badge><p className={styles.tableExcerpt} title={item.changeSummary}>{item.changeSummary}</p></td>
               <td>{item.submittedByName ?? "未知申请人"}</td>

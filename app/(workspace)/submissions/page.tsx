@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getManagedProjectScope, getNarrowVersionRequestIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
@@ -40,7 +40,8 @@ export default async function SubmissionsPage({
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const managerScope = getManagedProjectScope(user);
-  const projectScope = getProjectWorkflowProjectIds(user, true);
+  const batchEvidenceScope = getBatchEvidenceReadScope(user);
+  const projectScope = batchEvidenceScope.projectIds;
   const hasProjectAccess = Boolean(project && (projectScope === null || projectScope.includes(project.id)));
   const readableRequests = projectScope === null || hasProjectAccess
     ? null : new Set(getNarrowVersionRequestIds(user));
@@ -170,11 +171,19 @@ export default async function SubmissionsPage({
                 }
                 return <PendingTransferTable
                   key={`${group.projectId}-${focusedRequestId ?? "all"}`}
-                  group={{ ...group, items: group.items.map((item) => ({
-                    ...item,
-                    riskEntry: riskEntries[item.requestId],
-                    canCancel: item.draftBatchId === null && item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
-                  })) }}
+                  group={{ ...group, items: group.items.map(({ draftBatchId, draftBatchProjectId, draftBatchCode, ...item }) => {
+                    const draftReserved = draftBatchId !== null;
+                    const draftBatch = managesGroup && draftBatchId !== null && draftBatchProjectId !== null
+                      && canReadBatchEvidence(user, draftBatchProjectId, "DRAFT", batchEvidenceScope)
+                      ? { id: draftBatchId, projectId: draftBatchProjectId, code: draftBatchCode } : null;
+                    return {
+                      ...item,
+                      draftReserved,
+                      draftBatch,
+                      riskEntry: riskEntries[item.requestId],
+                      canCancel: !draftReserved && item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
+                    };
+                  }) }}
                   scopeProjectId={project?.id}
                   hasProjectWorkflowScope={projectScope === null || projectScope.includes(group.projectId)}
                   pageSize={pageSize}

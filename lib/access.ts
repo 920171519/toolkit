@@ -230,7 +230,7 @@ export function getReadableLinkedBatchEvidence(
 ) {
   const { batchId, batchProjectId, batchStatus, batchCode, batchConclusion } = evidence;
   if (batchId === null || batchProjectId === null || !canReadBatchEvidence(user, batchProjectId, batchStatus, scope)) return null;
-  return { batchId, batchProjectId, batchCode, batchConclusion };
+  return { batchId, batchProjectId, batchStatus, batchCode, batchConclusion };
 }
 
 const batchEvidenceScopeCtes = `readable_projects AS (SELECT value AS id FROM json_each(?)),

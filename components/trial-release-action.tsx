@@ -3,7 +3,7 @@ import { releaseTrialAction } from "@/lib/actions/workflow";
 import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { packageIdentity } from "@/lib/package-identity";
 import { getTrialNodeGuidance } from "@/lib/release-guidance";
-import { trialReleaseStateKey, type TrialReadyVersion } from "@/lib/trial-eligibility";
+import { trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import type { SessionUser } from "@/lib/types";
 import { workflowHref } from "@/lib/workflow-links";
 import { ActionForm } from "./action-form";
@@ -15,8 +15,8 @@ import styles from "./trial-queue-table.module.css";
 
 export function TrialReleaseAction({ actor, row, records, projectId, query = {}, label = "发布", triggerClassName = "button button-secondary button-sm" }: {
   actor: SessionUser;
-  row: TrialReadyVersion;
-  records: readonly TrialReadyVersion[];
+  row: TrialReadyDisplayVersion;
+  records: readonly TrialReadyDisplayVersion[];
   projectId?: number;
   query?: Record<string, string>;
   label?: string;
@@ -36,16 +36,17 @@ export function TrialReleaseAction({ actor, row, records, projectId, query = {},
       <section aria-label="验收依据">
         <h3>验收依据</h3>
         {records.map((record) => {
-          const conclusion = record.batchConclusion ? CONCLUSION_META[record.batchConclusion as BatchConclusion] : null;
+          const { batch } = record;
+          const conclusion = batch?.batchConclusion ? CONCLUSION_META[batch.batchConclusion as BatchConclusion] : null;
           const status = TRANSFER_REQUEST_STATUS_META[record.integrationStatus as TransferRequestStatus];
           return <div className="trial-source-line" key={record.requestId}>
             <strong>{record.projectName}</strong>
             <Badge tone={conclusion?.tone ?? status?.tone ?? "slate"}>{conclusion?.label ?? status?.label ?? "待验收"}</Badge>
-            {record.batchId ? <Link href={workflowHref("/integration/" + record.batchId, record.projectId)}
-              className="archive-link mono" prefetch={false}>{record.batchCode ?? "查看批次"}</Link>
-              : <span className="small muted">未关联转测批次</span>}
-            {record.batchReportUrl && <ExternalLink href={record.batchReportUrl}>验证报告</ExternalLink>}
-            {record.batchTestSummary && <span className="small muted trial-summary">{record.batchTestSummary}</span>}
+            {batch ? <Link href={workflowHref("/integration/" + batch.batchId, batch.batchProjectId)}
+              className="archive-link mono" prefetch={false}>{batch.batchCode ?? "查看批次"}</Link>
+              : <span className="small muted">{record.hasLinkedBatch ? "—" : "未关联转测批次"}</span>}
+            {batch?.reportUrl && <ExternalLink href={batch.reportUrl}>验证报告</ExternalLink>}
+            {batch?.testSummary && <span className="small muted trial-summary">{batch.testSummary}</span>}
           </div>;
         })}
         <div className={styles.actions}>

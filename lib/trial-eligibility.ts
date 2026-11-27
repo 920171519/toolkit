@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { getBatchEvidenceReadScope, getReadableLinkedBatchEvidence, type LinkedBatchEvidence } from "./access";
 import { all } from "./db";
 import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL } from "./trial-readiness";
+import type { SessionUser } from "./types";
 
 const trialRequestStatuses = "('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')";
 
@@ -19,7 +21,7 @@ function trialEligibilityCtes(versionScope = "") {
     ),
     trial_project_evidence AS (
       SELECT s.versionId, s.projectId, r.id AS requestId, r.status AS requestStatus,
-             b.id AS batchId, b.code AS batchCode, b.status AS batchStatus, b.conclusion AS batchConclusion,
+             b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
              r.status IN ${trialRequestStatuses} AS usable,
              CASE WHEN r.status = 'PASSED' AND b.status = 'COMPLETED' AND b.conclusion = 'PASS' THEN 1 ELSE 0 END AS passed
       FROM trial_scope s
@@ -48,16 +50,13 @@ function trialEligibilityCtes(versionScope = "") {
     )`;
 }
 
-type TrialProjectEvidence = {
+type TrialProjectEvidence = LinkedBatchEvidence & {
   projectId: number;
   projectName: string;
   requestId: number | null;
   requestStatus: string | null;
   usable: number | null;
   passed: number;
-  batchId: number | null;
-  batchCode: string | null;
-  batchStatus: string | null;
 };
 
 type TrialReleaseState = {
@@ -75,7 +74,7 @@ export function getTrialReleaseEligibility(versionId: number): TrialReleaseEligi
     `WITH ${trialEligibilityCtes("AND id = ?")}
      SELECT q.releaseMode, q.riskProjectCount, q.riskAdmissionId, q.riskConclusion, q.evidenceKey,
             e.projectId, p.name AS projectName, e.requestId, e.requestStatus, e.usable, e.passed,
-            e.batchId, e.batchCode, e.batchStatus
+            e.batchId, e.batchCode, e.batchProjectId, e.batchStatus, e.batchConclusion
      FROM trial_eligibility q
      LEFT JOIN trial_project_evidence e ON e.versionId = q.versionId
      LEFT JOIN projects p ON p.id = e.projectId
@@ -86,8 +85,8 @@ export function getTrialReleaseEligibility(versionId: number): TrialReleaseEligi
   const { releaseMode, riskProjectCount, riskAdmissionId, riskConclusion, evidenceKey } = summary;
   const projects = rows.flatMap((row) => {
     if (row.projectId === null) return [];
-    const { projectId, projectName, requestId, requestStatus, usable, passed, batchId, batchCode, batchStatus } = row;
-    return [{ projectId, projectName, requestId, requestStatus, usable, passed, batchId, batchCode, batchStatus }];
+    const { projectId, projectName, requestId, requestStatus, usable, passed, batchId, batchCode, batchProjectId, batchStatus, batchConclusion } = row;
+    return [{ projectId, projectName, requestId, requestStatus, usable, passed, batchId, batchCode, batchProjectId, batchStatus, batchConclusion }];
   });
   return { releaseMode, riskProjectCount, riskAdmissionId, riskConclusion, evidenceKey, projects };
 }
@@ -158,7 +157,7 @@ export function getTrialProgress(versionIds: number[], projectId?: number) {
   return new Map(rows.map((row) => [row.versionId, row]));
 }
 
-export type TrialReadyVersion = {
+export type TrialReadyVersion = LinkedBatchEvidence & {
   requestId: number;
   versionId: number;
   projectId: number;
@@ -179,9 +178,6 @@ export type TrialReadyVersion = {
   softwareManagerId: number | null;
   releaseMode: "INTEGRATION" | "RISK";
   riskConclusion: string | null;
-  batchId: number | null;
-  batchCode: string | null;
-  batchConclusion: string | null;
   batchTestSummary: string | null;
   batchReportUrl: string | null;
   versionProjectCount: number;
@@ -191,9 +187,11 @@ export type TrialReadyVersion = {
   ongoingTestCount: number;
 };
 
+type TrialReadyScope = { requestId?: number; versionId?: number };
+
 export function getTrialReadyVersions(
   projectIds: number[] | null = null,
-  options: { requestId?: number; versionId?: number } = {},
+  options: TrialReadyScope = {},
 ): TrialReadyVersion[] {
   if (projectIds?.length === 0) return [];
   const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
@@ -208,7 +206,7 @@ export function getTrialReadyVersions(
             o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
             q.releaseMode,
             q.riskConclusion, q.riskAdmissionId, q.evidenceKey, q.versionProjectCount, q.riskProjectCount,
-            e.batchId, e.batchCode, e.batchConclusion,
+            e.batchId, e.batchCode, e.batchProjectId, e.batchStatus, e.batchConclusion,
             b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
             ${ACTIVE_INTEGRATION_BATCH_COUNT_SQL} AS ongoingTestCount
      FROM trial_eligibility q
@@ -229,6 +227,32 @@ export function getTrialReadyVersions(
     ...(options.requestId === undefined ? [] : [options.requestId]),
     ...(projectIds === null ? [] : [JSON.stringify(projectIds)]),
   );
+}
+
+export type TrialReadyDisplayVersion = Omit<TrialReadyVersion, keyof LinkedBatchEvidence | "batchTestSummary" | "batchReportUrl"> & {
+  hasLinkedBatch: boolean;
+  batch: (NonNullable<ReturnType<typeof getReadableLinkedBatchEvidence>> & {
+    testSummary: string | null;
+    reportUrl: string | null;
+  }) | null;
+};
+
+export function getTrialReadyDisplayVersions(
+  user: SessionUser,
+  projectIds: number[] | null,
+  options: TrialReadyScope = {},
+): TrialReadyDisplayVersion[] {
+  const rows = getTrialReadyVersions(projectIds, options);
+  if (rows.length === 0) return [];
+  const scope = getBatchEvidenceReadScope(user);
+  return rows.map(({ batchId, batchProjectId, batchStatus, batchCode, batchConclusion, batchTestSummary, batchReportUrl, ...row }) => {
+    const batch = getReadableLinkedBatchEvidence(user, { batchId, batchProjectId, batchStatus, batchCode, batchConclusion }, scope);
+    return {
+      ...row,
+      hasLinkedBatch: batchId !== null,
+      batch: batch ? { ...batch, testSummary: batchTestSummary, reportUrl: batchReportUrl } : null,
+    };
+  });
 }
 
 export function getTrialNodeUsages(packageId: number) {

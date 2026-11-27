@@ -2,9 +2,9 @@ import {
   canAccessProjectPage,
   canManagePackageArea,
   canManageProjectWorkflowForProject,
-  canReadBatchEvidence,
   canReadPackageWorkflow,
   getBatchEvidenceReadScope,
+  getReadableLinkedBatchEvidence,
 } from "./access";
 import { bindingBarcodeProgress } from "./binding-barcode-results";
 import { isBindingReleaseOpen } from "./binding-availability";
@@ -111,17 +111,16 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
       q: identity.code,
       request: row.requestStatus === "PENDING" ? row.requestId : undefined,
     });
-    const canInspectBatch = canReadBatchEvidence(user, row.projectId, row.batchStatus, batchScope);
-    const batchHref = row.batchId && canInspectBatch
-      ? workflowHref(`/integration/${row.batchId}`, row.projectId, args) : undefined;
-    const stage = canInspectBatch && row.batchStatus === "DRAFT" ? "批次待发起"
+    const batch = getReadableLinkedBatchEvidence(user, row, batchScope);
+    const batchHref = batch ? workflowHref(`/integration/${batch.batchId}`, batch.batchProjectId, args) : undefined;
+    const stage = batch?.batchStatus === "DRAFT" ? "批次待发起"
       : row.requestStatus === "IN_TEST" ? "等待集成测试结论"
         : row.requestStatus === "FAILED" ? "集成测试未通过"
           : row.requestStatus === "BLOCKED" ? "集成测试受阻"
             : row.requestStatus === "PASSED" ? "缺少有效的测试通过结论" : "待安排转测";
     items.push({
       title: `${row.projectName} · ${stage}`,
-      detail: `${row.batchCode && canInspectBatch ? `批次 ${row.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
+      detail: `${batch?.batchCode ? `批次 ${batch.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
       href: batchHref ?? requestsHref,
       actionLabel: batchHref ? "查看转测批次" : "查看转测申请",
     });

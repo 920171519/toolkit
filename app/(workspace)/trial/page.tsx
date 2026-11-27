@@ -19,7 +19,7 @@ import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
-import { getTrialReadyVersions, trialReleaseStateKey, type TrialReadyVersion } from "@/lib/trial-eligibility";
+import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import { getReadableTrialDetail, getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
 import identityStyles from "@/components/package-identity.module.css";
@@ -27,15 +27,20 @@ import identityStyles from "@/components/package-identity.module.css";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "试制与绑定验证" };
 
-function displayPackage({ packageName, packageCode }: Pick<TrialReadyVersion, "packageName" | "packageCode">) {
+function displayPackage({ packageName, packageCode }: Pick<TrialReadyDisplayVersion, "packageName" | "packageCode">) {
   return packageIdentity({ name: packageName, code: packageCode });
 }
 
-function riskRelease(row: TrialReadyVersion) {
+function riskRelease(row: TrialReadyDisplayVersion) {
   return row.riskProjectCount > 0;
 }
 
-function readyStatus(row: TrialReadyVersion) {
+function readyBatchLabel(row: TrialReadyDisplayVersion) {
+  if (row.batch) return row.batch.batchCode ?? "未关联转测批次";
+  return row.hasLinkedBatch ? "—" : "未关联转测批次";
+}
+
+function readyStatus(row: TrialReadyDisplayVersion) {
   return trialReleaseStatuses[riskRelease(row) ? "RISK" : "READY"];
 }
 
@@ -74,9 +79,9 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const { returnTo } = getWorkflowListState(params);
   const query = { ...queueParams, ...(returnTo ? { returnTo } : {}), ...(showBindings ? { view: "binding" } : {}) };
   const queueHref = (binding: boolean) => workflowHref("/trial", projectId, { ...query, view: binding ? "binding" : undefined }) + (binding ? "#binding-queue" : "");
-  const byVersion = new Map<number, TrialReadyVersion[]>();
+  const byVersion = new Map<number, TrialReadyDisplayVersion[]>();
   if (canViewReleaseQueue) {
-    for (const request of getTrialReadyVersions(project ? [project.id] : managerScope)) {
+    for (const request of getTrialReadyDisplayVersions(user, project ? [project.id] : managerScope)) {
       const records = byVersion.get(request.versionId);
       if (records) records.push(request);
       else byVersion.set(request.versionId, [request]);
@@ -105,12 +110,12 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     readableBatch: canReadProject(row.projectId) ? getReadableLinkedBatchEvidence(user, row, batchScope) : null,
   })).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
-  const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
-  const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
+  const canRelease = (row: TrialReadyDisplayVersion) => canManageProjectWorkflowForProject(user, row.projectId);
+  const packageLink = (row: TrialReadyDisplayVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link mono ${identityStyles.code}`}>{displayPackage(row).code}</Link>
   );
 
-  const identityColumns: TrialTableColumn<TrialReadyVersion | TrialVersionRow>[] = [
+  const identityColumns: TrialTableColumn<TrialReadyDisplayVersion | TrialVersionRow>[] = [
     {
       key: "package",
       label: "软件包",
@@ -125,7 +130,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     },
     { key: "version", label: "版本", value: (row) => row.version, cell: (row) => <span className={`mono ${styles.version}`}>{row.version}</span> },
   ];
-  const submitterColumn: TrialTableColumn<TrialReadyVersion | TrialVersionRow> = {
+  const submitterColumn: TrialTableColumn<TrialReadyDisplayVersion | TrialVersionRow> = {
     key: "submitter", label: "提交人", value: (row) => row.submittedByName ?? "未知",
   };
   const releaseColumns: TrialTableColumn<(typeof ready)[number]>[] = [
@@ -140,9 +145,11 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     {
       key: "batch",
       label: "转测批次",
-      value: (row) => row.records.map((record) => record.batchCode ?? "未关联转测批次").join("、"),
-      filterValues: (row) => row.records.map((record) => record.batchCode ?? "未关联转测批次"),
-      cell: (row) => <div className={styles.bindingStatus}>{row.records.map((record) => <span key={record.requestId}>{batchLink(record, record.projectId)}</span>)}</div>,
+      value: (row) => row.records.map(readyBatchLabel).join("、"),
+      filterValues: (row) => row.records.map(readyBatchLabel),
+      cell: (row) => <div className={styles.bindingStatus}>{row.records.map((record) => <span key={record.requestId}>
+        {record.batch ? batchLink(record.batch, record.batch.batchProjectId) : <span className="small muted">{readyBatchLabel(record)}</span>}
+      </span>)}</div>,
     },
     submitterColumn,
     {

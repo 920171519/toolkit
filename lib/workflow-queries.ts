@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableBatchEvidenceIds, getReadableVersionIds, type LinkedBatchEvidence } from "./access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableBatchEvidenceIds, getReadableLinkedBatchEvidence, getReadableVersionIds, type LinkedBatchEvidence } from "./access";
 import { OPEN_BINDING_RELEASE_STATUSES_SQL, OPEN_BINDING_REQUIREMENT_STATUSES_SQL } from "./binding-availability";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
@@ -53,6 +53,7 @@ export type PendingTransferItem = {
   canInclude: number;
   packageActive: number;
   draftBatchId: number | null;
+  draftBatchProjectId: number | null;
   draftBatchCode: string | null;
 };
 
@@ -77,7 +78,7 @@ export function getPendingTransferGroups(
             draft.id IS NULL AND p.is_active = 1 AND EXISTS (
               SELECT 1 FROM package_usages usage WHERE usage.package_id = p.id AND usage.project_id = r.project_id
             ) AS canInclude,
-            p.is_active AS packageActive, draft.id AS draftBatchId, draft.code AS draftBatchCode,
+            p.is_active AS packageActive, draft.id AS draftBatchId, draft.project_id AS draftBatchProjectId, draft.code AS draftBatchCode,
             pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
@@ -1491,13 +1492,9 @@ export type VersionTrace = {
     formFlowNo: string | null;
     releaseMode: "INTEGRATION" | "RISK";
     riskConclusion: string | null;
-    batchId: number | null;
-    batchCode: string | null;
-    batchStatus: string | null;
-    batchConclusion: string | null;
     batchTestSummary: string | null;
     batchReportUrl: string | null;
-  }>;
+  } & LinkedBatchEvidence>;
   batches: Array<{
     id: number;
     code: string;
@@ -1538,7 +1535,7 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
             r.trial_released_at AS trialReleasedAt,
             r.formal_released_at AS formalReleasedAt, r.form_flow_no AS formFlowNo,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
-            b.id AS batchId, b.code AS batchCode, b.status AS batchStatus,
+            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus,
             b.conclusion AS batchConclusion, b.test_summary AS batchTestSummary,
             b.test_report_url AS batchReportUrl
      FROM version_transfer_requests r
@@ -1580,18 +1577,22 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
   const narrowRequests = readableProjects === null ? [] : getNarrowVersionRequestIds(user, versionId);
   const safeRequests = requests.filter(({ projectId, requestId }) => hasProjectEvidence(projectId) || narrowRequests.includes(requestId));
   if (projectId && requests.length > 0 && safeRequests.length === 0 && readableBatches.length === 0) return null;
-  const projectedRequests = safeRequests.map((request) => hasBatchEvidence(request.projectId, request.batchStatus) ? request : {
+  const canReadLinkedBatch = (request: LinkedBatchEvidence & { projectId: number }) =>
+    hasProjectEvidence(request.projectId)
+    && (projectId === undefined || request.batchProjectId === projectId)
+    && getReadableLinkedBatchEvidence(user, request, batchScope) !== null;
+  const hiddenBatch = { batchId: null, batchProjectId: null, batchCode: null, batchStatus: null, batchConclusion: null };
+  const projectedRequests = safeRequests.map((request) => canReadLinkedBatch(request) ? request : {
     ...request,
-    batchId: null,
-    batchCode: null,
-    batchStatus: null,
-    batchConclusion: null,
+    ...hiddenBatch,
     batchTestSummary: null,
     batchReportUrl: null,
   });
-  const details = safeRequests
-    .map((request) => getReadableTrialDetail(user, request.requestId))
-    .filter((detail): detail is TrialDetail => detail !== null);
+  const details = safeRequests.flatMap(({ requestId }) => {
+    const detail = getReadableTrialDetail(user, requestId);
+    if (!detail) return [];
+    return [canReadLinkedBatch(detail.request) ? detail : { ...detail, request: { ...detail.request, ...hiddenBatch } }];
+  });
   return { version, requests: projectedRequests, batches: readableBatches, details };
 }
 

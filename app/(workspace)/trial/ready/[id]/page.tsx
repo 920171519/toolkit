@@ -14,7 +14,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
-import { getTrialReadyVersions, trialReleaseStateKey } from "@/lib/trial-eligibility";
+import { getTrialReadyDisplayVersions, trialReleaseStateKey } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import { getManagedTrialRequestState } from "@/lib/workflow-queries";
 import styles from "@/components/workflow-queue.module.css";
@@ -36,7 +36,7 @@ export default async function TrialReadyDetailPage({
   const projectId = requireWorkflowProject(user, search.project)?.id;
   const managerScope = getManagedProjectScope(user);
   const scope = projectId === undefined ? managerScope : [projectId];
-  const [row] = getTrialReadyVersions(scope, { requestId });
+  const [row] = getTrialReadyDisplayVersions(user, scope, { requestId });
   const returnTo = getWorkflowListState(search).returnTo;
   const queue = { ...trialQueueParams(search), ...(returnTo ? { returnTo } : {}) };
   const back = <Link href={workflowHref("/trial", projectId, queue)} className="button button-secondary" prefetch={false}>
@@ -67,9 +67,10 @@ export default async function TrialReadyDetailPage({
   }
   if (!canManageProjectWorkflowForProject(user, row.projectId)) notFound();
   const risk = row.riskProjectCount > 0;
-  const conclusion = row.batchConclusion ? CONCLUSION_META[row.batchConclusion as BatchConclusion] : null;
+  const { batch } = row;
+  const conclusion = batch?.batchConclusion ? CONCLUSION_META[batch.batchConclusion as BatchConclusion] : null;
   const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
-  const records = getTrialReadyVersions(managerScope, { versionId: row.versionId });
+  const records = getTrialReadyDisplayVersions(user, managerScope, { versionId: row.versionId });
 
   return (
     <>
@@ -99,12 +100,12 @@ export default async function TrialReadyDetailPage({
             <>
               <div className="trial-source-line">
                 <strong>{conclusion?.label ?? "通过"}</strong>
-                {row.batchId && <Link href={workflowHref("/integration/" + row.batchId, projectId)} className="archive-link" prefetch={false}>
-                  {row.batchCode ?? "查看批次"}
+                {batch && <Link href={workflowHref("/integration/" + batch.batchId, projectId === undefined ? undefined : batch.batchProjectId)} className="archive-link" prefetch={false}>
+                  {batch.batchCode ?? "查看批次"}
                 </Link>}
-                {row.batchReportUrl && <ExternalLink href={row.batchReportUrl}>验证报告</ExternalLink>}
+                {batch?.reportUrl && <ExternalLink href={batch.reportUrl}>验证报告</ExternalLink>}
               </div>
-              {row.batchTestSummary && <p style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{row.batchTestSummary}</p>}
+              {batch?.testSummary && <p style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{batch.testSummary}</p>}
             </>
           )}
         </div>

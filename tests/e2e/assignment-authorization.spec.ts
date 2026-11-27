@@ -238,6 +238,125 @@ test("项目活动、节点绑定和转正核对按项目分工展示批次证�
   }
 });
 
+test("历史跨项目关联按批次所属项目展示，试制资格与占用状态保留", async ({ page }) => {
+  await login(page, "MGR001");
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const [n1, m2] = db.prepare("SELECT id FROM projects WHERE code IN ('N1','M2') ORDER BY sort_order").all() as { id: number }[];
+  const stamp = "2026-12-01T00:00:00.000Z";
+  const archive = "https://example.com/archive/qa-association";
+  const summary = "已发起批次的验收细节";
+  const report = "https://example.com/reports/qa-association";
+  const packageCode = "QA-ASSOC";
+  const versionNumbers = { ready: "1.2.3-legacy-ready", pending: "1.2.4-legacy-pending" };
+  const historicalCode = "QA-ASSOC-HISTORY";
+  const latestCode = "QA-ASSOC-LATEST";
+  const draftCode = "QA-ASSOC-DRAFT";
+  let packageId: number | undefined;
+  const batches: number[] = [];
+  try {
+    packageId = Number(db.prepare("INSERT INTO packages (name, code, created_at) VALUES ('历史批次关联测试包', ?, ?)").run(packageCode, stamp).lastInsertRowid);
+    db.prepare(
+      "INSERT INTO package_usages (package_id, project_id, node_id) SELECT ?, ?, id FROM project_nodes WHERE project_id = ? AND name = 'EVT'",
+    ).run(packageId, n1.id, n1.id);
+    const addRequest = (version: string, passed: boolean) => {
+      const versionId = Number(db.prepare(
+        `INSERT INTO package_versions (package_id, version, change_summary, archive_url, status, submitted_at, updated_at)
+         VALUES (?, ?, '历史关联回归', ?, ?, ?, ?)`,
+      ).run(packageId!, version, archive, passed ? "PENDING_TRIAL" : "PENDING_TRANSFER", stamp, stamp).lastInsertRowid);
+      const status = passed ? "PASSED" : "PENDING";
+      const requestId = Number(db.prepare(
+        `INSERT INTO version_transfer_requests (package_version_id, project_id, status, integration_status, submitted_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(versionId, n1.id, status, status, stamp, stamp).lastInsertRowid);
+      return { versionId, requestId, version };
+    };
+    const addBatch = (code: string, projectId: number, request: ReturnType<typeof addRequest>, status: "DRAFT" | "COMPLETED") => {
+      const completed = status === "COMPLETED";
+      const id = Number(db.prepare(
+        `INSERT INTO integration_batches (code, project_id, title, status, created_at, completed_at, sent_at,
+          conclusion, test_summary, test_report_url) VALUES (?, ?, '历史关联回归', ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(code, projectId, status, stamp, completed ? stamp : null, completed ? stamp : null,
+        completed ? "PASS" : null, completed ? summary : null, completed ? report : null).lastInsertRowid);
+      batches.push(id);
+      db.prepare(
+        `INSERT INTO batch_items (batch_id, package_id, package_version_id, version, archive_url, transfer_request_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, packageId!, request.versionId, request.version, archive, request.requestId);
+      return id;
+    };
+
+    const ready = addRequest(versionNumbers.ready, true);
+    const pending = addRequest(versionNumbers.pending, false);
+    addBatch(historicalCode, n1.id, ready, "COMPLETED");
+    const latestBatch = addBatch(latestCode, m2.id, ready, "COMPLETED");
+    const reservedDraft = addBatch(draftCode, m2.id, pending, "DRAFT");
+    const traceHref = `/versions/${ready.versionId}`;
+    const pendingTraceHref = `/versions/${pending.versionId}?project=${n1.id}`;
+    const queueHref = `/trial?project=${n1.id}`;
+    const readyHref = `/trial/ready/${ready.requestId}?project=${n1.id}`;
+    const submissionsHref = `/submissions?project=${n1.id}&q=${packageCode}`;
+    const traceRow = page.getByRole("region", { name: "项目版本证据表格" }).getByRole("row", { name: /星云 N1/ });
+    const history = page.getByRole("region", { name: "集成测试证据表格" });
+    const queuedRow = page.getByRole("region", { name: "待发布试制表格" }).getByRole("row").filter({ hasText: ready.version });
+    const review = page.getByRole("region", { name: "验收结论" });
+    const pendingRow = page.getByRole("region", { name: "星云 N1待转测申请表格" }).getByRole("row").filter({ hasText: pending.version });
+
+    await page.goto(traceHref);
+    await expect(traceRow.getByText("无关联批次")).toBeVisible();
+    await expect(history.getByRole("link", { name: historicalCode, exact: true })).toBeVisible();
+    await expect(history.getByText(latestCode, { exact: true })).toHaveCount(0);
+
+    await page.goto(queueHref);
+    await expect(queuedRow).toContainText("待发试制");
+    await expect(queuedRow).not.toContainText(latestCode);
+    await queuedRow.getByRole("link", { name: "详情", exact: true }).click();
+    await expect(page).toHaveURL(readyHref);
+    await expect(review.getByText("通过", { exact: true })).toBeVisible();
+    await expect(review.getByRole("link", { name: "验证报告", exact: true })).toHaveCount(0);
+    await expect(review).not.toContainText(summary);
+    await page.getByRole("button", { name: "发布", exact: true }).click();
+    const publish = page.getByRole("dialog", { name: new RegExp(`发布 ${packageCode}`) });
+    await expect(publish.getByRole("button", { name: "发布全项目共享试制版本", exact: true })).toBeVisible();
+    await expect(publish).not.toContainText(latestCode);
+    await expect(publish).not.toContainText(summary);
+
+    await page.goto(pendingTraceHref);
+    await page.getByRole("button", { name: "发布试制", exact: true }).click();
+    const guidance = page.getByRole("dialog", { name: "试制发布条件", exact: true });
+    await expect(guidance.getByRole("link", { name: "查看转测申请", exact: true })).toBeVisible();
+    await expect(guidance).not.toContainText(draftCode);
+
+    await page.goto(submissionsHref);
+    await expect(pendingRow.getByText("草稿占用", { exact: true })).toBeVisible();
+    await expect(pendingRow.getByRole("checkbox")).toHaveCount(0);
+    await expect(pendingRow.getByRole("link", { name: new RegExp(draftCode) })).toHaveCount(0);
+
+    await login(page, "ADMIN001");
+    await page.goto(traceHref);
+    await expect(traceRow.getByRole("link", { name: latestCode, exact: true })).toHaveAttribute("href", `/integration/${latestBatch}?project=${m2.id}`);
+    await page.goto(`${traceHref}?project=${n1.id}`);
+    await expect(traceRow.getByText("无关联批次")).toBeVisible();
+    await expect(history.getByRole("link", { name: historicalCode, exact: true })).toBeVisible();
+
+    await page.goto(readyHref);
+    await expect(review.getByRole("link", { name: latestCode, exact: true })).toHaveAttribute("href", `/integration/${latestBatch}?project=${m2.id}`);
+    await expect(review.getByRole("link", { name: "验证报告", exact: true })).toHaveAttribute("href", report);
+    await expect(review.getByText(summary, { exact: true })).toBeVisible();
+
+    await page.goto(submissionsHref);
+    await expect(pendingRow.getByRole("link", { name: new RegExp(draftCode) })).toHaveAttribute("href", new RegExp(`^/integration/${reservedDraft}\\?project=${m2.id}(?:&|$)`));
+    await expect(pendingRow.getByRole("checkbox")).toHaveCount(0);
+  } finally {
+    try {
+      for (const batch of batches) db.prepare("DELETE FROM integration_batches WHERE id = ?").run(batch);
+      if (packageId !== undefined) db.prepare("DELETE FROM packages WHERE id = ?").run(packageId);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("仅负责归档项目的软件经理保留配置和历史读取权限", async ({ page }) => {
   await login(page, "MEMBER001");
   const db = openE2eDatabase();
