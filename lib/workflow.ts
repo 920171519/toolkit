@@ -685,13 +685,10 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
     const requirementsToCreate: Array<{
       requestId: number;
       projectId: number;
-      projectName: string;
       nodeId: number;
-      nodeName: string;
       requiredCount: number;
       bindingOwnerId: number;
       bindingApproverId: number;
-      approverPool: number[];
     }> = [];
     const usages = getTrialNodeUsages(anchor.package_id);
     const requestByProject = new Map(requests.map((request) => [request.projectId, request]));
@@ -703,21 +700,26 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       assert(request, `${usage.projectName} 缺少该版本的转测申请，不能发布共享试制。`);
       const [missing] = missingTrialNodeAssignments(usage);
       assert(!missing, `${usage.projectName} / ${usage.nodeName} 未配置${missing}。`);
-      const pool = all<{ userId: number }>(
-        "SELECT user_id AS userId FROM project_node_approvers WHERE node_id = ? ORDER BY id",
-        usage.nodeId,
-      ).map((row) => row.userId);
       requirementsToCreate.push({
         requestId: request.requestId,
         projectId: request.projectId,
-        projectName: request.projectName,
         nodeId: usage.nodeId,
-        nodeName: usage.nodeName,
         requiredCount: Math.max(1, usage.requiredCount),
         bindingOwnerId: usage.bindingOwnerId!,
         bindingApproverId: usage.bindingApproverId!,
-        approverPool: pool.length > 0 ? pool : [usage.bindingApproverId!],
       });
+    }
+
+    const approverPools = new Map<number, number[]>();
+    const configuredApprovers = all<{ nodeId: number; userId: number }>(
+      `SELECT node_id AS nodeId, user_id AS userId FROM project_node_approvers
+       WHERE node_id IN (SELECT value FROM json_each(?)) ORDER BY id`,
+      JSON.stringify(requirementsToCreate.map(({ nodeId }) => nodeId)),
+    );
+    for (const { nodeId, userId } of configuredApprovers) {
+      const pool = approverPools.get(nodeId);
+      if (pool) pool.push(userId);
+      else approverPools.set(nodeId, [userId]);
     }
 
     const timestamp = now();
@@ -766,7 +768,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         timestamp,
       );
       const requirementId = Number(insertResult.lastInsertRowid);
-      for (const approverId of item.approverPool) {
+      for (const approverId of approverPools.get(item.nodeId) ?? [item.bindingApproverId]) {
         run(
           "INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at) VALUES (?, ?, ?)",
           requirementId,
