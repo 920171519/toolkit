@@ -21,7 +21,7 @@ import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersionCount, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
 import workflowStyles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
@@ -83,10 +83,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
   const canReadProject = (id: number) => scope === null || scope.includes(id);
-  const assignedRequests = !project && scope !== null ? new Set(getAssignedTrialRequestIds(user)) : new Set<number>();
-  const trials = showBindings ? getTrialVersions(assignedRequests.size > 0 ? null : scope).flatMap((row) => {
+  const assignedRequestIds = !project && scope !== null ? getAssignedTrialRequestIds(user) : [];
+  const trials = showBindings ? getTrialVersions(scope, assignedRequestIds).flatMap((row) => {
     if (canReadProject(row.projectId)) return [row];
-    const detail = assignedRequests.has(row.requestId) ? getReadableTrialDetail(user, row.requestId) : null;
+    const detail = getReadableTrialDetail(user, row.requestId);
     if (!detail) return [];
     return [{
       ...row,
@@ -96,6 +96,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       pendingFlowCount: detail.requirements.flatMap(({ flows }) => flows).filter(({ status }) => status === "PENDING").length,
     }];
   }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
+  const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
@@ -186,7 +187,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
 
       {canViewReleaseQueue && <WorkflowQueueNav label="试制与绑定队列" views={[
         { label: "待发布试制", href: queueHref(false), count: ready.length, current: !showBindings },
-        { label: "节点绑定", href: queueHref(true), count: trials.length, current: showBindings, nativeNavigation: !showBindings },
+        { label: "节点绑定", href: queueHref(true), count: bindingCount, current: showBindings, nativeNavigation: !showBindings },
       ]} />}
 
       {!showBindings && <TrialQueueTable

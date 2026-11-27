@@ -626,9 +626,27 @@ export type TrialVersionRow = {
   pendingFlowCount: number;
 };
 
-export function getTrialVersions(projectIds: number[] | null = null): TrialVersionRow[] {
-  return filterByProject(
-    all<TrialVersionRow>(
+const trialQueueFrom = `FROM version_transfer_requests r
+  JOIN package_versions pv ON pv.id = r.package_version_id
+  JOIN projects pr ON pr.id = r.project_id`;
+
+function trialQueueScope(projectIds: number[] | null, assignedRequestIds: number[]) {
+  const activeTrial = "pr.status != 'ARCHIVED' AND pv.status = 'TRIAL' AND r.status = 'TRIAL'";
+  if (projectIds === null) return { where: activeTrial, params: [] };
+  return {
+    where: `${activeTrial} AND (r.project_id IN (SELECT value FROM json_each(?)) OR r.id IN (SELECT value FROM json_each(?)))`,
+    params: [JSON.stringify(projectIds), JSON.stringify(assignedRequestIds)],
+  };
+}
+
+export function getTrialVersionCount(projectIds: number[] | null, assignedRequestIds: number[]): number {
+  const { where, params } = trialQueueScope(projectIds, assignedRequestIds);
+  return one<{ total: number }>(`SELECT COUNT(*) AS total ${trialQueueFrom} WHERE ${where}`, ...params)?.total ?? 0;
+}
+
+export function getTrialVersions(projectIds: number[] | null = null, assignedRequestIds: number[] = []): TrialVersionRow[] {
+  const { where, params } = trialQueueScope(projectIds, assignedRequestIds);
+  return all<TrialVersionRow>(
       `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
               pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
               pv.version, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
@@ -646,20 +664,17 @@ export function getTrialVersions(projectIds: number[] | null = null): TrialVersi
                AND br.confirmed_at IS NOT NULL) AS requirementPassed,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived,
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
-       FROM version_transfer_requests r
-       JOIN package_versions pv ON pv.id = r.package_version_id
+       ${trialQueueFrom}
        JOIN packages p ON p.id = pv.package_id
-       JOIN projects pr ON pr.id = r.project_id
        LEFT JOIN users su ON su.id = pv.submitted_by
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
        LEFT JOIN integration_batches b ON b.id = (
          SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
        )
-       WHERE pr.status != 'ARCHIVED' AND pv.status = 'TRIAL' AND r.status = 'TRIAL'
+       WHERE ${where}
        ORDER BY r.trial_released_at DESC, r.id DESC`,
-    ),
-    projectIds,
+    ...params,
   ).map((version) => ({
     ...version,
     requirementTotal: Number(version.requirementTotal),

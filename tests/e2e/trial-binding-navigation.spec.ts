@@ -10,6 +10,7 @@ test("从试制页跳到绑定验证列表，聚焦并保留项目和筛选条�
   await expect(heading).not.toBeInViewport();
 
   const jumpLink = page.getByRole("navigation", { name: "试制与绑定队列" }).getByRole("link", { name: /^节点绑定/ });
+  await expect(jumpLink.getByText("1", { exact: true })).toBeVisible();
   await jumpLink.focus();
   await jumpLink.press("Enter");
 
@@ -20,4 +21,5 @@ test("从试制页跳到绑定验证列表，聚焦并保留项目和筛选条�
   await expect(queue).toBeFocused();
   await expect(heading).toBeInViewport();
   await expect(queue.getByRole("link", { name: "清除搜索条件 1001OTA" })).toBeVisible();
+  await expect(jumpLink.getByText("1", { exact: true })).toBeVisible();
 });
