@@ -3,7 +3,7 @@ import "server-only";
 import { all, db, one, run, transaction } from "./db";
 import { ROLES, type PackageStatus, type Role } from "./constants";
 import { canManageAreas, isAdmin } from "./permissions";
-import { canManagePackageArea, canManageProjectWorkflowForProject, getProjectSoftwareManagerIds, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
+import { canEditPackageResponsibility, canManagePackageArea, canManageProjectWorkflowForProject, getProjectSoftwareManagerIds, isAreaLeader, isAreaProjectLeadForProject } from "./access";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { assert } from "./domain-error";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
@@ -1012,7 +1012,7 @@ export function updatePackageResponsibility(
   );
   assert(pkg, "软件包不存在。", "NOT_FOUND");
   assert(
-    isAdmin(actor) || isAreaLeader(actor.id, pkg.area_id) || isAreaProjectLead(actor.id, pkg.area_id),
+    canEditPackageResponsibility(actor, pkg.area_id),
     "只有责任田主管、项目负责人或系统管理员可以修改软件包责任信息。",
     "FORBIDDEN",
   );

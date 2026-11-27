@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("软件包详情按资料分类，版本和节点可以搜索，关闭后保留当前筛选", async ({ page }) => {
   await login(page, "MGR001");
@@ -43,4 +44,45 @@ test("责任信息编辑使用独立面板，并能搜索人员和返回原位�
   await drawer.getByRole("button", { name: "取消", exact: true }).click();
   await expect(edit).toBeFocused();
   await expect(drawer.getByRole("tab", { name: "概览" })).toHaveAttribute("aria-selected", "true");
+});
+
+test("责任田项目负责人可编辑软件包责任信息，项目软件经理仅可读取", async ({ page }) => {
+  const detailUrl = "/api/packages/7?project=1";
+  await login(page, "TEST001");
+  const baseline = await page.request.get(detailUrl);
+  expect(baseline.ok()).toBeTruthy();
+  const { package: pkg, audits } = await baseline.json();
+  const description = "责任田项目负责人验证诊断工具链说明的保存。";
+  let auditId: number | undefined;
+
+  try {
+    await page.goto("/packages?project=1&open=7");
+    const drawer = page.getByRole("dialog", { name: "软件包详情" });
+    await drawer.getByRole("button", { name: "编辑责任信息" }).click();
+    await drawer.getByLabel("软件包说明").fill(description);
+    await drawer.getByRole("button", { name: "保存责任信息" }).click();
+    await expect(drawer.getByText(description, { exact: true })).toBeVisible();
+
+    const saved = await page.request.get(detailUrl);
+    expect(saved.ok()).toBeTruthy();
+    const detail = await saved.json();
+    expect(detail.canEdit).toBe(true);
+    const [latestAudit] = detail.audits;
+    expect(latestAudit?.action).toBe("UPDATE_PACKAGE_RESPONSIBILITY");
+    expect(audits.map(({ id }: { id: number }) => id)).not.toContain(latestAudit.id);
+    auditId = latestAudit.id;
+
+    await login(page, "MGR001");
+    const reader = await page.request.get(detailUrl);
+    expect(reader.ok()).toBeTruthy();
+    expect(await reader.json()).toMatchObject({ canEdit: false, package: { description }, audits: [] });
+  } finally {
+    const db = openE2eDatabase();
+    try {
+      db.prepare("UPDATE packages SET description = ? WHERE id = ? AND description = ?").run(pkg.description, pkg.id, description);
+      if (auditId !== undefined) db.prepare("DELETE FROM audit_logs WHERE id = ?").run(auditId);
+    } finally {
+      db.close();
+    }
+  }
 });

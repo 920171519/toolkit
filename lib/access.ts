@@ -4,7 +4,7 @@ import { all, one } from "./db";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 
-export function isAreaProjectLead(userId: number, areaId: number | null): boolean {
+function isAreaProjectLead(userId: number, areaId: number | null): boolean {
   if (!areaId) return false;
   const row = one<{ id: number }>(
     "SELECT id FROM area_project_leads WHERE area_id = ? AND user_id = ? LIMIT 1",
@@ -96,20 +96,6 @@ export function canEditPackageResponsibility(
   if (packageAreaId && isAreaLeader(user.id, packageAreaId)) return true;
   return isAreaProjectLead(user.id, packageAreaId);
 }
-
-export function canEditPackageById(
-  user: SessionUser | null,
-  packageId: number,
-): boolean {
-  if (!user) return false;
-  if (user.role === "ADMIN") return true;
-  const row = one<{ area_id: number | null }>(
-    "SELECT area_id FROM packages WHERE id = ?",
-    packageId,
-  );
-  return canEditPackageResponsibility(user, row?.area_id ?? null);
-}
-
 
 export function hasAreaLeadership(userId: number): boolean {
   const leader = one<{ id: number }>("SELECT id FROM area_leaders WHERE user_id = ? LIMIT 1", userId);

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { all, one } from "./db";
-import { canEditPackageById, getManagedProjectIdsForUser, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
+import { canEditPackageResponsibility, getManagedProjectIdsForUser, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, Role } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
@@ -657,12 +657,14 @@ export function getReadablePackageOverviewRows(user: SessionUser, projectId?: nu
     .map((row) => restrictPackageSummary(row, versions.get(row.id) ?? new Set<string>()));
 }
 
-export function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): PackageDetailData | null {
+export function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): (PackageDetailData & { canEdit: boolean }) | null {
   const versionIds = getReadableVersionIds(user);
   const packageIds = getReadablePackageIds(user, versionIds);
   if (packageIds !== null && !packageIds.includes(packageId)) return null;
   const data = getPackageDetail(packageId, true, projectId);
-  if (!data || versionIds === null) return data;
+  if (!data) return null;
+  const canEdit = canEditPackageResponsibility(user, data.package.areaId);
+  if (versionIds === null) return { ...data, canEdit };
   const versions = data.versions.filter((version) => versionIds.includes(version.id));
   const projectIds = getProjectWorkflowProjectIds(user, true);
   const managed = getManagedProjectIdsForUser(user.id);
@@ -678,7 +680,8 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
     versions: versions.map((version) => version.batchId === null || readableBatches.has(version.batchId) ? version : {
       ...version, batchId: null, batchCode: null, batchStatus: null, batchConclusion: null,
     }),
-    audits: canEditPackageById(user, packageId) ? data.audits : [],
+    canEdit,
+    audits: canEdit ? data.audits : [],
   };
 }
 
