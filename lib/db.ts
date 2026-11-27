@@ -46,18 +46,11 @@ function migrateSchema(database: DatabaseSync) {
   if (!projectColumns.some((column) => column.name === "stage")) {
     database.exec(`ALTER TABLE projects ADD COLUMN ${PROJECT_STAGE_COLUMN_SQL}`);
   }
-  // Existing databases predate the multi-approver pool. Backfill the primary approver
-  // so node configuration and old binding requirements expose a selectable approver range.
+  // Backfill the current node pool from the primary approver in older databases.
   database.exec(
     `INSERT OR IGNORE INTO project_node_approvers (node_id, user_id, created_at)
      SELECT id, binding_approver_id, datetime('now')
      FROM project_nodes WHERE binding_approver_id IS NOT NULL`,
-  );
-  database.exec(
-    `INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at)
-     SELECT br.id, pna.user_id, datetime('now')
-     FROM binding_requirements br
-     JOIN project_node_approvers pna ON pna.node_id = br.node_id`,
   );
   const flowColumns = database
     .prepare("PRAGMA table_info(binding_flows)")
