@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { createAuditLogWriter } from "./audit-log";
 import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
@@ -128,13 +129,12 @@ export function backfillTrialTransferRequests(database: DatabaseSync, actorId: n
     insertTransferRequest(database, request.versionId, request.projectId, timestamp));
   if (!inserted.length) return inserted;
 
-  const writeAudit = database.prepare(
-    `INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at)
-     VALUES (?, 'BACKFILL_TRANSFER_REQUEST', 'PACKAGE_VERSION', ?, ?, ?)`,
-  );
+  const audit = createAuditLogWriter(database);
   for (const request of inserted) {
-    writeAudit.run(
+    audit(
       actorId,
+      "BACKFILL_TRANSFER_REQUEST",
+      "PACKAGE_VERSION",
       request.versionId,
       `补派 ${request.packageCode} ${request.version} 转测至 ${request.projectName}（${request.projectCode}）`,
       timestamp,

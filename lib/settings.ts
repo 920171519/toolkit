@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createAuditLogWriter } from "./audit-log";
 import { all, db, one, run, transaction } from "./db";
 import { ROLES, type PackageStatus, type Role } from "./constants";
 import { canManageAreas, isAdmin } from "./permissions";
@@ -12,17 +13,7 @@ import { refreshProjectTrialReadiness } from "./trial-readiness";
 import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
 import { LEGACY_VERSION_IMPORT_SQL, STANDALONE_IMPORTED_VERSION_SQL } from "./version-scope";
 
-function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
-  run(
-    "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-    actorId,
-    action,
-    entityType,
-    entityId,
-    detail,
-    new Date().toISOString(),
-  );
-}
+const audit = createAuditLogWriter(db);
 
 export function addAreaLeader(actor: SessionUser, areaId: number, userId: number) {
   assert(canManageAreas(actor), "只有系统管理员可以设置责任田主管。", "FORBIDDEN");

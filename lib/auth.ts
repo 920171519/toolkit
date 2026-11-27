@@ -4,14 +4,16 @@ import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createAuditLogWriter } from "./audit-log";
 import type { Role } from "./constants";
-import { one, run, transaction } from "./db";
+import { db, one, run, transaction } from "./db";
 import { hashPassword, verifyPassword } from "./password";
 import type { SessionUser } from "./types";
 import { safeWorkspacePath } from "./return-to";
 
 export const SESSION_COOKIE = "toolkit_session";
 const SESSION_DAYS = 7;
+const audit = createAuditLogWriter(db);
 
 type UserRow = {
   id: number;
@@ -100,13 +102,7 @@ export async function changeCurrentPassword(userId: number, currentPassword: str
     );
     if (!result.changes) return false;
     run("DELETE FROM sessions WHERE user_id = ?", userId);
-    run(
-      `INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at)
-       VALUES (?, 'CHANGE_PASSWORD', 'USER', ?, '用户修改自己的登录密码', ?)`,
-      userId,
-      userId,
-      now,
-    );
+    audit(userId, "CHANGE_PASSWORD", "USER", userId, "用户修改自己的登录密码", now);
     return true;
   });
   if (!changed) return "expired";

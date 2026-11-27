@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { createAuditLogWriter } from "./audit-log";
 import { hashPassword } from "./password";
 
 export const DEMO_PASSWORD = "Demo@1234";
@@ -786,17 +787,15 @@ function seedAll(db: DatabaseSync) {
   insertProgress.run(4, tester, "N1 DVT 配套已完成第一轮冒烟，配置下发与回读通过，继续覆盖异常断电场景。", iso("2026-11-13T11:00:00+08:00"));
   insertProgress.run(5, tester2, "M2 媒体专项已开始，4K 解码基础场景通过，等待高码率片源完成。", iso("2026-11-14T10:30:00+08:00"));
 
-  const audit = db.prepare(
-    "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-  );
-  audit.run(manager, "SEND_BATCH", "BATCH", 4, "发起 B120 星云 N1 配套转测", iso("2026-11-13T09:00:00+08:00"));
-  audit.run(manager, "RELEASE_TRIAL", "PACKAGE_VERSION", keystoreTrial.id, "提交 1006KEY 1.3.0 发布试制电子流并发布试制", iso("2026-11-11T18:00:00+08:00"));
-  audit.run(manager, "RELEASE_TRIAL", "PACKAGE_VERSION", netsyncFormal.id, "提交 1004NET 2.0.0 发布试制电子流并发布试制", iso("2026-11-09T17:00:00+08:00"));
-  audit.run(hanSong, "SUBMIT_BINDING_FLOW", "BINDING_FLOW", 1, "提交 1006KEY 1.3.0 的硬件绑定电子流", iso("2026-11-12T10:00:00+08:00"));
-  audit.run(wangLei, "APPROVE_BINDING_FLOW", "BINDING_FLOW", 1, "审批通过 1006KEY 1.3.0 的硬件绑定电子流", iso("2026-11-12T15:00:00+08:00"));
-  audit.run(tester, "COMPLETE_BATCH", "BATCH", 1, "提交 B118 集成测试结论：测试不通过", iso("2026-11-06T17:40:00+08:00"));
-  audit.run(admin, "CREATE_AREA", "AREA", areaIds[0], "创建责任田：系统底座", iso("2026-09-01T09:10:00+08:00"));
-  audit.run(xuYan, "ARCHIVE_PROJECT", "PROJECT", projectIds[3], "远山 X0 项目结束并归档", iso("2026-10-30T17:00:00+08:00"));
+  const audit = createAuditLogWriter(db);
+  audit(manager, "SEND_BATCH", "BATCH", 4, "发起 B120 星云 N1 配套转测", iso("2026-11-13T09:00:00+08:00"));
+  audit(manager, "RELEASE_TRIAL", "PACKAGE_VERSION", keystoreTrial.id, "提交 1006KEY 1.3.0 发布试制电子流并发布试制", iso("2026-11-11T18:00:00+08:00"));
+  audit(manager, "RELEASE_TRIAL", "PACKAGE_VERSION", netsyncFormal.id, "提交 1004NET 2.0.0 发布试制电子流并发布试制", iso("2026-11-09T17:00:00+08:00"));
+  audit(hanSong, "SUBMIT_BINDING_FLOW", "BINDING_FLOW", 1, "提交 1006KEY 1.3.0 的硬件绑定电子流", iso("2026-11-12T10:00:00+08:00"));
+  audit(wangLei, "APPROVE_BINDING_FLOW", "BINDING_FLOW", 1, "审批通过 1006KEY 1.3.0 的硬件绑定电子流", iso("2026-11-12T15:00:00+08:00"));
+  audit(tester, "COMPLETE_BATCH", "BATCH", 1, "提交 B118 集成测试结论：测试不通过", iso("2026-11-06T17:40:00+08:00"));
+  audit(admin, "CREATE_AREA", "AREA", areaIds[0], "创建责任田：系统底座", iso("2026-09-01T09:10:00+08:00"));
+  audit(xuYan, "ARCHIVE_PROJECT", "PROJECT", projectIds[3], "远山 X0 项目结束并归档", iso("2026-10-30T17:00:00+08:00"));
 
   // 历史数据默认视为软件经理已评估过绑定推送；新流程发布试制后需由软件经理明确推送。
   db.exec("UPDATE binding_requirements SET pushed_at = created_at, pushed_by = (SELECT trial_released_by FROM version_transfer_requests WHERE id = binding_requirements.request_id) WHERE pushed_at IS NULL");

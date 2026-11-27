@@ -1,6 +1,7 @@
 import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { createAuditLogWriter } from "./audit-log";
 import { all, db, one, run, transaction } from "./db";
 import { packageIdentity } from "./package-identity";
 import {
@@ -33,18 +34,7 @@ import {
   type BindingBarcodeResult,
 } from "./binding-barcode-results";
 
-function audit(actorId: number, action: string, entityType: string, entityId: number | null, detail: string) {
-  run(
-    "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-    actorId,
-    action,
-    entityType,
-    entityId,
-    detail,
-    new Date().toISOString(),
-  );
-}
-
+const audit = createAuditLogWriter(db);
 const now = () => new Date().toISOString();
 
 function projectForManagement(projectId: number): {
