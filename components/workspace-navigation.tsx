@@ -8,6 +8,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { NavigationPending } from "@/components/navigation-pending";
 import { SidebarNav, type SidebarGroup, type SidebarItem } from "@/components/sidebar-nav";
 import { getPageWindow } from "@/lib/list-pagination";
+import { wordSearchMatcher } from "@/lib/search-text";
 import { workflowHref } from "@/lib/workflow-links";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 
@@ -79,8 +80,8 @@ function MobileWorkspaceMenu({ groups, areaLabel }: { groups: SidebarGroup[]; ar
 function ProjectChoices({ projects, section, filters }: { projects: Project[]; section: SidebarItem; filters?: Record<string, string | undefined> }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const terms = query.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const matches = projects.filter((project) => terms.every((term) => `${project.code} ${project.name}`.normalize("NFKC").toLowerCase().includes(term)));
+  const matchesSearch = wordSearchMatcher(query);
+  const matches = projects.filter((project) => matchesSearch(project.code, project.name));
   const { current, pages: lastPage, offset, end } = getPageWindow(matches.length, projectListPageSize, page);
   return (
     <>

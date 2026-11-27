@@ -9,6 +9,7 @@ import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
 import { getPageWindow } from "@/lib/list-pagination";
+import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { packageIdentity } from "@/lib/package-identity";
 import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
@@ -32,18 +33,13 @@ type PackageVersion = PackageDrawerData["versions"][number];
 const listPageSize = 10;
 const initialActionState: ActionState = {};
 
-function normalized(value: string) {
-  return value.normalize("NFKC").trim().toLowerCase();
-}
-
 function useDrawerFilter<Row>(rows: Row[], searchable: (row: Row) => string) {
   const [query, setQuery] = useState("");
   const [requestedPage, setPage] = useState(1);
-  const terms = normalized(query).split(/\s+/).filter(Boolean);
-  const matching = terms.length === 0 ? rows : rows.filter((row) => {
-    const text = normalized(searchable(row));
-    return terms.every((term) => text.includes(term));
-  });
+  const words = searchWords(query);
+  const matching = words.length === 0 ? rows : rows.filter((row) =>
+    includesSearchWords(words, normalizeSearchText(searchable(row))),
+  );
   const { current: page, pages: pageCount, offset: start, end } = getPageWindow(matching.length, listPageSize, requestedPage);
   return {
     query,

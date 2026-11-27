@@ -26,7 +26,7 @@ test("新建软件包的责任田与责任人控件等高且支持搜索", async
     const picker = dialog.getByRole("dialog", { name: "搜索责任人" });
     const search = picker.getByRole("searchbox", { name: "搜索责任人" });
     await expect(search).toBeFocused();
-    await search.fill("TEST001");
+    await search.fill(" ｔｅｓｔ００１ ");
     await search.press("Enter");
     await expect(picker).toBeVisible();
     await picker.getByRole("button", { name: /周宁.*TEST001/ }).click();

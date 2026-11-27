@@ -3,9 +3,10 @@ import { login } from "./helpers";
 
 test("项目总览按联系人和产品阶段筛选，并保留每页条数", async ({ page }) => {
   await login(page, "ADMIN001");
-  await page.goto("/overview?q=m2+mgr002");
+  const query = "Ｍ２ mgr002";
+  await page.goto(`/overview?q=${encodeURIComponent(query)}`);
   const catalog = page.getByRole("region", { name: "项目列表", exact: true });
-  const searchChip = catalog.getByRole("link", { name: "清除搜索条件 m2 mgr002" });
+  const searchChip = catalog.getByRole("link", { name: `清除搜索条件 ${query}` });
   const stage = catalog.getByRole("button", { name: "筛选产品阶段", exact: true });
   const stageMenu = page.getByRole("dialog", { name: "筛选产品阶段", exact: true });
   const pageSize = catalog.getByRole("combobox", { name: "每页条数" });
@@ -15,7 +16,7 @@ test("项目总览按联系人和产品阶段筛选，并保留每页条数", as
   await stage.click();
   await stageMenu.getByRole("checkbox", { name: "TR1", exact: true }).check();
   await stageMenu.getByRole("button", { name: "应用", exact: true }).click();
-  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "m2 mgr002" && url.searchParams.get("f_stage") === "TR1" && url.searchParams.get("pageSize") === "10");
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === query && url.searchParams.get("f_stage") === "TR1" && url.searchParams.get("pageSize") === "10");
   await expect(catalog.getByRole("link", { name: "极光 M2", exact: true })).toBeVisible();
   await expect(catalog.getByRole("link", { name: "星云 N1", exact: true })).toHaveCount(0);
 

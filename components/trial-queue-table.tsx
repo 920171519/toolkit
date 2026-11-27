@@ -7,6 +7,7 @@ import { DirectoryFilterBar } from "@/components/settings-directory";
 import { EmptyState } from "@/components/ui";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, type ColumnFilterOption } from "@/lib/column-filters";
 import { getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
+import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialColumnFilter, trialDefaultPageSize, trialLegacyFilter, trialQueueKey, type TrialColumnKey, type TrialQueueKind } from "@/lib/trial-queue";
 import styles from "./trial-queue-table.module.css";
@@ -25,7 +26,6 @@ export type TrialTableColumn<Row> = {
 };
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
-const normalize = (value: string | number) => String(value).normalize("NFKC").toLowerCase();
 
 export function TrialQueueTable<Row>({
   kind, title, rows, columns, projectId, query, rowKey, actions, details, emptyTitle,
@@ -44,7 +44,7 @@ export function TrialQueueTable<Row>({
   const field = (name: string) => trialQueueKey(kind, name);
   const pageSize = getListPageSize(query[field("size")], trialDefaultPageSize);
   const search = query[field("q")] ?? "";
-  const terms = normalize(search).split(/\s+/).filter(Boolean);
+  const words = searchWords(search);
   const columnFilters = columns.map((column) => {
     const filter = trialColumnFilter(kind, column.key, column.filterLabel ?? column.label);
     if (column.choices && !filter.options) {
@@ -57,9 +57,10 @@ export function TrialQueueTable<Row>({
   const sort = columns.find((column) => column.key === query[field("sort")]);
   const descending = query[field("direction")] === "desc";
   const matching = rows.filter((row) => {
-    if (terms.length) {
-      const values = [...columns.map((column) => column.value(row)), ...(details?.(row) ?? [])].map(normalize);
-      if (!terms.every((term) => values.some((value) => value.includes(term)))) return false;
+    if (words.length) {
+      const fields = [...columns.map((column) => column.value(row)), ...(details?.(row) ?? [])]
+        .map((value) => normalizeSearchText(String(value)));
+      if (!includesSearchWords(words, ...fields)) return false;
     }
     return columnFilters.every(({ column, filter, legacy }) => {
       const value = column.value(row);

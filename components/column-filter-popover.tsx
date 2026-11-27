@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ListFilter, X } from "lucide-react";
 import { columnFilterKeys, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
+import { normalizeSearchText } from "@/lib/search-text";
 import { directoryHref } from "@/lib/settings-directory";
 import styles from "./column-filter-header.module.css";
 
@@ -14,8 +15,8 @@ function ChoiceInputs({ field, selectedValue }: { field: ColumnFilterField; sele
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(() => new Set(selectedValue?.split(",") ?? []));
   const options = field.options ?? [];
-  const query = search.trim().normalize("NFKC").toLowerCase();
-  const visible = options.filter(({ label }) => label.normalize("NFKC").toLowerCase().includes(query));
+  const query = normalizeSearchText(search.trim());
+  const visible = options.filter(({ label }) => normalizeSearchText(label).includes(query));
   const allSelected = visible.length > 0 && visible.every(({ value }) => selected.has(value));
 
   function toggle(values: string[], checked: boolean) {

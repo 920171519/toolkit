@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { normalizeSearchText } from "@/lib/search-text";
 import { DialogSurface } from "./form-dialog";
 import styles from "./settings-select.module.css";
 
@@ -18,8 +19,8 @@ export function SettingsSelect({ name, label, options, defaultValue = "", requir
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(String(defaultValue));
-  const search = query.normalize("NFKC").trim().toLowerCase();
-  const matching = options.filter((option) => `${option.label} ${option.keywords ?? ""}`.normalize("NFKC").toLowerCase().includes(search));
+  const search = normalizeSearchText(query).trim();
+  const matching = options.filter((option) => normalizeSearchText(`${option.label} ${option.keywords ?? ""}`).includes(search));
   const selection = options.find((option) => String(option.id) === selected);
   const available = dialogSearchPlaceholder ? options :
     selection && !matching.includes(selection) ? [selection, ...matching] : matching;

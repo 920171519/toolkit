@@ -10,7 +10,8 @@ import { getAdminPackages, getAreaConfigs, getPeople, parseFlash } from "@/lib/q
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/settings";
-import { directoryHref, directoryPage, matchesDirectorySearch } from "@/lib/settings-directory";
+import { directoryHref, directoryPage } from "@/lib/settings-directory";
+import { wordSearchMatcher } from "@/lib/search-text";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
@@ -72,6 +73,7 @@ export default async function PackagesSettingsPage({
   } satisfies Record<string, ColumnFilterField>;
 
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const matchesSearch = wordSearchMatcher(query);
   const oldArea = areas.find((area) => String(area.id) === params.area);
   const legacyState = params.state ?? params.status;
   const oldState = legacyState === "active" || legacyState === "inactive" ? legacyState : undefined;
@@ -90,7 +92,7 @@ export default async function PackagesSettingsPage({
       && matchesNumberFilter(filters, "nodes", pkg.usageCount)
       && matchesChoiceFilter(filters, "enabled", [pkg.isActive ? "active" : "inactive"])
       && matchesChoiceFilter(filters, "progress", [pkg.currentStatus ?? missing])
-      && matchesDirectorySearch(query, identity.code, identity.name, pkg.areaName, pkg.ownerName);
+      && matchesSearch(identity.code, identity.name, pkg.areaName, pkg.ownerName);
   }).sort((a, b) => a.identity.code.localeCompare(b.identity.code, "zh-CN", { numeric: true }) || a.pkg.id - b.pkg.id);
   const { items: rows, page, pages, total } = directoryPage(matching, params.page, pageSize);
   const listParams = { ...filters, q: query || undefined, pageSize: String(pageSize), page: page > 1 ? String(page) : undefined };

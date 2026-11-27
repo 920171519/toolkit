@@ -22,9 +22,9 @@ import {
   directoryOrder,
   directoryPage,
   directoryValue,
-  matchesDirectorySearch,
   type DirectoryParams,
 } from "@/lib/settings-directory";
+import { wordSearchMatcher } from "@/lib/search-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "人员与角色" };
@@ -47,6 +47,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const query = directoryValue(search.q);
+  const matchesSearch = wordSearchMatcher(query);
   const fields = {
     name: { key: "name", label: "姓名", kind: "text" },
     title: { key: "title", label: "职位", kind: "text" },
@@ -87,7 +88,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
     matchesChoiceFilter(selected, "area", member.areas.length ? member.areas.map(({ id }) => String(id)) : ["empty"]) &&
     matchesChoiceFilter(selected, "status", [member.isActive ? "active" : "inactive"]) &&
     matchesNumberFilter(selected, "packages", member.ownedPackages) &&
-    matchesDirectorySearch(query, member.name, member.employeeId, member.title, member.department, ROLE_META[member.role].label, areaNames(member)),
+    matchesSearch(member.name, member.employeeId, member.title, member.department, ROLE_META[member.role].label, areaNames(member)),
   );
   const { sorted, sort, order } = directoryOrder(filtered, columns, search, "name");
   const pageSize = getListPageSize(search.pageSize);

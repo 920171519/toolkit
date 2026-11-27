@@ -1,15 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
+import { wordSearchMatcher } from "@/lib/search-text";
 import styles from "./settings-person-picker.module.css";
 
 export type SettingsPerson = { id: number; label: string };
 
 const initialLimit = 25;
-
-function normalize(value: string) {
-  return value.normalize("NFKC").trim().toLowerCase();
-}
 
 export function SettingsPersonPicker({ name, label, options, defaultValue = "", required = true }: {
   name: string;
@@ -22,11 +19,8 @@ export function SettingsPersonPicker({ name, label, options, defaultValue = "", 
   const [query, setQuery] = useState("");
   const [selectedValue, setSelectedValue] = useState(String(defaultValue));
   const [limit, setLimit] = useState(initialLimit);
-  const terms = normalize(query).split(/\s+/).filter(Boolean);
-  const matching = options.filter((person) => {
-    const text = normalize(person.label);
-    return terms.every((term) => text.includes(term));
-  });
+  const matchesSearch = wordSearchMatcher(query);
+  const matching = options.filter((person) => matchesSearch(person.label));
   const selected = options.find((person) => String(person.id) === selectedValue);
   const visible = matching.slice(0, limit);
   if (selected && !visible.includes(selected)) visible.unshift(selected);

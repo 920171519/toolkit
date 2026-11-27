@@ -12,7 +12,8 @@ import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import styles from "../projects/projects.module.css";
-import { directoryHref, directoryPage, matchesDirectorySearch } from "@/lib/settings-directory";
+import { directoryHref, directoryPage } from "@/lib/settings-directory";
+import { wordSearchMatcher } from "@/lib/search-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "项目总览" };
@@ -47,6 +48,7 @@ export default async function OverviewPage({
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const matchesSearch = wordSearchMatcher(query);
   const pageSize = getListPageSize(params.pageSize);
   const catalog = getProjectCatalogEntries();
   const workflowProjectIds = new Set(getWorkflowProjectOptions(user, true).map((project) => project.id));
@@ -72,8 +74,7 @@ export default async function OverviewPage({
     && matchesChoiceFilter(columnFilters, "stage", [project.stage])
     && matchesChoiceFilter(columnFilters, "pm", contactValues(project.pms))
     && matchesChoiceFilter(columnFilters, "manager", contactValues(project.softwareManagers))
-    && matchesDirectorySearch(
-      query,
+    && matchesSearch(
       project.name,
       project.code,
       project.description,

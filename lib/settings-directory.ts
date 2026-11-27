@@ -72,13 +72,6 @@ export function directoryActionHref(directory: Directory, formData: FormData, id
   return directoryHref(id === undefined ? `/settings/${directory}` : `/settings/${directory}/${id}`, filters);
 }
 
-export function matchesDirectorySearch(search: string, ...values: Array<string | null | undefined>) {
-  const normal = (value: string) => value.normalize("NFKC").toLowerCase();
-  const words = normal(search).split(/\s+/).filter(Boolean);
-  const text = normal(values.join(" "));
-  return words.every((word) => text.includes(word));
-}
-
 export function directoryPage<T>(items: T[], value: string | string[] | undefined, pageSize: number) {
   const { current: page, pages, offset, end } = getPageWindow(items.length, pageSize, readListPage(directoryValue(value)));
   return { items: items.slice(offset, end), page, pages, total: items.length };

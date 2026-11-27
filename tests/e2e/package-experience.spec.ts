@@ -38,7 +38,7 @@ test("责任信息编辑使用独立面板，并能搜索人员和返回原位�
   await edit.click();
   const search = drawer.getByRole("searchbox", { name: "搜索责任人" });
   await expect(search).toBeFocused();
-  await search.fill("MGR001");
+  await search.fill("林澈　ｍｇｒ００１");
   await expect(drawer.getByRole("radio", { name: /MGR001/ })).toBeVisible();
   await expect(drawer.getByRole("tablist")).toHaveCount(0);
   await drawer.getByRole("button", { name: "取消", exact: true }).click();

@@ -1,3 +1,5 @@
+import { normalizeSearchText } from "./search-text";
+
 export type ColumnFilterOption = { value: string; label: string };
 
 export type ColumnFilterField = {
@@ -60,15 +62,11 @@ export function readColumnFilters(params: FilterParams, fields: ColumnFilterFiel
   return filters;
 }
 
-function normalize(value: string) {
-  return value.normalize("NFKC").trim().toLowerCase();
-}
-
 export function matchesTextFilter(filters: Filters, key: string, value?: string | null) {
   const condition = filters[`f_${key}`];
   if (!condition) return true;
-  const candidate = normalize(value ?? "");
-  const search = normalize(condition);
+  const candidate = normalizeSearchText(value ?? "").trim();
+  const search = normalizeSearchText(condition).trim();
   return filters[`f_${key}_mode`] === "exact" ? candidate === search : candidate.includes(search);
 }
 

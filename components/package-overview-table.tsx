@@ -7,7 +7,7 @@ import { ArrowRight, Search } from "lucide-react";
 import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
 import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
-import { matchesDirectorySearch } from "@/lib/settings-directory";
+import { wordSearchMatcher } from "@/lib/search-text";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
@@ -38,6 +38,7 @@ export function PackageOverviewTable({
 }) {
   const params = useSearchParams();
   const query = params.get("q") ?? "";
+  const matchesSearch = wordSearchMatcher(query);
   const requestedId = Number(params.get("open"));
   const openId = Number.isSafeInteger(requestedId) && requestedId > 0 ? requestedId : null;
   const openPanel = params.get("panel") === "usage" ? "usage" : "overview";
@@ -85,7 +86,7 @@ export function PackageOverviewTable({
       (!filters.f_trial || pkg.trialVersions.some((version) => matchesTextFilter(filters, "trial", version))) &&
       [pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion].some((version) => matchesTextFilter(filters, "current", version)) &&
       matchesChoiceFilter(filters, "status", [pkg.currentStatus ?? (pkg.formalVersion ? "FORMAL_ONLY" : empty)]) &&
-      matchesDirectorySearch(query, identity.code, identity.name, pkg.ownerName, pkg.areaName, pkg.formalVersion,
+      matchesSearch(identity.code, identity.name, pkg.ownerName, pkg.areaName, pkg.formalVersion,
         pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion, ...pkg.trialVersions,
         ...pkg.usages.flatMap((usage) => [usage.projectName, usage.projectCode, ...usage.nodeNames]));
   });

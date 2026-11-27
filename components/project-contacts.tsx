@@ -5,13 +5,10 @@ import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import styles from "@/app/public-contacts.module.css";
 import { getPageWindow } from "@/lib/list-pagination";
 import type { ProjectContact, PublicProject } from "@/lib/project-queries";
+import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { EmptyState } from "./ui";
 
 const pageSize = 12;
-
-function normalize(value: string) {
-  return value.normalize("NFKC").toLowerCase();
-}
 
 function ContactGroup({ role, people }: { role: string; people: ProjectContact[] }) {
   return (
@@ -40,14 +37,14 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
   const directory = useRef<HTMLElement>(null);
   const index = useMemo(() => projects.map((project) => ({
     project,
-    terms: normalize([
+    text: normalizeSearchText([
       project.name,
       project.code,
       ...[...project.pms, ...project.softwareManagers].flatMap((person) => [person.name, person.employeeId, person.title]),
     ].join(" ")),
   })), [projects]);
-  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
-  const filtered = index.filter((entry) => terms.every((term) => entry.terms.includes(term)));
+  const words = searchWords(query);
+  const filtered = index.filter((entry) => includesSearchWords(words, entry.text));
   const { current: currentPage, pages: pageCount, offset, end } = getPageWindow(filtered.length, pageSize, page);
   const visible = filtered.slice(offset, end);
 
@@ -91,7 +88,7 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
       {visible.length === 0 ? (
         <div className="card">
           <EmptyState
-            title={terms.length > 0 ? "没有匹配的项目联系人" : "暂无在行项目"}
+            title={words.length > 0 ? "没有匹配的项目联系人" : "暂无在行项目"}
           />
         </div>
       ) : (
@@ -99,7 +96,7 @@ export function ProjectContacts({ projects }: { projects: PublicProject[] }) {
           {visible.map(({ project }) => (
             <article className={`card project-contact-card ${styles.project}`} key={project.id}>
               <h2>{project.name}</h2>
-              {!normalize(project.name).split(/\s+/).includes(normalize(project.code)) && <span className={styles.secondary}>{project.code}</span>}
+              {!normalizeSearchText(project.name).split(/\s+/).includes(normalizeSearchText(project.code)) && <span className={styles.secondary}>{project.code}</span>}
               <dl className={styles.contactGroups}>
                 <ContactGroup role="PM" people={project.pms} />
                 <ContactGroup role="软件经理" people={project.softwareManagers} />
