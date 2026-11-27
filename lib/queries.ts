@@ -1,6 +1,6 @@
 import "server-only";
 
-import { all, one } from "./db";
+import { all } from "./db";
 import { canEditPackageResponsibility, getManagedProjectScope, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, Role } from "./constants";
@@ -460,13 +460,24 @@ export type AdminPackage = PackageSummary & {
 };
 
 export function getAdminPackages(): AdminPackage[] {
-  return getPackagesOverview(true).map((pkg) => {
-    const counts = one<{ versionCount: number; usageCount: number }>(
-      `SELECT (SELECT COUNT(*) FROM package_versions WHERE package_id = ?) AS versionCount,
-              (SELECT COUNT(*) FROM package_usages WHERE package_id = ?) AS usageCount`,
-      pkg.id,
-      pkg.id,
-    );
+  const packages = getPackagesOverview(true);
+  if (packages.length === 0) return [];
+  const countsByPackage = new Map(all<{
+    id: number;
+    versionCount: number | null;
+    usageCount: number | null;
+  }>(
+    `SELECT p.id, v.total AS versionCount, u.total AS usageCount
+     FROM packages p
+     LEFT JOIN (
+       SELECT package_id, COUNT(*) AS total FROM package_versions GROUP BY package_id
+     ) v ON v.package_id = p.id
+     LEFT JOIN (
+       SELECT package_id, COUNT(*) AS total FROM package_usages GROUP BY package_id
+     ) u ON u.package_id = p.id`,
+  ).map((counts) => [counts.id, counts]));
+  return packages.map((pkg) => {
+    const counts = countsByPackage.get(pkg.id);
     return {
       ...pkg,
       versionCount: Number(counts?.versionCount ?? 0),
