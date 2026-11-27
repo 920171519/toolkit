@@ -11,7 +11,7 @@ import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
-import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "@/lib/access";
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
@@ -23,7 +23,7 @@ import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds } from "@/lib/workflow-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, search.project);
-  const scope = project ? [project.id] : getWorkflowProjectScope(user);
+  const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);
   const listState = getWorkflowListState(search);
   const guidance = getFormalReleaseGuidance(user, versionId, { projectId: project?.id, returnTo: listState.returnTo });
   const returnHref = workflowHref("/formal", project?.id, listState);

@@ -8,7 +8,7 @@ import {
   canSubmitBindingFlow,
   isBindingOpen,
 } from "./permissions";
-import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "./access";
+import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
 import { getTrialReadyVersions } from "./workflow-queries";
 import { getRiskTrialEntries } from "./trial-risk-entry";
@@ -19,8 +19,7 @@ import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 import { reportArchivePath, resolveReportPath } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
-import { insertTransferRequest, refreshVersionAggregate } from "./transfer-requests";
-import { canSubmitTransferForArea, getActiveTransferProjects } from "./transfer-guidance";
+import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggregate } from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
 import {
@@ -91,7 +90,7 @@ export function submitTransfer(
       input.version.trim(),
     );
     assert(!duplicate, "该版本号已存在，请填写新的版本号。");
-    const projects = getActiveTransferProjects(input.packageId);
+    const projects = getActiveTransferProjects(db, input.packageId);
     assert(projects.length > 0, "该软件包尚未关联任何在行项目的测试节点，无法提交转测。");
     if (input.scopeProjectId !== undefined) {
       assert(projects.some((project) => project.id === input.scopeProjectId), "所选软件包不在当前项目的使用范围内。");

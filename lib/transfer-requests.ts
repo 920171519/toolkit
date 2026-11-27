@@ -3,6 +3,15 @@ import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
 
+export function getActiveTransferProjects(database: DatabaseSync, packageId: number) {
+  return database.prepare(
+    `SELECT DISTINCT p.id, p.name
+     FROM package_usages u JOIN projects p ON p.id = u.project_id
+     WHERE u.package_id = ? AND p.status != 'ARCHIVED'
+     ORDER BY p.sort_order, p.id`,
+  ).all(packageId) as Array<{ id: number; name: string }>;
+}
+
 export function insertTransferRequest(
   database: DatabaseSync,
   versionId: number,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
@@ -10,7 +10,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
-import { getPendingFormalVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getPendingFormalVersions } from "@/lib/workflow-queries";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
@@ -27,7 +27,7 @@ export default async function FormalPage({ searchParams }: {
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
-  const rawVersions = getPendingFormalVersions(project ? [project.id] : getWorkflowProjectScope(user));
+  const rawVersions = getPendingFormalVersions(project ? [project.id] : getProjectWorkflowProjectIds(user));
   const groups = new Map<number, typeof rawVersions>();
   for (const version of rawVersions) {
     const group = groups.get(version.versionId) ?? [];

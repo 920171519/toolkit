@@ -38,21 +38,7 @@ export function isAreaProjectLeadForProject(
   return Boolean(row);
 }
 
-export function isAreaProjectMember(
-  userId: number,
-  areaId: number,
-  projectId: number,
-): boolean {
-  const row = one<{ id: number }>(
-    "SELECT id FROM area_project_members WHERE area_id = ? AND project_id = ? AND user_id = ? LIMIT 1",
-    areaId,
-    projectId,
-    userId,
-  );
-  return Boolean(row);
-}
-
-export function getIntegrationDuty(userId: number, projectId: number): {
+function getIntegrationDuty(userId: number, projectId: number): {
   areaId: number;
   isLeader: boolean;
   isProjectLead: boolean;
@@ -120,7 +106,7 @@ export function getProjectSoftwareManagerIds(projectId: number): number[] {
   ).map((row) => row.userId);
 }
 
-export function isProjectSoftwareManager(userId: number, projectId: number): boolean {
+function isProjectSoftwareManager(userId: number, projectId: number): boolean {
   return Boolean(
     one<{ id: number }>(
       "SELECT 1 AS id FROM project_software_managers WHERE project_id = ? AND user_id = ? LIMIT 1",
@@ -168,6 +154,11 @@ export function getTransferAreaIds(user: SessionUser): number[] | null {
     user.id,
     user.id,
   ).map((row) => row.areaId);
+}
+
+export function canSubmitTransferForArea(user: SessionUser, areaId: number | null): boolean {
+  const areaIds = getTransferAreaIds(user);
+  return areaIds === null || (areaId !== null && areaIds.includes(areaId));
 }
 
 export function canAccessProjectPage(user: SessionUser | null, projectId: number): boolean {

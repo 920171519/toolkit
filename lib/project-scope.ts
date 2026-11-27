@@ -1,14 +1,13 @@
 import "server-only";
 
 import { notFound } from "next/navigation";
-import { canAccessProjectPage, getReadablePackageIds } from "./access";
+import { canAccessProjectPage, getProjectWorkflowProjectIds, getReadablePackageIds } from "./access";
 import { one } from "./db";
 import { getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
-import { getWorkflowProjectScope } from "./workflow-queries";
 
 export function getWorkflowProjectOptions(user: SessionUser, includeArchived = false) {
-  const ids = getWorkflowProjectScope(user, includeArchived);
+  const ids = getProjectWorkflowProjectIds(user, includeArchived);
   const projects = getProjectOptions(includeArchived);
   if (ids === null) return projects;
   const allowed = new Set(ids);

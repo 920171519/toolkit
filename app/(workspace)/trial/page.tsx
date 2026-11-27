@@ -12,7 +12,7 @@ import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds, getProjectWorkflowProjectIds } from "@/lib/access";
 import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
@@ -21,7 +21,7 @@ import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersionCount, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersionCount, getTrialVersions, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
 import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +59,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
   const projectId = project?.id;
-  const scope = project ? [project.id] : getWorkflowProjectScope(user);
+  const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);
   const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
   const archived = project?.status === "ARCHIVED";
   const canViewReleaseQueue = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);

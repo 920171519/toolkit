@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, getNarrowVersionRequestIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getNarrowVersionRequestIds, getProjectWorkflowProjectIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
@@ -16,7 +16,6 @@ import {
   getBatches,
   getPendingTransferGroups,
   getManagedProjectIds,
-  getWorkflowProjectScope,
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -42,7 +41,7 @@ export default async function SubmissionsPage({
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
   const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
-  const projectScope = getWorkflowProjectScope(user, true);
+  const projectScope = getProjectWorkflowProjectIds(user, true);
   const hasProjectAccess = Boolean(project && (projectScope === null || projectScope.includes(project.id)));
   const readableRequests = projectScope === null || hasProjectAccess
     ? null : new Set(getNarrowVersionRequestIds(user));

@@ -1,25 +1,11 @@
 import "server-only";
 
-import { canManagePackageArea, canManageProjectWorkflowForProject, canReadPackageWorkflow, getTransferAreaIds } from "./access";
-import { all, one } from "./db";
+import { canManagePackageArea, canManageProjectWorkflowForProject, canReadPackageWorkflow, canSubmitTransferForArea, getTransferAreaIds } from "./access";
+import { db, one } from "./db";
 import { getTransferPackageOptions } from "./queries";
+import { getActiveTransferProjects } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-
-export function getActiveTransferProjects(packageId: number) {
-  return all<{ id: number; name: string }>(
-    `SELECT DISTINCT p.id, p.name
-     FROM package_usages u JOIN projects p ON p.id = u.project_id
-     WHERE u.package_id = ? AND p.status != 'ARCHIVED'
-     ORDER BY p.sort_order, p.id`,
-    packageId,
-  );
-}
-
-export function canSubmitTransferForArea(user: SessionUser, areaId: number | null) {
-  const areaIds = getTransferAreaIds(user);
-  return areaIds === null || (areaId !== null && areaIds.includes(areaId));
-}
 
 type TransferGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 
@@ -47,9 +33,10 @@ export function getTransferEntryGuidance(
     if (!pkg) return unavailable;
     const canConfigure = canManagePackageArea(user, pkg.areaId);
     const configHref = canConfigure ? `/settings/packages/${packageId}` : undefined;
-    const projects = getActiveTransferProjects(packageId);
+    const projects = getActiveTransferProjects(db, packageId);
+    const canSubmit = canSubmitTransferForArea(user, pkg.areaId);
     const items: TransferGuidanceItem[] = [];
-    if (!canSubmitTransferForArea(user, pkg.areaId)) items.push({
+    if (!canSubmit) items.push({
       title: pkg.areaName ? `由「${pkg.areaName}」责任田人员提交` : "软件包尚未归属责任田",
       detail: pkg.areaName ? "联系责任田主管安排提交或分配职责。" : "请管理员先配置软件包责任田。",
       href: pkg.areaId ? `/settings/areas/${pkg.areaId}` : undefined,
@@ -70,7 +57,7 @@ export function getTransferEntryGuidance(
     else if (projectId !== undefined && !projects.some(({ id }) => id === projectId)) items.push({
       title: "当前项目不使用该软件包",
       detail: "从全局提交页选择该包，申请将发送给实际使用的在行项目。",
-      href: canSubmitTransferForArea(user, pkg.areaId) && pkg.active ? workflowHref("/submissions/transfer", undefined, { package: packageId }) : undefined,
+      href: canSubmit && pkg.active ? workflowHref("/submissions/transfer", undefined, { package: packageId }) : undefined,
       actionLabel: "切换到全局转测",
     });
     return items;

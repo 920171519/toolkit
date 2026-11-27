@@ -33,10 +33,6 @@ export function getManagedProjectIds(user: SessionUser): number[] {
   ).map((row) => row.id);
 }
 
-export function getWorkflowProjectScope(user: SessionUser, includeArchived = false): number[] | null {
-  return getProjectWorkflowProjectIds(user, includeArchived);
-}
-
 function filterByProject<T extends { projectId: number | null }>(rows: T[], projectIds: number[] | null): T[] {
   if (projectIds === null) return rows;
   const allowed = new Set(projectIds);
