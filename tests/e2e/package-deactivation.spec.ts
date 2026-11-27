@@ -132,6 +132,37 @@ function beforeNextWrite(connection: DatabaseSync, operation: () => void) {
   };
 }
 
+test("历史补录按写入时已经存在的版本号核对大小写", ({}, testInfo) => {
+  withConnections(testInfo, (first, second) => {
+    const firstCommand = loadCommands(first);
+    const secondCommand = loadCommands(second);
+    const packageId = firstCommand.savePackage(actor, packageInput);
+    const input = {
+      packageId,
+      version: "2.0.0-RC",
+      status: "FORMAL" as const,
+      changeSummary: "历史补录版本对照",
+      archiveUrl: "https://example.test/package",
+      buildUrl: "https://example.test/build",
+      formFlowNo: "EF-LEGACY-QA",
+      formalReleasedAt: "2026-01-01T00:00:00Z",
+      trialFormNo: "",
+      trialReleasedAt: "",
+    };
+
+    let versionId: number | undefined;
+    beforeNextWrite(first, () => {
+      versionId = secondCommand.importLegacyVersion(actor, input);
+    });
+    expect(() => firstCommand.importLegacyVersion(actor, { ...input, version: "2.0.0-rc" }))
+      .toThrow("该软件包已存在相同版本号。");
+    expect(second.prepare("SELECT id, version FROM package_versions WHERE package_id = ?").all(packageId))
+      .toEqual([{ id: versionId, version: "2.0.0-RC" }]);
+    expect(second.prepare("SELECT entity_id FROM audit_logs WHERE action = 'IMPORT_LEGACY_VERSION'").all())
+      .toEqual([{ entity_id: versionId }]);
+  });
+});
+
 for (const [operation, label] of [["create", "新建软件包"], ["edit", "保存软件包配置"], ["drawer", "抽屉保存责任人"]] as const) {
   test(label + "按写入时账号状态校验责任人", ({}, testInfo) => {
     withConnections(testInfo, (first, second) => {

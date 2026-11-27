@@ -42,43 +42,43 @@ export type SavePackageInput = {
 };
 
 export function savePackage(actor: SessionUser, input: SavePackageInput): number {
-  const existingPackage = input.id
-    ? one<{ id: number; area_id: number | null; name: string; code: string }>("SELECT id, area_id, name, code FROM packages WHERE id = ?", input.id)
-    : null;
-  if (input.id) {
-    assert(existingPackage, "软件包不存在。", "NOT_FOUND");
-    assert(
-      canManagePackageArea(actor, existingPackage.area_id),
-      "只有责任田主管或系统管理员可以维护该软件包。",
-      "FORBIDDEN",
-    );
-    assert(
-      input.areaId === existingPackage.area_id || isAdmin(actor),
-      "只有系统管理员可以调整软件包所属责任田。",
-      "FORBIDDEN",
-    );
-  } else {
-    assert(
-      canManagePackageArea(actor, input.areaId),
-      "只有责任田主管或系统管理员可以在该责任田下新建软件包。",
-      "FORBIDDEN",
-    );
-  }
-  const name = input.name.trim();
-  const code = input.code.trim().toUpperCase();
-  const current = existingPackage ? packageIdentity(existingPackage) : null;
-  const unchangedCode = current?.code.toUpperCase() === code;
-  assert(name.length >= 2, "软件包名称至少需要 2 个字符。");
-  assert(unchangedCode || isStandardPackageCode(code), "软件包编码需要 5 位数字加 3 位字母，例如 10001OTA。");
-  const identityChanged = current?.name !== name || !unchangedCode;
-  const identity = existingPackage && !identityChanged ? existingPackage : { name, code };
-  const ownerId = input.ownerId;
-  assert(ownerId, "请为软件包指定责任人。");
-  assert(
-    Number.isInteger(input.trialOverdueDays) && input.trialOverdueDays >= 1 && input.trialOverdueDays <= 365,
-    "试制超期天数需为 1-365 的整数。",
-  );
   return transaction(() => {
+    const existingPackage = input.id
+      ? one<{ id: number; area_id: number | null; name: string; code: string }>("SELECT id, area_id, name, code FROM packages WHERE id = ?", input.id)
+      : null;
+    if (input.id) {
+      assert(existingPackage, "软件包不存在。", "NOT_FOUND");
+      assert(
+        canManagePackageArea(actor, existingPackage.area_id),
+        "只有责任田主管或系统管理员可以维护该软件包。",
+        "FORBIDDEN",
+      );
+      assert(
+        input.areaId === existingPackage.area_id || isAdmin(actor),
+        "只有系统管理员可以调整软件包所属责任田。",
+        "FORBIDDEN",
+      );
+    } else {
+      assert(
+        canManagePackageArea(actor, input.areaId),
+        "只有责任田主管或系统管理员可以在该责任田下新建软件包。",
+        "FORBIDDEN",
+      );
+    }
+    const name = input.name.trim();
+    const code = input.code.trim().toUpperCase();
+    const current = existingPackage ? packageIdentity(existingPackage) : null;
+    const unchangedCode = current?.code.toUpperCase() === code;
+    assert(name.length >= 2, "软件包名称至少需要 2 个字符。");
+    assert(unchangedCode || isStandardPackageCode(code), "软件包编码需要 5 位数字加 3 位字母，例如 10001OTA。");
+    const identityChanged = current?.name !== name || !unchangedCode;
+    const identity = existingPackage && !identityChanged ? existingPackage : { name, code };
+    const ownerId = input.ownerId;
+    assert(ownerId, "请为软件包指定责任人。");
+    assert(
+      Number.isInteger(input.trialOverdueDays) && input.trialOverdueDays >= 1 && input.trialOverdueDays <= 365,
+      "试制超期天数需为 1-365 的整数。",
+    );
     assertActivePackageOwner(ownerId);
     if (input.areaId) {
       const area = one<{ id: number }>("SELECT id FROM areas WHERE id = ?", input.areaId);
@@ -94,10 +94,8 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
       );
       assert(!matches.some((pkg) => packageIdentity(pkg).code.toUpperCase() === code), "软件包编码已存在。");
     }
-    let packageId = input.id ?? 0;
+    let packageId = existingPackage?.id ?? 0;
     if (packageId) {
-      const existing = one<{ id: number }>("SELECT id FROM packages WHERE id = ?", packageId);
-      assert(existing, "软件包不存在。", "NOT_FOUND");
       run(
         "UPDATE packages SET name = ?, code = ?, description = ?, area_id = ?, owner_id = ?, is_active = ?, trial_overdue_days = ? WHERE id = ?",
         identity.name,
@@ -186,27 +184,27 @@ function legacyVersionMetadata(input: LegacyVersionMetadataInput, status: Legacy
 }
 
 export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersionInput): number {
-  const pkg = one<{ id: number; name: string; code: string; area_id: number | null }>(
-    "SELECT id, name, code, area_id FROM packages WHERE id = ?",
-    input.packageId,
-  );
-  assert(pkg, "软件包不存在。", "NOT_FOUND");
-  assert(
-    canManagePackageArea(actor, pkg.area_id),
-    "只有责任田主管或系统管理员可以导入历史版本。",
-    "FORBIDDEN",
-  );
-  const version = input.version.trim();
-  assert(version.length >= 1 && version.length <= 40, "版本号需为 1-40 个字符。");
-  const duplicate = one<{ id: number }>(
-    "SELECT id FROM package_versions WHERE package_id = ? AND UPPER(version) = UPPER(?)",
-    input.packageId,
-    version,
-  );
-  assert(!duplicate, "该软件包已存在相同版本号。");
-  const metadata = legacyVersionMetadata(input, input.status);
-  const timestamp = new Date().toISOString();
   return transaction(() => {
+    const pkg = one<{ id: number; name: string; code: string; area_id: number | null }>(
+      "SELECT id, name, code, area_id FROM packages WHERE id = ?",
+      input.packageId,
+    );
+    assert(pkg, "软件包不存在。", "NOT_FOUND");
+    assert(
+      canManagePackageArea(actor, pkg.area_id),
+      "只有责任田主管或系统管理员可以导入历史版本。",
+      "FORBIDDEN",
+    );
+    const version = input.version.trim();
+    assert(version.length >= 1 && version.length <= 40, "版本号需为 1-40 个字符。");
+    const duplicate = one<{ id: number }>(
+      "SELECT id FROM package_versions WHERE package_id = ? AND UPPER(version) = UPPER(?)",
+      input.packageId,
+      version,
+    );
+    assert(!duplicate, "该软件包已存在相同版本号。");
+    const metadata = legacyVersionMetadata(input, input.status);
+    const timestamp = new Date().toISOString();
     const result = run(
       `INSERT INTO package_versions
         (package_id, version, change_summary, archive_url, build_url, status, submitted_by, submitted_at,
@@ -298,24 +296,24 @@ export function updatePackageResponsibility(
   packageId: number,
   input: UpdatePackageResponsibilityInput,
 ) {
-  const pkg = one<{
-    id: number;
-    name: string;
-    area_id: number | null;
-    owner_id: number | null;
-  }>(
-    "SELECT id, name, area_id, owner_id FROM packages WHERE id = ?",
-    packageId,
-  );
-  assert(pkg, "软件包不存在。", "NOT_FOUND");
-  assert(
-    canEditPackageResponsibility(actor, pkg.area_id),
-    "只有责任田主管、项目负责人或系统管理员可以修改软件包责任信息。",
-    "FORBIDDEN",
-  );
-  const ownerId = input.ownerId;
-  assert(ownerId, "请为软件包指定责任人。");
   transaction(() => {
+    const pkg = one<{
+      id: number;
+      name: string;
+      area_id: number | null;
+      owner_id: number | null;
+    }>(
+      "SELECT id, name, area_id, owner_id FROM packages WHERE id = ?",
+      packageId,
+    );
+    assert(pkg, "软件包不存在。", "NOT_FOUND");
+    assert(
+      canEditPackageResponsibility(actor, pkg.area_id),
+      "只有责任田主管、项目负责人或系统管理员可以修改软件包责任信息。",
+      "FORBIDDEN",
+    );
+    const ownerId = input.ownerId;
+    assert(ownerId, "请为软件包指定责任人。");
     assertActivePackageOwner(ownerId);
     if (!input.isActive) {
       // The drawer has historically treated only a stored 1 as enabled.
