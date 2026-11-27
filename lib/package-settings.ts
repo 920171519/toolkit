@@ -18,6 +18,13 @@ import type { SessionUser } from "./types";
 
 const audit = createAuditLogWriter(db);
 
+function assertPackageCanDeactivate(packageId: number, isActive: (flag: number) => boolean) {
+  const current = one<{ active: number }>("SELECT is_active AS active FROM packages WHERE id = ?", packageId);
+  if (current && isActive(current.active)) {
+    assert(getPackageDeactivationBlockingVersions(packageId).length === 0, "该软件包仍有未转正版本记录，不能停用。");
+  }
+}
+
 export type SavePackageInput = {
   id?: number;
   name: string;
@@ -73,10 +80,7 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
   }
   return transaction(() => {
     if (input.id && !input.isActive) {
-      const current = one<{ active: number }>("SELECT is_active AS active FROM packages WHERE id = ?", input.id);
-      if (current?.active) {
-        assert(getPackageDeactivationBlockingVersions(input.id).length === 0, "该软件包仍有未转正版本记录，不能停用。");
-      }
+      assertPackageCanDeactivate(input.id, Boolean);
     }
     if (identityChanged) {
       const matches = all<{ name: string; code: string }>(
@@ -294,9 +298,8 @@ export function updatePackageResponsibility(
     name: string;
     area_id: number | null;
     owner_id: number | null;
-    is_active: number;
   }>(
-    "SELECT id, name, area_id, owner_id, is_active FROM packages WHERE id = ?",
+    "SELECT id, name, area_id, owner_id FROM packages WHERE id = ?",
     packageId,
   );
   assert(pkg, "软件包不存在。", "NOT_FOUND");
@@ -312,8 +315,9 @@ export function updatePackageResponsibility(
   );
   assert(owner, "责任人不存在或已停用。");
   transaction(() => {
-    if (pkg.is_active === 1 && !input.isActive) {
-      assert(getPackageDeactivationBlockingVersions(packageId).length === 0, "该软件包仍有未转正版本记录，不能停用。");
+    if (!input.isActive) {
+      // The drawer has historically treated only a stored 1 as enabled.
+      assertPackageCanDeactivate(packageId, (flag) => flag === 1);
     }
     run(
       "UPDATE packages SET owner_id = ?, description = ?, is_active = ? WHERE id = ?",
