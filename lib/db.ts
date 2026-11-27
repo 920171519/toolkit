@@ -2,7 +2,13 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
-import { PROJECT_STAGE_COLUMN_SQL, SCHEMA_SQL } from "./schema";
+import {
+  PACKAGE_VERSION_BUILD_URL_COLUMN_SQL,
+  PROJECT_STAGE_COLUMN_SQL,
+  SCHEMA_SQL,
+  TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL,
+  TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL,
+} from "./schema";
 import { seedDatabase } from "./seed";
 import { closeDatabaseAfterError, withImmediateTransaction } from "./sqlite-lifecycle";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
@@ -92,10 +98,10 @@ function migrateSchema(database: DatabaseSync) {
     .prepare("PRAGMA table_info(version_transfer_requests)")
     .all() as Array<{ name: string }>;
   if (!requestColumns.some((column) => column.name === "release_mode")) {
-    database.exec("ALTER TABLE version_transfer_requests ADD COLUMN release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'");
+    database.exec(`ALTER TABLE version_transfer_requests ADD COLUMN ${TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL}`);
   }
   if (!requestColumns.some((column) => column.name === "risk_conclusion")) {
-    database.exec("ALTER TABLE version_transfer_requests ADD COLUMN risk_conclusion TEXT");
+    database.exec(`ALTER TABLE version_transfer_requests ADD COLUMN ${TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL}`);
   }
   if (!requestColumns.some((column) => column.name === "integration_status")) {
     database.exec(
@@ -118,7 +124,7 @@ function migrateSchema(database: DatabaseSync) {
     .prepare("PRAGMA table_info(package_versions)")
     .all() as Array<{ name: string }>;
   for (const [name, sql] of [
-    ["build_url", "ALTER TABLE package_versions ADD COLUMN build_url TEXT"],
+    ["build_url", `ALTER TABLE package_versions ADD COLUMN ${PACKAGE_VERSION_BUILD_URL_COLUMN_SQL}`],
     ["binding_mode", "ALTER TABLE package_versions ADD COLUMN binding_mode TEXT NOT NULL DEFAULT 'PENDING'"],
     ["binding_reason", "ALTER TABLE package_versions ADD COLUMN binding_reason TEXT"],
     ["binding_decided_at", "ALTER TABLE package_versions ADD COLUMN binding_decided_at TEXT"],

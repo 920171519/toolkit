@@ -5,6 +5,10 @@ export const SCHEMA_VERSION = 10;
 export const PROJECT_STAGE_COLUMN_SQL =
   `stage TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${PROJECT_STAGES.map((stage) => `'${stage}'`).join(",")}))`;
 
+export const PACKAGE_VERSION_BUILD_URL_COLUMN_SQL = "build_url TEXT";
+export const TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL = "release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'";
+export const TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL = "risk_conclusion TEXT";
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,6 +146,7 @@ CREATE TABLE IF NOT EXISTS package_versions (
   void_reason TEXT,
   voided_at TEXT,
   updated_at TEXT NOT NULL,
+  ${PACKAGE_VERSION_BUILD_URL_COLUMN_SQL},
   UNIQUE(package_id, version)
 );
 
@@ -162,6 +167,8 @@ CREATE TABLE IF NOT EXISTS version_transfer_requests (
   voided_at TEXT,
   submitted_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  ${TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL},
+  ${TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL},
   UNIQUE(package_version_id, project_id)
 );
 
