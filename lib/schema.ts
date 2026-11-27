@@ -387,6 +387,7 @@ CREATE INDEX IF NOT EXISTS idx_progress_notes_batch ON batch_progress_notes(batc
 CREATE INDEX IF NOT EXISTS idx_area_project_members ON area_project_members(area_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_binding_requirements_request ON binding_requirements(request_id);
 CREATE INDEX IF NOT EXISTS idx_binding_flow_barcodes_flow ON binding_flow_barcodes(flow_id);
+CREATE INDEX IF NOT EXISTS idx_binding_flows_requirement ON binding_flows(requirement_id);
 CREATE INDEX IF NOT EXISTS idx_binding_flows_approver ON binding_flows(approver_id, status);
 CREATE INDEX IF NOT EXISTS idx_binding_flows_submitter ON binding_flows(submitted_by, status);
 CREATE INDEX IF NOT EXISTS idx_usages_package ON package_usages(package_id);

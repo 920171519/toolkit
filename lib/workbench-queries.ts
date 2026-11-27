@@ -279,6 +279,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     });
   }
 
+  // Keep binding flows ahead of requirements in this join after indexing requirement_id.
   const approvals = all<{
     id: number;
     flowNo: string;
@@ -296,7 +297,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
             pr.name AS projectName, n.name AS nodeName, su.name AS submittedByName,
             (SELECT COUNT(*) FROM binding_flow_barcodes b WHERE b.flow_id = f.id) AS barcodeCount
      FROM binding_flows f
-     JOIN binding_requirements br ON br.id = f.requirement_id
+     CROSS JOIN binding_requirements br ON br.id = f.requirement_id
      JOIN version_transfer_requests r ON r.id = br.request_id
      JOIN package_versions pv ON pv.id = f.package_version_id
      JOIN packages p ON p.id = pv.package_id

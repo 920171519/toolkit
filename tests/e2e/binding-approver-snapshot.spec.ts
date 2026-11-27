@@ -108,3 +108,35 @@ test("仅补齐缺失的主审批人，重复启动不消耗新的记录编号",
     }
   }
 });
+
+test("旧库重启补齐节点电子流索引并保留已有单据", ({}, testInfo) => {
+  const databasePath = testInfo.outputPath("toolkit.db");
+  openInNewProcess(databasePath);
+  const readFlows = (database: DatabaseSync) => database.prepare(
+    "SELECT id, requirement_id AS requirementId, flow_no AS flowNo, status FROM binding_flows ORDER BY id",
+  ).all();
+
+  const database = new DatabaseSync(databasePath);
+  const before = (() => {
+    try {
+      const flows = readFlows(database);
+      expect(flows.length).toBeGreaterThan(0);
+      database.exec("DROP INDEX IF EXISTS idx_binding_flows_requirement");
+      return flows;
+    } finally {
+      database.close();
+    }
+  })();
+
+  for (let restart = 0; restart < 2; restart += 1) {
+    openInNewProcess(databasePath);
+    const reopened = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const columns = reopened.prepare("PRAGMA index_info(idx_binding_flows_requirement)").all();
+      expect(columns.map(({ name }) => name)).toEqual(["requirement_id"]);
+      expect(readFlows(reopened)).toEqual(before);
+    } finally {
+      reopened.close();
+    }
+  }
+});
