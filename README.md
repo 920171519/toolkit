@@ -335,7 +335,7 @@
 | SQLite (`node:sqlite`) | 单机持久化，适合 < 1000 人的部门系统 |
 | Tailwind CSS 4 + 自定义样式 | 统一视觉与响应式布局 |
 | Playwright | 关键业务流程端到端测试 |
-| Node.js >= 22.5 | 使用内置 `node:sqlite` |
+| Node.js >= 22.5 | 使用内置 `node:sqlite`，22.13 起默认启用 |
 
 ## 快速开始
 
@@ -345,6 +345,8 @@ pnpm dev
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)。首次启动会自动创建数据库并写入演示数据（`data/toolkit.db`）。
+
+Node.js 22.5 至 22.12 需要为 Node 进程启用 `--experimental-sqlite`，并选择兼容该版本的 pnpm。项目完整回归使用 Node.js 24.19.0 和 pnpm 11.19.0。 [Node.js SQLite 文档](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html) · [22.13.0 发布说明](https://nodejs.org/en/blog/release/v22.13.0)
 
 ### 演示账号
 
@@ -414,7 +416,7 @@ pnpm dev              # 开发模式
 pnpm build            # 生产构建
 pnpm start            # 启动生产服务（需先 build）
 pnpm typecheck        # TypeScript 类型检查
-pnpm lint             # ESLint
+pnpm lint             # ESLint 和架构检查
 pnpm test:e2e         # 运行 Playwright E2E（使用系统临时目录中的独立数据）
 pnpm test:e2e:full    # 构建后运行 E2E
 pnpm db:seed          # 初始化数据库，按启动配置决定是否写入演示数据
