@@ -3,7 +3,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { canAccessProjectPage, getProjectWorkflowProjectIds, getReadablePackageIds } from "./access";
 import { one } from "./db";
-import { getProjectOptions } from "./project-queries";
+import { getProjectOption, getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
 
 export function getWorkflowProjectOptions(user: SessionUser, includeArchived = false) {
@@ -16,7 +16,7 @@ export function getWorkflowProjectOptions(user: SessionUser, includeArchived = f
 
 export function getReadablePackageProject(user: SessionUser, projectId: number) {
   if (!Number.isSafeInteger(projectId) || projectId < 1) return undefined;
-  const project = getProjectOptions(true).find((option) => option.id === projectId);
+  const project = getProjectOption(projectId);
   if (!project || canAccessProjectPage(user, projectId)) return project;
   const packageIds = getReadablePackageIds(user);
   return one(`SELECT 1 FROM package_usages WHERE project_id = ? AND package_id IN (SELECT value FROM json_each(?)) LIMIT 1`,
@@ -40,7 +40,7 @@ export function requireWorkflowProject(
   if (Array.isArray(value)) notFound();
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id < 1 || (expectedProjectId !== undefined && id !== expectedProjectId)) notFound();
-  const project = getWorkflowProjectOptions(user, true).find((option) => option.id === id);
+  const project = canAccessProjectPage(user, id) ? getProjectOption(id) : undefined;
   // Some detail pages independently authorize a specific record, without granting project navigation.
   if (!project && allowObjectScope && expectedProjectId === id) return undefined;
   if (!project) notFound();

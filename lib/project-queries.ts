@@ -90,6 +90,11 @@ export function getProjectOptions(includeArchived = false): ProjectOption[] {
   return readProjects(projectOptionColumns, { includeArchived });
 }
 
+export function getProjectOption(projectId: number): ProjectOption | undefined {
+  const [project] = readProjects<ProjectOption>(projectOptionColumns, { projectId, includeArchived: true });
+  return project;
+}
+
 export function getPublicProjects(): PublicProject[] {
   return readProjectsWithContacts(projectOptionColumns, { includeArchived: false });
 }

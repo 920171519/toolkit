@@ -9,7 +9,6 @@ import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import identityStyles from "@/components/package-identity.module.css";
 import { getProjectCatalogEntries } from "@/lib/project-queries";
-import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
@@ -74,9 +73,7 @@ export default async function ProjectOverviewPage({
       )}
     </>
   );
-  const canViewWorkflow = canAccessProjectPage(user, projectId)
-    && getWorkflowProjectOptions(user, true).some((option) => option.id === projectId);
-  if (!canViewWorkflow) {
+  if (!canAccessProjectPage(user, projectId)) {
     return (
       <div className={styles.projectOverview}>
         {projectHeader}

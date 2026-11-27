@@ -193,12 +193,16 @@ export function canSubmitTransferForArea(user: SessionUser, areaId: number | nul
 
 export function canAccessProjectPage(user: SessionUser | null, projectId: number): boolean {
   if (!user) return false;
-  const projectIds = getProjectWorkflowProjectIds(user, true);
-  return projectIds === null || projectIds.includes(projectId);
+  if (user.role === "ADMIN") return true;
+  return Number.isSafeInteger(projectId) && readWorkflowProjectIds(user.id, true, projectId).length > 0;
 }
 
 export function getProjectWorkflowProjectIds(user: SessionUser, includeArchived = false): number[] | null {
   if (user.role === "ADMIN") return null;
+  return readWorkflowProjectIds(user.id, includeArchived);
+}
+
+function readWorkflowProjectIds(userId: number, includeArchived: boolean, projectId?: number): number[] {
   return all<{ id: number }>(
     `SELECT p.id FROM projects p
      WHERE (? OR p.status != 'ARCHIVED')
@@ -210,8 +214,9 @@ export function getProjectWorkflowProjectIds(user: SessionUser, includeArchived 
            WHERE apm.user_id = ? AND a.is_integration = 1
        ) OR EXISTS (
          SELECT 1 FROM area_leaders al JOIN areas a ON a.id = al.area_id WHERE al.user_id = ? AND a.is_integration = 1
-       ))`,
-    includeArchived ? 1 : 0, user.id, user.id, user.id, user.id,
+       ))${projectId === undefined ? "" : " AND p.id = ?"}`,
+    includeArchived ? 1 : 0, userId, userId, userId, userId,
+    ...(projectId === undefined ? [] : [projectId]),
   ).map(({ id }) => id);
 }
 
