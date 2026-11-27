@@ -9,6 +9,15 @@ import { packageCodeSql } from "./package-identity";
 import { getPackageDeactivationBlockingVersions } from "./settings-queries";
 import type { PackageSummary, PackageVersionSummary, SessionUser } from "./types";
 
+const PACKAGE_CURRENT_VERSION_JOIN_SQL = `
+  LEFT JOIN package_versions current_version ON current_version.id = (
+    SELECT pv.id FROM package_versions pv
+    WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
+      AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
+    ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1
+  )
+`;
+
 const PACKAGE_SUMMARY_SQL = `
   SELECT p.id, p.name, p.code, p.description, p.is_active AS isActive,
          p.area_id AS areaId, a.name AS areaName, a.color AS areaColor,
@@ -32,12 +41,7 @@ const PACKAGE_SUMMARY_SQL = `
   FROM packages p
   LEFT JOIN areas a ON a.id = p.area_id
   LEFT JOIN users o ON o.id = p.owner_id
-  LEFT JOIN package_versions current_version ON current_version.id = (
-    SELECT pv.id FROM package_versions pv
-    WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
-      AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
-    ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1
-  )
+  ${PACKAGE_CURRENT_VERSION_JOIN_SQL}
 `;
 
 type PackageSelection = number | readonly number[];
@@ -80,7 +84,7 @@ function readPackagesOverview(includeInactive: boolean, selection?: PackageSelec
   }));
 }
 
-function withTrialProgress<T extends PackageSummary>(packages: T[], projectId?: number): T[] {
+function withTrialProgress<T extends Pick<PackageSummary, "currentVersionId" | "currentStatus">>(packages: T[], projectId?: number): T[] {
   const progress = getTrialProgress(packages.flatMap((pkg) => pkg.currentVersionId === null ? [] : [pkg.currentVersionId]), projectId);
   return packages.map((pkg) => {
     const trial = pkg.currentVersionId === null ? undefined : progress.get(pkg.currentVersionId);
@@ -95,10 +99,6 @@ function withTrialProgress<T extends PackageSummary>(packages: T[], projectId?: 
     }
     return pkg;
   });
-}
-
-function getPackagesOverview(includeInactive = false): PackageSummary[] {
-  return withTrialProgress(readPackagesOverview(includeInactive));
 }
 
 function transferPackageFilter(user: SessionUser, projectId?: number) {
@@ -328,38 +328,32 @@ export function getLegacyImportPackageOptions(areaIds: readonly number[] | null)
   );
 }
 
-type AdminPackage = PackageSummary & {
+type PackageSettingsRow = Pick<PackageSummary,
+  "id" | "name" | "code" | "isActive" | "areaId" | "areaName" | "ownerId" | "ownerName" | "ownerEmployeeId" | "currentStatus" | "currentVersionId"
+> & {
   versionCount: number;
   usageCount: number;
-  usageLabel: string | null;
 };
 
-export function getAdminPackages(): AdminPackage[] {
-  const packages = getPackagesOverview(true);
-  if (packages.length === 0) return [];
-  const countsByPackage = new Map(all<{
-    id: number;
-    versionCount: number | null;
-    usageCount: number | null;
-  }>(
-    `SELECT p.id, v.total AS versionCount, u.total AS usageCount
+export function getPackageSettingsDirectory(areaIds: readonly number[] | null) {
+  if (areaIds?.length === 0) return [];
+  const scope = packageSelectionFilter("p.area_id", areaIds ?? undefined);
+  const rows = all<Omit<PackageSettingsRow, "isActive"> & { isActive: number }>(
+    `SELECT p.id, p.name, p.code, p.is_active AS isActive,
+            p.area_id AS areaId, a.name AS areaName, p.owner_id AS ownerId,
+            o.name AS ownerName, o.employee_id AS ownerEmployeeId,
+            current_version.status AS currentStatus, current_version.id AS currentVersionId,
+            (SELECT COUNT(*) FROM package_versions v WHERE v.package_id = p.id) AS versionCount,
+            (SELECT COUNT(*) FROM package_usages u WHERE u.package_id = p.id) AS usageCount
      FROM packages p
-     LEFT JOIN (
-       SELECT package_id, COUNT(*) AS total FROM package_versions GROUP BY package_id
-     ) v ON v.package_id = p.id
-     LEFT JOIN (
-       SELECT package_id, COUNT(*) AS total FROM package_usages GROUP BY package_id
-     ) u ON u.package_id = p.id`,
-  ).map((counts) => [counts.id, counts]));
-  return packages.map((pkg) => {
-    const counts = countsByPackage.get(pkg.id);
-    return {
-      ...pkg,
-      versionCount: Number(counts?.versionCount ?? 0),
-      usageCount: Number(counts?.usageCount ?? 0),
-      usageLabel: null,
-    };
-  });
+     LEFT JOIN areas a ON a.id = p.area_id
+     LEFT JOIN users o ON o.id = p.owner_id
+     ${PACKAGE_CURRENT_VERSION_JOIN_SQL}
+     ${scope.condition ? `WHERE ${scope.condition}` : ""}
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
+    ...scope.values,
+  );
+  return withTrialProgress(rows.map((row) => ({ ...row, isActive: Boolean(row.isActive) })));
 }
 
 type PackageDetailData = {

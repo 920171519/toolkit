@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getLedAreaIds } from "@/lib/access";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, readColumnFilters } from "@/lib/column-filters";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
-import { getAdminPackages } from "@/lib/package-queries";
+import { getPackageSettingsDirectory } from "@/lib/package-queries";
 import { getActivePersonOptions, getResponsibilityAreaOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { getListPageSize } from "@/lib/list-pagination";
@@ -46,7 +46,7 @@ export default async function PackagesSettingsPage({
   const params = await searchParams;
   const notice = readFlash(params);
   const areas = getResponsibilityAreaOptions({ orderBy: "id" }).filter((area) => isAdmin || ledAreas.has(area.id));
-  const packages = getAdminPackages().filter((pkg) => isAdmin || (pkg.areaId !== null && ledAreas.has(pkg.areaId)));
+  const packages = getPackageSettingsDirectory(isAdmin ? null : [...ledAreas]);
   const people = getActivePersonOptions();
   const areaOptions = areas.map((area) => ({ value: String(area.id), label: area.name }));
   if (packages.some((pkg) => pkg.areaId === null)) {
