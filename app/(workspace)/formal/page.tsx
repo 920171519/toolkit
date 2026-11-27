@@ -10,7 +10,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
-import { getPendingFormalVersions } from "@/lib/workflow-queries";
+import { getPendingFormalVersions } from "@/lib/release-queue-queries";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";

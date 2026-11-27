@@ -51,6 +51,7 @@ const workflowPageQueries = new Set([
   "lib/binding-queries.ts",
   "lib/batch-queries.ts",
   "lib/pending-transfer-queries.ts",
+  "lib/release-queue-queries.ts",
 ]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;

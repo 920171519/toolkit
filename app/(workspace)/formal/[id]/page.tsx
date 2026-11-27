@@ -23,7 +23,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
-import { getPendingFormalVersions, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/workflow-queries";
+import { getPendingFormalVersions, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/release-queue-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";

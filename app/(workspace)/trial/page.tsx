@@ -22,7 +22,7 @@ import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStat
 import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import { getReadableTrialQueueCounts } from "@/lib/binding-queries";
-import { getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/release-queue-queries";
 import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";

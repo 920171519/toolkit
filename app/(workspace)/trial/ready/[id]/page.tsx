@@ -16,7 +16,7 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedTrialRequestState } from "@/lib/workflow-queries";
+import { getManagedTrialRequestState } from "@/lib/release-queue-queries";
 import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
