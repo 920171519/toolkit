@@ -76,6 +76,56 @@ async function withdrawFlow(page: Page, barcode: string) {
   await expect(flowRow(page, barcode)).toContainText(reason);
 }
 
+test("绑定权限按节点和单据指派，审批人只查看指派给自己的电子流", async ({ page }) => {
+  await login(page, "VALID001");
+  const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-binding-assignment-scope-e2e", ["N1"]);
+  const trial = `/trial/${requestId}?project=1`;
+  const node = page.locator(".binding-requirement");
+  const newFlow = page.getByRole("button", { name: "新增绑定电子流", exact: true, includeHidden: true });
+  const assignedBarcode = "BINDING-DUTY-ASSIGNED";
+  const otherFlow = "BF-E2E-OTHER-APPROVER";
+  try {
+    db.prepare(`INSERT INTO binding_requirements
+       (request_id, package_version_id, project_id, node_id, binding_owner_id, approver_id, pushed_at, created_at, updated_at)
+       SELECT r.id, r.package_version_id, r.project_id, n.id, owner.id, approver.id, datetime('now'), datetime('now'), datetime('now')
+       FROM version_transfer_requests r JOIN project_nodes n ON n.project_id = r.project_id
+       JOIN users owner ON owner.employee_id = 'TEST001' JOIN users approver ON approver.employee_id = 'MGR001'
+       WHERE r.id = ? AND NOT EXISTS (SELECT 1 FROM binding_requirements b WHERE b.request_id = r.id AND b.node_id = n.id)
+       ORDER BY n.sort_order, n.id LIMIT 1`).run(requestId);
+    await page.goto(trial);
+    await expect(node).toHaveCount(1);
+    await submitFlow(page, assignedBarcode);
+
+    db.prepare(`INSERT INTO binding_flows
+       (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode, web_url, submitted_by, approver_id, status, submitted_at)
+       SELECT ?, f.requirement_id, f.package_version_id, f.project_id, f.node_id, 'BINDING-DUTY-OTHER',
+              'https://example.com/other-binding', f.submitted_by, u.id, 'PENDING', datetime('now')
+       FROM binding_flows f JOIN users u ON u.employee_id = 'MGR001'
+       WHERE f.package_version_id = ? AND f.device_barcode = ?`).run(otherFlow, versionId, assignedBarcode);
+    await login(page, "OWNER001");
+    await page.goto(trial);
+    await expect(node).toHaveCount(1);
+    await expect(flowRow(page, assignedBarcode)).toBeVisible();
+    await expect(page.getByText(otherFlow, { exact: true })).toHaveCount(0);
+    await expect(newFlow).toHaveCount(0);
+    await approveFlow(page, assignedBarcode, "王磊");
+
+    await login(page, "MGR001");
+    await page.goto(trial);
+    await expect(node).toHaveCount(2);
+    await expect(page.getByText(otherFlow, { exact: true })).toHaveCount(1);
+    await expect(newFlow).toHaveCount(0);
+    await login(page, "ADMIN001");
+    await page.goto(trial);
+    await expect(newFlow).toHaveCount(2);
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
 test("只有软件包责任人、本项目软件经理和管理员可确认节点，通过记录可追溯", async ({ page }) => {
   await login(page, "VALID001");
   const db = new DatabaseSync(resolve(process.env.TOOLKIT_QA_DB ?? "data/e2e.db"));

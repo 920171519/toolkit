@@ -45,13 +45,6 @@ function migrateSchema(database: DatabaseSync) {
   if (!projectColumns.some((column) => column.name === "stage")) {
     database.exec(`ALTER TABLE projects ADD COLUMN ${PROJECT_STAGE_COLUMN_SQL}`);
   }
-  database.exec(
-    `UPDATE projects
-     SET software_manager_id = (
-       SELECT id FROM users WHERE role = 'SOFTWARE_MANAGER' AND is_active = 1 ORDER BY id LIMIT 1
-     )
-     WHERE software_manager_id IS NULL`,
-  );
   // Existing databases predate the multi-approver pool. Backfill the primary approver
   // so node configuration and old binding requirements expose a selectable approver range.
   database.exec(
@@ -190,6 +183,8 @@ function migrateSchema(database: DatabaseSync) {
     `INSERT OR IGNORE INTO project_software_managers (project_id, user_id, created_at)
      SELECT id, software_manager_id, datetime('now') FROM projects WHERE software_manager_id IS NOT NULL`,
   );
+  // Normalize in place so account IDs and all business and session references stay valid.
+  database.exec("UPDATE users SET role = 'MEMBER' WHERE role NOT IN ('ADMIN', 'MEMBER')");
 }
 
 // The database is opened lazily. This keeps `next build` from touching the data file

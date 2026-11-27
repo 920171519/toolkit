@@ -1,20 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import {
-  getPackageDetail,
-  getPackageOverviewRows,
+  getReadablePackageDetail,
+  getReadablePackageOverviewRows,
   getPeople,
   getTransferPackageOptions,
   parseFlash,
 } from "@/lib/queries";
-import { canEditPackageById, hasAreaLeadership } from "@/lib/access";
+import { canAccessProjectPage, canEditPackageById, hasAreaLeadership } from "@/lib/access";
 import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { requireWorkflowProject } from "@/lib/project-scope";
+import { getReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { FlashMessage, PageHeader } from "@/components/ui";
@@ -30,15 +31,17 @@ export default async function PackagesPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const selectedProject = requireWorkflowProject(user, params.project);
-  const packages = getPackageOverviewRows(selectedProject?.id);
+  const selectedProject = typeof params.project === "string" ? getReadablePackageProject(user, Number(params.project)) : undefined;
+  if (params.project && !selectedProject) notFound();
+  const workflowProjectId = selectedProject && canAccessProjectPage(user, selectedProject.id) ? selectedProject.id : undefined;
+  const packages = getReadablePackageOverviewRows(user, selectedProject?.id);
   const people = user.role === "ADMIN" || hasAreaLeadership(user.id) ? getPeople() : [];
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
-  const initialDetail = initialOpenId ? getPackageDetail(initialOpenId, true, selectedProject?.id) : null;
-  const initialCanEdit = initialOpenId ? canEditPackageById(user, initialOpenId) : false;
+  const initialDetail = initialOpenId ? getReadablePackageDetail(user, initialOpenId, selectedProject?.id) : null;
+  const initialCanEdit = initialDetail ? canEditPackageById(user, initialDetail.package.id) : false;
   const canRequest = getTransferPackageOptions(user, selectedProject?.id).length > 0;
-  const transferHref = workflowHref("/submissions/transfer", selectedProject?.id);
+  const transferHref = workflowHref("/submissions/transfer", workflowProjectId);
 
   return (
     <>
@@ -47,7 +50,7 @@ export default async function PackagesPage({
         help={selectedProject && <InfoTooltip label="软件包使用范围说明">按项目筛选后，使用范围仍列出每个软件包的全部在行项目和节点。</InfoTooltip>}
         actions={
           <>
-            <Link href={workflowHref("/versions", selectedProject?.id)} className="button button-secondary">
+            <Link href={workflowHref("/versions", workflowProjectId)} className="button button-secondary">
               <ListTree size={14} aria-hidden="true" /> 版本全链路
             </Link>
             {canRequest ? <Link href={transferHref} className="button button-primary"><Plus size={14} aria-hidden="true" /> 提交转测申请</Link>
@@ -63,6 +66,7 @@ export default async function PackagesPage({
         packages={packages}
         people={people}
         selectedProjectId={selectedProject?.id}
+        hasProjectWorkflowScope={workflowProjectId !== undefined}
         initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit,
           deactivationBlockers: initialCanEdit ? getPackageDeactivationBlockingVersions(initialDetail.package.id) : [],
         } : null}

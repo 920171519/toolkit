@@ -246,7 +246,7 @@ test.describe("工程协同台项目维度流程", () => {
     const account = page.locator(".sidebar-user");
     await expect(account).toBeVisible();
     await expect(account.locator(".sidebar-user-name")).toHaveText("林澈");
-    await expect(account.locator(".sidebar-user-role")).toHaveText("软件经理 · MGR001");
+    await expect(account.locator(".sidebar-user-role")).toHaveText("普通账号 · MGR001");
     await expect(page.locator(".personal-task").filter({ hasText: "星云 N1" }).first()).toBeVisible();
     await expect(page.locator(".personal-task").filter({ hasText: "极光 M2" })).toHaveCount(0);
     await expect(page.locator(".personal-task").filter({ hasText: "磐石 T3" })).toHaveCount(0);
@@ -461,6 +461,7 @@ test.describe("工程协同台项目维度流程", () => {
     const reportPath = (await reportLink.getAttribute("href"))!;
     const report = await page.request.get(reportPath);
     expect(report.ok()).toBe(true);
+    expect(report.headers()["cache-control"]).toContain("no-store");
     expect(await report.body()).toEqual(reportContents);
     expect((await request.get(reportPath)).status()).toBe(401);
 
@@ -476,7 +477,8 @@ test.describe("工程协同台项目维度流程", () => {
       await writeFile(legacyPath, "旧验证报告", { flag: "wx" });
       try {
         const legacy = db.prepare(
-          "INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at) VALUES (?, ?, ?, ?, ?)",
+          `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, (SELECT id FROM users WHERE employee_id = 'TEST001'))`,
         ).run(legacyName, legacyPath.replaceAll("/", "\\"), "text/plain; charset=utf-8", Buffer.byteLength("旧验证报告"), new Date().toISOString());
         try {
           const legacyDownload = await page.request.get(`/api/reports/${legacy.lastInsertRowid}`);
@@ -491,6 +493,8 @@ test.describe("工程协同台项目维度流程", () => {
     } finally {
       db.close();
     }
+    await login(page, "MEMBER001");
+    expect((await page.request.get(reportPath)).status()).toBe(404);
   });
 
   test("项目试制、多个设备条码电子流审批与项目转正", async ({ page }) => {
@@ -672,7 +676,7 @@ test.describe("工程协同台项目维度流程", () => {
   });
 
   test("软件包使用范围跨项目展示，项目总览进入项目工作区和归档记录", async ({ page }) => {
-    await login(page, "OWNER001");
+    await login(page, "ADMIN001");
     await page.goto("/packages");
     await expect(page.locator(".data-table")).not.toContainText("远山 X0");
     await page.goto("/packages?project=1");
@@ -969,7 +973,7 @@ test.describe("工程协同台项目维度流程", () => {
   });
 
   test("软件包总览支持按列筛选，详情展示说明与构建地址", async ({ page }) => {
-    await login(page, "OWNER001");
+    await login(page, "MGR001");
     await page.goto("/packages?project=1");
     const table = page.getByRole("region", { name: "软件版本总览表格" });
     const usageFilter = table.getByRole("button", { name: "筛选使用范围", exact: true });

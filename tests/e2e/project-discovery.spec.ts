@@ -82,8 +82,8 @@ test("项目目录展示所有项目，未获分配的项目仅提供基本信�
   await expect(page.getByRole("heading", { name: "页面或记录不存在" })).toBeVisible();
 });
 
-test("授权项目的流程入口保留项目范围，试制内容按角色显示", async ({ page }) => {
-  await login(page, "VALID001");
+test("授权项目的流程入口保留项目范围，试制发布按项目分工显示", async ({ page }) => {
+  await login(page, "TEST001");
   await page.goto("/overview");
   const catalog = page.getByRole("region", { name: "项目列表", exact: true });
   await catalog.getByRole("link", { name: "星云 N1", exact: true }).click();

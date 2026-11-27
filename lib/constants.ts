@@ -1,15 +1,7 @@
 export const DEPARTMENT_NAME = process.env.NEXT_PUBLIC_DEPARTMENT_NAME || "软件工程部";
 export const PRODUCT_NAME = "工程协同台";
 
-export const ROLES = [
-  "ADMIN",
-  "SOFTWARE_MANAGER",
-  "INTEGRATION_TESTER",
-  "REVIEWER",
-  "PACKAGE_OWNER",
-  "TEST_VALIDATOR",
-  "MEMBER",
-] as const;
+export const ROLES = ["ADMIN", "MEMBER"] as const;
 
 export type Role = (typeof ROLES)[number];
 
@@ -17,43 +9,13 @@ export const ROLE_META: Record<Role, { label: string; short: string; description
   ADMIN: {
     label: "系统管理员",
     short: "管理员",
-    description: "维护人员、角色与全部基础数据，拥有所有操作权限。",
+    description: "维护账号、人员分工与基础数据，可办理各项目的流程。",
     tone: "violet",
   },
-  SOFTWARE_MANAGER: {
-    label: "软件经理",
-    short: "软件经理",
-    description: "维护所负责的项目和节点，组织项目转测、试制与转正。",
-    tone: "amber",
-  },
-  INTEGRATION_TESTER: {
-    label: "集成测试",
-    short: "集成测试",
-    description: "接收配套转测，填写测试结论与验证报告。",
-    tone: "sky",
-  },
-  REVIEWER: {
-    label: "评审专家",
-    short: "评审专家",
-    description: "评审角色预留，具体评审规则将在后续需求明确后重新接入。",
-    tone: "rose",
-  },
-  PACKAGE_OWNER: {
-    label: "软件包责任人",
-    short: "责任人",
-    description: "按责任田分工提交软件包的转测申请和版本信息。",
-    tone: "emerald",
-  },
-  TEST_VALIDATOR: {
-    label: "绑定验证员",
-    short: "验证员",
-    description: "逐个项目测试节点记录绑定验证结果。",
-    tone: "teal",
-  },
   MEMBER: {
-    label: "部门成员",
+    label: "普通账号",
     short: "成员",
-    description: "可查看部门公开信息与内部工程数据。",
+    description: "按项目、责任田、软件包和节点的分工查看资料并办理流程。",
     tone: "slate",
   },
 };

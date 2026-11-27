@@ -74,7 +74,7 @@ test("人员目录按责任田分工筛选，分页并从详情保留筛选条�
   await expect(table.getByRole("link", { name: "韩松", exact: true })).toBeVisible();
   await expect(table.getByRole("link", { name: "张启明", exact: true })).toHaveCount(0);
   const role = await openFilter(page, "系统角色");
-  await role.getByRole("checkbox", { name: "绑定验证员", exact: true }).check();
+  await role.getByRole("checkbox", { name: "普通账号", exact: true }).check();
   await role.getByRole("button", { name: "应用", exact: true }).click();
   const employeeId = await openFilter(page, "工号");
   await employeeId.getByLabel("工号", { exact: true }).fill("valid001");
@@ -88,7 +88,7 @@ test("人员目录按责任田分工筛选，分页并从详情保留筛选条�
   await expect(page).toHaveURL(/\/settings\/users\/\d+/);
   await page.getByRole("link", { name: "返回人员列表" }).click();
   await expect(page).toHaveURL(/f_employeeId=valid001/);
-  await expect(page).toHaveURL(/f_role=TEST_VALIDATOR/);
+  await expect(page).toHaveURL(/f_role=MEMBER/);
   await expect(page).toHaveURL(/f_area=\d+/);
   await expect(page).toHaveURL(/pageSize=10/);
   await expect(table.locator("tbody tr")).toHaveCount(1);

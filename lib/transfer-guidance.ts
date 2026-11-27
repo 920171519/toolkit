@@ -1,6 +1,6 @@
 import "server-only";
 
-import { canManagePackageArea, canManageProjectWorkflowForProject, getTransferAreaIds } from "./access";
+import { canManagePackageArea, canManageProjectWorkflowForProject, canReadPackageWorkflow, getTransferAreaIds } from "./access";
 import { all, one } from "./db";
 import { getTransferPackageOptions } from "./queries";
 import type { SessionUser } from "./types";
@@ -37,12 +37,14 @@ export function getTransferEntryGuidance(
   }];
 
   if (packageId !== undefined) {
+    const unavailable = [{ title: "软件包不可用", href: workflowHref("/packages", projectId), actionLabel: "返回软件版本总览" }];
+    if (!canReadPackageWorkflow(user, packageId)) return unavailable;
     const pkg = one<{ areaId: number | null; areaName: string | null; active: number }>(
       `SELECT p.area_id AS areaId, a.name AS areaName, p.is_active AS active
        FROM packages p LEFT JOIN areas a ON a.id = p.area_id WHERE p.id = ?`,
       packageId,
     );
-    if (!pkg) return [{ title: "软件包不可用", href: workflowHref("/packages", projectId), actionLabel: "返回软件版本总览" }];
+    if (!pkg) return unavailable;
     const canConfigure = canManagePackageArea(user, pkg.areaId);
     const configHref = canConfigure ? `/settings/packages/${packageId}` : undefined;
     const projects = getActiveTransferProjects(packageId);

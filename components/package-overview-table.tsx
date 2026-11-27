@@ -27,12 +27,13 @@ function nodeOptionValue(name: string) {
 }
 
 export function PackageOverviewTable({
-  packages, people, initialDetail = null, selectedProjectId,
+  packages, people, initialDetail = null, selectedProjectId, hasProjectWorkflowScope = true,
 }: {
   packages: PackageOverviewRow[];
   people: PersonOption[];
   initialDetail?: DrawerPayload | null;
   selectedProjectId?: number;
+  hasProjectWorkflowScope?: boolean;
 }) {
   const params = useSearchParams();
   const query = params.get("q") ?? "";
@@ -200,7 +201,8 @@ export function PackageOverviewTable({
           </nav>
         </div>
       </section>
-      {openId && <PackageDrawer key={`${openId}-${openPanel}`} packageId={openId} projectId={selectedProjectId} people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} initialPanel={openPanel} />}
+      {openId && <PackageDrawer key={`${openId}-${openPanel}`} packageId={openId} projectId={selectedProjectId} hasProjectWorkflowScope={hasProjectWorkflowScope}
+        people={people} onClose={closePackage} initialDetail={initialDetail?.package.id === openId ? initialDetail : null} initialPanel={openPanel} />}
     </>
   );
 }

@@ -47,10 +47,9 @@ function projectForManagement(projectId: number): {
   id: number;
   name: string;
   status: string;
-  software_manager_id: number | null;
 } {
-  const project = one<{ id: number; name: string; status: string; software_manager_id: number | null }>(
-    "SELECT id, name, status, software_manager_id FROM projects WHERE id = ?",
+  const project = one<{ id: number; name: string; status: string }>(
+    "SELECT id, name, status FROM projects WHERE id = ?",
     projectId,
   );
   assert(project, "项目不存在。", "NOT_FOUND");
@@ -1252,15 +1251,15 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
       requirementId,
     );
     assert(requirement, "绑定任务不存在。", "NOT_FOUND");
+    assert(
+      canSubmitBindingFlow(actor, requirement.binding_owner_id),
+      "只有该节点的绑定验证责任人或系统管理员可以提交绑定电子流。",
+      "FORBIDDEN",
+    );
     assert(requirement.project_status !== "ARCHIVED", "项目已归档，不能提交绑定电子流。");
     assert(isBindingOpen(requirement.request_status) && isBindingOpen(requirement.version_status), "该版本已结束绑定验证，不能提交绑定电子流。");
     assert(!requirement.waived_at && (requirement.status === "PENDING" || requirement.status === "PASSED"), "该节点已关闭或已免绑，不能提交绑定电子流。");
     assert(requirement.pushed_at, "软件经理尚未推送绑定任务，暂不能提交绑定电子流。");
-    assert(
-      canSubmitBindingFlow(actor, requirement.binding_owner_id),
-      "只有该节点的绑定验证责任人、硬件验证角色或管理人员可以提交绑定电子流。",
-      "FORBIDDEN",
-    );
     const approvers = all<{ userId: number }>(
       "SELECT user_id AS userId FROM binding_requirement_approvers WHERE requirement_id = ? ORDER BY id",
       requirementId,
@@ -1405,9 +1404,9 @@ export function decideBindingFlow(
       flowId,
     );
     assert(flow, "绑定电子流不存在。", "NOT_FOUND");
-    assert(flow.status === "PENDING", "该绑定电子流已处理。");
     assert(canApproveBindingFlow(actor, flow.approver_id), "只有该节点的绑定电子流审批人或管理员可以审批。", "FORBIDDEN");
     assert(flow.submitted_by !== actor.id, "不能审批自己提交的绑定电子流。");
+    assert(flow.status === "PENDING", "该绑定电子流已处理。");
     assert(flow.project_status !== "ARCHIVED", "项目已归档，不能审批绑定电子流。");
     assert(isBindingOpen(flow.request_status) && isBindingOpen(flow.version_status), "该版本已作废或已发布正式版本，不能审批绑定电子流。");
     assert(flow.pushed_at && !flow.waived_at && (flow.requirement_status === "PENDING" || flow.requirement_status === "PASSED"), "该节点未推送、已关闭或已免绑，不能审批绑定电子流。");

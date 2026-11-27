@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { addProjectNodeApproverAction, deleteProjectNodeAction, removeProjectNodeApproverAction, updateProjectNodeAction } from "@/lib/actions/settings";
@@ -24,7 +24,7 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
   params: Promise<{ id: string; nodeId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["ADMIN", "SOFTWARE_MANAGER"]);
+  const user = await requireUser();
   const ids = await params;
   const projectId = Number(ids.id);
   const nodeId = Number(ids.nodeId);

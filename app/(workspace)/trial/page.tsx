@@ -12,7 +12,7 @@ import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds } from "@/lib/access";
 import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
@@ -21,7 +21,7 @@ import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
-import { getTrialReadyVersions, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
 import workflowStyles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
@@ -56,8 +56,9 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const project = requireWorkflowProject(user, params.project);
   const projectId = project?.id;
   const scope = project ? [project.id] : getWorkflowProjectScope(user);
+  const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
   const archived = project?.status === "ARCHIVED";
-  const canViewReleaseQueue = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER");
+  const canViewReleaseQueue = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);
   const showBindings = !canViewReleaseQueue || params.view === "binding";
   const currentKind = showBindings ? "binding" : "release";
   const queueParams = trialQueueParams({
@@ -71,7 +72,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const queueHref = (binding: boolean) => workflowHref("/trial", projectId, { ...query, view: binding ? "binding" : undefined }) + (binding ? "#binding-queue" : "");
   const byVersion = new Map<number, TrialReadyVersion[]>();
   if (canViewReleaseQueue) {
-    for (const request of getTrialReadyVersions(scope)) {
+    for (const request of getTrialReadyVersions(project ? [project.id] : managerScope)) {
       const records = byVersion.get(request.versionId);
       if (records) records.push(request);
       else byVersion.set(request.versionId, [request]);
@@ -81,7 +82,20 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     ...(records.find((row) => canManageProjectWorkflowForProject(user, row.projectId)) ?? records[0]),
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
-  const trials = getTrialVersions(scope).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
+  const canReadProject = (id: number) => scope === null || scope.includes(id);
+  const assignedRequests = !project && scope !== null ? new Set(getAssignedTrialRequestIds(user)) : new Set<number>();
+  const trials = showBindings ? getTrialVersions(assignedRequests.size > 0 ? null : scope).flatMap((row) => {
+    if (canReadProject(row.projectId)) return [row];
+    const detail = assignedRequests.has(row.requestId) ? getReadableTrialDetail(user, row.requestId) : null;
+    if (!detail) return [];
+    return [{
+      ...row,
+      requirementTotal: detail.requirements.length,
+      requirementPassed: detail.requirements.filter(({ confirmedAt }) => confirmedAt !== null).length,
+      requirementWaived: detail.requirements.filter(({ waivedAt }) => waivedAt !== null).length,
+      pendingFlowCount: detail.requirements.flatMap(({ flows }) => flows).filter(({ status }) => status === "PENDING").length,
+    }];
+  }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
@@ -94,8 +108,8 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     {
       key: "batch",
       label: "转测批次",
-      value: (row) => row.batchCode ?? "未关联转测批次",
-      cell: (row) => batchLink(row, projectId),
+      value: (row) => canReadProject(row.projectId) ? row.batchCode ?? "未关联转测批次" : "—",
+      cell: (row) => canReadProject(row.projectId) ? batchLink(row, projectId) : <span className="small muted">—</span>,
     },
     { key: "submitter", label: "提交人", value: (row) => row.submittedByName ?? "未知" },
   ];

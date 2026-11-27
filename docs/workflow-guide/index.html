@@ -122,7 +122,7 @@
     <div class="wrap">
       <p class="brand">工程协同台</p>
       <h1>软件包流程截图指南</h1>
-      <p>选角色，按截图编号操作。点击截图可放大。登录后从「项目总览」进入项目，或直接打开工作台待办。</p>
+      <p>按业务分工选择操作。系统账号分为管理员和普通账号，软件经理、节点绑定人和审批人由项目或任务指派。点击截图可放大。登录后从「项目总览」进入有权办理的项目，或直接打开工作台待办。</p>
       <nav class="stage-links" aria-label="四个流程阶段">
         <a href="#transfer"><span class="sequence" aria-hidden="true">01</span><strong>待转测申请</strong><small>提版本 → 发起批次</small></a><a href="#integration"><span class="sequence" aria-hidden="true">02</span><strong>集成测试</strong><small>验证配套 → 提交结论</small></a><a href="#trial"><span class="sequence" aria-hidden="true">03</span><strong>试制与绑定验证</strong><small>发布试制 → 确认节点</small></a><a href="#formal"><span class="sequence" aria-hidden="true">04</span><strong>转正发布</strong><small>核对证据 → 发布正式版</small></a>
       </nav>
@@ -131,7 +131,7 @@
   <main class="wrap layout" id="workflow">
     <aside class="roles" id="roles" hidden aria-labelledby="roles-title">
       <h2 id="roles-title">我需要做什么</h2>
-      <div class="role-choices" role="group" aria-label="按角色筛选">
+      <div class="role-choices" role="group" aria-label="按业务分工筛选">
         <button type="button" data-role="all" aria-pressed="true">全部角色</button><button type="button" data-role="submitter" aria-pressed="false">转测申请人</button><button type="button" data-role="manager" aria-pressed="false">项目软件经理</button><button type="button" data-role="tester" aria-pressed="false">集成测试负责人</button><button type="button" data-role="binder" aria-pressed="false">节点绑定人员</button><button type="button" data-role="approver" aria-pressed="false">电子流审批人</button><button type="button" data-role="owner" aria-pressed="false">软件包责任人</button><button type="button" data-role="admin" aria-pressed="false">系统管理员</button>
       </div>
       <p id="role-status" aria-live="polite">显示全部操作</p>

@@ -122,23 +122,27 @@ export default async function FormalDetailPage({ params, searchParams }: {
                 const conclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
                 const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
                 const waived = requirements.filter((requirement) => requirement.waivedAt).length;
-                const canInspect = canAccessProjectPage(user, request.projectId);
+                const progress = request.bindingMode === "SKIPPED" ? <Badge tone="slate">无需绑定</Badge>
+                  : <Badge tone="teal">{passed + waived}/{requirements.length} 节点已完成</Badge>;
+                if (!canAccessProjectPage(user, request.projectId)) return manageable
+                  ? <div className="binding-table-item" key={request.id}>
+                    <div className={styles.nodeHeading}><strong>{request.projectName}</strong>{progress}</div>
+                  </div>
+                  : null;
                 const trialUrl = releaseFlowUrl(request.trialFormNo);
                 return <details className="binding-table-item" key={request.id} open={project ? request.projectId === project.id : index === 0}>
                   <summary className={styles.nodeHeading}>
                     <span><strong>{request.projectName}</strong><span className="small muted">{trialUrl ? "已登记试制电子流" : request.trialFormNo ?? "无试制电子流"}</span></span>
-                    {request.bindingMode === "SKIPPED" ? <Badge tone="slate">无需绑定</Badge> : <Badge tone="teal">{passed + waived}/{requirements.length} 节点已完成</Badge>}
+                    {progress}
                     <ChevronDown size={16} aria-hidden="true" />
                   </summary>
                   <div className="binding-table-body">
                     <div className={styles.rowActions}>
                       {trialUrl && <ReleaseFlowEvidence value={trialUrl} label="查看试制电子流" />}
                       {request.releaseMode === "RISK" && <Badge tone="amber">风险发布</Badge>}
-                      {request.batchId && (canInspect
-                        ? <Link href={workflowHref(`/integration/${request.batchId}`, request.projectId)} prefetch={false} className="archive-link">转测批次 {request.batchCode} · {conclusion?.label ?? "已提交"}</Link>
-                        : <span className="small muted">转测批次 {request.batchCode} · {conclusion?.label ?? "已提交"}</span>)}
+                      {request.batchId && <Link href={workflowHref(`/integration/${request.batchId}`, request.projectId)} prefetch={false} className="archive-link">转测批次 {request.batchCode} · {conclusion?.label ?? "已提交"}</Link>}
                       {!request.batchId && <span className="small muted">无关联转测批次</span>}
-                      {canInspect && <Link href={workflowHref(`/trial/${request.id}`, request.projectId)} prefetch={false} className="archive-link">查看绑定验证记录</Link>}
+                      <Link href={workflowHref(`/trial/${request.id}`, request.projectId)} prefetch={false} className="archive-link">查看绑定验证记录</Link>
                     </div>
                     {request.riskConclusion && <p className="note">风险结论：{request.riskConclusion}</p>}
                     {request.bindingMode === "SKIPPED"

@@ -2,6 +2,7 @@ import {
   canAccessProjectPage,
   canManagePackageArea,
   canManageProjectWorkflowForProject,
+  canReadPackageWorkflow,
 } from "./access";
 import { all, db, one } from "./db";
 import { packageIdentity } from "./package-identity";
@@ -11,7 +12,7 @@ import { areFormalBindingsReady, getActiveBindingSummary, getActiveIntegrationBa
 import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-import { getPendingBindingFlowCount, getTrialDetail, getWorkflowProjectScope } from "./workflow-queries";
+import { getPendingBindingFlowCount, getReadableTrialDetail } from "./workflow-queries";
 
 type ReleaseGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 type GuidanceContext = {
@@ -37,11 +38,10 @@ function versionRecord(versionId: number) {
     packageId: number;
     code: string;
     name: string;
-    ownerId: number | null;
     areaId: number | null;
     bindingMode: string;
   }>(`SELECT pv.id, pv.status, pv.version, pv.binding_mode AS bindingMode,
-            p.id AS packageId, p.code, p.name, p.owner_id AS ownerId, p.area_id AS areaId
+            p.id AS packageId, p.code, p.name, p.area_id AS areaId
      FROM package_versions pv JOIN packages p ON p.id = pv.package_id WHERE pv.id = ?`, versionId);
 }
 
@@ -91,10 +91,10 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
      LEFT JOIN integration_batches b ON b.id = e.batchId
      ORDER BY p.sort_order`, versionId);
   if (context.projectId && !evidence.some((row) => row.projectId === context.projectId)) return null;
-  const scope = getWorkflowProjectScope(user);
-  const canRead = (projectId: number) => (scope === null || scope.includes(projectId)) && canAccessProjectPage(user, projectId);
+  const readableProjectIds = new Set(evidence.filter(({ projectId }) => canAccessProjectPage(user, projectId)).map(({ projectId }) => projectId));
+  const canRead = (projectId: number) => readableProjectIds.has(projectId);
   const readable = evidence.filter((row) => canRead(row.projectId));
-  if (readable.length === 0 && user.role !== "ADMIN") return null;
+  if (readable.length === 0 && user.role !== "ADMIN" && !canReadPackageWorkflow(user, version.packageId, context.projectId)) return null;
   const manageable = readable.filter((row) => canManageProjectWorkflowForProject(user, row.projectId));
   const preferred = manageable.find((row) => row.projectId === context.projectId) ?? manageable[0];
   const items: ReleaseGuidanceItem[] = [];
@@ -125,16 +125,17 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
       q: identity.code,
       request: row.requestStatus === "PENDING" ? row.requestId : undefined,
     });
-    const batchHref = row.batchId && (row.batchStatus !== "DRAFT" || mayArrange)
+    const canInspectBatch = row.batchStatus !== "DRAFT" || mayArrange;
+    const batchHref = row.batchId && canInspectBatch
       ? workflowHref(`/integration/${row.batchId}`, row.projectId, args) : undefined;
-    const stage = row.batchStatus === "DRAFT" ? "批次待发起"
+    const stage = canInspectBatch && row.batchStatus === "DRAFT" ? "批次待发起"
       : row.requestStatus === "IN_TEST" ? "等待集成测试结论"
         : row.requestStatus === "FAILED" ? "集成测试未通过"
           : row.requestStatus === "BLOCKED" ? "集成测试受阻"
             : row.requestStatus === "PASSED" ? "缺少有效的测试通过结论" : "待安排转测";
     items.push({
       title: `${row.projectName} · ${stage}`,
-      detail: `${row.batchCode ? `批次 ${row.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
+      detail: `${row.batchCode && canInspectBatch ? `批次 ${row.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
       href: batchHref ?? requestsHref,
       actionLabel: batchHref ? "查看转测批次" : "查看转测申请",
     });
@@ -166,8 +167,10 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   if (!version) return null;
   const requests = getActiveReleaseRequests(db, versionId);
   if (!requests.length || (context.projectId && !requests.some((request) => request.projectId === context.projectId))) return null;
-  const canRead = (projectId: number) => canAccessProjectPage(user, projectId) || (version.ownerId === user.id && isBindingOpen(version.status));
-  const readable = requests.filter((request) => canRead(request.projectId));
+  const readable = requests.flatMap((request) => {
+    const detail = getReadableTrialDetail(user, request.id);
+    return detail ? [{ ...request, detail }] : [];
+  });
   if (readable.length === 0) return null;
   const manageable = readable.filter((request) => canManageProjectWorkflowForProject(user, request.projectId));
   const preferred = manageable.find((request) => request.projectId === context.projectId) ?? manageable[0];
@@ -175,7 +178,8 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   const identity = packageIdentity(version);
   const args = { returnTo: context.returnTo };
   const bindingArgs = { ...context.bindingListState, ...args };
-  const traceHref = workflowHref(`/versions/${versionId}`, context.projectId, args);
+  const projectScope = (projectId: number) => canAccessProjectPage(user, projectId) ? projectId : undefined;
+  const traceHref = workflowHref(`/versions/${versionId}`, context.projectId === undefined ? undefined : projectScope(context.projectId), args);
   if (!isBindingOpen(version.status)) return {
     status: version.status, canManage,
     description: `${identity.code} ${version.version}`,
@@ -186,8 +190,6 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
     }],
   };
 
-  const workflowScope = getWorkflowProjectScope(user);
-  const projectScope = (projectId: number) => workflowScope === null || workflowScope.includes(projectId) ? projectId : undefined;
   const binding = getActiveBindingSummary(db, versionId);
   const batches = getActiveIntegrationBatches(db, versionId);
   const bindingsReady = version.bindingMode !== "PENDING" && areFormalBindingsReady(binding, version.bindingMode);
@@ -206,10 +208,8 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   });
 
   for (const row of readable) {
-    const detail = getTrialDetail(row.id);
-    if (!detail) continue;
     const trialHref = workflowHref(`/trial/${row.id}`, projectScope(row.projectId), bindingArgs);
-    for (const node of detail.requirements) {
+    for (const node of row.detail.requirements) {
       const nodeTitle = `${row.projectName} · ${node.nodeName}`;
       const pending = node.flows.filter((flow) => flow.status === "PENDING");
       shownFlows += pending.length;
@@ -249,7 +249,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
     detail: `还有 ${hiddenNodes} 个节点未完成。请联系相应项目的软件经理。`,
   });
   for (const batch of batches) {
-    if (!canAccessProjectPage(user, batch.projectId) || (projectScope(batch.projectId) === undefined)
+    if (!canAccessProjectPage(user, batch.projectId)
       || (batch.status === "DRAFT" && !canManageProjectWorkflowForProject(user, batch.projectId))) {
       hiddenBatches += 1;
       continue;

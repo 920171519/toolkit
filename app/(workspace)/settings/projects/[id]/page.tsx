@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowDown, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { PROJECT_STATUS_META } from "@/lib/constants";
@@ -10,7 +10,7 @@ import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { addProjectNodeAction, deleteProjectAction, saveProjectAction } from "@/lib/actions/settings";
 import { directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
 import { getProjectDeletionBlockers } from "@/lib/settings";
-import { getNodeCandidateGuidance, getProjectManagerCandidateGuidance, packageReferenceGuidance } from "@/lib/settings-guidance";
+import { getNodeCandidateGuidance, packageReferenceGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog, type GuidanceItem } from "@/components/guidance-dialog";
@@ -25,7 +25,8 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["ADMIN", "SOFTWARE_MANAGER"]);
+  const user = await requireUser();
+  const canAssignManagers = user.role === "ADMIN";
   const projectId = Number((await params).id);
   if (!Number.isSafeInteger(projectId) || projectId < 1 || !canManageProjectWorkflowForProject(user, projectId)) notFound();
   const [project] = getProjectConfigs(projectId);
@@ -43,7 +44,6 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
   const editHref = directoryHref(path, { ...listContext, edit: "project" }) + "#project-profile";
   const editing = search.edit === "project";
   const nodeCandidateBlocker = getNodeCandidateGuidance(user, people.length);
-  const managerCandidateBlocker = editing ? getProjectManagerCandidateGuidance(user, people) : null;
   const deletion = getProjectDeletionBlockers(project.id);
   const deleteReasons: GuidanceItem[] = [
     ...packageReferenceGuidance(user, deletion.packages, "此软件包仍关联本项目的节点。", "usage"),
@@ -72,25 +72,22 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
       <FlashMessage notice={notice} />
       <section className={editing ? "card workspace-edit-form settings-project-editor" : "card"} id="project-profile" aria-labelledby="project-profile-title">
         <div className="card-header">
-          <div><h2 id="project-profile-title">项目资料</h2>{editing && <p className="small muted">变更软件经理会同步调整该项目的流程访问权限。</p>}</div>
+          <div><h2 id="project-profile-title">项目资料</h2>{editing && canAssignManagers && <p className="small muted">变更软件经理会同步调整该项目的流程访问权限。</p>}</div>
           {editing
             ? <Link className="button button-secondary button-sm" href={detailHref} prefetch={false}>取消编辑</Link>
             : <Link className="button button-secondary button-sm" data-testid="edit-project-trigger" href={editHref} prefetch={false}>编辑项目资料</Link>}
         </div>
         <div className="card-body">
-          {editing && !managerCandidateBlocker ? (
+          {editing ? (
             <ActionForm action={saveProjectAction} testId={"edit-project-form-" + project.id} hidden={{ ...listContext, id: project.id }} submitText="保存项目配置">
-              <ProjectSettingsFields people={people} project={project} canManagePeople={user.role === "ADMIN"} />
+              <ProjectSettingsFields people={people} project={project} canAssignManagers={canAssignManagers} />
             </ActionForm>
           ) : (
-            <>
-              <dl className="settings-profile">
-                <div><dt>PM</dt><dd>{project.pms.map((person) => person.name).join("、") || "待指定"}</dd></div>
-                <div><dt>软件经理</dt><dd>{project.softwareManagers.map((person) => person.name).join("、") || "待指定"}</dd></div>
-                {project.description && <div><dt>说明</dt><dd>{project.description}</dd></div>}
-              </dl>
-              {managerCandidateBlocker && <GuidanceDialog label="保存项目配置" title="保存项目配置" items={[managerCandidateBlocker]} />}
-            </>
+            <dl className="settings-profile">
+              <div><dt>PM</dt><dd>{project.pms.map((person) => person.name).join("、") || "待指定"}</dd></div>
+              <div><dt>软件经理</dt><dd>{project.softwareManagers.map((person) => person.name).join("、") || "待指定"}</dd></div>
+              {project.description && <div><dt>说明</dt><dd>{project.description}</dd></div>}
+            </dl>
           )}
         </div>
       </section>

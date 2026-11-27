@@ -13,6 +13,7 @@ test("角色权限说明可展开，项目删除入口直接可见且支持键�
   await expect(permissions).toBeHidden();
   await roles.click();
   await expect(permissions.getByText("系统管理员", { exact: true })).toBeVisible();
+  await expect(permissions.locator("dt")).toHaveText(["系统管理员", "普通账号"]);
   await expect(indicator).not.toHaveCSS("transform", collapsedIcon);
   await roles.press("Enter");
   await expect(permissions).toBeHidden();
@@ -198,13 +199,13 @@ test("人员配置支持在手机上按身份查找并进入账号详情", async
   await employeeIdFilter.getByRole("button", { name: "应用", exact: true }).click();
   await page.getByRole("button", { name: "筛选系统角色", exact: true }).click();
   const roleFilter = page.getByRole("dialog", { name: "筛选系统角色", exact: true });
-  await roleFilter.getByRole("checkbox", { name: "软件经理", exact: true }).check();
+  await roleFilter.getByRole("checkbox", { name: "普通账号", exact: true }).check();
   await roleFilter.getByRole("button", { name: "应用", exact: true }).click();
   await expect(page.getByRole("row", { name: /林澈/ })).toBeVisible();
   await expect(page.getByRole("row", { name: /沈清/ })).toHaveCount(0);
   await page.getByRole("link", { name: "管理林澈的账号" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "林澈" })).toBeVisible();
-  await expect(page.getByLabel("系统角色")).toHaveValue("SOFTWARE_MANAGER");
+  await expect(page.getByLabel("系统角色")).toHaveValue("MEMBER");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 

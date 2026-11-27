@@ -4,13 +4,6 @@ import type {
   IssueAttribution,
   PackageStatus,
 } from "./constants";
-import {
-  canApproveReview,
-  canManageWorkflow,
-  canReview,
-  canSubmitForPackage,
-  canValidateBinding,
-} from "./permissions";
 import type { SessionUser } from "./types";
 
 export class DomainError extends Error {
@@ -24,6 +17,27 @@ export class DomainError extends Error {
 
 export function assert(condition: unknown, message: string, code = "DOMAIN_ERROR"): asserts condition {
   if (!condition) throw new DomainError(message, code);
+}
+
+// Historical workflow predicates. Live workflows use the assignment checks in access.ts.
+function canManageWorkflow(user: SessionUser) {
+  return ["ADMIN", "SOFTWARE_MANAGER"].includes(user.role);
+}
+
+function canReview(user: SessionUser) {
+  return ["ADMIN", "REVIEWER"].includes(user.role);
+}
+
+function canApproveReview(user: SessionUser, requestedById: number | null) {
+  return canReview(user) && user.id !== requestedById;
+}
+
+function canSubmitForPackage(user: SessionUser, ownerId: number | null) {
+  return canManageWorkflow(user) || user.id === ownerId;
+}
+
+function canValidateBinding(user: SessionUser) {
+  return ["ADMIN", "SOFTWARE_MANAGER", "INTEGRATION_TESTER", "TEST_VALIDATOR", "PACKAGE_OWNER"].includes(user.role);
 }
 
 function audit(

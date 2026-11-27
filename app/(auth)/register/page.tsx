@@ -16,7 +16,7 @@ export default async function RegisterPage() {
     <section className={`card ${styles.panel}`} aria-labelledby="register-title">
       <header className={styles.heading}>
         <h1 id="register-title">注册账号</h1>
-        <InfoTooltip label="账号权限说明">新账号默认是部门成员，角色和责任田由管理员分配。</InfoTooltip>
+        <InfoTooltip label="账号权限说明">新账号默认为普通账号，工作权限按实际分工授予。</InfoTooltip>
       </header>
       <RegisterForm />
     </section>

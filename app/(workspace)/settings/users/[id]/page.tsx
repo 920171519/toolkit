@@ -63,7 +63,7 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
       <section className="card">
         <div className="card-header">
           <div className="settings-label-help">
-            <h2>工作流权限</h2>
+            <h2>账号权限</h2>
             <InfoTooltip label={`${ROLE_META[member.role].label}权限说明`}>{ROLE_META[member.role].description}</InfoTooltip>
           </div>
         </div>

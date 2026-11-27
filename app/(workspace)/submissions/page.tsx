@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getNarrowVersionRequestIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
-import { requireWorkflowProject } from "@/lib/project-scope";
+import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowPage, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
 import {
@@ -38,13 +39,21 @@ export default async function SubmissionsPage({
   const params = await searchParams;
   const { returnTo } = getWorkflowListState(params);
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
-  const project = requireWorkflowProject(user, params.project);
+  const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
-  const scope = project ? [project.id] : getWorkflowProjectScope(user);
-  const groups = getPendingTransferGroups(scope, user.role === "ADMIN" ? null : getManagedProjectIds(user));
+  const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
+  const projectScope = getWorkflowProjectScope(user, true);
+  const hasProjectAccess = Boolean(project && (projectScope === null || projectScope.includes(project.id)));
+  const readableRequests = projectScope === null || hasProjectAccess
+    ? null : new Set(getNarrowVersionRequestIds(user));
+  const groups = getPendingTransferGroups(project ? [project.id] : null, managerScope)
+    .map((group) => !readableRequests || projectScope?.includes(group.projectId) ? group
+      : { ...group, items: group.items.filter(({ requestId }) => readableRequests.has(requestId)) })
+    .filter((group) => group.items.length > 0);
   const canRequest = getTransferPackageOptions(user, project?.id).length > 0;
+  if (project && !hasProjectAccess && !canRequest && groups.length === 0) notFound();
   const transferHref = workflowHref("/submissions/transfer", project?.id, { returnTo });
-  const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER");
+  const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);
   const showDrafts = canPrepare && params.view === "drafts";
   const query = getWorkflowSearch(params.q);
   const focusedRequestId = showDrafts ? undefined : readTransferRequestId(params.request);
@@ -62,10 +71,11 @@ export default async function SubmissionsPage({
     !archived && canManageProjectWorkflowForProject(user, group.projectId) ? group.items.filter((item) => item.draftBatchId === null).map((item) => item.requestId) : [],
   ));
   const draftFilters = { statuses: ["DRAFT"] as ["DRAFT"], activeProjectsOnly: true };
-  const draftsCount = canPrepare ? getBatchCount(scope, draftFilters) : 0;
-  const matchingDrafts = showDrafts && query ? getBatchCount(scope, { ...draftFilters, query }) : draftsCount;
+  const draftScope = project ? [project.id] : managerScope;
+  const draftsCount = canPrepare ? getBatchCount(draftScope, draftFilters) : 0;
+  const matchingDrafts = showDrafts && query ? getBatchCount(draftScope, { ...draftFilters, query }) : draftsCount;
   const page = getWorkflowPage(matchingDrafts, pageSize, params.page);
-  const drafts = showDrafts ? getBatches(pageSize, scope, { ...draftFilters, query, offset: page.offset }) : [];
+  const drafts = showDrafts ? getBatches(pageSize, draftScope, { ...draftFilters, query, offset: page.offset }) : [];
   const queueHref = (draft: boolean, searchTerm = query, nextPage = 1) => workflowHref("/submissions", project?.id, {
     view: draft ? "drafts" : undefined,
     q: searchTerm || undefined,
@@ -91,7 +101,8 @@ export default async function SubmissionsPage({
         title="转测申请"
         description={archived ? "项目已归档" : undefined}
         actions={<>
-          <Link href={integrationHref} prefetch={false} className="button button-secondary">{archived ? "查看历史批次" : "查看在测批次"} <ArrowRight size={14} /></Link>
+          {(!project || hasProjectAccess) &&
+            <Link href={integrationHref} prefetch={false} className="button button-secondary">{archived ? "查看历史批次" : "查看在测批次"} <ArrowRight size={14} /></Link>}
           {canRequest ? <Link href={transferHref} prefetch={false} className="button button-primary" data-testid="submit-transfer-trigger"><ClipboardList size={14} /> 提交转测申请</Link>
             : <GuidanceDialog label="提交转测申请" title="转测提交条件" fallbackHref={transferHref} items={getTransferEntryGuidance(user, project?.id)} />}
         </>}

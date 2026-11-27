@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditPackageById } from "@/lib/access";
-import { getPackageDetail } from "@/lib/queries";
-import { getWorkflowProjectOptions } from "@/lib/project-scope";
+import { getReadablePackageDetail } from "@/lib/queries";
+import { getReadablePackageProject } from "@/lib/project-scope";
 import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +22,12 @@ export async function GET(
   }
   const scope = new URL(request.url).searchParams.getAll("project");
   const project = scope.length === 1
-    ? getWorkflowProjectOptions(user, true).find((option) => option.id === Number(scope[0]))
+    ? getReadablePackageProject(user, Number(scope[0]))
     : undefined;
   if (scope.length > 0 && !project) {
     return NextResponse.json({ error: "项目不存在或不可查看。" }, { status: 404 });
   }
-  const data = getPackageDetail(packageId, true, project?.id);
+  const data = getReadablePackageDetail(user, packageId, project?.id);
   if (!data) {
     return NextResponse.json({ error: "软件包不存在。" }, { status: 404 });
   }

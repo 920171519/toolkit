@@ -17,7 +17,7 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
-import { getTrialReadyVersions, getWorkflowProjectScope } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getTrialReadyVersions } from "@/lib/workflow-queries";
 import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
@@ -31,12 +31,12 @@ export default async function TrialReadyDetailPage({
   searchParams: Promise<TrialSearchParams>;
 }) {
   const user = await requireUser();
-  if (user.role !== "ADMIN" && user.role !== "SOFTWARE_MANAGER") notFound();
   const requestId = Number((await params).id);
   if (!Number.isSafeInteger(requestId) || requestId < 1) notFound();
   const search = await searchParams;
   const projectId = requireWorkflowProject(user, search.project)?.id;
-  const scope = projectId === undefined ? getWorkflowProjectScope(user) : [projectId];
+  const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
+  const scope = projectId === undefined ? managerScope : [projectId];
   const [row] = getTrialReadyVersions(scope, { requestId });
   const returnTo = getWorkflowListState(search).returnTo;
   const queue = { ...trialQueueParams(search), ...(returnTo ? { returnTo } : {}) };
@@ -76,7 +76,7 @@ export default async function TrialReadyDetailPage({
   const risk = row.riskProjectCount > 0;
   const conclusion = row.batchConclusion ? CONCLUSION_META[row.batchConclusion as BatchConclusion] : null;
   const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
-  const records = getTrialReadyVersions(getWorkflowProjectScope(user), { versionId: row.versionId });
+  const records = getTrialReadyVersions(managerScope, { versionId: row.versionId });
 
   return (
     <>

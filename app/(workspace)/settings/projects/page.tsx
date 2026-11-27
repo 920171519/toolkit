@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { getManagedProjectIdsForUser } from "@/lib/access";
 import { getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
 import { saveProjectAction } from "@/lib/actions/settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { directoryHref, projectDirectoryDetailParams } from "@/lib/settings-directory";
-import { getProjectManagerCandidateGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
-import { GuidanceDialog } from "@/components/guidance-dialog";
 import { ProjectSettingsFields, PROJECT_STATUS_OPTIONS } from "@/components/project-settings-fields";
 import { matchesSearch, searchValue, settingsPage, SettingsFilters, SettingsPagination } from "@/components/settings-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -23,31 +23,30 @@ const listPath = "/settings/projects";
 export default async function ProjectsSettingsPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["ADMIN", "SOFTWARE_MANAGER"]);
+  const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
+  const managedProjectIds = isAdmin ? null : getManagedProjectIdsForUser(user.id);
+  if (managedProjectIds?.length === 0) notFound();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const query = searchValue(params.q);
   const status = PROJECT_STATUS_OPTIONS.find(({ value }) => value === params.status)?.value ?? "";
-  const projects = getProjectConfigs().filter((project) => isAdmin || project.softwareManagers.some((manager) => manager.id === user.id));
+  const projects = getProjectConfigs().filter((project) => !managedProjectIds || managedProjectIds.includes(project.id));
   const list = settingsPage(projects.filter((project) => (!status || project.status === status) && matchesSearch(query, project.name, project.code, project.pmName, project.softwareManagerName)), params.page);
   const people = isAdmin ? getPeople() : [];
-  const managerCandidateBlocker = isAdmin ? getProjectManagerCandidateGuidance(user, people) : null;
   const listContext = projectDirectoryDetailParams({ q: query, status, page: String(list.page) });
 
   return (
     <>
       <PageHeader
         title="项目与测试节点"
-        actions={isAdmin && (managerCandidateBlocker ? (
-          <GuidanceDialog label="新建项目" title="新建项目" items={[managerCandidateBlocker]} />
-        ) : (
+        actions={isAdmin && (
           <FormDialog label={<><Plus size={16} aria-hidden="true" /> 新建项目</>} title="新建项目" testId="new-project-trigger">
             <ActionForm action={saveProjectAction} hidden={listContext} submitText="创建项目" testId="new-project-form" preserveValuesOnSubmit>
-              <ProjectSettingsFields people={people} canManagePeople />
+              <ProjectSettingsFields people={people} canAssignManagers />
             </ActionForm>
           </FormDialog>
-        ))}
+        )}
       />
       <FlashMessage notice={notice} />
       <section className="card" aria-label="项目列表">

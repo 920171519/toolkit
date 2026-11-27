@@ -31,13 +31,12 @@ export default async function LoginPage({
       {process.env.TOOLKIT_SKIP_SEED !== "1" && <details className={styles.demo}>
         <summary>本地演示账号</summary>
         <div className={styles.demoAccounts}>
-          <span>管理员 · ADMIN001</span>
-          <span>软件经理 · MGR001</span>
-          <span>集成测试 · TEST001</span>
-          <span>评审专家 · REVIEW001</span>
+          <span>系统管理员 · ADMIN001</span>
+          <span>项目软件经理 · MGR001</span>
+          <span>集成测试责任田主管 · TEST001</span>
           <span>软件包责任人 · OWNER001</span>
-          <span>绑定验证 · VALID001</span>
-          <span>部门成员 · MEMBER001</span>
+          <span>节点绑定责任人 · VALID001</span>
+          <span>普通账号 · MEMBER001</span>
           <strong>统一演示密码 <code>Demo@1234</code></strong>
         </div>
       </details>}

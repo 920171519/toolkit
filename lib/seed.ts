@@ -47,18 +47,18 @@ function seedAll(db: DatabaseSync) {
   const passwordHash = hashPassword(DEMO_PASSWORD);
   const userSeeds = [
     ["张启明", "ADMIN001", "ADMIN", "平台管理员"],
-    ["林澈", "MGR001", "SOFTWARE_MANAGER", "软件经理"],
-    ["周宁", "TEST001", "INTEGRATION_TESTER", "集成测试工程师"],
-    ["王磊", "OWNER001", "PACKAGE_OWNER", "系统架构师"],
-    ["陈曦", "OWNER002", "PACKAGE_OWNER", "通信软件专家"],
-    ["赵敏", "OWNER003", "PACKAGE_OWNER", "安全软件专家"],
-    ["韩松", "VALID001", "TEST_VALIDATOR", "硬件验证工程师"],
+    ["林澈", "MGR001", "MEMBER", "软件经理"],
+    ["周宁", "TEST001", "MEMBER", "集成测试工程师"],
+    ["王磊", "OWNER001", "MEMBER", "系统架构师"],
+    ["陈曦", "OWNER002", "MEMBER", "通信软件专家"],
+    ["赵敏", "OWNER003", "MEMBER", "安全软件专家"],
+    ["韩松", "VALID001", "MEMBER", "硬件验证工程师"],
     ["许言", "MEMBER001", "MEMBER", "项目质量工程师"],
-    ["郑一", "OWNER004", "PACKAGE_OWNER", "工具链负责人"],
-    ["沈清", "MGR002", "SOFTWARE_MANAGER", "软件经理"],
-    ["唐雅", "MGR003", "SOFTWARE_MANAGER", "软件经理"],
-    ["何欣", "TEST002", "INTEGRATION_TESTER", "集成测试工程师"],
-    ["程野", "TEST003", "INTEGRATION_TESTER", "集成测试工程师"],
+    ["郑一", "OWNER004", "MEMBER", "工具链负责人"],
+    ["沈清", "MGR002", "MEMBER", "软件经理"],
+    ["唐雅", "MGR003", "MEMBER", "软件经理"],
+    ["何欣", "TEST002", "MEMBER", "集成测试工程师"],
+    ["程野", "TEST003", "MEMBER", "集成测试工程师"],
   ] as const;
   const createdAt = iso("2026-09-01T09:00:00+08:00");
   const userIds: Record<string, number> = {};

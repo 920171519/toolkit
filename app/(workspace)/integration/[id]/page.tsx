@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, FileText } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { batchSelectionKey, DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
-import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getIntegrationManagedProjectIds, getManagedProjectIdsForUser } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -42,11 +42,8 @@ export default async function BatchDetailPage({
   const { id } = await params;
   const batchId = Number(id);
   if (!Number.isInteger(batchId)) notFound();
-  const scope = getWorkflowProjectScope(user);
-  const detailScope = user.role === "SOFTWARE_MANAGER"
-    ? [...new Set([...getManagedProjectIdsForUser(user.id), ...getIntegrationManagedProjectIds(user.id)])]
-    : scope;
-  const data = getBatchDetail(batchId, detailScope);
+  const scope = getWorkflowProjectScope(user, true);
+  const data = getBatchDetail(batchId, scope);
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");

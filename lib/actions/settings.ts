@@ -220,7 +220,6 @@ export async function saveProjectAction(
   const user = await actionUser();
   const id = numberValue(formData, "id");
   const status = text(formData, "status") as "ACTIVE" | "PAUSED" | "ARCHIVED";
-  const softwareManagerIds = idList(formData, "softwareManagerIds");
   let projectId: number;
   try {
     projectId = saveProject(user, {
@@ -229,7 +228,7 @@ export async function saveProjectAction(
       code: text(formData, "code"),
       description: text(formData, "description"),
       pmUserIds: idList(formData, "pmUserIds"),
-      softwareManagerIds,
+      softwareManagerIds: formData.has("softwareManagerIds") ? idList(formData, "softwareManagerIds") : undefined,
       status: status || "ACTIVE",
       stage: formData.has("stage") ? text(formData, "stage") : undefined,
       sortOrder: undefined,
@@ -238,9 +237,6 @@ export async function saveProjectAction(
     return failure(error);
   }
   refreshAll();
-  if (user.role === "SOFTWARE_MANAGER" && !softwareManagerIds.includes(user.id)) {
-    successRedirect(projectSettingsHref(formData), "项目配置已更新。你已不负责该项目。");
-  }
   successRedirect(projectSettingsHref(formData, projectId), id ? "项目配置已更新。" : "项目已创建，可继续添加测试节点。");
 }
 

@@ -70,7 +70,7 @@ test.describe("公开项目联系人与账号", () => {
     await expect(search).toBeVisible();
   });
 
-  test("注册后获得部门成员身份，可以登录并退出", async ({ page }) => {
+  test("注册后获得普通账号身份，可以登录并退出", async ({ page }) => {
     await page.context().clearCookies();
     await page.goto("/register");
     const help = page.getByRole("button", { name: "账号权限说明" });
@@ -78,7 +78,7 @@ test.describe("公开项目联系人与账号", () => {
     await page.getByRole("link", { name: "项目联系人", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(help).toBeFocused();
-    await expect(tooltip).toContainText("新账号默认是部门成员");
+    await expect(tooltip).toContainText("新账号默认为普通账号");
     await page.keyboard.press("Escape");
     await expect(tooltip).toBeHidden();
     await expect(help).toBeFocused();
@@ -96,7 +96,7 @@ test.describe("公开项目联系人与账号", () => {
     await form.getByRole("button", { name: /注册并进入工作台/ }).click();
     await page.waitForURL("**/dashboard**");
     await expect(page.locator(".sidebar-user-name")).toContainText("测试成员");
-    await expect(page.locator(".sidebar-user-role")).toContainText("部门成员");
+    await expect(page.locator(".sidebar-user-role")).toContainText("普通账号");
     await expect(page.getByRole("heading", { name: "我的工作台" })).toBeVisible();
     await expect(page.locator("main")).toContainText("测试成员");
 

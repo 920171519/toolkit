@@ -11,7 +11,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { parseFlash } from "@/lib/queries";
-import { getPendingBindingFlowCount, getTrialDetail } from "@/lib/workflow-queries";
+import { getPendingBindingFlowCount, getReadableTrialDetail } from "@/lib/workflow-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -57,16 +57,15 @@ export default async function TrialDetailPage({
   const { id } = await params;
   const requestId = Number(id);
   if (!Number.isInteger(requestId)) notFound();
-  const data = getTrialDetail(requestId);
+  const data = getReadableTrialDetail(user, requestId);
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { request, requirements } = data;
   const archived = request.projectStatus === "ARCHIVED";
   const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
-  const ownsOpenTrial = canEditFlows && request.packageOwnerId === user.id;
-  if (!ownsOpenTrial && !canAccessProjectPage(user, request.projectId)) notFound();
-  const scopeProjectId = requireWorkflowProject(user, search.project, request.projectId)?.id;
+  const canReadProject = canAccessProjectPage(user, request.projectId);
+  const scopeProjectId = requireWorkflowProject(user, search.project, request.projectId, true)?.id;
   const listState = { ...getWorkflowListState(search), ...trialQueueParams(search), view: "binding" };
   const actionFields = { requestId, scopeProjectId, ...listState };
   const manager = !archived && canManageProjectWorkflowForProject(user, request.projectId);
@@ -384,7 +383,7 @@ export default async function TrialDetailPage({
             <dl className="detail-list">
               <div className="detail-row"><dt>项目软件经理</dt><dd>{request.softwareManagerName ?? "未指定"}</dd></div>
               <div className="detail-row"><dt>发布来源</dt><dd>{riskRelease ? <Badge tone="rose">风险发布</Badge> : <Badge tone="violet">集成测试通过</Badge>}</dd></div>
-              {request.batchId && <div className="detail-row"><dt>转测批次</dt><dd><Link href={workflowHref(`/integration/${request.batchId}`, scopeProjectId)} prefetch={false} className="archive-link">{request.batchCode} · {batchConclusion?.label ?? "待提交结论"}</Link></dd></div>}
+              {request.batchId && canReadProject && <div className="detail-row"><dt>转测批次</dt><dd><Link href={workflowHref(`/integration/${request.batchId}`, scopeProjectId)} prefetch={false} className="archive-link">{request.batchCode} · {batchConclusion?.label ?? "待提交结论"}</Link></dd></div>}
               {request.status === "VOID" && request.riskConclusion && <div className="detail-row"><dt>风险结论</dt><dd>{request.riskConclusion}</dd></div>}
               <div className="detail-row"><dt>归档地址</dt><dd><ExternalLink href={request.archiveUrl}>下载归档</ExternalLink></dd></div>
             </dl>

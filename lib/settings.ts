@@ -2,8 +2,8 @@ import "server-only";
 
 import { all, db, one, run, transaction } from "./db";
 import { ROLES, type PackageStatus, type Role } from "./constants";
-import { canManageConfig, canManageAreas, isAdmin } from "./permissions";
-import { canManagePackageArea, canManageProjectWorkflowForProject, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
+import { canManageAreas, isAdmin } from "./permissions";
+import { canManagePackageArea, canManageProjectWorkflowForProject, getProjectSoftwareManagerIds, isAreaLeader, isAreaProjectLead, isAreaProjectLeadForProject } from "./access";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { assert } from "./services";
 import { isStandardPackageCode, packageIdentity } from "./package-identity";
@@ -267,18 +267,18 @@ export type SaveProjectInput = {
   code: string;
   description: string;
   pmUserIds: number[];
-  softwareManagerIds: number[];
+  softwareManagerIds?: number[];
   status: "ACTIVE" | "PAUSED" | "ARCHIVED";
   stage?: string;
   sortOrder?: number | null;
 };
 
 export function saveProject(actor: SessionUser, input: SaveProjectInput): number {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目。", "FORBIDDEN");
+  const canAssignManagers = isAdmin(actor);
   if (input.id) {
     assertProjectConfigurationAccess(actor, input.id);
   } else {
-    assert(isAdmin(actor), "只有系统管理员可以新建项目。", "FORBIDDEN");
+    assert(canAssignManagers, "只有系统管理员可以新建项目。", "FORBIDDEN");
   }
   const code = input.code.trim();
   assert(input.name.trim().length >= 2, "项目名称至少需要 2 个字符。");
@@ -302,23 +302,33 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     const pm = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", pmUserId);
     assert(pm, "选择的 PM 不存在或已停用。");
   }
-  assert(softwareManagerIds.length > 0, "请至少为项目指定一位软件经理。");
-  for (const softwareManagerId of softwareManagerIds) {
-    const softwareManager = one<{ id: number; role: Role }>(
-      "SELECT id, role FROM users WHERE id = ? AND is_active = 1",
-      softwareManagerId,
-    );
-    assert(softwareManager, "选择的软件经理不存在或已停用。");
-    assert(softwareManager.role === "SOFTWARE_MANAGER", "选择的软件经理必须具有“软件经理”角色。");
-  }
   assert(["ACTIVE", "PAUSED", "ARCHIVED"].includes(input.status), "项目状态无效。");
   const requestedStage = input.stage;
   assert(requestedStage === undefined || isProjectStage(requestedStage), "项目阶段无效。");
   return transaction(() => {
     let projectId = input.id ?? 0;
     let stage = requestedStage ?? DEFAULT_PROJECT_STAGE;
+    if (canAssignManagers) {
+      assert(softwareManagerIds.length > 0, "请至少为项目指定一位软件经理。");
+      for (const softwareManagerId of softwareManagerIds) {
+        const softwareManager = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", softwareManagerId);
+        assert(softwareManager, "选择的软件经理不存在或已停用。");
+      }
+    } else {
+      assertProjectConfigurationAccess(actor, projectId);
+      if (input.softwareManagerIds !== undefined) {
+        const currentManagers = new Set(getProjectSoftwareManagerIds(projectId));
+        assert(
+          softwareManagerIds.length === currentManagers.size && softwareManagerIds.every((id) => currentManagers.has(id)),
+          "只有系统管理员可以变更项目软件经理。",
+          "FORBIDDEN",
+        );
+      }
+    }
     if (projectId) {
-      const existing = one<{ sort_order: number; stage: ProjectStage; status: string }>("SELECT sort_order, stage, status FROM projects WHERE id = ?", projectId);
+      const existing = one<{ sort_order: number; stage: ProjectStage; status: string; software_manager_id: number | null }>(
+        "SELECT sort_order, stage, status, software_manager_id FROM projects WHERE id = ?", projectId,
+      );
       assert(existing, "项目不存在。", "NOT_FOUND");
       stage = requestedStage ?? existing.stage;
       const sortOrder = input.sortOrder == null ? existing.sort_order : Math.max(0, Math.floor(input.sortOrder));
@@ -331,7 +341,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
         code,
         input.description.trim(),
         pmUserIds[0],
-        softwareManagerIds[0],
+        canAssignManagers ? softwareManagerIds[0] : existing.software_manager_id,
         input.status,
         stage,
         sortOrder,
@@ -364,13 +374,15 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
       projectId = Number(result.lastInsertRowid);
     }
     run("DELETE FROM project_pms WHERE project_id = ?", projectId);
-    run("DELETE FROM project_software_managers WHERE project_id = ?", projectId);
     const timestamp = new Date().toISOString();
     for (const pmUserId of pmUserIds) {
       run("INSERT INTO project_pms (project_id, user_id, created_at) VALUES (?, ?, ?)", projectId, pmUserId, timestamp);
     }
-    for (const softwareManagerId of softwareManagerIds) {
-      run("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)", projectId, softwareManagerId, timestamp);
+    if (canAssignManagers) {
+      run("DELETE FROM project_software_managers WHERE project_id = ?", projectId);
+      for (const softwareManagerId of softwareManagerIds) {
+        run("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (?, ?, ?)", projectId, softwareManagerId, timestamp);
+      }
     }
     audit(
       actor.id,
@@ -425,7 +437,6 @@ export function addProjectNode(
   description: string,
   owners: NodeOwnersInput,
 ) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目节点。", "FORBIDDEN");
   assert(name.trim().length >= 1 && name.trim().length <= 20, "节点名称需为 1-20 个字符。");
   const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
   assert(project, "项目不存在。", "NOT_FOUND");
@@ -478,9 +489,7 @@ export function updateProjectNode(
   description: string,
   owners: NodeOwnersInput,
 ) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目节点。", "FORBIDDEN");
   assert(name.trim().length >= 1 && name.trim().length <= 20, "节点名称需为 1-20 个字符。");
-  validateNodeOwners(owners);
   const node = one<{ id: number; project_id: number; project_name: string; old_name: string }>(
     `SELECT n.id, n.project_id, n.name AS old_name, p.name AS project_name
      FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
@@ -488,6 +497,7 @@ export function updateProjectNode(
   );
   assert(node, "项目节点不存在。", "NOT_FOUND");
   assertProjectConfigurationAccess(actor, node.project_id);
+  validateNodeOwners(owners);
   const duplicate = one<{ id: number }>(
     "SELECT id FROM project_nodes WHERE project_id = ? AND LOWER(name) = LOWER(?) AND id != ?",
     node.project_id,
@@ -525,7 +535,6 @@ export function updateProjectNode(
 }
 
 export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userId: number) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护节点审批人范围。", "FORBIDDEN");
   const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
     `SELECT n.id, n.name, n.project_id, p.name AS project_name
      FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
@@ -564,7 +573,6 @@ export function getNodeApproverRemovalBlocker(userId: number, primaryApproverId:
 }
 
 export function removeProjectNodeApprover(actor: SessionUser, assignmentId: number) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护节点审批人范围。", "FORBIDDEN");
   return transaction(() => {
     const assignment = one<{
       node_id: number;
@@ -635,7 +643,6 @@ export function getProjectDeletionBlockers(projectId: number) {
 }
 
 export function deleteProjectNode(actor: SessionUser, nodeId: number) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目节点。", "FORBIDDEN");
   const node = one<{ id: number; name: string; project_id: number; project_name: string }>(
     `SELECT n.id, n.name, n.project_id, p.name AS project_name
      FROM project_nodes n JOIN projects p ON p.id = n.project_id WHERE n.id = ?`,
@@ -654,7 +661,6 @@ export function deleteProjectNode(actor: SessionUser, nodeId: number) {
 }
 
 export function deleteProject(actor: SessionUser, projectId: number) {
-  assert(canManageConfig(actor), "只有软件经理或系统管理员可以维护项目。", "FORBIDDEN");
   const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
   assert(project, "项目不存在。", "NOT_FOUND");
   assertProjectConfigurationAccess(actor, projectId);

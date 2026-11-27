@@ -2,7 +2,6 @@ import "server-only";
 
 import { canManagePackageArea } from "./access";
 import { packageIdentity } from "./package-identity";
-import type { PersonOption } from "./queries";
 import type { getSettingsPackageReferences } from "./settings";
 import type { SessionUser } from "./types";
 
@@ -15,18 +14,6 @@ export function getNodeCandidateGuidance(actor: SessionUser, candidateCount: num
       : "绑定验证责任人和主审批人需由不同账号担任。请联系管理员启用其他账号。",
     href: actor.role === "ADMIN" ? "/settings/users" : undefined,
     actionLabel: "查看人员与角色",
-  };
-}
-
-export function getProjectManagerCandidateGuidance(actor: SessionUser, people: readonly PersonOption[]) {
-  if (people.some(({ role }) => role === "SOFTWARE_MANAGER")) return null;
-  return {
-    title: "没有启用的软件经理账号",
-    detail: actor.role === "ADMIN"
-      ? "项目须指定至少一位软件经理。请先启用相应账号，或为人员设置软件经理角色。"
-      : "项目须指定至少一位软件经理。请联系管理员启用相应账号或调整人员角色。",
-    href: actor.role === "ADMIN" ? "/settings/users" : undefined,
-    actionLabel: "配置人员角色",
   };
 }
 

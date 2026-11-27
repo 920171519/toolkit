@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { getReadableVersionIds } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -32,8 +33,9 @@ export default async function VersionsPage({ searchParams }: {
   const params = await searchParams;
   const project = requireWorkflowProject(user, params.project);
   const requested = readTraceListState(params);
-  const tabs = getTraceVersionTabs(requested.tabs, project?.id);
-  const { rows, total, page, pageCount } = getTraceVersionPage(requested, project?.id);
+  const readableIds = getReadableVersionIds(user);
+  const tabs = getTraceVersionTabs(requested.tabs, project?.id, readableIds);
+  const { rows, total, page, pageCount } = getTraceVersionPage(requested, project?.id, readableIds);
   const state = { ...requested, page, tabs: tabs.map((tab) => tab.id) };
   const filtered = Boolean(state.query || Object.keys(state.filters).length);
   const listParams = {

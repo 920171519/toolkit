@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { canAccessProjectPage } from "@/lib/access";
 import { getTransferPackageOptions } from "@/lib/queries";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
-import { requireWorkflowProject } from "@/lib/project-scope";
+import { requireReadablePackageProject } from "@/lib/project-scope";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { workflowHref } from "@/lib/workflow-links";
 import { TransferRequestForm } from "@/components/transfer-request-form";
@@ -16,9 +18,10 @@ export const metadata: Metadata = { title: "提交转测申请" };
 export default async function NewTransferRequestPage({ searchParams }: { searchParams: Promise<{ project?: string | string[]; package?: string | string[]; returnTo?: string | string[] }> }) {
   const user = await requireUser();
   const params = await searchParams;
-  const project = requireWorkflowProject(user, params.project);
+  const project = requireReadablePackageProject(user, params.project);
   const returnTo = safeOverviewReturnPath(params.returnTo);
   const packages = getTransferPackageOptions(user, project?.id);
+  if (project && !canAccessProjectPage(user, project.id) && packages.length === 0) notFound();
   const requestedId = typeof params.package === "string" && /^[1-9][0-9]*$/.test(params.package) && Number.isSafeInteger(Number(params.package)) ? Number(params.package) : undefined;
   const initialPackageId = packages.find((pkg) => pkg.id === requestedId)?.id;
   const guidance = !packages.length || (requestedId !== undefined && initialPackageId === undefined)

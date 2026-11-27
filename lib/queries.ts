@@ -1,7 +1,7 @@
 import "server-only";
 
 import { all, one } from "./db";
-import { getTransferAreaIds } from "./access";
+import { canEditPackageById, getManagedProjectIdsForUser, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, PackageStatus, Role } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
@@ -1150,6 +1150,65 @@ export type PackageDetailData = {
   >;
   audits: Array<{ id: number; action: string; detail: string; createdAt: string; actorName: string | null }>;
 };
+
+function restrictPackageSummary<T extends PackageSummary>(pkg: T, visibleVersions: Set<string>): T {
+  const visible = (version: string | null) => version !== null && visibleVersions.has(version) ? version : null;
+  const currentVersion = visible(pkg.currentVersion);
+  return {
+    ...pkg,
+    formalVersion: visible(pkg.formalVersion),
+    trialVersion: visible(pkg.trialVersion),
+    trialVersions: pkg.trialVersions.filter((version) => visibleVersions.has(version)),
+    currentVersion,
+    currentVersionId: currentVersion === null ? null : pkg.currentVersionId,
+    currentStatus: currentVersion === null ? null : pkg.currentStatus,
+    inTestVersion: visible(pkg.inTestVersion),
+    pendingTransferVersion: visible(pkg.pendingTransferVersion),
+  };
+}
+
+export function getReadablePackageOverviewRows(user: SessionUser, projectId?: number) {
+  const rows = getPackageOverviewRows(projectId);
+  const versionIds = getReadableVersionIds(user);
+  const packageIds = getReadablePackageIds(user, versionIds);
+  if (versionIds === null || packageIds === null) return rows;
+  const versions = new Map<number, Set<string>>();
+  for (const { packageId, version } of all<{ packageId: number; version: string }>(
+    `SELECT package_id AS packageId, version FROM package_versions WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(versionIds),
+  )) {
+    const labels = versions.get(packageId) ?? new Set<string>();
+    labels.add(version);
+    versions.set(packageId, labels);
+  }
+  const readablePackages = new Set(packageIds);
+  return rows.filter(({ id }) => readablePackages.has(id))
+    .map((row) => restrictPackageSummary(row, versions.get(row.id) ?? new Set<string>()));
+}
+
+export function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): PackageDetailData | null {
+  const versionIds = getReadableVersionIds(user);
+  const packageIds = getReadablePackageIds(user, versionIds);
+  if (packageIds !== null && !packageIds.includes(packageId)) return null;
+  const data = getPackageDetail(packageId, true, projectId);
+  if (!data || versionIds === null) return data;
+  const versions = data.versions.filter((version) => versionIds.includes(version.id));
+  const projectIds = getProjectWorkflowProjectIds(user, true);
+  const managed = getManagedProjectIdsForUser(user.id);
+  const readableBatches = new Set(all<{ id: number }>(
+    `SELECT id FROM integration_batches
+     WHERE id IN (SELECT value FROM json_each(?)) AND project_id IN (SELECT value FROM json_each(?))
+       AND (status != 'DRAFT' OR project_id IN (SELECT value FROM json_each(?)))`,
+    JSON.stringify(versions.flatMap((version) => version.batchId ?? [])), JSON.stringify(projectIds), JSON.stringify(managed),
+  ).map(({ id }) => id));
+  return {
+    ...data,
+    package: restrictPackageSummary(data.package, new Set(versions.map(({ version }) => version))),
+    versions: versions.map((version) => version.batchId === null || readableBatches.has(version.batchId) ? version : {
+      ...version, batchId: null, batchCode: null, batchStatus: null, batchConclusion: null,
+    }),
+    audits: canEditPackageById(user, packageId) ? data.audits : [],
+  };
+}
 
 export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
   const packages = projectId ? getPackageOverviewRows(projectId) : getPackagesOverview(includeInactive);

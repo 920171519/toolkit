@@ -152,15 +152,17 @@ function UsageList({ usages }: { usages: PackageDetailData["usages"] }) {
   );
 }
 
-export function PackageDrawer({ packageId, projectId, people, onClose, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
+export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = true, people, onClose, initialDetail = null, readOnly = false, initialPanel = "overview" }: {
   packageId: number;
   projectId?: number;
+  hasProjectWorkflowScope?: boolean;
   people: PersonOption[];
   onClose: () => void;
   initialDetail?: DrawerPayload | null;
   readOnly?: boolean;
   initialPanel?: DrawerPanel;
 }) {
+  const workflowProjectId = hasProjectWorkflowScope ? projectId : undefined;
   const router = useRouter();
   const [detail, setDetail] = useState<DrawerPayload | null>(initialDetail);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -339,17 +341,17 @@ export function PackageDrawer({ packageId, projectId, people, onClose, initialDe
                 <div className={styles.sectionHeading}>
                   <h3>最近版本</h3>
                 </div>
-                <VersionRows versions={detail.versions.slice(0, 3)} projectId={projectId} />
+                <VersionRows versions={detail.versions.slice(0, 3)} projectId={workflowProjectId} />
               </section>}
             </>}
-            {panel === "versions" && <VersionHistory versions={detail.versions} packageId={packageId} projectId={projectId} />}
+            {panel === "versions" && <VersionHistory versions={detail.versions} packageId={packageId} projectId={workflowProjectId} />}
             {panel === "usage" && <UsageList usages={detail.usages} />}
           </div>
         )}
       </div>
 
       {!editing && detail && !readOnly && <footer className={styles.footer}>
-        <Link href={workflowHref("/submissions/transfer", projectId, { package: packageId })} prefetch={false} className="button button-primary">提交转测申请 <ArrowUpRight size={15} aria-hidden="true" /></Link>
+        <Link href={workflowHref("/submissions/transfer", workflowProjectId, { package: packageId })} prefetch={false} className="button button-primary">提交转测申请 <ArrowUpRight size={15} aria-hidden="true" /></Link>
       </footer>}
     </dialog>
   );

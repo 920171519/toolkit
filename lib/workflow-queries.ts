@@ -1,5 +1,5 @@
 import { all, one } from "./db";
-import { getIntegrationManagedProjectIds } from "./access";
+import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
 import type { BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
@@ -38,12 +38,8 @@ export function getManagedProjectIds(user: SessionUser): number[] {
   ).map((row) => row.id);
 }
 
-export function getWorkflowProjectScope(user: SessionUser): number[] | null {
-  if (user.role === "ADMIN") return null;
-  if (user.role === "SOFTWARE_MANAGER") return getManagedProjectIds(user);
-  const integrationProjects = getIntegrationManagedProjectIds(user.id);
-  if (user.role === "INTEGRATION_TESTER" || integrationProjects.length > 0) return integrationProjects;
-  return null;
+export function getWorkflowProjectScope(user: SessionUser, includeArchived = false): number[] | null {
+  return getProjectWorkflowProjectIds(user, includeArchived);
 }
 
 function filterByProject<T extends { projectId: number | null }>(rows: T[], projectIds: number[] | null): T[] {
@@ -793,6 +789,33 @@ export type TrialDetail = {
   requirements: BindingRequirementRow[];
 };
 
+function bindingFlowCounts(flows: BindingFlowRow[]) {
+  const approvedBarcodes = new Set<string>();
+  const submittedBarcodes = new Set<string>();
+  const passedBarcodes = new Set<string>();
+  let unreviewedApprovedCount = 0;
+  let failedBarcodeCount = 0;
+  for (const flow of flows) {
+    if (flow.status !== "PENDING" && flow.status !== "APPROVED") continue;
+    for (const { barcode, result } of flow.barcodeResults) {
+      submittedBarcodes.add(barcode);
+      if (result === "FAIL") failedBarcodeCount += 1;
+      if (flow.status !== "APPROVED") continue;
+      approvedBarcodes.add(barcode);
+      if (result === "UNREVIEWED") unreviewedApprovedCount += 1;
+      if (result === "PASS") passedBarcodes.add(barcode);
+    }
+  }
+  return {
+    approvedCount: approvedBarcodes.size,
+    passedBarcodeCount: passedBarcodes.size,
+    unreviewedApprovedCount,
+    failedBarcodeCount,
+    submittedCount: submittedBarcodes.size,
+    pendingCount: flows.filter((flow) => flow.status === "PENDING").length,
+  };
+}
+
 export function getTrialDetail(requestId: number): TrialDetail | null {
   const request = one<TrialDetail["request"]>(
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
@@ -890,38 +913,28 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
       );
       if (approver) approverOptions.push(approver);
     }
-    const approvedBarcodes = new Set<string>();
-    const submittedBarcodes = new Set<string>();
-    const passedBarcodes = new Set<string>();
-    let unreviewedApprovedCount = 0;
-    let failedBarcodeCount = 0;
-    for (const flow of flows) {
-      if (flow.status === "PENDING" || flow.status === "APPROVED") {
-        for (const { barcode, result } of flow.barcodeResults) {
-          submittedBarcodes.add(barcode);
-          if (result === "FAIL") failedBarcodeCount += 1;
-          if (flow.status !== "APPROVED") continue;
-          approvedBarcodes.add(barcode);
-          if (result === "UNREVIEWED") unreviewedApprovedCount += 1;
-          if (result === "PASS") passedBarcodes.add(barcode);
-        }
-      }
-    }
     return {
       ...requirement,
-      approvedCount: approvedBarcodes.size,
-      passedBarcodeCount: passedBarcodes.size,
-      unreviewedApprovedCount,
-      failedBarcodeCount,
+      ...bindingFlowCounts(flows),
       barcodeEvidenceKey: bindingBarcodeEvidenceKey(barcodeRevision, flows),
       legacyConfirmation: requirement.status === "PASSED" && barcodeConfirmation === 0,
-      submittedCount: submittedBarcodes.size,
-      pendingCount: flows.filter((flow) => flow.status === "PENDING").length,
       approverOptions,
       flows,
     };
   });
   return { request, requirements };
+}
+
+export function getReadableTrialDetail(user: SessionUser, requestId: number): TrialDetail | null {
+  const detail = getTrialDetail(requestId);
+  if (!detail) return null;
+  if (canAccessProjectPage(user, detail.request.projectId) || detail.request.packageOwnerId === user.id) return detail;
+  const requirements = detail.requirements.flatMap((requirement) => {
+    if (requirement.bindingOwnerId === user.id && requirement.pushedAt !== null) return [requirement];
+    const flows = requirement.flows.filter((flow) => flow.approverId === user.id || flow.submittedById === user.id);
+    return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
+  });
+  return requirements.length ? { ...detail, requirements } : null;
 }
 
 export type PendingFormalVersion = {
@@ -1245,7 +1258,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     });
   }
 
-  const approvals = filterByProject(all<{
+  const approvals = all<{
     id: number;
     flowNo: string;
     packageName: string;
@@ -1275,7 +1288,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     user.role === "ADMIN" ? 1 : 0,
     user.id,
     user.id,
-  ), getWorkflowProjectScope(user));
+  );
   for (const approval of approvals) {
     tasks.push({
       key: `approval-${approval.id}`,
@@ -1286,7 +1299,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     });
   }
 
-  if (user.role === "ADMIN" || user.role === "SOFTWARE_MANAGER") {
+  if (user.role === "ADMIN" || managedProjectIds.length > 0) {
     const pendingGroups = getPendingTransferGroups(managerScope);
     for (const group of pendingGroups) {
       tasks.push({
@@ -1541,7 +1554,8 @@ export type VersionTrace = {
   details: TrialDetail[];
 };
 
-export function getVersionTrace(versionId: number, projectId?: number): VersionTrace | null {
+export function getVersionTrace(user: SessionUser, versionId: number, projectId?: number, readableIds = getReadableVersionIds(user)): VersionTrace | null {
+  if (readableIds !== null && !readableIds.includes(versionId)) return null;
   const version = one<VersionTrace["version"]>(
     `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version,
             pv.status, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
@@ -1599,10 +1613,30 @@ export function getVersionTrace(versionId: number, projectId?: number): VersionT
     );
     if (!standalone) return null;
   }
-  const details = requests
-    .map((request) => getTrialDetail(request.requestId))
+  const readableProjects = getProjectWorkflowProjectIds(user, true);
+  const managedProjects = getManagedProjectIdsForUser(user.id);
+  const hasProjectEvidence = (id: number) => readableProjects === null || readableProjects.includes(id);
+  const hasBatchEvidence = (id: number, status: string | null) => status === "DRAFT"
+    ? readableProjects === null || managedProjects.includes(id)
+    : hasProjectEvidence(id);
+  const readableBatches = batches.filter((batch) => hasBatchEvidence(batch.projectId, batch.status));
+  if (projectId && requests.length === 0 && readableBatches.length === 0 && batches.length > 0) return null;
+  const narrowRequests = readableProjects === null ? [] : getNarrowVersionRequestIds(user, versionId);
+  const safeRequests = requests.filter(({ projectId, requestId }) => hasProjectEvidence(projectId) || narrowRequests.includes(requestId));
+  if (projectId && requests.length > 0 && safeRequests.length === 0 && readableBatches.length === 0) return null;
+  const projectedRequests = safeRequests.map((request) => hasBatchEvidence(request.projectId, request.batchStatus) ? request : {
+    ...request,
+    batchId: null,
+    batchCode: null,
+    batchStatus: null,
+    batchConclusion: null,
+    batchTestSummary: null,
+    batchReportUrl: null,
+  });
+  const details = safeRequests
+    .map((request) => getReadableTrialDetail(user, request.requestId))
     .filter((detail): detail is TrialDetail => detail !== null);
-  return { version, requests, batches, details };
+  return { version, requests: projectedRequests, batches: readableBatches, details };
 }
 
 export type ProjectVersionRow = {
@@ -1679,10 +1713,14 @@ function traceProjectScope(projectId?: number) {
   };
 }
 
-export function getTraceVersionPage(state: TraceListState, projectId?: number) {
+export function getTraceVersionPage(state: TraceListState, projectId?: number, readableIds: number[] | null = null) {
   const scope = traceProjectScope(projectId);
   const conditions = [scope.condition];
   const params: Array<string | number> = [...scope.values];
+  if (readableIds !== null) {
+    conditions.push("pv.id IN (SELECT value FROM json_each(?))");
+    params.push(JSON.stringify(readableIds));
+  }
   const columns = state.filters;
   const packageExact = columns.f_package_mode === "exact";
   const filters: Array<[string, string | number | undefined]> = [
@@ -1726,13 +1764,14 @@ export function getTraceVersionPage(state: TraceListState, projectId?: number) {
   return { rows, total, page, pageCount };
 }
 
-export function getTraceVersionTabs(ids: number[], projectId?: number): TraceVersionRow[] {
-  if (ids.length === 0) return [];
+export function getTraceVersionTabs(ids: number[], projectId?: number, readableIds: number[] | null = null): TraceVersionRow[] {
+  const allowed = readableIds === null ? ids : ids.filter((id) => readableIds.includes(id));
+  if (allowed.length === 0) return [];
   const scope = traceProjectScope(projectId);
   const rows = all<TraceVersionRow>(
     `${traceVersionFields} ${traceVersionsFrom}
-     WHERE ${scope.condition} AND pv.id IN (${ids.map(() => "?").join(", ")})`,
-    ...scope.values, ...ids,
+     WHERE ${scope.condition} AND pv.id IN (${allowed.map(() => "?").join(", ")})`,
+    ...scope.values, ...allowed,
   );
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   return ids.flatMap((id) => rowsById.get(id) ?? []);
