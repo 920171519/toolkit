@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { canEditPackageById } from "@/lib/access";
-import { getReadablePackageDetail } from "@/lib/queries";
+import { getPackageDrawerData } from "@/lib/package-drawer-data";
 import { getReadablePackageProject } from "@/lib/project-scope";
-import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -27,19 +25,9 @@ export async function GET(
   if (scope.length > 0 && !project) {
     return NextResponse.json({ error: "项目不存在或不可查看。" }, { status: 404 });
   }
-  const data = getReadablePackageDetail(user, packageId, project?.id);
+  const data = getPackageDrawerData(user, packageId, project?.id);
   if (!data) {
     return NextResponse.json({ error: "软件包不存在。" }, { status: 404 });
   }
-  const canEdit = canEditPackageById(user, packageId);
-  return NextResponse.json(
-    {
-      ...data,
-      canEdit,
-      deactivationBlockers: canEdit ? getPackageDeactivationBlockingVersions(packageId) : [],
-    },
-    {
-      headers: { "Cache-Control": "no-store" },
-    },
-  );
+  return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 }

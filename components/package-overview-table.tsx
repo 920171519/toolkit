@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Search } from "lucide-react";
 import type { PackageOverviewRow, PersonOption } from "@/lib/queries";
+import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { matchesDirectorySearch } from "@/lib/settings-directory";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
@@ -13,7 +14,7 @@ import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
-import { PackageDrawer, type DrawerPayload } from "@/components/package-drawer";
+import { PackageDrawer } from "@/components/package-drawer";
 import identityStyles from "./package-identity.module.css";
 
 const path = "/packages";
@@ -31,7 +32,7 @@ export function PackageOverviewTable({
 }: {
   packages: PackageOverviewRow[];
   people: PersonOption[];
-  initialDetail?: DrawerPayload | null;
+  initialDetail?: PackageDrawerData | null;
   selectedProjectId?: number;
   hasProjectWorkflowScope?: boolean;
 }) {

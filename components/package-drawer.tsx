@@ -4,7 +4,8 @@ import { useCallback, useEffect, useId, useRef, useState, useTransition, type Ke
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, LoaderCircle, Pencil, Search, X } from "lucide-react";
-import type { PackageDetailData, PersonOption } from "@/lib/queries";
+import type { PersonOption } from "@/lib/queries";
+import type { PackageDrawerData } from "@/lib/package-drawer-data";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
@@ -12,12 +13,11 @@ import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
-import { SettingsPackageActivation, type PackageDeactivationBlockers } from "@/components/settings-package-activation";
+import { SettingsPackageActivation } from "@/components/settings-package-activation";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";
 import styles from "./package-drawer.module.css";
 
-export type DrawerPayload = PackageDetailData & { canEdit: boolean; deactivationBlockers: PackageDeactivationBlockers };
 
 const panels = [
   { id: "overview", label: "概览" },
@@ -26,7 +26,7 @@ const panels = [
 ] as const;
 
 type DrawerPanel = typeof panels[number]["id"];
-type PackageVersion = PackageDetailData["versions"][number];
+type PackageVersion = PackageDrawerData["versions"][number];
 
 const listPageSize = 10;
 const initialActionState: ActionState = {};
@@ -134,7 +134,7 @@ function VersionHistory({ versions, packageId, projectId }: { versions: PackageV
   );
 }
 
-function UsageList({ usages }: { usages: PackageDetailData["usages"] }) {
+function UsageList({ usages }: { usages: PackageDrawerData["usages"] }) {
   const filter = useDrawerFilter(usages, (usage) => [usage.projectName, usage.projectCode, ...usage.nodes.map((node) => node.nodeName)].join(" "));
   return (
     <>
@@ -158,13 +158,13 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
   hasProjectWorkflowScope?: boolean;
   people: PersonOption[];
   onClose: () => void;
-  initialDetail?: DrawerPayload | null;
+  initialDetail?: PackageDrawerData | null;
   readOnly?: boolean;
   initialPanel?: DrawerPanel;
 }) {
   const workflowProjectId = hasProjectWorkflowScope ? projectId : undefined;
   const router = useRouter();
-  const [detail, setDetail] = useState<DrawerPayload | null>(initialDetail);
+  const [detail, setDetail] = useState<PackageDrawerData | null>(initialDetail);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [panel, setPanel] = useState<DrawerPanel>(initialPanel);
   const [editing, setEditing] = useState(false);
@@ -182,7 +182,7 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
         credentials: "same-origin",
         cache: "no-store",
       });
-      const payload = (await response.json()) as DrawerPayload & { error?: string };
+      const payload = (await response.json()) as PackageDrawerData & { error?: string };
       if (!response.ok) throw new Error(payload.error || "软件包详情加载失败。");
       setDetail(payload);
       return true;

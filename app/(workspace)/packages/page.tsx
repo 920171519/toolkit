@@ -3,15 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { getPackageDrawerData } from "@/lib/package-drawer-data";
 import {
-  getReadablePackageDetail,
   getReadablePackageOverviewRows,
   getPeople,
   getTransferPackageOptions,
   parseFlash,
 } from "@/lib/queries";
-import { canAccessProjectPage, canEditPackageById, hasAreaLeadership } from "@/lib/access";
-import { getPackageDeactivationBlockingVersions } from "@/lib/settings";
+import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -38,8 +37,7 @@ export default async function PackagesPage({
   const people = user.role === "ADMIN" || hasAreaLeadership(user.id) ? getPeople() : [];
   const openIdParam = Array.isArray(params.open) ? params.open[0] : params.open;
   const initialOpenId = openIdParam && Number.isInteger(Number(openIdParam)) ? Number(openIdParam) : undefined;
-  const initialDetail = initialOpenId ? getReadablePackageDetail(user, initialOpenId, selectedProject?.id) : null;
-  const initialCanEdit = initialDetail ? canEditPackageById(user, initialDetail.package.id) : false;
+  const initialDetail = initialOpenId ? getPackageDrawerData(user, initialOpenId, selectedProject?.id) : null;
   const canRequest = getTransferPackageOptions(user, selectedProject?.id).length > 0;
   const transferHref = workflowHref("/submissions/transfer", workflowProjectId);
 
@@ -67,9 +65,7 @@ export default async function PackagesPage({
         people={people}
         selectedProjectId={selectedProject?.id}
         hasProjectWorkflowScope={workflowProjectId !== undefined}
-        initialDetail={initialDetail ? { ...initialDetail, canEdit: initialCanEdit,
-          deactivationBlockers: initialCanEdit ? getPackageDeactivationBlockingVersions(initialDetail.package.id) : [],
-        } : null}
+        initialDetail={initialDetail}
       />
     </>
   );
