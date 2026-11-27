@@ -718,6 +718,83 @@ function bindingFlowCounts(flows: BindingFlowRow[]) {
   };
 }
 
+type BindingApproverOption = BindingRequirementRow["approverOptions"][number];
+
+function getBindingFlowsByRequirement(requirementIdsJson: string) {
+  const flowRows = all<Omit<BindingFlowRow, "barcodes" | "barcodeResults">>(
+    `SELECT f.id, f.flow_no AS flowNo, f.requirement_id AS requirementId, f.status,
+            f.web_url AS webUrl, su.name AS submittedByName, f.submitted_by AS submittedById, f.submitted_at AS submittedAt,
+            ap.name AS approverName, f.approver_id AS approverId, rv.name AS reviewedByName, f.reviewed_at AS reviewedAt,
+            f.review_comment AS reviewComment, f.cancelled_at AS cancelledAt, f.cancel_reason AS cancelReason
+     FROM binding_flows f
+     LEFT JOIN users su ON su.id = f.submitted_by
+     LEFT JOIN users ap ON ap.id = f.approver_id
+     LEFT JOIN users rv ON rv.id = f.reviewed_by
+     WHERE f.requirement_id IN (SELECT value FROM json_each(?))
+     ORDER BY f.submitted_at DESC, f.id DESC`,
+    requirementIdsJson,
+  );
+  const barcodeRows = flowRows.length === 0 ? [] : all<BindingBarcodeRow & { flowId: number }>(
+    `SELECT b.flow_id AS flowId, b.id, b.barcode, b.validation_result AS result,
+            b.failure_reason AS failureReason, b.validated_at AS validatedAt, validator.name AS validatedByName,
+            b.failure_reason_at AS failureReasonAt, recorder.name AS failureReasonByName
+     FROM binding_flow_barcodes b
+     LEFT JOIN users validator ON validator.id = b.validated_by
+     LEFT JOIN users recorder ON recorder.id = b.failure_reason_by
+     WHERE b.flow_id IN (SELECT value FROM json_each(?)) ORDER BY b.id`,
+    JSON.stringify(flowRows.map(({ id }) => id)),
+  );
+  const barcodesByFlow = new Map<number, BindingBarcodeRow[]>();
+  for (const { flowId, ...barcode } of barcodeRows) {
+    const group = barcodesByFlow.get(flowId) ?? [];
+    group.push(barcode);
+    barcodesByFlow.set(flowId, group);
+  }
+  const flows: BindingFlowRow[] = flowRows.map((flow) => {
+    const barcodeResults = barcodesByFlow.get(flow.id) ?? [];
+    return { ...flow, barcodeResults, barcodes: barcodeResults.map(({ barcode }) => barcode) };
+  });
+  return Map.groupBy(flows, ({ requirementId }) => requirementId);
+}
+
+function getBindingApproversByRequirement(
+  requirementIdsJson: string,
+  requirements: ReadonlyArray<Pick<BindingRequirementRow, "id" | "approverId" | "approverName">>,
+) {
+  const snapshots = all<BindingApproverOption & { requirementId: number }>(
+    `SELECT bra.requirement_id AS requirementId, bra.user_id AS userId, u.name AS userName,
+            u.employee_id AS userEmployeeId, u.is_active AS isActive
+     FROM binding_requirement_approvers bra JOIN users u ON u.id = bra.user_id
+     WHERE bra.requirement_id IN (SELECT value FROM json_each(?)) ORDER BY bra.id`,
+    requirementIdsJson,
+  );
+  const approversByRequirement = new Map<number, BindingApproverOption[]>();
+  for (const { requirementId, ...option } of snapshots) {
+    const group = approversByRequirement.get(requirementId) ?? [];
+    group.push(option);
+    approversByRequirement.set(requirementId, group);
+  }
+  const legacyApprovers = new Map<number, number>();
+  for (const { id, approverId, approverName } of requirements) {
+    if (!approversByRequirement.has(id) && approverId && approverName) {
+      legacyApprovers.set(id, approverId);
+    }
+  }
+  if (legacyApprovers.size > 0) {
+    const users = all<BindingApproverOption>(
+      `SELECT id AS userId, name AS userName, employee_id AS userEmployeeId, is_active AS isActive
+       FROM users WHERE id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify([...new Set(legacyApprovers.values())]),
+    );
+    const usersById = new Map(users.map((user) => [user.userId, user]));
+    for (const [requirementId, userId] of legacyApprovers) {
+      const user = usersById.get(userId);
+      if (user) approversByRequirement.set(requirementId, [{ ...user }]);
+    }
+  }
+  return approversByRequirement;
+}
+
 export function getTrialDetail(requestId: number): TrialDetail | null {
   const request = one<TrialDetail["request"]>(
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
@@ -746,7 +823,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     requestId,
   );
   if (!request) return null;
-  const requirements = all<Omit<BindingRequirementRow, "flows" | "approvedCount" | "submittedCount" | "pendingCount"
+  const requirementRows = all<Omit<BindingRequirementRow, "flows" | "approverOptions" | "approvedCount" | "submittedCount" | "pendingCount"
     | "passedBarcodeCount" | "unreviewedApprovedCount" | "failedBarcodeCount" | "barcodeEvidenceKey" | "legacyConfirmation">
     & { barcodeRevision: number; barcodeConfirmation: number }>(
     `SELECT br.id, br.project_id AS projectId, pr.name AS projectName, br.node_id AS nodeId,
@@ -767,52 +844,14 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
      LEFT JOIN users cu ON cu.id = br.confirmed_by
      WHERE br.request_id = ? ORDER BY n.sort_order`,
     requestId,
-  ).map(({ barcodeRevision, barcodeConfirmation, ...requirement }) => {
-    const flowRows = all<Omit<BindingFlowRow, "barcodes" | "barcodeResults">>(
-      `SELECT f.id, f.flow_no AS flowNo, f.requirement_id AS requirementId, f.status,
-              f.web_url AS webUrl, su.name AS submittedByName, f.submitted_by AS submittedById, f.submitted_at AS submittedAt,
-              ap.name AS approverName, f.approver_id AS approverId, rv.name AS reviewedByName, f.reviewed_at AS reviewedAt,
-              f.review_comment AS reviewComment, f.cancelled_at AS cancelledAt, f.cancel_reason AS cancelReason
-       FROM binding_flows f
-       LEFT JOIN users su ON su.id = f.submitted_by
-       LEFT JOIN users ap ON ap.id = f.approver_id
-       LEFT JOIN users rv ON rv.id = f.reviewed_by
-       WHERE f.requirement_id = ? ORDER BY f.submitted_at DESC, f.id DESC`,
-      requirement.id,
-    );
-    const barcodeRows = all<BindingBarcodeRow & { flowId: number }>(
-      `SELECT b.flow_id AS flowId, b.id, b.barcode, b.validation_result AS result,
-              b.failure_reason AS failureReason, b.validated_at AS validatedAt, validator.name AS validatedByName,
-              b.failure_reason_at AS failureReasonAt, recorder.name AS failureReasonByName
-       FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-       LEFT JOIN users validator ON validator.id = b.validated_by
-       LEFT JOIN users recorder ON recorder.id = b.failure_reason_by
-       WHERE f.requirement_id = ? ORDER BY b.id`,
-      requirement.id,
-    );
-    const barcodeMap = new Map<number, BindingBarcodeRow[]>();
-    for (const { flowId, ...row } of barcodeRows) {
-      const list = barcodeMap.get(flowId) ?? [];
-      list.push(row);
-      barcodeMap.set(flowId, list);
-    }
-    const flows: BindingFlowRow[] = flowRows.map((flow) => {
-      const barcodeResults = barcodeMap.get(flow.id) ?? [];
-      return { ...flow, barcodeResults, barcodes: barcodeResults.map(({ barcode }) => barcode) };
-    });
-    const approverOptions = all<BindingRequirementRow["approverOptions"][number]>(
-      `SELECT bra.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId, u.is_active AS isActive
-       FROM binding_requirement_approvers bra JOIN users u ON u.id = bra.user_id
-       WHERE bra.requirement_id = ? ORDER BY bra.id`,
-      requirement.id,
-    );
-    if (approverOptions.length === 0 && requirement.approverId && requirement.approverName) {
-      const approver = one<BindingRequirementRow["approverOptions"][number]>(
-        "SELECT id AS userId, name AS userName, employee_id AS userEmployeeId, is_active AS isActive FROM users WHERE id = ?",
-        requirement.approverId,
-      );
-      if (approver) approverOptions.push(approver);
-    }
+  );
+  if (requirementRows.length === 0) return { request, requirements: [] };
+  const requirementIds = JSON.stringify(requirementRows.map(({ id }) => id));
+  const flowsByRequirement = getBindingFlowsByRequirement(requirementIds);
+  const approversByRequirement = getBindingApproversByRequirement(requirementIds, requirementRows);
+  const requirements = requirementRows.map(({ barcodeRevision, barcodeConfirmation, ...requirement }) => {
+    const flows = flowsByRequirement.get(requirement.id) ?? [];
+    const approverOptions = approversByRequirement.get(requirement.id) ?? [];
     return {
       ...requirement,
       ...bindingFlowCounts(flows),
