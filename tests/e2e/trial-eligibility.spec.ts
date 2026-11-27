@@ -171,6 +171,48 @@ test("共享版本等最后一个在行项目通过后自动进入待发布试�
   await expectTrialState(page, sample, "待发试制");
 });
 
+test("工作台合并共享待发试制版本，按管理范围保留项目名称和顺序", async ({ page, trialData }) => {
+  const { db } = trialData;
+  const shared = trialData.create(38, [1, 3]);
+  const risk = trialData.create(39, [1]);
+  const waiting = trialData.create(40, [1, 3]);
+  const manager = db.prepare("SELECT id FROM users WHERE employee_id = 'MGR001'").get() as { id: number };
+  const dates = db.prepare("UPDATE package_versions SET submitted_at = ? WHERE id = ?");
+  dates.run("2030-01-02T00:00:00.000Z", shared.versionId);
+  dates.run("2030-01-01T00:00:00.000Z", risk.versionId);
+  dates.run("2030-01-03T00:00:00.000Z", waiting.versionId);
+  const pass = db.prepare("UPDATE version_transfer_requests SET status = 'PASSED', integration_status = 'PASSED' WHERE package_version_id = ? AND project_id = ?");
+  const finish = db.prepare("UPDATE integration_batches SET status = 'COMPLETED', conclusion = 'PASS' WHERE id = ?");
+  pass.run(shared.versionId, 1);
+  pass.run(shared.versionId, 3);
+  pass.run(waiting.versionId, 1);
+  for (const batch of [...shared.batches, waiting.batches[0]]) finish.run(batch);
+  db.prepare(
+    `INSERT INTO trial_risk_admissions (package_version_id, request_id, project_id, project_name, stage, reason, created_at)
+     SELECT r.package_version_id, r.id, r.project_id, pr.name, 'IN_TEST', '工作台待发试制回归', datetime('now')
+     FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id WHERE r.package_version_id = ?`,
+  ).run(risk.versionId);
+
+  const task = page.getByRole("region", { name: "试制与转正", exact: true }).getByRole("link", { name: /个版本待发试制/ });
+  const expectReadyTask = async (project: string) => {
+    await expect(task.locator("strong")).toHaveText("4 个版本待发试制（1 个风险试制）");
+    await expect(task.locator("strong + span")).toHaveText(
+      `${project} · ${shared.code} ${shared.version}、星云 N1 · ${risk.code} ${risk.version}、星云 N1 · 1001OTA 1.6.2、星云 N1 · 1001OTA 1.6.0`,
+    );
+  };
+
+  await login(page, "MGR001");
+  await expectReadyTask("星云 N1");
+  db.prepare("INSERT INTO project_software_managers (project_id, user_id, created_at) VALUES (3, ?, datetime('now'))").run(manager.id);
+  try {
+    await page.reload();
+    await expectReadyTask("磐石 T3");
+    await expect(task).toHaveAttribute("href", "/trial");
+  } finally {
+    db.prepare("DELETE FROM project_software_managers WHERE project_id = 3 AND user_id = ?").run(manager.id);
+  }
+});
+
 test("共享试制资格变更后旧表单不能发布，重新核对后只覆盖当前使用项目", async ({ page, trialData }) => {
   const sample = trialData.create(35, [1, 3]);
   await submitPassingConclusion(page, sample.batches[0], "TEST001");

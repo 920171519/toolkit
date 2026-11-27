@@ -19,7 +19,7 @@ import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
-import { getTrialReadyVersions } from "./trial-eligibility";
+import { getWorkbenchTrialReadyRows } from "./trial-eligibility";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
 import { EFFECTIVE_INTEGRATION_STATUS_SQL, getPreviousBatchVersions, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, PENDING_BATCH_REQUEST_SQL } from "./transfer-requests";
 
@@ -1469,7 +1469,8 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
         category: "test",
       });
     }
-    const ready = Array.from(new Map(getTrialReadyVersions(managerScope).map((item) => [item.versionId, item])).values());
+    // A shared version stays in its first queue position and displays its last matching project.
+    const ready = Array.from(new Map(getWorkbenchTrialReadyRows(managerScope).map((item) => [item.versionId, item])).values());
     if (ready.length > 0) {
       const riskCount = ready.filter((version) => version.riskProjectCount > 0).length;
       tasks.push({

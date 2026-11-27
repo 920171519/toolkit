@@ -196,6 +196,8 @@ const trialReadyFrom = `FROM trial_eligibility q
   JOIN packages p ON p.id = pv.package_id
   JOIN projects pr ON pr.id = e.projectId`;
 const trialReadyCondition = "q.releaseMode IS NOT NULL";
+const trialReadyProjectScope = "AND pr.id IN (SELECT value FROM json_each(?))";
+const trialReadyOrder = "ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC";
 
 export function getProjectTrialReadyCount(projectId: number): number {
   // Limit candidate versions while keeping every active use in the eligibility check.
@@ -215,7 +217,7 @@ export function getTrialReadyVersions(
   if (projectIds?.length === 0) return [];
   const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
   const versionScope = options.versionId === undefined ? "" : "AND id = ?";
-  const projectsScope = projectIds === null ? "" : "AND pr.id IN (SELECT value FROM json_each(?))";
+  const projectsScope = projectIds === null ? "" : trialReadyProjectScope;
   return all<TrialReadyVersion>(
     `WITH ${trialEligibilityCtes(`${requestScope} ${versionScope}`)}
      SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
@@ -235,11 +237,29 @@ export function getTrialReadyVersions(
      LEFT JOIN integration_batches b ON b.id = e.batchId
      WHERE ${trialReadyCondition}
        ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectsScope}
-     ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
+     ${trialReadyOrder}`,
     ...(options.requestId === undefined ? [] : [options.requestId]),
     ...(options.versionId === undefined ? [] : [options.versionId]),
     ...(options.requestId === undefined ? [] : [options.requestId]),
     ...(projectIds === null ? [] : [JSON.stringify(projectIds)]),
+  );
+}
+
+export function getWorkbenchTrialReadyRows(projectIds: number[] | null) {
+  if (projectIds?.length === 0) return [];
+  const projects = projectIds === null ? null : JSON.stringify(projectIds);
+  // Select candidates used by managed projects, then check every active use for each candidate.
+  const versionScope = projects === null ? "" : `AND package_id IN (
+    SELECT package_id FROM package_usages WHERE project_id IN (SELECT value FROM json_each(?))
+  )`;
+  return all<Pick<TrialReadyVersion, "versionId" | "projectName" | "packageName" | "packageCode" | "version" | "riskProjectCount">>(
+    `WITH ${trialEligibilityCtes(versionScope)}
+     SELECT pv.id AS versionId, pr.name AS projectName, p.name AS packageName, p.code AS packageCode,
+            pv.version, q.riskProjectCount
+     ${trialReadyFrom}
+     WHERE ${trialReadyCondition} ${projects === null ? "" : trialReadyProjectScope}
+     ${trialReadyOrder}`,
+    ...(projects === null ? [] : [projects, projects]),
   );
 }
 
