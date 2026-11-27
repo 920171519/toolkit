@@ -10,7 +10,7 @@ import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-d
 import { getProjectOptionsWithNodes } from "@/lib/project-queries";
 import { getPackageConfiguration, getPeople, getResponsibilityAreaOptions, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
-import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
+import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings-queries";
 import { ActionForm } from "@/components/action-form";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";

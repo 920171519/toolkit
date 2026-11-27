@@ -10,7 +10,7 @@ import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { addProjectNodeAction, deleteProjectAction, saveProjectAction } from "@/lib/actions/settings";
 import { directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
-import { getProjectDeletionBlockers } from "@/lib/settings";
+import { getProjectDeletionBlockers } from "@/lib/settings-queries";
 import { getNodeCandidateGuidance, packageReferenceGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";

@@ -70,6 +70,12 @@ for (const file of files.sort()) {
         `${name} imports the workflow mutation module directly. Use actions for writes and domain modules for reads.`,
       );
     }
+    if (dependency === "lib/settings.ts" && name !== "lib/actions/settings.ts"
+      && (isEntrypoint || name === "lib/package-drawer-data.ts")) {
+      dependencyBoundaryErrors.push(
+        `${name} imports the settings mutation module directly. Use settings actions for writes and settings queries for reads.`,
+      );
+    }
     if (name === "lib/workflow.ts" && dependency === "lib/workflow-queries.ts") {
       dependencyBoundaryErrors.push(
         "lib/workflow.ts depends on a page query. Read transaction facts from their owning domain module.",

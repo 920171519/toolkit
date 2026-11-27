@@ -7,7 +7,7 @@ import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { getAdminUsers, parseFlash } from "@/lib/queries";
 import { ROLE_META, ROLES } from "@/lib/constants";
 import { saveUserProfileAction, setUserActiveAction, updateUserRoleAction } from "@/lib/actions/settings";
-import { getSettingsPackageReferences } from "@/lib/settings";
+import { getSettingsPackageReferences } from "@/lib/settings-queries";
 import { packageReferenceGuidance } from "@/lib/settings-guidance";
 import { ActionForm } from "@/components/action-form";
 import { GuidanceDialog } from "@/components/guidance-dialog";

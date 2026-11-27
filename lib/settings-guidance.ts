@@ -2,7 +2,7 @@ import "server-only";
 
 import { canManagePackageArea } from "./access";
 import { packageIdentity } from "./package-identity";
-import type { getSettingsPackageReferences } from "./settings";
+import type { getSettingsPackageReferences } from "./settings-queries";
 import type { SessionUser } from "./types";
 
 export function getNodeCandidateGuidance(actor: SessionUser, candidateCount: number) {

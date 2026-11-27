@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
-import type { getPackageDeactivationBlockingVersions } from "@/lib/settings";
+import type { getPackageDeactivationBlockingVersions } from "@/lib/settings-queries";
 import { GuidanceDialog } from "./guidance-dialog";
 
 export type PackageDeactivationBlockers = ReturnType<typeof getPackageDeactivationBlockingVersions>;

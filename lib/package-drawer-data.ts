@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getReadablePackageDetail } from "./queries";
-import { getPackageDeactivationBlockingVersions } from "./settings";
+import { getPackageDeactivationBlockingVersions } from "./settings-queries";
 import type { SessionUser } from "./types";
 
 export function getPackageDrawerData(user: SessionUser, packageId: number, projectId?: number) {
