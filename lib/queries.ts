@@ -1,7 +1,7 @@
 import "server-only";
 
 import { all, one } from "./db";
-import { canEditPackageResponsibility, getManagedProjectIdsForUser, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
+import { canEditPackageResponsibility, getManagedProjectScope, getProjectWorkflowProjectIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, Role } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
@@ -519,7 +519,7 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
   if (versionIds === null) return { ...data, canEdit };
   const versions = data.versions.filter((version) => versionIds.includes(version.id));
   const projectIds = getProjectWorkflowProjectIds(user, true);
-  const managed = getManagedProjectIdsForUser(user.id);
+  const managed = getManagedProjectScope(user, { includeArchived: true }) ?? [];
   const readableBatches = new Set(all<{ id: number }>(
     `SELECT id FROM integration_batches
      WHERE id IN (SELECT value FROM json_each(?)) AND project_id IN (SELECT value FROM json_each(?))

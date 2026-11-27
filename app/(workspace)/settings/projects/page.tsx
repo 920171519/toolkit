@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getManagedProjectIdsForUser } from "@/lib/access";
+import { getManagedProjectScope } from "@/lib/access";
 import { getProjectConfigs } from "@/lib/project-queries";
 import { getPeople, parseFlash } from "@/lib/queries";
 import { saveProjectAction } from "@/lib/actions/settings";
@@ -26,7 +26,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
 }) {
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
-  const managedProjectIds = isAdmin ? null : getManagedProjectIdsForUser(user.id);
+  const managedProjectIds = getManagedProjectScope(user, { includeArchived: true });
   if (managedProjectIds?.length === 0) notFound();
   const params = await searchParams;
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");

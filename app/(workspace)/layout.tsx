@@ -2,7 +2,7 @@ import Link from "next/link";
 import { KeyRound, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
-import { getLedAreaIds, getManagedProjectIdsForUser } from "@/lib/access";
+import { getLedAreaIds, getManagedProjectScope } from "@/lib/access";
 import { getAccountAreaLabel } from "@/lib/queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { getProjectOptions } from "@/lib/project-queries";
@@ -19,7 +19,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const areaLabel = getAccountAreaLabel(user.id);
   const accountLabel = `${ROLE_META[user.role].label} · ${user.employeeId}`;
   const isAdmin = user.role === "ADMIN";
-  const canConfigure = isAdmin || getManagedProjectIdsForUser(user.id).length > 0;
+  const canConfigure = getManagedProjectScope(user, { includeArchived: true })?.length !== 0;
   const canManagePackages = isAdmin || getLedAreaIds(user.id).length > 0;
 
   const departmentItems: SidebarItem[] = [

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, getNarrowVersionRequestIds, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
@@ -15,7 +15,6 @@ import {
   getBatchCount,
   getBatches,
   getPendingTransferGroups,
-  getManagedProjectIds,
 } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -40,7 +39,7 @@ export default async function SubmissionsPage({
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
-  const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
+  const managerScope = getManagedProjectScope(user);
   const projectScope = getProjectWorkflowProjectIds(user, true);
   const hasProjectAccess = Boolean(project && (projectScope === null || projectScope.includes(project.id)));
   const readableRequests = projectScope === null || hasProjectAccess

@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
   bindingBarcodeEvidenceKey,
@@ -12,7 +12,6 @@ import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
 import { getPageWindow } from "./list-pagination";
 import { packageCodeSql, packageIdentity } from "./package-identity";
-import { getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
@@ -26,17 +25,6 @@ export function getNextBatchCode(): string {
      WHERE UPPER(code) GLOB 'B[0-9]*' AND SUBSTR(code, 2) NOT GLOB '*[^0-9]*'`,
   );
   return `B${String(Math.max(120, batch?.highest ?? 0) + 1).padStart(3, "0")}`;
-}
-
-export function getManagedProjectIds(user: SessionUser): number[] {
-  if (user.role === "ADMIN") return getProjectOptions().map((project) => project.id);
-  return all<{ id: number }>(
-    `SELECT p.id FROM project_software_managers psm
-     JOIN projects p ON p.id = psm.project_id
-     WHERE psm.user_id = ? AND p.status != 'ARCHIVED'
-     ORDER BY p.sort_order`,
-    user.id,
-  ).map((row) => row.id);
 }
 
 function filterByProject<T extends { projectId: number | null }>(rows: T[], projectIds: number[] | null): T[] {
@@ -1050,9 +1038,9 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   const tasks: PersonalTask[] = [];
   const alerts: PersonalAlert[] = [];
   const notifications: PersonalAlert[] = [];
-  const managedProjectIds = getManagedProjectIds(user);
+  const managerScope = getManagedProjectScope(user);
+  const managedProjectIdsJson = JSON.stringify(managerScope ?? []);
   const integrationProjectIds = getIntegrationManagedProjectIds(user.id);
-  const managerScope = user.role === "ADMIN" ? null : managedProjectIds;
   const integrationScope = user.role === "ADMIN" ? null : integrationProjectIds;
 
   const failedTests = all<{
@@ -1225,13 +1213,13 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
        AND br.status = 'PENDING' AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL
        AND (br.binding_owner_id = ? OR p.owner_id = ? OR ? = 1 OR br.project_id IN (SELECT value FROM json_each(?)))
      ORDER BY pr.sort_order, n.sort_order`,
-    user.id, user.id, user.role === "ADMIN" ? 1 : 0, JSON.stringify(managedProjectIds),
+    user.id, user.id, managerScope === null ? 1 : 0, managedProjectIdsJson,
   );
   for (const task of bindingTasks) {
     const counts = summarizeBindingBarcodes(JSON.parse(task.barcodeFacts) as BindingBarcodeFact[]);
     const { passedBarcodeCount, unreviewedApprovedCount, failedBarcodeCount } = counts;
     const { canConfirm: ready, submissionShortfall } = bindingBarcodeProgress(task.requiredCount, counts);
-    const canConfirm = task.packageOwnerId === user.id || managerScope === null || managedProjectIds.includes(task.projectId);
+    const canConfirm = task.packageOwnerId === user.id || managerScope === null || managerScope.includes(task.projectId);
     const reviewAction = !canConfirm ? null : ready ? "确认节点通过" : unreviewedApprovedCount > 0 ? "判定设备条码"
       : failedBarcodeCount > 0 ? "核对失败条码" : null;
     if (!reviewAction && (ready || task.bindingOwnerId !== user.id)) continue;
@@ -1292,7 +1280,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     });
   }
 
-  if (user.role === "ADMIN" || managedProjectIds.length > 0) {
+  if (managerScope === null || managerScope.length > 0) {
     const pendingGroups = getPendingTransferGroups(managerScope);
     for (const group of pendingGroups) {
       tasks.push({
@@ -1345,7 +1333,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
          AND (? = 1 OR pr.id IN (SELECT value FROM json_each(?)))
        ORDER BY r.trial_released_at DESC, r.id DESC`,
       managerScope === null ? 1 : 0,
-      JSON.stringify(managedProjectIds),
+      managedProjectIdsJson,
     );
     const bindingDecisions = new Map(pendingDecisions.map((version) => [version.versionId, version]));
     for (const version of bindingDecisions.values()) {
@@ -1592,10 +1580,10 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
     if (!standalone) return null;
   }
   const readableProjects = getProjectWorkflowProjectIds(user, true);
-  const managedProjects = getManagedProjectIdsForUser(user.id);
+  const managedProjects = getManagedProjectScope(user, { includeArchived: true });
   const hasProjectEvidence = (id: number) => readableProjects === null || readableProjects.includes(id);
   const hasBatchEvidence = (id: number, status: string | null) => status === "DRAFT"
-    ? readableProjects === null || managedProjects.includes(id)
+    ? managedProjects === null || managedProjects.includes(id)
     : hasProjectEvidence(id);
   const readableBatches = batches.filter((batch) => hasBatchEvidence(batch.projectId, batch.status));
   if (projectId && requests.length === 0 && readableBatches.length === 0 && batches.length > 0) return null;

@@ -130,10 +130,17 @@ export function canConfirmBindingNodeForProject(
   return user.id === packageOwnerId || canManageProjectWorkflowForProject(user, projectId);
 }
 
-export function getManagedProjectIdsForUser(userId: number): number[] {
+export function getManagedProjectScope(
+  user: SessionUser,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
+): number[] | null {
+  if (user.role === "ADMIN") return null;
   return all<{ projectId: number }>(
-    "SELECT project_id AS projectId FROM project_software_managers WHERE user_id = ? ORDER BY project_id",
-    userId,
+    `SELECT psm.project_id AS projectId FROM project_software_managers psm
+     ${includeArchived ? "" : "JOIN projects p ON p.id = psm.project_id"}
+     WHERE psm.user_id = ? ${includeArchived ? "" : "AND p.status != 'ARCHIVED'"}
+     ORDER BY ${includeArchived ? "psm.project_id" : "p.sort_order"}`,
+    user.id,
   ).map((row) => row.projectId);
 }
 
@@ -205,7 +212,7 @@ export function getAssignedTrialRequestIds(user: SessionUser): number[] {
 export function getReadableVersionIds(user: SessionUser): number[] | null {
   if (user.role === "ADMIN") return null;
   const projectIds = JSON.stringify(getProjectWorkflowProjectIds(user, true));
-  const managementIds = JSON.stringify(getManagedProjectIdsForUser(user.id));
+  const managementIds = JSON.stringify(getManagedProjectScope(user, { includeArchived: true }) ?? []);
   return all<{ id: number }>(
     `WITH readable_projects AS (SELECT value AS id FROM json_each(?)),
           managed_projects AS (SELECT value AS id FROM json_each(?)),

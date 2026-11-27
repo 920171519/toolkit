@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getManagedProjectScope, getProjectWorkflowProjectIds } from "@/lib/access";
 import { BATCH_STATUS_META, type BatchStatus } from "@/lib/constants";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
@@ -14,7 +14,7 @@ import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";
-import { getBatchCount, getBatches, getIntegrationHistoryPage, getManagedProjectIds } from "@/lib/workflow-queries";
+import { getBatchCount, getBatches, getIntegrationHistoryPage } from "@/lib/workflow-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
@@ -37,7 +37,7 @@ export default async function IntegrationPage({
   const notice = parseFlash(params.flash, params.tone === "error" ? "error" : "success");
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
-  const canArrange = project ? canManageProjectWorkflowForProject(user, project.id) : user.role === "ADMIN" || getManagedProjectIds(user).length > 0;
+  const canArrange = project ? canManageProjectWorkflowForProject(user, project.id) : getManagedProjectScope(user)?.length !== 0;
   const scope = project ? [project.id] : getProjectWorkflowProjectIds(user, true);
   const activeStatuses: BatchStatus[] = ["IN_TEST"];
   const historyStatuses: BatchStatus[] = archived ? ["IN_TEST", "COMPLETED", "TERMINATED"] : ["COMPLETED", "TERMINATED"];

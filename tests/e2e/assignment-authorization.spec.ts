@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectFlash, login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 const n1Settings = "/settings/projects/1";
 
@@ -89,4 +90,43 @@ test("共享转正确认同步范围，同时只展开有权项目的原始证�
   await expect(evidence.getByRole("link", { name: "查看绑定验证记录" })).toHaveAttribute("href", /project=1/);
   await page.getByRole("button", { name: "发布正式版本", exact: true }).click();
   await expect(page.getByRole("dialog", { name: /转正 1004NET/ })).toContainText("星云 N1、极光 M2、磐石 T3 将同步使用该正式版本");
+});
+
+test("仅负责归档项目的软件经理保留配置和历史读取权限", async ({ page }) => {
+  await login(page, "MEMBER001");
+  const db = openE2eDatabase();
+  const archivedProjectId = 4;
+  let inserted = false;
+  try {
+    const result = db.prepare(
+      `INSERT INTO project_software_managers (project_id, user_id, created_at)
+       SELECT ?, id, datetime('now') FROM users WHERE employee_id = 'MEMBER001'`,
+    ).run(archivedProjectId);
+    inserted = result.changes === 1;
+    expect(inserted).toBe(true);
+
+    await page.goto("/dashboard");
+    await expect(page.getByRole("complementary", { name: "主导航" }).getByRole("link", { name: "项目配置", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "待我处理" })).toContainText("暂无待办");
+    await page.goto("/settings/projects");
+    const settings = page.getByRole("table");
+    await expect(settings.getByRole("row").filter({ hasText: "远山 X0" })).toBeVisible();
+    await expect(settings).not.toContainText("星云 N1");
+
+    await page.goto(`/integration?project=${archivedProjectId}`);
+    await expect(page.getByRole("heading", { name: "历史批次", exact: true })).toBeVisible();
+    await page.goto("/submissions");
+    await expect(page.getByRole("navigation", { name: "转测工作队列" })).toHaveCount(0);
+    await page.goto("/trial");
+    await expect(page.getByRole("navigation", { name: "试制与绑定队列" })).toHaveCount(0);
+  } finally {
+    try {
+      if (inserted) db.prepare(
+        `DELETE FROM project_software_managers WHERE project_id = ?
+         AND user_id = (SELECT id FROM users WHERE employee_id = 'MEMBER001')`,
+      ).run(archivedProjectId);
+    } finally {
+      db.close();
+    }
+  }
 });

@@ -6,7 +6,7 @@ import { Badge, ExternalLink, PageHeader } from "@/components/ui";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { TrialReleaseAction } from "@/components/trial-release-action";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
-import { canManageProjectWorkflowForProject } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getManagedProjectScope } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { packageIdentity } from "@/lib/package-identity";
@@ -16,7 +16,7 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyVersions, trialReleaseStateKey } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedProjectIds, getManagedTrialRequestState } from "@/lib/workflow-queries";
+import { getManagedTrialRequestState } from "@/lib/workflow-queries";
 import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function TrialReadyDetailPage({
   if (!Number.isSafeInteger(requestId) || requestId < 1) notFound();
   const search = await searchParams;
   const projectId = requireWorkflowProject(user, search.project)?.id;
-  const managerScope = user.role === "ADMIN" ? null : getManagedProjectIds(user);
+  const managerScope = getManagedProjectScope(user);
   const scope = projectId === undefined ? managerScope : [projectId];
   const [row] = getTrialReadyVersions(scope, { requestId });
   const returnTo = getWorkflowListState(search).returnTo;
