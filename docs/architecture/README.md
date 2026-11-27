@@ -13,7 +13,8 @@
 | 批次写入 | `lib/actions/workflow.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/workflow.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/workflow.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
-| 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
+| 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田及项目节点。 |
+| 软件包配置写入 | `lib/actions/settings.ts` → `lib/package-settings.ts` | 管理软件包资料、使用范围和历史补录，配置联动复用 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
 | 工作台读取 | `lib/workbench-queries.ts` | 按角色和项目组合待办、提醒、个人版本和电子流，复用各队列及通知模块。 |
 | 版本追溯读取 | `lib/version-trace-queries.ts` | 负责版本列表、追溯标签和项目版本活动，按原权限投影批次、报告及绑定证据。 |
@@ -34,7 +35,7 @@
 | 概念 | 权威记录 | 所有者 |
 | --- | --- | --- |
 | 登录和业务分工 | `sessions`、`users`、项目和责任田分工表 | `auth`、`access`、`settings`。Cookie 承载会话，下一次请求按服务端记录校验。 |
-| 软件包身份和使用范围 | `packages`、`package_usages` | `settings` 写入。`package-identity` 投影旧资料中的编码与名称，流程关联继续按 ID。 |
+| 软件包身份和使用范围 | `packages`、`package_usages` | `package-settings` 写入。`package-identity` 投影旧资料中的编码与名称，流程关联继续按 ID。 |
 | 共享版本状态 | `package_versions` | `release-workflow` 办理共享试制及转正，`version-void-workflow` 负责写入作废记录。 |
 | 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `transfer-workflow` 创建申请，`batch-workflow` 写入验收，`release-workflow` 更新发布状态。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
 | 批次与完整配套 | `integration_batches`、`batch_items` | `batch-workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |

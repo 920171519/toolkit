@@ -27,8 +27,8 @@
 | 提交、审批及撤销绑定电子流 | 节点绑定责任人或管理员可提交，从发布时的审批人快照选择指定人。旧要求缺少快照时沿用已保存的主审批人。该电子流指派的审批人或管理员可审批，均不得自审。提交人、本项目软件经理或管理员可在允许的状态下登记撤销。 | [`canSubmitBindingFlow`、`bindingFlowApprovalBlocker`](../../lib/permissions.ts)、[绑定写入](../../lib/binding-workflow.ts) |
 | 判定条码、确认节点 | 软件包责任人、该节点所属项目的软件经理或管理员。 | [`canConfirmBindingNodeForProject`](../../lib/access.ts)、[绑定写入](../../lib/binding-workflow.ts) |
 | 登记单节点免绑 | 该节点绑定责任人、本项目软件经理或管理员。 | [绑定写入](../../lib/binding-workflow.ts) |
-| 修改软件包责任信息 | 管理员、该包责任田主管或该责任田的项目负责人。抽屉编辑资格、软件包审计可见性和保存使用同一权限。 | [`canEditPackageResponsibility`](../../lib/access.ts)、[软件包抽屉](../../lib/package-drawer-data.ts)、[`updatePackageResponsibility`](../../lib/settings.ts) |
-| 维护软件包配置和补录 | 管理员或相应责任田主管可维护软件包配置和导入历史版本。更正历史补录由管理员执行。 | [`canManagePackageArea`](../../lib/access.ts)、[配置服务](../../lib/settings.ts) |
+| 修改软件包责任信息 | 管理员、该包责任田主管或该责任田的项目负责人。抽屉编辑资格、软件包审计可见性和保存使用同一权限。 | [`canEditPackageResponsibility`](../../lib/access.ts)、[软件包抽屉](../../lib/package-drawer-data.ts)、[`updatePackageResponsibility`](../../lib/package-settings.ts) |
+| 维护软件包配置和补录 | 管理员或相应责任田主管可维护软件包配置和导入历史版本。更正历史补录由管理员执行。 | [`canManagePackageArea`](../../lib/access.ts)、[软件包配置写入](../../lib/package-settings.ts) |
 
 ## 合并规则前需核对的边界
 

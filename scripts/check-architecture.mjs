@@ -61,6 +61,7 @@ const workflowPageQueries = new Set([
   "lib/pending-transfer-queries.ts",
   "lib/release-queue-queries.ts",
 ]);
+const settingsMutationModules = new Set(["lib/settings.ts", "lib/package-settings.ts"]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();
@@ -86,7 +87,7 @@ for (const file of files.sort()) {
         `${name} imports the workflow mutation module directly. Use actions for writes and domain modules for reads.`,
       );
     }
-    if (dependency === "lib/settings.ts" && name !== "lib/actions/settings.ts"
+    if (settingsMutationModules.has(dependency) && name !== "lib/actions/settings.ts"
       && (isEntrypoint || name === "lib/package-drawer-data.ts")) {
       dependencyBoundaryErrors.push(
         `${name} imports the settings mutation module directly. Use settings actions for writes and settings queries for reads.`,

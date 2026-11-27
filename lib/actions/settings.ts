@@ -11,13 +11,13 @@ import {
   text,
   successRedirect,
 } from "@/lib/action-helpers";
+import { correctLegacyVersion, importLegacyVersion, savePackage, savePackageUsages, updatePackageResponsibility } from "@/lib/package-settings";
 import {
   addAreaLeader,
   addProjectNode,
   addProjectNodeApprover,
   updateProjectNode,
   assignAreaProjectLead,
-  correctLegacyVersion,
   deleteArea,
   deleteProject,
   deleteProjectNode,
@@ -27,13 +27,9 @@ import {
   removeProjectNodeApprover,
   saveArea,
   assignAreaProjectMember,
-  savePackage,
-  importLegacyVersion,
-  savePackageUsages,
   saveProject,
   saveUserProfile,
   setUserActive,
-  updatePackageResponsibility,
   updateUserRole,
 } from "@/lib/settings";
 import { ROLES, type Role } from "@/lib/constants";
