@@ -24,16 +24,14 @@ import {
 import {
   addAreaLeader,
   assignAreaProjectLead,
+  assignAreaProjectMember,
   deleteArea,
   removeAreaLeader,
   removeAreaProjectLead,
   removeAreaProjectMember,
   saveArea,
-  assignAreaProjectMember,
-  saveUserProfile,
-  setUserActive,
-  updateUserRole,
-} from "@/lib/settings";
+} from "@/lib/area-settings";
+import { saveUserProfile, setUserActive, updateUserRole } from "@/lib/user-settings";
 import { ROLES, type Role } from "@/lib/constants";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryActionHref, directoryFilters, directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
 

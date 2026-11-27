@@ -517,7 +517,8 @@ lib/
   binding-workflow.ts         # 节点与电子流写入
   access.ts                   # 责任田层级与集成测试责任田权限
   permissions.ts              # 角色/项目软件经理/责任田权限判断
-  settings.ts                 # 责任田与账号配置
+  area-settings.ts            # 责任田及项目分工配置
+  user-settings.ts            # 账号资料、角色与登录状态
   project-settings.ts         # 项目与节点配置
   package-settings.ts         # 软件包配置与历史补录
 tests/e2e/                    # Playwright 端到端测试
