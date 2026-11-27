@@ -19,7 +19,8 @@ const sources = {
   "lib/actions/settings.ts": 'export { deleteArea } from "../area-settings";',
   "lib/batch-workflow.ts": 'export { voidVersionRecords } from "./version-void-workflow"; export type BatchInput = string;',
   "lib/actions/workflow.ts": 'export { voidVersionRecords } from "../batch-workflow";',
-  "lib/version-void-workflow.ts": "export function voidVersionRecords() {}",
+  "lib/version-void-workflow.ts": 'export { invalidateAdmission } from "./trial-risk-admissions"; export function voidVersionRecords() {}',
+  "lib/trial-risk-admissions.ts": "export function invalidateAdmission() {}",
   "lib/batch-queries.ts": "export function getBatch() {}",
 };
 
@@ -67,13 +68,13 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
   const result = checkFixture(t, {
     "app/api/example/route.ts": 'export const batch = import("@/lib/batch-workflow");',
     "lib/wrapper.ts": [
-      'import type { BatchInput } from "./batch-workflow";',
       'export { voidVersionRecords } from "./batch-workflow";',
+      'import type { BatchInput } from "./batch-workflow";',
       "export type Input = BatchInput;",
     ].join("\n"),
     "lib/actions/other.ts": 'export const area = require("../area-settings");',
     "components/example.ts": 'import "@/lib/db"; import "node:sqlite";',
-    "lib/other.ts": 'export { session } from "./session-store";',
+    "lib/other.ts": 'export { session } from "./session-store"; export { invalidateAdmission } from "./trial-risk-admissions";',
     "lib/batch-workflow.ts": sources["lib/batch-workflow.ts"] + ' export { getBatch } from "./batch-queries";',
   });
 
@@ -85,6 +86,7 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "components/example.ts imports @/lib/db directly",
     "components/example.ts imports node:sqlite directly",
     "lib/other.ts imports session storage directly",
+    "lib/other.ts imports the workflow mutation module directly (lib/trial-risk-admissions.ts)",
     "lib/batch-workflow.ts depends on a page query",
   ]) {
     assert.ok(result.stderr.includes(diagnostic), result.stderr);

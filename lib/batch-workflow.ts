@@ -16,9 +16,9 @@ import {
   OTHER_OPEN_BATCH_RESERVATION_SQL,
   PENDING_BATCH_REQUEST_SQL,
   refreshVersionAggregate,
-  TRIAL_PENDING_VERSION_STATUSES_SQL,
 } from "./transfer-requests";
 import { refreshTrialReadiness } from "./trial-readiness";
+import { invalidateInTestRiskAdmissionsForBatch, invalidateUnreleasedRiskTrialAdmission } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import { voidVersionRecords } from "./version-void-workflow";
 
@@ -280,10 +280,7 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
       refreshVersionAggregate(db, request.package_version_id, timestamp);
       refreshTrialReadiness(db, request.package_version_id, timestamp);
     }
-    run(
-      "UPDATE trial_risk_admissions SET invalidated_at = ? WHERE batch_id = ? AND stage = 'IN_TEST' AND invalidated_at IS NULL",
-      timestamp, batchId,
-    );
+    invalidateInTestRiskAdmissionsForBatch(db, batchId, timestamp);
     audit(actor.id, "TERMINATE_BATCH", "BATCH", batchId, `终止 ${batch.code} 集成测试：${reason.trim()}`);
   });
 }
@@ -410,13 +407,7 @@ export async function completeBatchTest(
           requestStatus, requestStatus, timestamp, item.request_id,
         );
         if (requestStatus !== "PASSED") {
-          run(
-            `UPDATE trial_risk_admissions SET invalidated_at = ?
-             WHERE package_version_id = ? AND invalidated_at IS NULL
-               AND EXISTS (SELECT 1 FROM package_versions pv WHERE pv.id = package_version_id
-                 AND pv.status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL})`,
-            timestamp, item.version_id,
-          );
+          invalidateUnreleasedRiskTrialAdmission(db, item.version_id, timestamp);
         }
         refreshVersionAggregate(db, item.version_id, timestamp);
         refreshTrialReadiness(db, item.version_id, timestamp);

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { run } from "./db";
+import { db, run } from "./db";
+import { invalidateTrialRiskAdmissionForVersion } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import type { ManualVersionVoidKind } from "./version-void";
 
@@ -18,11 +19,7 @@ export function voidVersionRecords(actor: SessionUser, versionId: number, kind: 
      WHERE package_version_id = ?`,
     reason, timestamp, timestamp, versionId,
   );
-  run(
-    `UPDATE trial_risk_admissions SET invalidated_at = ?
-     WHERE package_version_id = ? AND invalidated_at IS NULL`,
-    timestamp, versionId,
-  );
+  invalidateTrialRiskAdmissionForVersion(db, versionId, timestamp);
   run(
     `UPDATE binding_requirements SET status = 'CANCELLED', decision_reason = ?, updated_at = ?
      WHERE package_version_id = ? AND status IN ('PENDING','PASSED')`,

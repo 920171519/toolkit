@@ -15,6 +15,7 @@ import {
   missingTrialNodeAssignments,
   trialReleaseStateKey,
 } from "./trial-eligibility";
+import { insertTrialRiskAdmission, invalidateTrialRiskAdmissionForVersion } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import { releaseFlowUrl } from "./release-flow";
 import {
@@ -48,12 +49,10 @@ export function admitRiskTrial(
     assert(candidate && candidate.riskProjectCount > 0 && candidate.projects.every((row) => row.usable)
       && candidate.projects.some((row) => row.requestId === input.requestId && row.projectId === project.id),
     "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
-    run(
-      `INSERT INTO trial_risk_admissions
-         (package_version_id, request_id, project_id, project_name, batch_id, stage, reason, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      request.versionId, input.requestId, project.id, project.name, entry.batchId, entry.stage, reason, actor.id, now(),
-    );
+    insertTrialRiskAdmission(db, {
+      versionId: request.versionId, requestId: input.requestId, projectId: project.id, projectName: project.name,
+      batchId: entry.batchId, stage: entry.stage, reason, actorId: actor.id, createdAt: now(),
+    });
     audit(actor.id, "ADMIT_RISK_TRIAL", "PACKAGE_VERSION", request.versionId, `${project.name}登记风险试制：${reason}`);
     return { projectId: project.id };
   });
@@ -229,8 +228,7 @@ export function abandonTrialRelease(actor: SessionUser, requestId: number, concl
     assert(trialReleaseStateKey(ready) === eligibility, "试制资格已变化，请刷新后重新确认。");
     const timestamp = now();
     if (ready.releaseMode === "RISK") {
-      run("UPDATE trial_risk_admissions SET invalidated_at = ? WHERE package_version_id = ? AND invalidated_at IS NULL",
-        timestamp, anchor.package_version_id);
+      invalidateTrialRiskAdmissionForVersion(db, anchor.package_version_id, timestamp);
       audit(actor.id, "WITHDRAW_RISK_TRIAL", "PACKAGE_VERSION", anchor.package_version_id, conclusion.trim());
       return { withdrawnRisk: true };
     }

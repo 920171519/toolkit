@@ -66,6 +66,7 @@ const workflowMutationCallers = new Map([
   ["lib/binding-workflow.ts", [workflowAction]],
   ["lib/release-workflow.ts", [workflowAction, "lib/actions/risk-trial.ts"]],
   ["lib/transfer-workflow.ts", [workflowAction]],
+  ["lib/trial-risk-admissions.ts", ["lib/batch-workflow.ts", "lib/release-workflow.ts", "lib/version-void-workflow.ts"]],
   ["lib/version-void-workflow.ts", ["lib/batch-workflow.ts", "lib/release-workflow.ts"]],
 ]);
 const workflowPageQueries = new Set([
