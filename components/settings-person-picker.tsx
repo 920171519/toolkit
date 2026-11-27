@@ -8,10 +8,11 @@ export type SettingsPerson = { id: number; label: string };
 
 const initialLimit = 25;
 
-export function SettingsPersonPicker({ name, label, options, defaultValue = "", required = true }: {
+export function SettingsPersonPicker({ name, label, options, excludedIds, defaultValue = "", required = true }: {
   name: string;
   label: string;
   options: SettingsPerson[];
+  excludedIds?: readonly number[];
   defaultValue?: number | "";
   required?: boolean;
 }) {
@@ -20,8 +21,9 @@ export function SettingsPersonPicker({ name, label, options, defaultValue = "", 
   const [selectedValue, setSelectedValue] = useState(String(defaultValue));
   const [limit, setLimit] = useState(initialLimit);
   const matchesSearch = wordSearchMatcher(query);
-  const matching = options.filter((person) => matchesSearch(person.label));
-  const selected = options.find((person) => String(person.id) === selectedValue);
+  const excluded = new Set(excludedIds);
+  const matching = options.filter((person) => !excluded.has(person.id) && matchesSearch(person.label));
+  const selected = options.find((person) => !excluded.has(person.id) && String(person.id) === selectedValue);
   const visible = matching.slice(0, limit);
   if (selected && !visible.includes(selected)) visible.unshift(selected);
 

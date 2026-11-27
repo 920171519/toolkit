@@ -257,6 +257,11 @@ test("责任田成员选择在窄屏对话框中完成并保留项目筛选", as
   await expect(dialog).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get("q")).toBe("N1");
   expect(new URL(page.url()).searchParams.get("pageSize")).toBe("10");
+  await trigger.click();
+  await search.fill("MEMBER001");
+  await expect(candidate).toHaveCount(0);
+  await expect(dialog.getByRole("status")).toHaveText("没有匹配的人员。");
+  await search.press("Escape");
   await row.getByRole("button", { name: "2 人" }).click();
   const members = page.getByRole("dialog", { name: /项目|成员/ });
   await members.getByRole("button", { name: "移除 许言" }).click();

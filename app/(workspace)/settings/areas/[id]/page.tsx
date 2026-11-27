@@ -32,20 +32,21 @@ export const metadata: Metadata = { title: "责任田详情" };
 
 const secondaryTrigger = "button button-secondary button-sm";
 
-function AreaProjectRow({ project, lead, members, people, areaId, manageLead, manageMembers, isAdmin, filters }: {
+type PersonPickerOptions = { options: SettingsPerson[]; excludedIds: number[] };
+
+function AreaProjectRow({ project, lead, members, leadPicker, memberPicker, hasActiveAccounts, areaId, manageLead, manageMembers, isAdmin, filters }: {
   project: ProjectOption;
   lead?: AreaProjectLead;
   members: AreaProjectMember[];
-  people: SettingsPerson[];
+  leadPicker?: PersonPickerOptions;
+  memberPicker?: PersonPickerOptions;
+  hasActiveAccounts: boolean;
   areaId: number;
   manageLead: boolean;
   manageMembers: boolean;
   isAdmin: boolean;
   filters: Record<string, string>;
 }) {
-  const memberIds = new Set(members.map((member) => member.userId));
-  const availableMembers = manageMembers ? people.filter(({ id }) => !memberIds.has(id)) : [];
-  const availableLeads = manageLead ? people.filter(({ id }) => id !== lead?.userId) : [];
   const leadActionLabel = lead ? "更换负责人" : "添加负责人";
   const memberKey = members.map((member) => member.id).join("-");
   const accountHelp = {
@@ -78,10 +79,10 @@ function AreaProjectRow({ project, lead, members, people, areaId, manageLead, ma
       </dl>
       {(manageLead || manageMembers) && (
         <div className="settings-record-actions">
-          {manageLead && (availableLeads.length > 0 || lead ? (
+          {manageLead && (leadPicker || lead ? (
             <FormDialog key={lead?.userId ?? "new"} label={leadActionLabel} title={`${project.name} · ${leadActionLabel}`} triggerClassName={secondaryTrigger} cancelLabel="取消">
-              {availableLeads.length > 0 ? <ActionForm action={assignAreaProjectLeadAction} hidden={{ ...filters, areaId, projectId: project.id, assignmentId: lead?.id, oldUserId: lead?.userId }} submitText={lead ? "更换项目负责人" : "设置项目负责人"}>
-                <SettingsPersonPicker name="userId" label="项目负责人" options={availableLeads} />
+              {leadPicker ? <ActionForm action={assignAreaProjectLeadAction} hidden={{ ...filters, areaId, projectId: project.id, assignmentId: lead?.id, oldUserId: lead?.userId }} submitText={lead ? "更换项目负责人" : "设置项目负责人"}>
+                <SettingsPersonPicker name="userId" label="项目负责人" {...leadPicker} />
               </ActionForm> : <p className="small muted">
                 没有其他启用的账号可接任。{accountHelp.detail}
                 {accountHelp.href && <> <Link href={accountHelp.href} className="archive-link" prefetch={false}>{accountHelp.actionLabel}</Link></>}
@@ -94,15 +95,15 @@ function AreaProjectRow({ project, lead, members, people, areaId, manageLead, ma
             <GuidanceDialog label={leadActionLabel} title={`${project.name} · ${leadActionLabel}`}
               items={[{ title: "没有可分配的启用账号", ...accountHelp }]} triggerClassName={secondaryTrigger} />
           ))}
-          {manageMembers && (availableMembers.length > 0 ? (
+          {manageMembers && (memberPicker ? (
             <FormDialog key={`add-${memberKey}`} label={<><Plus size={13} aria-hidden="true" /> 添加成员</>} title={`${project.name} · 添加成员`} triggerClassName={secondaryTrigger} cancelLabel="取消">
               <ActionForm action={assignAreaProjectMemberAction} hidden={{ ...filters, areaId, projectId: project.id }} submitText="添加项目成员">
-                <SettingsPersonPicker name="userId" label="项目成员" options={availableMembers} />
+                <SettingsPersonPicker name="userId" label="项目成员" {...memberPicker} />
               </ActionForm>
             </FormDialog>
           ) : (
             <GuidanceDialog label="添加成员" title={`${project.name} · 添加成员`}
-              items={[{ title: people.length ? "启用的账号均已是项目成员" : "没有可分配的启用账号", ...accountHelp }]} triggerClassName={secondaryTrigger} />
+              items={[{ title: hasActiveAccounts ? "启用的账号均已是项目成员" : "没有可分配的启用账号", ...accountHelp }]} triggerClassName={secondaryTrigger} />
           ))}
         </div>
       )}
@@ -128,7 +129,6 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
     ? getPeople().map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))
     : [];
   const leaderIds = new Set(area.leaders.map(({ userId }) => userId));
-  const availableLeaders = people.filter(({ id }) => !leaderIds.has(id));
   const leadsByProject = new Map(area.projectLeads.map((lead) => [lead.projectId, lead]));
   const membersByProject = Map.groupBy(area.projectMembers, (member) => member.projectId);
   const query = directoryValue(search.q);
@@ -140,6 +140,35 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
     return (manageArea || lead || members.length > 0) && matchesSearch(query, project.name, project.code, lead?.userName, lead?.userEmployeeId, ...members.flatMap((member) => [member.userName, member.userEmployeeId]));
   });
   const list = settingsPage(relevantProjects, search.page, pageSize);
+  const projectRows = list.items.map((project) => {
+    const lead = leadsByProject.get(project.id);
+    const members = membersByProject.get(project.id) ?? [];
+    return {
+      project,
+      lead,
+      members,
+      manageMembers: manageArea || lead?.userId === user.id,
+      leadIds: new Set(lead ? [lead.userId] : []),
+      memberIds: new Set(members.map(({ userId }) => userId)),
+    };
+  });
+  const pickerExclusions = [
+    ...(isAdmin ? [leaderIds] : []),
+    ...projectRows.flatMap(({ leadIds, memberIds, manageMembers }) => [
+      ...(manageArea ? [leadIds] : []),
+      ...(manageMembers ? [memberIds] : []),
+    ]),
+  ];
+  // Only serialize people who were eligible for at least one of the visible pickers.
+  const [firstExclusion, ...otherExclusions] = pickerExclusions;
+  const hiddenIds = firstExclusion && otherExclusions.reduce((hidden, ids) => hidden.intersection(ids), firstExclusion);
+  const options = hiddenIds ? people.filter(({ id }) => !hiddenIds.has(id)) : [];
+  const optionIds = new Set(options.map(({ id }) => id));
+  function pickerOptions(exclusions: Set<number>): PersonPickerOptions | undefined {
+    const excludedIds = [...exclusions.intersection(optionIds)];
+    if (excludedIds.length < options.length) return { options, excludedIds };
+  }
+  const leaderPicker = isAdmin ? pickerOptions(leaderIds) : undefined;
   const listParams = areaDirectoryListParams(search);
   const returnParams = areaDirectoryDetailParams(listParams);
   const filters = { ...returnParams, q: query, pageSize: String(pageSize), page: String(list.page) };
@@ -163,9 +192,9 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
       <FlashMessage notice={notice} />
       <section className="card" aria-labelledby="area-leaders">
         <div className="card-header"><div><h2 id="area-leaders">责任田主管</h2>{area.isIntegration && <span className="settings-meta">集成测试责任田</span>}</div>
-          {isAdmin && (availableLeaders.length > 0 ? <FormDialog key={area.leaders.length} label={<><Plus size={13} aria-hidden="true" /> 添加主管</>} title="添加责任田主管" triggerClassName={secondaryTrigger} cancelLabel="取消">
+          {isAdmin && (leaderPicker ? <FormDialog key={area.leaders.length} label={<><Plus size={13} aria-hidden="true" /> 添加主管</>} title="添加责任田主管" triggerClassName={secondaryTrigger} cancelLabel="取消">
             <ActionForm action={addAreaLeaderAction} hidden={{ ...filters, areaId: area.id }} submitText="设置主管">
-              <SettingsPersonPicker name="userId" label="责任田主管" options={availableLeaders} />
+              <SettingsPersonPicker name="userId" label="责任田主管" {...leaderPicker} />
             </ActionForm>
           </FormDialog> : <GuidanceDialog label="添加主管" title="添加责任田主管"
             items={[{
@@ -194,10 +223,12 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
           <PageSizeSelect key={pageSize} name="pageSize" defaultValue={pageSize} />
         </SettingsFilters>
         {list.items.length ? <ul className="settings-record-list">
-          {list.items.map((project) => {
-            const lead = leadsByProject.get(project.id);
-            return <AreaProjectRow key={project.id} project={project} lead={lead} members={membersByProject.get(project.id) ?? []} people={people} areaId={area.id} manageLead={manageArea} manageMembers={manageArea || lead?.userId === user.id} isAdmin={isAdmin} filters={filters} />;
-          })}
+          {projectRows.map(({ project, lead, members, manageMembers, leadIds, memberIds }) => (
+            <AreaProjectRow key={project.id} project={project} lead={lead} members={members} areaId={area.id}
+              manageLead={manageArea} manageMembers={manageMembers} isAdmin={isAdmin} filters={filters}
+              leadPicker={manageArea ? pickerOptions(leadIds) : undefined}
+              memberPicker={manageMembers ? pickerOptions(memberIds) : undefined} hasActiveAccounts={people.length > 0} />
+          ))}
         </ul> : <EmptyState title={query ? "没有匹配的项目" : "暂无项目分工"}
           description={query ? undefined : manageArea
             ? "创建项目后可在这里分配负责人和成员。"

@@ -81,6 +81,7 @@
 | 主侧栏和窄屏配置标签各自判断分工、维护配置目录 | [设置导航](../../lib/settings-navigation.ts)、[配置范围回归](../../tests/e2e/assignment-authorization.spec.ts) | 服务端复用一份菜单与请求内分工结果，保留窄屏短标签及实际操作的独立权限校验。 |
 | 补录命令和历史读取分别声明补录审计动作与实体 | [存储证据](../../lib/version-scope.ts)、[补录写入](../../lib/package-settings.ts) | 读写共用同一对存储值，原始标记和其他历史版本兼容方式继续有效。 |
 | 21 个页面分别决定跳转提示的色调和参数解析 | [跳转提示](../../lib/flash.ts)、[登录与跳转回归](../../tests/e2e/public-auth.spec.ts) | 路由统一读取参数对象，保留重复参数、空值和默认色调规则。 |
+| 责任田多个关闭的人员对话框重复序列化选项 | [责任田详情](../../app/%28workspace%29/settings/areas/%5Bid%5D/page.tsx)、[人员选择](../../components/settings-person-picker.tsx)、[窄屏回归](../../tests/e2e/settings-experience.spec.ts) | 同页共用一份可选账号并传递每处排除名单，只序列化至少在一处有资格的账号。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |
