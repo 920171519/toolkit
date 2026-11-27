@@ -33,8 +33,9 @@ jobs:
           npm install --global --ignore-scripts pnpm@11.19.0
           pnpm install --frozen-lockfile
 
-      - name: Install Chromium and system dependencies
-        run: pnpm exec playwright install --with-deps chromium
+      # The hosted Ubuntu image already supplies the browser's system libraries.
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
 
       - name: Check lint and architecture
         run: pnpm lint
