@@ -38,10 +38,14 @@ export function bindingBarcodeResult(flow: Locator, barcode: string, includeHidd
 export async function saveBindingBarcodeResults(page: Page, flow: Locator, results: Record<string, "PASS" | "FAIL" | "UNREVIEWED">) {
   const details = flow.locator("details.barcode-details");
   if ((await details.getAttribute("open")) === null) await details.locator("summary").click();
+  const evidenceKey = details.locator('input[name="evidenceKey"]');
+  const previousEvidence = await evidenceKey.inputValue();
   for (const [barcode, result] of Object.entries(results)) {
     await bindingBarcodeResult(flow, barcode).selectOption(result);
   }
   await flow.getByRole("button", { name: "保存条码判定", exact: true }).click();
+  // Consecutive saves show the same notice. Wait for the server's new evidence revision.
+  await expect(evidenceKey).not.toHaveValue(previousEvidence);
   await expectFlash(page, "已保存条码判定");
   for (const [barcode, result] of Object.entries(results)) {
     await expect(bindingBarcodeResult(flow, barcode, true)).toHaveValue(result);
