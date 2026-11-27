@@ -171,6 +171,52 @@ test("共享版本等最后一个在行项目通过后自动进入待发布试�
   await expectTrialState(page, sample, "待发试制");
 });
 
+test("共享试制资格变更后旧表单不能发布，重新核对后只覆盖当前使用项目", async ({ page, trialData }) => {
+  const sample = trialData.create(35, [1, 3]);
+  await submitPassingConclusion(page, sample.batches[0], "TEST001");
+  await submitPassingConclusion(page, sample.batches[1], "TEST003");
+  await login(page, "ADMIN001");
+  const queue = `/trial?project=1&view=release&release_q=${sample.version}`;
+  const row = page.getByRole("row").filter({ hasText: sample.version });
+  const dialog = page.getByRole("dialog", { name: /发布 .* 试制/ });
+  const publish = async () => {
+    await dialog.getByLabel("试制电子流网址").fill("https://example.com/trials/recheck-scope");
+    await dialog.getByLabel("试制评审纪要").fill("按当前软件包使用范围核对试制资格。");
+    await dialog.getByRole("button", { name: "发布全项目共享试制版本" }).click();
+    await confirmAction(page);
+  };
+  const requirements = () => trialData.db.prepare(
+    "SELECT project_id FROM binding_requirements WHERE package_version_id = ? ORDER BY project_id",
+  ).all(sample.versionId);
+
+  await page.goto(queue);
+  await row.getByRole("button", { name: "发布", exact: true }).click();
+  await expect(dialog).toContainText("全部 2 个使用项目");
+  const settings = await page.context().newPage();
+  try {
+    await settings.goto(`/settings/packages/${sample.packageId}`);
+    const usage = settings.getByTestId("package-usage-form");
+    const project = usage.locator("details").filter({ hasText: "磐石 T3" });
+    if (await project.getAttribute("open") === null) await project.locator("summary").click();
+    await project.getByRole("checkbox", { checked: true }).uncheck();
+    await usage.getByRole("button", { name: "保存使用范围" }).click();
+    await expectFlash(settings, "项目使用范围已更新");
+  } finally {
+    await settings.close();
+  }
+
+  await publish();
+  await expect(dialog.getByRole("alert")).toContainText("试制资格已变化，请刷新后重新确认");
+  expect(requirements()).toEqual([]);
+
+  await page.goto(queue);
+  await row.getByRole("button", { name: "发布", exact: true }).click();
+  await expect(dialog).toContainText("全部 1 个使用项目");
+  await publish();
+  await expectFlash(page, /已发布.*试制|试制.*发布/);
+  expect(requirements()).toEqual([{ project_id: 1 }]);
+});
+
 test("新增使用项目时补建一条转测申请，并保留原项目的结论和报告", async ({ page, trialData }) => {
   const sample = trialData.create(33, [1]);
   await submitPassingConclusion(page, sample.batches[0], "TEST001");

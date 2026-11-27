@@ -10,7 +10,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
-import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
+import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/workflow-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";

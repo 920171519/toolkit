@@ -10,9 +10,8 @@ import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
-import { trialEligibilityCtes } from "./trial-eligibility";
-import { getPendingBindingFlowCounts } from "./trial-readiness";
-import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
+import { getTrialReadyVersions } from "./trial-eligibility";
+import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
 
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
@@ -556,89 +555,6 @@ export function getBatchDetail(batchId: number, projectIds: number[] | null): Ba
   return { batch, items, progressNotes };
 }
 
-export type TrialReadyVersion = {
-  requestId: number;
-  versionId: number;
-  projectId: number;
-  projectName: string;
-  projectCode: string;
-  packageId: number;
-  packageName: string;
-  packageCode: string;
-  version: string;
-  integrationStatus: string;
-  versionStatus: string;
-  changeSummary: string;
-  archiveUrl: string;
-  submittedByName: string | null;
-  submittedAt: string;
-  ownerName: string | null;
-  softwareManagerName: string | null;
-  softwareManagerId: number | null;
-  releaseMode: "INTEGRATION" | "RISK";
-  riskConclusion: string | null;
-  batchId: number | null;
-  batchCode: string | null;
-  batchConclusion: string | null;
-  batchTestSummary: string | null;
-  batchReportUrl: string | null;
-  versionProjectCount: number;
-  riskProjectCount: number;
-  riskAdmissionId: number | null;
-  evidenceKey: string;
-  ongoingTestCount: number;
-};
-
-const ONGOING_TEST_COUNT_SQL = `(
-  SELECT COUNT(DISTINCT b.id) FROM batch_items bi
-  JOIN integration_batches b ON b.id = bi.batch_id
-  JOIN projects p ON p.id = b.project_id
-  WHERE bi.package_version_id = pv.id AND bi.transfer_request_id IS NOT NULL
-    AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED'
-)`;
-
-export function getTrialReadyVersions(
-  projectIds: number[] | null = null,
-  options: { requestId?: number; versionId?: number; includeUnregisteredRisk?: boolean } = {},
-): TrialReadyVersion[] {
-  if (projectIds?.length === 0) return [];
-  const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
-  const versionScope = options.versionId === undefined ? "" : "AND id = ?";
-  const projectsScope = projectIds === null ? "" : "AND pr.id IN (SELECT value FROM json_each(?))";
-  return all<TrialReadyVersion>(
-    `WITH ${trialEligibilityCtes(`SELECT id, package_id FROM package_versions
-       WHERE status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} ${requestScope} ${versionScope}`)}
-     SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
-            pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-            pv.version, r.status AS integrationStatus, pv.status AS versionStatus, pv.change_summary AS changeSummary,
-            pv.archive_url AS archiveUrl, su.name AS submittedByName, pv.submitted_at AS submittedAt,
-            o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
-            CASE WHEN q.riskProjectCount = 0 THEN 'INTEGRATION' ELSE 'RISK' END AS releaseMode,
-            q.riskConclusion, q.riskAdmissionId, q.evidenceKey, q.versionProjectCount, q.riskProjectCount,
-            b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
-            b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
-            ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount
-     FROM trial_eligibility q
-     JOIN trial_project_evidence e ON e.versionId = q.versionId
-     JOIN version_transfer_requests r ON r.id = e.requestId
-     JOIN package_versions pv ON pv.id = q.versionId
-     JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = e.projectId
-     LEFT JOIN users su ON su.id = pv.submitted_by
-     LEFT JOIN users o ON o.id = p.owner_id
-     LEFT JOIN users sm ON sm.id = pr.software_manager_id
-     LEFT JOIN integration_batches b ON b.id = e.batchId
-     WHERE q.unavailableRequestCount = 0 AND (q.releaseMode IS NOT NULL OR ?)
-       ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectsScope}
-     ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
-    ...(options.requestId === undefined ? [] : [options.requestId]),
-    ...(options.versionId === undefined ? [] : [options.versionId]),
-    options.includeUnregisteredRisk ? 1 : 0,
-    ...(options.requestId === undefined ? [] : [options.requestId]),
-    ...(projectIds === null ? [] : [JSON.stringify(projectIds)]),
-  );
-}
-
 export type TrialVersionRow = {
   requestId: number;
   versionId: number;
@@ -869,7 +785,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, p.owner_id AS packageOwnerId, pv.id AS versionId,
             pv.version, r.status, pv.status AS versionStatus, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
-            r.integration_status AS integrationStatus, ${ONGOING_TEST_COUNT_SQL} AS ongoingTestCount,
+            r.integration_status AS integrationStatus, ${ACTIVE_INTEGRATION_BATCH_COUNT_SQL} AS ongoingTestCount,
             r.trial_form_no AS trialFormNo, pv.trial_review_minutes AS trialReviewMinutes,
             r.trial_released_at AS trialReleasedAt,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,

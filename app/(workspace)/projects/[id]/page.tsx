@@ -13,6 +13,7 @@ import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
+import { getTrialReadyVersions } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import {
   getPendingFormalVersions,
@@ -20,7 +21,6 @@ import {
   getProjectBatchCounts,
   getProjectVersionRows,
   getRecentProjectBatches,
-  getTrialReadyVersions,
   getTrialVersions,
 } from "@/lib/workflow-queries";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, SectionHeading } from "@/components/ui";

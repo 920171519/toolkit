@@ -17,7 +17,7 @@ import { cancelTransferAction } from "@/lib/actions/workflow";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesDateFilter, matchesTextFilter, type ColumnFilterField } from "@/lib/column-filters";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
-import type { RiskTrialEntry } from "@/lib/trial-risk-entry";
+import type { RiskTrialEntry } from "@/lib/trial-eligibility";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
 import type { PendingTransferGroup, PendingTransferItem } from "@/lib/workflow-queries";

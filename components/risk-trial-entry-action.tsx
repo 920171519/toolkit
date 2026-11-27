@@ -4,7 +4,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { Badge } from "@/components/ui";
 import { admitRiskTrialAction } from "@/lib/actions/workflow";
 import { packageIdentity } from "@/lib/package-identity";
-import type { RiskTrialEntry, RiskTrialEntryStage } from "@/lib/trial-risk-entry";
+import type { RiskTrialEntry, RiskTrialEntryStage } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import { WorkflowPackageName } from "./workflow-package-name";
 

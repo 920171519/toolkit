@@ -4,12 +4,11 @@ import {
   canManageProjectWorkflowForProject,
   canReadPackageWorkflow,
 } from "./access";
-import { all, db, one } from "./db";
+import { db, one } from "./db";
 import { packageIdentity } from "./package-identity";
 import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "./permissions";
-import { getTrialNodeUsages, missingTrialNodeAssignments, trialEligibilityCtes } from "./trial-eligibility";
+import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignments } from "./trial-eligibility";
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
-import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
 import { getReadableTrialDetail } from "./workflow-queries";
@@ -28,8 +27,6 @@ type ReleaseGuidance = {
   href?: string;
 };
 type FormalReleaseGuidance = ReleaseGuidance & { pendingFlowCount: number };
-
-const pendingTrialStatuses = new Set(["PENDING_TRANSFER", "IN_TEST", "PENDING_TRIAL"]);
 
 function versionRecord(versionId: number) {
   return one<{
@@ -68,29 +65,12 @@ export function getTrialNodeGuidance(user: SessionUser, packageId: number): Rele
     : items;
 }
 
-/** Resolve the release action and its dependencies with the same eligibility CTE used by the trial queue and publish service. */
 export function getTrialReleaseGuidance(user: SessionUser, versionId: number, context: GuidanceContext = {}): ReleaseGuidance | null {
   const version = versionRecord(versionId);
-  if (!version || !pendingTrialStatuses.has(version.status)) return null;
-  const evidence = all<{
-    projectId: number;
-    projectName: string;
-    requestId: number | null;
-    requestStatus: string | null;
-    usable: number | null;
-    passed: number;
-    releaseMode: "INTEGRATION" | "RISK" | null;
-    batchId: number | null;
-    batchCode: string | null;
-    batchStatus: string | null;
-  }>(`WITH ${trialEligibilityCtes(`SELECT id, package_id FROM package_versions
-          WHERE status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} AND id = ?`)}
-     SELECT e.projectId, p.name AS projectName, e.requestId, e.requestStatus, e.usable, e.passed,
-            q.releaseMode, e.batchId, b.code AS batchCode, b.status AS batchStatus
-     FROM trial_project_evidence e JOIN trial_eligibility q ON q.versionId = e.versionId
-     JOIN projects p ON p.id = e.projectId
-     LEFT JOIN integration_batches b ON b.id = e.batchId
-     ORDER BY p.sort_order`, versionId);
+  if (!version) return null;
+  const eligibility = getTrialReleaseEligibility(versionId);
+  if (!eligibility) return null;
+  const { projects: evidence, releaseMode } = eligibility;
   if (context.projectId && !evidence.some((row) => row.projectId === context.projectId)) return null;
   const readableProjectIds = new Set(evidence.filter(({ projectId }) => canAccessProjectPage(user, projectId)).map(({ projectId }) => projectId));
   const canRead = (projectId: number) => readableProjectIds.has(projectId);
@@ -104,7 +84,7 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
   const canConfigurePackage = canManagePackageArea(user, version.areaId);
   const identity = packageIdentity(version);
   for (const row of evidence) {
-    if (row.passed || (row.releaseMode && row.usable)) continue;
+    if (row.passed || (releaseMode && row.usable)) continue;
     if (!canRead(row.projectId)) {
       restricted += 1;
       continue;

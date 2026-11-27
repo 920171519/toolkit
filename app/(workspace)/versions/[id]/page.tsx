@@ -9,7 +9,7 @@ import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
-import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
+import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { getFormalReleaseGuidance, getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";

@@ -19,9 +19,9 @@ import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
-import { trialReleaseStateKey } from "@/lib/trial-release-state";
+import { getTrialReadyVersions, trialReleaseStateKey, type TrialReadyVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersionCount, getTrialVersions, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getReadableTrialDetail, getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
 import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";

@@ -13,8 +13,12 @@ const activeReleaseRequest = "r.trial_released_at IS NOT NULL AND pr.status != '
 const activeIntegrationBatch = `FROM batch_items bi
   JOIN integration_batches b ON b.id = bi.batch_id
   JOIN projects p ON p.id = b.project_id
-  WHERE bi.package_version_id = ? AND bi.transfer_request_id IS NOT NULL
+  WHERE bi.transfer_request_id IS NOT NULL
     AND b.status IN ('DRAFT','IN_TEST') AND p.status != 'ARCHIVED'`;
+
+export const ACTIVE_INTEGRATION_BATCH_COUNT_SQL = `(
+  SELECT COUNT(DISTINCT b.id) ${activeIntegrationBatch} AND bi.package_version_id = pv.id
+)`;
 
 export function getActiveReleaseRequests(database: DatabaseSync, versionId: number) {
   return database.prepare(
@@ -39,13 +43,13 @@ function getActiveBindingSummary(database: DatabaseSync, versionId: number): Act
 }
 
 function hasActiveIntegrationBatch(database: DatabaseSync, versionId: number) {
-  return Boolean(database.prepare(`SELECT b.id ${activeIntegrationBatch} LIMIT 1`).get(versionId));
+  return Boolean(database.prepare(`SELECT b.id ${activeIntegrationBatch} AND bi.package_version_id = ? LIMIT 1`).get(versionId));
 }
 
 function getActiveIntegrationBatches(database: DatabaseSync, versionId: number) {
   return database.prepare(
     `SELECT DISTINCT b.id, b.code, b.status, p.id AS projectId, p.name AS projectName
-     ${activeIntegrationBatch} ORDER BY p.sort_order, b.id`,
+     ${activeIntegrationBatch} AND bi.package_version_id = ? ORDER BY p.sort_order, b.id`,
   ).all(versionId) as Array<{ id: number; code: string; status: string; projectId: number; projectName: string }>;
 }
 

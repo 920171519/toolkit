@@ -10,16 +10,20 @@ import {
 } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
-import { getTrialReadyVersions } from "./workflow-queries";
-import { getRiskTrialEntries } from "./trial-risk-entry";
-import { trialReleaseStateKey } from "./trial-release-state";
 import { getActiveReleaseRequests, getFormalReleaseCheck, refreshTrialReadiness } from "./trial-readiness";
-import { getTrialNodeUsages, missingTrialNodeAssignments } from "./trial-eligibility";
+import {
+  findReadyTrialProject,
+  getRiskTrialEntries,
+  getTrialNodeUsages,
+  getTrialReleaseEligibility,
+  missingTrialNodeAssignments,
+  trialReleaseStateKey,
+} from "./trial-eligibility";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
 import { reportArchivePath, resolveReportPath } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
-import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggregate } from "./transfer-requests";
+import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggregate, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
 import {
@@ -631,8 +635,10 @@ export function admitRiskTrial(
     assert(entry && entry.stage === input.stage && entry.batchId === (input.batchId ?? null),
       "转测状态已变化，请刷新页面并按当前阶段登记风险原因。");
     assert(!entry.registered, "该版本已经登记风险试制原因，请查看待发布试制队列。");
-    const [candidate] = getTrialReadyVersions([project.id], { requestId: input.requestId, includeUnregisteredRisk: true });
-    assert(candidate && candidate.riskProjectCount > 0, "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
+    const candidate = getTrialReleaseEligibility(request.versionId);
+    assert(candidate && candidate.riskProjectCount > 0 && candidate.projects.every((row) => row.usable)
+      && candidate.projects.some((row) => row.requestId === input.requestId && row.projectId === project.id),
+    "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
     run(
       `INSERT INTO trial_risk_admissions
          (package_version_id, request_id, project_id, project_name, batch_id, stage, reason, created_by, created_at)
@@ -651,14 +657,14 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
   assert(minutes.length >= 1 && minutes.length <= 2000, "请输入试制评审纪要（1–2000 个字符）。");
   return transaction(() => {
     const anchor = one<{
-      id: number;
       package_version_id: number;
       package_id: number;
       package_name: string;
       version: string;
-      status: string;
+      beforeTrial: number;
     }>(
-      `SELECT r.id, r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version, pv.status
+      `SELECT r.package_version_id, p.id AS package_id, p.name AS package_name, pv.version,
+              pv.status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} AS beforeTrial
        FROM version_transfer_requests r
        JOIN package_versions pv ON pv.id = r.package_version_id
        JOIN packages p ON p.id = pv.package_id
@@ -666,53 +672,26 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       requestId,
     );
     assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
-    assert(["PENDING_TRANSFER", "IN_TEST", "PENDING_TRIAL"].includes(anchor.status), "该版本已结束待发布流程，不能重复发布试制。");
+    assert(anchor.beforeTrial, "该版本已结束待发布流程，不能重复发布试制。");
 
-    const requests = all<{
-      id: number;
-      project_id: number;
-      project_name: string;
-      status: string;
-    }>(
-      `SELECT r.id, r.project_id, pr.name AS project_name, r.status
-       FROM version_transfer_requests r
-       JOIN projects pr ON pr.id = r.project_id
-       WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
-         AND EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = ? AND u.project_id = r.project_id)
-       ORDER BY pr.sort_order`,
-      anchor.package_version_id, anchor.package_id,
-    );
+    const ready = getTrialReleaseEligibility(anchor.package_version_id);
+    const projects = ready?.projects ?? [];
+    const requests = projects.flatMap((project) => project.requestId === null ? [] : [{ ...project, requestId: project.requestId }]);
     assert(requests.length > 0, "该版本没有可发布试制的项目记录。", "NOT_FOUND");
     assert(
-      requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
+      requests.some((request) => canManageProjectWorkflowForProject(actor, request.projectId)),
       "只有使用该软件包的项目软件经理或系统管理员可以发布试制。",
       "FORBIDDEN",
     );
-    const usageProjects = all<{ id: number; name: string }>(
-      `SELECT DISTINCT pr.id, pr.name
-       FROM package_usages u JOIN projects pr ON pr.id = u.project_id
-       WHERE u.package_id = ? AND pr.status != 'ARCHIVED'
-       ORDER BY pr.sort_order`,
-      anchor.package_id,
-    );
-    assert(usageProjects.length > 0, "该软件包没有在行项目使用范围，无法发布试制。");
-    const requestByProject = new Map(requests.map((request) => [request.project_id, request]));
-    for (const project of usageProjects) {
-      assert(
-        requestByProject.has(project.id),
-        `${project.name} 缺少该版本的转测申请，不能发布共享试制。`,
-      );
+    for (const project of projects) {
+      assert(project.requestId !== null, `${project.projectName} 缺少该版本的转测申请，不能发布共享试制。`);
     }
     for (const request of requests) {
-      assert(
-        ["PENDING", "IN_TEST", "PASSED", "FAILED", "BLOCKED"].includes(request.status),
-        `${request.project_name} 的版本状态不支持发布试制。`,
-      );
+      assert(request.usable, `${request.projectName} 的版本状态不支持发布试制。`);
     }
-    const [ready] = getTrialReadyVersions(null, { requestId });
-    assert(ready, "请先在待转测申请或集成测试页面登记风险试制原因。");
+    assert(ready?.releaseMode && findReadyTrialProject(ready, requestId), "请先在待转测申请或集成测试页面登记风险试制原因。");
     assert(trialReleaseStateKey(ready) === eligibility, "试制资格已变化，请刷新后重新确认。");
-    const riskRequired = ready.riskProjectCount > 0;
+    const riskRequired = ready.releaseMode === "RISK";
     const riskConclusion = riskRequired ? ready.riskConclusion : null;
 
     const requirementsToCreate: Array<{
@@ -727,8 +706,9 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       approverPool: number[];
     }> = [];
     const usages = getTrialNodeUsages(anchor.package_id);
+    const requestByProject = new Map(requests.map((request) => [request.projectId, request]));
     for (const request of requests) {
-      assert(usages.some((usage) => usage.projectId === request.project_id), `${request.project_name} 没有该软件包的测试节点，无法发布试制。`);
+      assert(usages.some((usage) => usage.projectId === request.projectId), `${request.projectName} 没有该软件包的测试节点，无法发布试制。`);
     }
     for (const usage of usages) {
       const request = requestByProject.get(usage.projectId);
@@ -740,9 +720,9 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         usage.nodeId,
       ).map((row) => row.userId);
       requirementsToCreate.push({
-        requestId: request.id,
-        projectId: request.project_id,
-        projectName: request.project_name,
+        requestId: request.requestId,
+        projectId: request.projectId,
+        projectName: request.projectName,
         nodeId: usage.nodeId,
         nodeName: usage.nodeName,
         requiredCount: Math.max(1, usage.requiredCount),
@@ -762,7 +742,7 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       trialUrl,
       minutes,
       timestamp,
-      riskRequired ? "RISK" : "INTEGRATION",
+      ready.releaseMode,
       riskConclusion ?? null,
       timestamp,
       anchor.package_version_id,
@@ -776,10 +756,10 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         trialUrl,
         timestamp,
         actor.id,
-        riskRequired ? "RISK" : "INTEGRATION",
+        ready.releaseMode,
         riskConclusion ?? null,
         timestamp,
-        request.id,
+        request.requestId,
       );
     }
     for (const item of requirementsToCreate) {
@@ -977,12 +957,13 @@ export function abandonTrialRelease(actor: SessionUser, requestId: number, concl
       requestId,
     );
     assert(anchor, "项目版本记录不存在。", "NOT_FOUND");
-    const [ready] = getTrialReadyVersions(null, { requestId });
-    assert(ready, "试制资格已变化，请刷新后重新确认。");
-    assertProjectManager(actor, ready.projectId);
+    const ready = getTrialReleaseEligibility(anchor.package_version_id);
+    const project = findReadyTrialProject(ready, requestId);
+    assert(ready && project, "试制资格已变化，请刷新后重新确认。");
+    assertProjectManager(actor, project.projectId);
     assert(trialReleaseStateKey(ready) === eligibility, "试制资格已变化，请刷新后重新确认。");
     const timestamp = now();
-    if (ready.riskProjectCount > 0) {
+    if (ready.releaseMode === "RISK") {
       run("UPDATE trial_risk_admissions SET invalidated_at = ? WHERE package_version_id = ? AND invalidated_at IS NULL",
         timestamp, anchor.package_version_id);
       audit(actor.id, "WITHDRAW_RISK_TRIAL", "PACKAGE_VERSION", anchor.package_version_id, conclusion.trim());
@@ -1025,12 +1006,13 @@ export function voidPackageVersion(actor: SessionUser, versionId: number, reason
     assert(version, "软件包版本不存在。", "NOT_FOUND");
     assertVersionProjectManager(actor, versionId);
     if (readyContext) {
-      const [ready] = getTrialReadyVersions(null, { requestId: readyContext.requestId });
+      const ready = getTrialReleaseEligibility(versionId);
+      const project = findReadyTrialProject(ready, readyContext.requestId);
       assert(
-        ready?.versionId === versionId && trialReleaseStateKey(ready) === readyContext.eligibility,
+        ready && project && trialReleaseStateKey(ready) === readyContext.eligibility,
         "试制资格已变化，请刷新后重新确认。",
       );
-      assertProjectManager(actor, ready.projectId);
+      assertProjectManager(actor, project.projectId);
     }
     const kind = voidKindForVersion(version);
     assert(kind, "当前版本状态不支持作废。");
