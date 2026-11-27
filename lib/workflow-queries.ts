@@ -1,5 +1,6 @@
 import { all, db, one } from "./db";
 import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
+import { OPEN_BINDING_RELEASE_STATUSES_SQL, OPEN_BINDING_REQUIREMENT_STATUSES_SQL } from "./binding-availability";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
   bindingBarcodeEvidenceKey,
@@ -1259,8 +1260,9 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN project_nodes n ON n.id = f.node_id
      LEFT JOIN users su ON su.id = f.submitted_by
      WHERE (? = 1 OR f.approver_id = ?) AND f.submitted_by IS NOT ? AND pr.status != 'ARCHIVED'
-       AND f.status = 'PENDING' AND br.status IN ('PENDING','PASSED') AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL
-       AND r.status IN ('TRIAL','PENDING_FORMAL') AND pv.status IN ('TRIAL','PENDING_FORMAL')
+       AND f.status = 'PENDING' AND br.status IN ${OPEN_BINDING_REQUIREMENT_STATUSES_SQL}
+       AND br.pushed_at IS NOT NULL AND br.waived_at IS NULL
+       AND r.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL} AND pv.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL}
      ORDER BY f.submitted_at`,
     user.role === "ADMIN" ? 1 : 0,
     user.id,

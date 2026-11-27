@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { BINDING_BARCODE_FAILURE_REASON_LIMIT, bindingBarcodeProgress, isActiveBindingFlow } from "@/lib/binding-barcode-results";
-import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "@/lib/permissions";
+import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
+import { bindingReleaseAvailability, bindingRequirementAvailability } from "@/lib/binding-availability";
 import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
@@ -63,8 +64,13 @@ export default async function TrialDetailPage({
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
   const { request, requirements } = data;
-  const archived = request.projectStatus === "ARCHIVED";
-  const canEditFlows = !archived && isBindingOpen(request.versionStatus) && isBindingOpen(request.status);
+  const releaseAvailability = bindingReleaseAvailability({
+    projectStatus: request.projectStatus,
+    requestStatus: request.status,
+    versionStatus: request.versionStatus,
+  });
+  const archived = releaseAvailability === "ARCHIVED";
+  const canEditFlows = releaseAvailability === "OPEN";
   const canReadProject = canAccessProjectPage(user, request.projectId);
   const scopeProjectId = requireWorkflowProject(user, search.project, request.projectId, true)?.id;
   const listState = { ...getWorkflowListState(search), ...trialQueueParams(search), view: "binding" };
@@ -160,9 +166,13 @@ export default async function TrialDetailPage({
               {requirements.length > 0 && <div style={{ marginBottom: 12 }}><ProgressBar value={passed + waived} max={requirements.length} /></div>}
               {requirements.length === 0 ? <EmptyState title="该版本没有节点绑定记录" /> : <div className={styles.nodeList}>
                 {requirements.map((requirement) => {
-                  const acceptsBinding = canEditFlows && requirement.waivedAt === null
-                    && (requirement.status === "PENDING" || requirement.status === "PASSED");
-                  const open = acceptsBinding && requirement.pushedAt !== null;
+                  const availability = bindingRequirementAvailability({
+                    status: requirement.status,
+                    pushed: requirement.pushedAt !== null,
+                    waived: requirement.waivedAt !== null,
+                  });
+                  const acceptsBinding = canEditFlows && availability !== "CLOSED";
+                  const open = canEditFlows && availability === "OPEN";
                   const showSubmit = acceptsBinding && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const showWaive = acceptsBinding && request.status === "TRIAL" && requirement.status === "PENDING"

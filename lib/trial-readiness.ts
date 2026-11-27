@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { OPEN_BINDING_RELEASE_STATUSES_SQL } from "./binding-availability";
 
 type ActiveBindingSummary = {
   total: number;
@@ -8,7 +9,6 @@ type ActiveBindingSummary = {
 
 type ActiveReleaseRequest = { id: number; projectId: number; projectName: string; status: string };
 
-const openTrialStatuses = "('TRIAL','PENDING_FORMAL')";
 const activeReleaseRequest = "r.trial_released_at IS NOT NULL AND pr.status != 'ARCHIVED'";
 const activeIntegrationBatch = `FROM batch_items bi
   JOIN integration_batches b ON b.id = bi.batch_id
@@ -108,7 +108,7 @@ export function getFormalReleaseCheck(
 export function refreshTrialReadiness(database: DatabaseSync, versionId: number, timestamp: string) {
   const version = database.prepare(
     `SELECT pv.status, pv.binding_mode FROM package_versions pv
-     WHERE pv.id = ? AND pv.status IN ${openTrialStatuses}
+     WHERE pv.id = ? AND pv.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL}
        AND EXISTS (
          SELECT 1 FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
          WHERE r.package_version_id = pv.id AND ${activeReleaseRequest}
@@ -126,7 +126,7 @@ export function refreshTrialReadiness(database: DatabaseSync, versionId: number,
   }
   database.prepare(
     `UPDATE version_transfer_requests SET status = ?, updated_at = ?
-     WHERE package_version_id = ? AND status IN ${openTrialStatuses} AND status != ?
+     WHERE package_version_id = ? AND status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL} AND status != ?
        AND trial_released_at IS NOT NULL
        AND project_id IN (SELECT id FROM projects WHERE status != 'ARCHIVED')`,
   ).run(nextStatus, timestamp, versionId, nextStatus);
@@ -141,7 +141,7 @@ export function refreshProjectTrialReadiness(database: DatabaseSync, timestamp: 
      FROM version_transfer_requests r
      JOIN projects pr ON pr.id = r.project_id
      JOIN package_versions pv ON pv.id = r.package_version_id
-     WHERE pv.status IN ${openTrialStatuses} AND r.trial_released_at IS NOT NULL AND ${scope}`,
+     WHERE pv.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL} AND r.trial_released_at IS NOT NULL AND ${scope}`,
   ).all(...(projectId === undefined ? [] : [projectId])) as Array<{ id: number }>;
   for (const version of versions) {
     refreshTrialReadiness(database, version.id, timestamp);

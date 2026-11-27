@@ -4,10 +4,6 @@ export function isAdmin(user: SessionUser | null): boolean {
   return user?.role === "ADMIN";
 }
 
-export function isBindingOpen(status: string): boolean {
-  return status === "TRIAL" || status === "PENDING_FORMAL";
-}
-
 export function canSubmitBindingFlow(
   user: SessionUser | null,
   bindingOwnerId: number | null,

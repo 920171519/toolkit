@@ -5,9 +5,10 @@ import {
   canReadPackageWorkflow,
 } from "./access";
 import { bindingBarcodeProgress } from "./binding-barcode-results";
+import { isBindingReleaseOpen } from "./binding-availability";
 import { db, one } from "./db";
 import { packageIdentity } from "./package-identity";
-import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "./permissions";
+import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
 import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignments } from "./trial-eligibility";
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import type { SessionUser } from "./types";
@@ -162,7 +163,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   const bindingArgs = { ...context.bindingListState, ...args };
   const projectScope = (projectId: number) => canAccessProjectPage(user, projectId) ? projectId : undefined;
   const traceHref = workflowHref(`/versions/${versionId}`, context.projectId === undefined ? undefined : projectScope(context.projectId), args);
-  if (!isBindingOpen(version.status)) return {
+  if (!isBindingReleaseOpen(version.status)) return {
     status: version.status, canManage, pendingFlowCount: 0,
     description: `${identity.code} ${version.version}`,
     items: [{

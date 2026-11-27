@@ -2,13 +2,15 @@ import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createAuditLogWriter } from "./audit-log";
+import {
+  bindingReleaseAvailability,
+  bindingRequirementAvailability,
+  OPEN_BINDING_REQUIREMENT_STATUSES_SQL,
+  type BindingReleaseFacts,
+} from "./binding-availability";
 import { all, db, one, run, transaction } from "./db";
 import { packageIdentity } from "./package-identity";
-import {
-  canApproveBindingFlow,
-  canSubmitBindingFlow,
-  isBindingOpen,
-} from "./permissions";
+import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
 import { getActiveReleaseRequests, getFormalReleaseCheck, refreshTrialReadiness } from "./trial-readiness";
@@ -1020,7 +1022,7 @@ export function voidPackageVersion(actor: SessionUser, versionId: number, reason
 function invalidateBindingConfirmation(requirementId: number, versionId: number, timestamp: string) {
   run(
     `UPDATE binding_requirements SET status = 'PENDING', confirmed_at = NULL, confirmed_by = NULL, barcode_confirmation = 0, updated_at = ?
-     WHERE id = ? AND status IN ('PENDING','PASSED') AND waived_at IS NULL`,
+     WHERE id = ? AND status IN ${OPEN_BINDING_REQUIREMENT_STATUSES_SQL} AND waived_at IS NULL`,
     timestamp,
     requirementId,
   );
@@ -1028,14 +1030,11 @@ function invalidateBindingConfirmation(requirementId: number, versionId: number,
 }
 
 function bindingBarcodeEvidence(actor: SessionUser, requirementId: number, evidenceKey: string) {
-  const requirement = one<{
+  const requirement = one<BindingReleaseFacts & {
     request_id: number;
-    request_status: string;
     version_id: number;
-    version_status: string;
     project_id: number;
     project_name: string;
-    project_status: string;
     node_name: string;
     package_name: string;
     version: string;
@@ -1046,8 +1045,8 @@ function bindingBarcodeEvidence(actor: SessionUser, requirementId: number, evide
     waived_at: string | null;
     barcode_revision: number;
   }>(
-    `SELECT br.request_id, r.status AS request_status, pv.id AS version_id, pv.status AS version_status,
-            pr.id AS project_id, pr.name AS project_name, pr.status AS project_status, n.name AS node_name,
+    `SELECT br.request_id, r.status AS requestStatus, pv.id AS version_id, pv.status AS versionStatus,
+            pr.id AS project_id, pr.name AS project_name, pr.status AS projectStatus, n.name AS node_name,
             p.name AS package_name, p.owner_id AS package_owner_id, pv.version, br.required_count, br.status,
             br.pushed_at, br.waived_at, br.barcode_revision
      FROM binding_requirements br
@@ -1065,10 +1064,13 @@ function bindingBarcodeEvidence(actor: SessionUser, requirementId: number, evide
     "只有软件包责任人、本项目软件经理或系统管理员可以判定条码或确认节点通过。",
     "FORBIDDEN",
   );
-  assert(requirement.project_status !== "ARCHIVED", "项目已归档，不能判定条码或确认节点通过。");
-  assert(isBindingOpen(requirement.request_status) && isBindingOpen(requirement.version_status), "该版本已结束绑定验证，不能判定条码或确认节点通过。");
-  assert((requirement.status === "PENDING" || requirement.status === "PASSED") && requirement.pushed_at && !requirement.waived_at,
-    "该节点未推送、已关闭或已免绑。");
+  const releaseAvailability = bindingReleaseAvailability(requirement);
+  assert(releaseAvailability !== "ARCHIVED", "项目已归档，不能判定条码或确认节点通过。");
+  assert(releaseAvailability === "OPEN", "该版本已结束绑定验证，不能判定条码或确认节点通过。");
+  const nodeAvailability = bindingRequirementAvailability({
+    status: requirement.status, pushed: Boolean(requirement.pushed_at), waived: Boolean(requirement.waived_at),
+  });
+  assert(nodeAvailability === "OPEN", "该节点未推送、已关闭或已免绑。");
 
   const flows = all<{ id: number; status: string }>(
     `SELECT id, status FROM binding_flows WHERE requirement_id = ? AND status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL}`,
@@ -1197,11 +1199,9 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     assert(barcode.length >= 3 && barcode.length <= 80, "设备条码长度需为 3-80 个字符。");
   }
   return transaction(() => {
-    const requirement = one<{
+    const requirement = one<BindingReleaseFacts & {
       id: number;
       request_id: number;
-      request_status: string;
-      version_status: string;
       status: string;
       package_version_id: number;
       package_id: number;
@@ -1213,13 +1213,12 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
       project_name: string;
       node_id: number;
       node_name: string;
-      project_status: string;
       pushed_at: string | null;
       waived_at: string | null;
     }>(
-      `SELECT br.id, br.request_id, r.status AS request_status, pv.status AS version_status, br.status, br.package_version_id, p.id AS package_id,
+      `SELECT br.id, br.request_id, r.status AS requestStatus, pv.status AS versionStatus, br.status, br.package_version_id, p.id AS package_id,
               p.name AS package_name, pv.version, br.binding_owner_id, br.approver_id, br.project_id,
-              pr.name AS project_name, pr.status AS project_status, br.node_id, n.name AS node_name, br.pushed_at, br.waived_at
+              pr.name AS project_name, pr.status AS projectStatus, br.node_id, n.name AS node_name, br.pushed_at, br.waived_at
        FROM binding_requirements br
        JOIN version_transfer_requests r ON r.id = br.request_id
        JOIN package_versions pv ON pv.id = br.package_version_id
@@ -1235,10 +1234,14 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
       "只有该节点的绑定验证责任人或系统管理员可以提交绑定电子流。",
       "FORBIDDEN",
     );
-    assert(requirement.project_status !== "ARCHIVED", "项目已归档，不能提交绑定电子流。");
-    assert(isBindingOpen(requirement.request_status) && isBindingOpen(requirement.version_status), "该版本已结束绑定验证，不能提交绑定电子流。");
-    assert(!requirement.waived_at && (requirement.status === "PENDING" || requirement.status === "PASSED"), "该节点已关闭或已免绑，不能提交绑定电子流。");
-    assert(requirement.pushed_at, "软件经理尚未推送绑定任务，暂不能提交绑定电子流。");
+    const releaseAvailability = bindingReleaseAvailability(requirement);
+    assert(releaseAvailability !== "ARCHIVED", "项目已归档，不能提交绑定电子流。");
+    assert(releaseAvailability === "OPEN", "该版本已结束绑定验证，不能提交绑定电子流。");
+    const nodeAvailability = bindingRequirementAvailability({
+      status: requirement.status, pushed: Boolean(requirement.pushed_at), waived: Boolean(requirement.waived_at),
+    });
+    assert(nodeAvailability !== "CLOSED", "该节点已关闭或已免绑，不能提交绑定电子流。");
+    assert(nodeAvailability === "OPEN", "软件经理尚未推送绑定任务，暂不能提交绑定电子流。");
     const approvers = all<{ userId: number }>(
       "SELECT user_id AS userId FROM binding_requirement_approvers WHERE requirement_id = ? ORDER BY id",
       requirementId,
@@ -1292,19 +1295,16 @@ export function cancelBindingFlow(actor: SessionUser, flowId: number, reason: st
   const notes = reason.trim();
   assert(notes.length >= 5 && notes.length <= 2000, "请填写撤销原因（5–2000 个字符）。");
   return transaction(() => {
-    const flow = one<{
+    const flow = one<BindingReleaseFacts & {
       submitted_by: number | null;
       status: string;
       project_id: number;
-      project_status: string;
       version_id: number;
-      version_status: string;
       request_id: number;
-      request_status: string;
       requirement_id: number;
     }>(
-      `SELECT f.submitted_by, f.status, f.project_id, pr.status AS project_status, pv.id AS version_id,
-              pv.status AS version_status, br.request_id, r.status AS request_status, f.requirement_id
+      `SELECT f.submitted_by, f.status, f.project_id, pr.status AS projectStatus, pv.id AS version_id,
+              pv.status AS versionStatus, br.request_id, r.status AS requestStatus, f.requirement_id
        FROM binding_flows f
        JOIN binding_requirements br ON br.id = f.requirement_id
        JOIN version_transfer_requests r ON r.id = br.request_id
@@ -1320,8 +1320,8 @@ export function cancelBindingFlow(actor: SessionUser, flowId: number, reason: st
       "FORBIDDEN",
     );
     assert(isActiveBindingFlow(flow.status), "该绑定电子流已结束，无需撤销。");
-    const beforeFormal = flow.project_status !== "ARCHIVED" && isBindingOpen(flow.version_status) && isBindingOpen(flow.request_status);
-    assert(beforeFormal || flow.version_status === "VOID", "仅未转正或已作废的版本允许撤销绑定电子流。");
+    const beforeFormal = bindingReleaseAvailability(flow) === "OPEN";
+    assert(beforeFormal || flow.versionStatus === "VOID", "仅未转正或已作废的版本允许撤销绑定电子流。");
     const timestamp = now();
     run(
       "UPDATE binding_flows SET status = 'CANCELLED', cancelled_at = ?, cancel_reason = ? WHERE id = ?",
@@ -1332,7 +1332,7 @@ export function cancelBindingFlow(actor: SessionUser, flowId: number, reason: st
     let returnedToBinding = false;
     if (beforeFormal && flow.status === "APPROVED") {
       invalidateBindingConfirmation(flow.requirement_id, flow.version_id, timestamp);
-      returnedToBinding = flow.version_status === "PENDING_FORMAL"
+      returnedToBinding = flow.versionStatus === "PENDING_FORMAL"
         && one<{ status: string }>("SELECT status FROM package_versions WHERE id = ?", flow.version_id)?.status === "TRIAL";
     }
     audit(actor.id, "CANCEL_BINDING_FLOW", "BINDING_FLOW", flowId, `撤销绑定电子流：${notes}`);
@@ -1348,20 +1348,17 @@ export function decideBindingFlow(
 ) {
   assert(comment.trim().length >= 2, "请填写审批意见。");
   return transaction(() => {
-    const flow = one<{
+    const flow = one<BindingReleaseFacts & {
       id: number;
       submitted_by: number | null;
       approver_id: number | null;
       status: string;
       requirement_id: number;
       request_id: number;
-      request_status: string;
       requirement_status: string;
       pushed_at: string | null;
       waived_at: string | null;
       version_id: number;
-      version_status: string;
-      project_status: string;
       package_id: number;
       package_name: string;
       version: string;
@@ -1369,8 +1366,8 @@ export function decideBindingFlow(
       node_name: string;
     }>(
       `SELECT f.id, f.submitted_by, f.approver_id, f.status, f.requirement_id, br.request_id,
-              r.status AS request_status, br.status AS requirement_status, br.pushed_at, br.waived_at,
-              f.package_version_id AS version_id, pv.status AS version_status, pr.status AS project_status, p.id AS package_id,
+              r.status AS requestStatus, br.status AS requirement_status, br.pushed_at, br.waived_at,
+              f.package_version_id AS version_id, pv.status AS versionStatus, pr.status AS projectStatus, p.id AS package_id,
               p.name AS package_name, pv.version, pr.name AS project_name, n.name AS node_name
        FROM binding_flows f
        JOIN binding_requirements br ON br.id = f.requirement_id
@@ -1386,9 +1383,13 @@ export function decideBindingFlow(
     assert(canApproveBindingFlow(actor, flow.approver_id), "只有该节点的绑定电子流审批人或管理员可以审批。", "FORBIDDEN");
     assert(flow.submitted_by !== actor.id, "不能审批自己提交的绑定电子流。");
     assert(flow.status === "PENDING", "该绑定电子流已处理。");
-    assert(flow.project_status !== "ARCHIVED", "项目已归档，不能审批绑定电子流。");
-    assert(isBindingOpen(flow.request_status) && isBindingOpen(flow.version_status), "该版本已作废或已发布正式版本，不能审批绑定电子流。");
-    assert(flow.pushed_at && !flow.waived_at && (flow.requirement_status === "PENDING" || flow.requirement_status === "PASSED"), "该节点未推送、已关闭或已免绑，不能审批绑定电子流。");
+    const releaseAvailability = bindingReleaseAvailability(flow);
+    assert(releaseAvailability !== "ARCHIVED", "项目已归档，不能审批绑定电子流。");
+    assert(releaseAvailability === "OPEN", "该版本已作废或已发布正式版本，不能审批绑定电子流。");
+    const nodeAvailability = bindingRequirementAvailability({
+      status: flow.requirement_status, pushed: Boolean(flow.pushed_at), waived: Boolean(flow.waived_at),
+    });
+    assert(nodeAvailability === "OPEN", "该节点未推送、已关闭或已免绑，不能审批绑定电子流。");
     const timestamp = now();
     run(
       "UPDATE binding_flows SET status = ?, reviewed_at = ?, reviewed_by = ?, review_comment = ? WHERE id = ?",
