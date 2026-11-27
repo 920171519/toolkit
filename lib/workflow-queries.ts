@@ -1,9 +1,10 @@
 import { all, db, one } from "./db";
 import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
-import type { BatchStatus } from "./constants";
+import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
 import { packageCodeSql, packageIdentity } from "./package-identity";
+import { getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
@@ -12,21 +13,12 @@ import { trialEligibilityCtes } from "./trial-eligibility";
 import { getPendingBindingFlowCounts } from "./trial-readiness";
 import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 
-export type ProjectOption = { id: number; name: string; code: string; status: string };
-
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
     `SELECT MAX(CAST(SUBSTR(code, 2) AS INTEGER)) AS highest FROM integration_batches
      WHERE UPPER(code) GLOB 'B[0-9]*' AND SUBSTR(code, 2) NOT GLOB '*[^0-9]*'`,
   );
   return `B${String(Math.max(120, batch?.highest ?? 0) + 1).padStart(3, "0")}`;
-}
-
-export function getProjectOptions(includeArchived = false): ProjectOption[] {
-  return all<ProjectOption>(
-    `SELECT id, name, code, status FROM projects
-     ${includeArchived ? "" : "WHERE status != 'ARCHIVED'"} ORDER BY sort_order, id`,
-  );
 }
 
 export function getManagedProjectIds(user: SessionUser): number[] {
@@ -359,6 +351,28 @@ export function getBatchCount(projectIds: number[] | null, filters: BatchFilters
     `SELECT COUNT(*) AS count FROM integration_batches b JOIN projects pr ON pr.id = b.project_id ${batchWhere(predicates)}`,
     ...values,
   )?.count ?? 0;
+}
+
+export function getProjectBatchCounts(projectId: number, includeDrafts: boolean) {
+  return one<{ draft: number; inTest: number }>(
+    `SELECT COUNT(*) FILTER (WHERE status = 'DRAFT') AS draft,
+            COUNT(*) FILTER (WHERE status = 'IN_TEST') AS inTest
+     FROM integration_batches WHERE project_id = ? AND (status = 'IN_TEST' OR (? = 1 AND status = 'DRAFT'))`,
+    projectId,
+    Number(includeDrafts),
+  ) ?? { draft: 0, inTest: 0 };
+}
+
+export function getRecentProjectBatches(projectId: number, limit: number, includeDrafts: boolean) {
+  return all<{ id: number; code: string; title: string; status: BatchStatus; conclusion: BatchConclusion | null; activityAt: string }>(
+    `SELECT id, code, title, status, conclusion, COALESCE(completed_at, terminated_at, sent_at, created_at) AS activityAt
+     FROM integration_batches
+     WHERE project_id = ? AND (? = 1 OR status != 'DRAFT')
+     ORDER BY activityAt DESC, id DESC LIMIT ?`,
+    projectId,
+    Number(includeDrafts),
+    limit,
+  );
 }
 
 export function getIntegrationHistoryPage(

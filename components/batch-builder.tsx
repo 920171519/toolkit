@@ -3,7 +3,8 @@
 import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import type { BatchCandidatePackage, ProjectOption } from "@/lib/workflow-queries";
+import type { ProjectOption } from "@/lib/project-queries";
+import type { BatchCandidatePackage } from "@/lib/workflow-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity } from "@/lib/package-identity";
 import { Badge, EmptyState } from "@/components/ui";

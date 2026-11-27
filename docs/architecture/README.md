@@ -11,7 +11,7 @@
 | 工作流写入 | `lib/actions/workflow.ts` → `lib/workflow.ts` | Server Action 解析表单并返回反馈。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
 | 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田、项目节点、软件包及补录。配置变更触发的流程联动例见 `lib/transfer-requests.ts`。 |
 | 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。试制资格依赖 `lib/trial-eligibility.ts`。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
-| 目录、详情与接口 | `lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 目录和详情模块按读取范围投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
+| 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 会话识别用户。业务授权按项目、责任田、软件包、节点和单据检查。版本对象读取、项目工作区和写入办理各有权限。 |
 | 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/seed.ts`、`lib/report-storage.ts` | `db` 统一连接、事务和启动迁移。演示数据经显式环境变量关闭。报告服务拥有路径校验，报告元数据存入 SQLite。 |
 | 配置与部署 | `package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh`、README 环境变量表 | pnpm 固定依赖，Next.js 处理构建和运行，Node 原生 SQLite 提供存储。部署脚本接入现有进程管理器。生产路径和会话选项逐步归档至任务池。 |
@@ -37,3 +37,5 @@
 运行 `node scripts/check-architecture.mjs --graph` 可导出当前完整的内部模块依赖表。基线扫描覆盖 187 个模块、773 条含类型引用的内部依赖，未发现循环。后续约束以实际依赖和被保留的契约为依据。
 
 软件包抽屉的授权投影由 `getPackageDrawerData` 提供。ESLint 会拦截页面和客户端模块直接导入通用查询中的底层详情读取函数。
+
+项目总览、项目详情和设置页面通过服务端查询模块读取数据。ESLint 拦截这些路由直接导入 `lib/db.ts`。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。

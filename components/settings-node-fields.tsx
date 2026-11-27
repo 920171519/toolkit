@@ -1,5 +1,6 @@
 import { SettingsSelect } from "@/components/settings-select";
-import type { PersonOption, ProjectConfig } from "@/lib/queries";
+import type { ProjectConfig } from "@/lib/project-queries";
+import type { PersonOption } from "@/lib/queries";
 
 export function SettingsNodeFields({ people, node }: { people: PersonOption[]; node?: ProjectConfig["nodes"][number] }) {
   const options = people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }));

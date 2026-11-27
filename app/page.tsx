@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
-import { getPublicProjects } from "@/lib/queries";
+import { getPublicProjects } from "@/lib/project-queries";
 import { PublicHeader } from "@/components/public-header";
 import { ProjectContacts } from "@/components/project-contacts";
 import styles from "./public-contacts.module.css";

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import styles from "@/app/public-contacts.module.css";
-import type { ProjectContact, PublicProject } from "@/lib/queries";
+import type { ProjectContact, PublicProject } from "@/lib/project-queries";
 import { EmptyState } from "./ui";
 
 const pageSize = 12;

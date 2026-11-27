@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChevronRight, Search } from "lucide-react";
 import { useState } from "react";
-import type { ProjectConfig } from "@/lib/queries";
+import type { ProjectConfig } from "@/lib/project-queries";
 
 type ProjectNodes = Pick<ProjectConfig, "id" | "name" | "code" | "status"> & {
   configureHref?: string;

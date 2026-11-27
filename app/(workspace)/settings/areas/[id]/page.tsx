@@ -7,7 +7,7 @@ import { getListPageSize } from "@/lib/list-pagination";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryHref } from "@/lib/settings-directory";
 import { getAreaConfigs, getPeople, parseFlash, type AreaProjectLead, type AreaProjectMember } from "@/lib/queries";
-import { getProjectOptions, type ProjectOption } from "@/lib/workflow-queries";
+import { getProjectOptions, type ProjectOption } from "@/lib/project-queries";
 import {
   addAreaLeaderAction,
   assignAreaProjectLeadAction,

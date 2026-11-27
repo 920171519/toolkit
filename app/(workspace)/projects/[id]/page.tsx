@@ -8,6 +8,7 @@ import { CONCLUSION_META, PACKAGE_STATUS_META, PROJECT_STATUS_META, TRANSFER_REQ
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import identityStyles from "@/components/package-identity.module.css";
+import { getProjectCatalogEntries } from "@/lib/project-queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
@@ -16,12 +17,13 @@ import { workflowHref } from "@/lib/workflow-links";
 import {
   getPendingFormalVersions,
   getPendingTransferGroups,
+  getProjectBatchCounts,
   getProjectVersionRows,
+  getRecentProjectBatches,
   getTrialReadyVersions,
   getTrialVersions,
 } from "@/lib/workflow-queries";
 import { Badge, BatchStatusPill, EmptyState, FlashMessage, PageHeader, SectionHeading } from "@/components/ui";
-import { getProjectBatchCounts, getProjectCatalogEntries, getRecentProjectBatches } from "../project-data";
 import styles from "../projects.module.css";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +49,7 @@ export default async function ProjectOverviewPage({
   if (!/^\d+$/.test(id)) notFound();
   const projectId = Number(id);
   if (!Number.isSafeInteger(projectId) || projectId < 1) notFound();
-  const [project] = getProjectCatalogEntries([projectId]);
+  const [project] = getProjectCatalogEntries(projectId);
   if (!project) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");

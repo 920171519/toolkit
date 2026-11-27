@@ -3,8 +3,9 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { canAccessProjectPage, getReadablePackageIds } from "./access";
 import { one } from "./db";
+import { getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
-import { getProjectOptions, getWorkflowProjectScope } from "./workflow-queries";
+import { getWorkflowProjectScope } from "./workflow-queries";
 
 export function getWorkflowProjectOptions(user: SessionUser, includeArchived = false) {
   const ids = getWorkflowProjectScope(user, includeArchived);

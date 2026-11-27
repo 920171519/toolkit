@@ -5,7 +5,7 @@ import { ROLE_META } from "@/lib/constants";
 import { getLedAreaIds, getManagedProjectIdsForUser } from "@/lib/access";
 import { getAccountAreaLabel } from "@/lib/queries";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
-import { getProjectOptions } from "@/lib/workflow-queries";
+import { getProjectOptions } from "@/lib/project-queries";
 import { Avatar } from "@/components/ui";
 import { Brand } from "@/components/brand";
 import type { SidebarItem } from "@/components/sidebar-nav";

@@ -7,7 +7,8 @@ import { canManageProjectWorkflowForProject, getLedAreaIds } from "@/lib/access"
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
-import { getAreaConfigs, getPackageDetail, getPeople, getProjectConfigs, parseFlash } from "@/lib/queries";
+import { getProjectConfigs } from "@/lib/project-queries";
+import { getAreaConfigs, getPackageDetail, getPeople, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
 import { ActionForm } from "@/components/action-form";

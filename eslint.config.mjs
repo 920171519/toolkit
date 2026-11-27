@@ -2,6 +2,12 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+const packageDrawerQueryRestriction = {
+  regex: "(?:^|/)queries(?:\\.ts)?$",
+  importNames: ["getReadablePackageDetail"],
+  message: "Use getPackageDrawerData for the authorized package drawer projection.",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -9,10 +15,17 @@ const eslintConfig = defineConfig([
     files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", {
-        patterns: [{
-          regex: "(?:^|/)queries(?:\\.ts)?$",
-          importNames: ["getReadablePackageDetail"],
-          message: "Use getPackageDrawerData for the authorized package drawer projection.",
+        patterns: [packageDrawerQueryRestriction],
+      }],
+    },
+  },
+  {
+    files: ["app/(workspace)/{overview,projects,settings}/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [packageDrawerQueryRestriction, {
+          regex: "(?:^|/)db(?:\\.ts)?$",
+          message: "Read through the corresponding server-side query module.",
         }],
       }],
     },

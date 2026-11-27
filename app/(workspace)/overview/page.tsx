@@ -7,10 +7,10 @@ import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
+import { getProjectCatalogEntries, type ProjectCatalogEntry } from "@/lib/project-queries";
 import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
-import { getProjectCatalogEntries, type ProjectCatalogEntry } from "../projects/project-data";
 import styles from "../projects/projects.module.css";
 import { directoryHref, directoryPage, matchesDirectorySearch } from "@/lib/settings-directory";
 
