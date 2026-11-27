@@ -44,9 +44,10 @@ type RequestGroup = Omit<PendingTransferGroup, "items"> & {
   items: Array<PendingTransferItem & { canCancel: boolean; riskEntry?: RiskTrialEntry }>;
 };
 
-export function PendingTransferTable({ group, scopeProjectId, selection, returnState, pageSize }: {
+export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflowScope, selection, returnState, pageSize }: {
   group: RequestGroup;
   scopeProjectId?: number;
+  hasProjectWorkflowScope: boolean;
   pageSize: number;
   selection?: { key: string; defaults: Record<number, number>; versionPackages: Record<number, number> };
   returnState: { q?: string; page?: number; pageSize?: number; request?: number; returnTo?: string };
@@ -199,7 +200,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
         <span className="small muted">第 {currentPage} / {pages} 页</span>
         <button className="button button-secondary button-sm" type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>下一页</button>
       </nav>}
-      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} people={[]} readOnly onClose={() => {
+      {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} hasProjectWorkflowScope={hasProjectWorkflowScope} people={[]} readOnly onClose={() => {
         setActivePackage(null);
         requestAnimationFrame(() => detailTrigger.current?.focus());
       }} />}

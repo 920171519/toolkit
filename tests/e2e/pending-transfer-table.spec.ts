@@ -1,6 +1,63 @@
 import { expect, test } from "@playwright/test";
 import { expectFlash, login } from "./helpers";
 
+test("软件包责任人可从两个项目的待转测申请追溯同一版本，项目软件经理保留项目范围", async ({ page }) => {
+  const version = "99.1127.2";
+  const title = `1002CFG ${version}`;
+  const queue = `/submissions?q=${version}`;
+  const projects = ["星云 N1", "磐石 T3"];
+
+  await login(page, "OWNER001");
+  await page.goto("/submissions/transfer");
+  const transfer = page.getByTestId("transfer-form");
+  await transfer.getByLabel("搜索软件包").fill("1002CFG");
+  await transfer.getByRole("button", { name: /^1002CFG\b/ }).click();
+  await transfer.locator('input[name="version"]').fill(version);
+  await transfer.locator('textarea[name="changeSummary"]').fill("验证共享版本从待转测申请的追溯入口。");
+  await transfer.locator('input[name="archiveUrl"]').fill("https://packages.example.com/trace-regression/cfg.tar.gz");
+  await transfer.locator('input[name="buildUrl"]').fill("https://ci.example.com/trace-regression/cfg");
+  await transfer.getByRole("button", { name: "提交申请" }).click();
+  await expectFlash(page, "转测申请已提交，并发送至 2 个项目");
+
+  async function openTrace(project: string) {
+    const pending = page.getByRole("region", { name: `${project}待转测申请表格`, exact: true });
+    await pending.getByRole("link", { name: "查看 1002CFG 详情", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "软件包详情", exact: true });
+    await drawer.getByRole("tab", { name: "版本历史", exact: true }).click();
+    const allVersions = await drawer.getByRole("link", { name: "查看全部版本追溯", exact: true }).getAttribute("href");
+    await drawer.getByRole("listitem").filter({ hasText: version }).getByRole("link", { name: "全链路追溯", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+    return allVersions;
+  }
+
+  try {
+    for (const project of projects) {
+      await page.goto(queue);
+      expect(await openTrace(project)).toBe("/versions?package=2");
+      await expect(page).toHaveURL(/\/versions\/\d+$/);
+      const evidence = page.getByRole("region", { name: "项目版本证据表格" });
+      for (const usedProject of projects) await expect(evidence.getByRole("row").filter({ hasText: usedProject })).toContainText("待转测");
+    }
+    const tracePath = new URL(page.url()).pathname;
+
+    await login(page, "MGR001");
+    await page.goto(queue);
+    expect(await openTrace(projects[0])).toBe("/versions?project=1&package=2");
+    await expect(page).toHaveURL(`${tracePath}?project=1`);
+    await expect(page.getByRole("region", { name: "项目版本证据表格" })).not.toContainText(projects[1]);
+
+    await login(page, "MEMBER001");
+    await page.goto(tracePath);
+    await expect(page.getByRole("heading", { name: "页面或记录不存在", exact: true })).toBeVisible();
+  } finally {
+    await login(page, "OWNER001");
+    await page.goto(queue);
+    await page.getByRole("row").filter({ hasText: version }).first().getByRole("button", { name: "撤回申请" }).click();
+    await page.getByRole("dialog", { name: `撤回 ${title}` }).getByRole("button", { name: "确认撤回" }).click();
+    await expectFlash(page, "转测申请已撤回");
+  }
+});
+
 test("待转测表头筛选保留互斥选择和暂缓项，核对完整配套后详情可返回原行", async ({ page }) => {
   await login(page, "OWNER002");
   await page.goto("/submissions?project=1");

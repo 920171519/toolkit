@@ -178,6 +178,7 @@ export default async function SubmissionsPage({
                     canCancel: item.draftBatchId === null && item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
                   })) }}
                   scopeProjectId={project?.id}
+                  hasProjectWorkflowScope={projectScope === null || projectScope.includes(group.projectId)}
                   pageSize={pageSize}
                   selection={managesGroup ? { key: batchSelectionKey(user.id, group.projectId), defaults, versionPackages } : undefined}
                   returnState={returnState}
