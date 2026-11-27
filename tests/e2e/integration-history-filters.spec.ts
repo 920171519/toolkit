@@ -13,6 +13,7 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
   const db = openE2eDatabase();
   const prefix = "E2E-HISTORY-";
   const target = prefix + "TARGET-";
+  const activePrefix = prefix + "ACTIVE-";
   try {
     db.exec("PRAGMA busy_timeout = 5000");
     db.exec("BEGIN");
@@ -26,6 +27,15 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
          SELECT ? || printf('%03d', n), 1, '新历史批次', 'COMPLETED', '2026-12-01T00:00:00.000Z', 'PASS'
          FROM numbers`,
       ).run(prefix + "RECENT-");
+      db.prepare(
+        `WITH RECURSIVE numbers(n) AS (
+           SELECT 1
+           UNION ALL SELECT n + 1 FROM numbers WHERE n < 11
+         )
+         INSERT INTO integration_batches (code, project_id, title, status, created_at)
+         SELECT ? || n, 1, '分页在测批次', 'IN_TEST', '2020-01-01T00:00:00.000Z'
+         FROM numbers`,
+      ).run(activePrefix);
       const insert = db.prepare(
         `INSERT INTO integration_batches (code, project_id, title, status, created_at, terminated_at)
          VALUES (?, ?, '旧历史批次', 'TERMINATED', '2020-01-01T15:50:00.000Z', ?)`,
@@ -34,6 +44,21 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       insert.run(target + "PREVIOUS-DAY", 1, "2020-01-01T15:59:00.000Z");
       const otherProject = insert.run(target + "OTHER-PROJECT", 2, "2020-01-01T16:05:00.000Z");
       db.exec("COMMIT");
+
+      await page.goto(`/integration?project=1&pageSize=10&q=${activePrefix}`);
+      const activePages = page.getByRole("navigation", { name: "批次列表分页" });
+      const activeRows = page.getByRole("region", { name: "在测批次列表", exact: true }).locator("tbody tr");
+      const activeFilters = (url: URL) => url.searchParams.get("project") === "1" &&
+        url.searchParams.get("pageSize") === "10" && url.searchParams.get("q") === activePrefix;
+      await expect(activeRows).toHaveCount(10);
+      await expect(activePages.getByRole("link", { name: "上一页", exact: true })).toHaveCount(0);
+      await activePages.getByRole("link", { name: "下一页", exact: true }).click();
+      await expect(page).toHaveURL((url) => activeFilters(url) && url.searchParams.get("page") === "2");
+      await expect(activeRows).toHaveCount(1);
+      await expect(activePages.getByRole("link", { name: "下一页", exact: true })).toHaveCount(0);
+      await activePages.getByRole("link", { name: "上一页", exact: true }).click();
+      await expect(page).toHaveURL((url) => activeFilters(url) && !url.searchParams.has("page"));
+      await expect(activeRows).toHaveCount(10);
 
       await page.goto("/integration?project=1&pageSize=10");
       const active = page.getByText("B120", { exact: true });
@@ -72,6 +97,10 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       await page.goto(filteredHistoryUrl.toString());
       await expect(rows).toHaveCount(1);
       await expect(history.getByRole("link", { name: "下一页", exact: true })).toHaveCount(0);
+      await history.getByRole("link", { name: "上一页", exact: true }).click();
+      await expect(page).toHaveURL((url) => url.searchParams.get("page") === "1" && url.searchParams.get("f_batch") === target);
+      await history.getByRole("link", { name: "下一页", exact: true }).click();
+      await expect(rows).toHaveCount(1);
 
       await table.getByRole("link", { name: target + "1", exact: true }).click();
       await expect(page.getByRole("heading", { level: 1, name: target + "1 · 旧历史批次" })).toBeVisible();

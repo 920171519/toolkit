@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { DirectoryPageSize } from "@/components/directory-page-size";
+import { PageLinks } from "@/components/page-links";
 import { DirectoryFilterBar } from "@/components/settings-directory";
 import { EmptyState } from "@/components/ui";
 import { filterOptions, matchesChoiceFilter, matchesNumberFilter, matchesTextFilter, type ColumnFilterOption } from "@/lib/column-filters";
@@ -142,8 +142,7 @@ export function TrialQueueTable<Row>({
         <DirectoryPageSize path="/trial" params={listParams} pageSize={pageSize} pageParam={field("page")} sizeParam={field("size")} hash={hash} />
         <div className={styles.pageNavigation}>
           <span className="small muted">第 {page} / {pages} 页{matching.length > 0 && "，显示 " + (offset + 1) + "–" + (offset + visible.length) + " 条"}</span>
-          {page > 1 && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page > 2 ? page - 1 : undefined })} prefetch={false}><ArrowLeft size={13} aria-hidden="true" />上一页</Link>}
-          {page < pages && <Link className="button button-secondary button-sm" href={href({ [field("page")]: page + 1 })} prefetch={false}>下一页<ArrowRight size={13} aria-hidden="true" /></Link>}
+          <PageLinks page={page} pages={pages} href={(nextPage) => href({ [field("page")]: nextPage > 1 ? nextPage : undefined })} icons="arrows" />
         </div>
       </nav>
     </section>

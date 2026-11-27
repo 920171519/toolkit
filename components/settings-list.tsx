@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { getPageWindow } from "@/lib/list-pagination";
+import { directoryHref } from "@/lib/settings-directory";
+import { PageLinks } from "./page-links";
 
 export function searchValue(value: string | string[] | undefined) {
   return typeof value === "string" ? value.trim().slice(0, 120) : "";
@@ -48,23 +50,17 @@ export function SettingsPagination({ action, page, pageCount, filters, range }: 
   page: number;
   pageCount: number;
   filters: Record<string, string>;
-  range?: string;
+  range: string;
 }) {
-  if (pageCount <= 1 && !range) return null;
-
-  function href(nextPage: number) {
-    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)));
-    query.set("page", String(nextPage));
-    return `${action}?${query}`;
-  }
+  const href = (nextPage: number) => directoryHref(action, { ...filters, page: String(nextPage) });
 
   return (
     <nav className="settings-pagination" aria-label="列表分页">
-      <span className="small muted">{range ?? `第 ${page} 页 / 共 ${pageCount} 页`}</span>
+      <span className="small muted">{range}</span>
       {pageCount > 1 && <div className="toolbar">
-        {page > 1 && <Link href={href(page - 1)} className="button button-secondary button-sm" prefetch={false}><ChevronLeft size={14} aria-hidden="true" />上一页</Link>}
-        {range && <span className="small muted">第 {page} 页 / 共 {pageCount} 页</span>}
-        {page < pageCount && <Link href={href(page + 1)} className="button button-secondary button-sm" prefetch={false}>下一页<ChevronRight size={14} aria-hidden="true" /></Link>}
+        <PageLinks page={page} pages={pageCount} href={href} icons="chevrons">
+          <span className="small muted">第 {page} 页 / 共 {pageCount} 页</span>
+        </PageLinks>
       </div>}
     </nav>
   );

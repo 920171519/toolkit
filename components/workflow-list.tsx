@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { PageSizeSelect } from "@/components/page-size-select";
+import { PageLinks } from "./page-links";
 import styles from "./workflow-queue.module.css";
 
 export function WorkflowListSearch({ action, label, query, pageSize, fields, children, showPageSize = true }: {
@@ -35,9 +35,9 @@ export function WorkflowListPagination({ label, current, pages, href }: {
   if (pages <= 1) return null;
   return (
     <nav className={styles.pagination} aria-label={label}>
-      {current > 1 && <Link href={href(current - 1)} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
-      <span>第 {current} / {pages} 页</span>
-      {current < pages && <Link href={href(current + 1)} prefetch={false} className="button button-secondary button-sm">下一页</Link>}
+      <PageLinks page={current} pages={pages} href={href}>
+        <span>第 {current} / {pages} 页</span>
+      </PageLinks>
     </nav>
   );
 }

@@ -11,6 +11,7 @@ import { wordSearchMatcher } from "@/lib/search-text";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
 import { PACKAGE_PROGRESS_META } from "@/lib/constants";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
+import { PageLinks } from "@/components/page-links";
 import { PageSizeSelect } from "@/components/page-size-select";
 import { packageIdentity } from "@/lib/package-identity";
 import { EmptyState } from "@/components/ui";
@@ -194,9 +195,9 @@ export function PackageOverviewTable({
             window.history.pushState(null, "", urlWith({ page: null, pageSize: size === DEFAULT_LIST_PAGE_SIZE ? null : size }));
           }} />
           <nav aria-label="软件包分页">
-            {page > 1 && <Link href={urlWith({ page: page - 1 === 1 ? null : page - 1 })} prefetch={false} className="button button-secondary button-sm">上一页</Link>}
-            <span>第 {page} / {lastPage} 页</span>
-            {page < lastPage && <Link href={urlWith({ page: page + 1 })} prefetch={false} className="button button-secondary button-sm">下一页</Link>}
+            <PageLinks page={page} pages={lastPage} href={(nextPage) => urlWith({ page: nextPage === 1 ? null : nextPage })}>
+              <span>第 {page} / {lastPage} 页</span>
+            </PageLinks>
           </nav>
         </div>
       </section>

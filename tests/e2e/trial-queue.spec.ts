@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("发布队列表头筛选、排序及分页，详情返回保留筛选条件", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -154,4 +155,52 @@ test("旧版待转正筛选值退出节点绑定筛选，仍可使用同一链�
   await page.goto(path + "&f_binding_status=PENDING_FORMAL");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("1006KEY");
+});
+
+test("绑定队列翻页保留项目、筛选、另一个队列的条件及定位锚点", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const db = openE2eDatabase();
+  const versionPrefix = "e2e-binding-page-";
+  try {
+    db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+    db.prepare(
+      `WITH RECURSIVE numbers(n) AS (
+         SELECT 1
+         UNION ALL SELECT n + 1 FROM numbers WHERE n < 11
+       )
+       INSERT INTO package_versions
+         (package_id, version, change_summary, archive_url, status, binding_mode, submitted_at, updated_at)
+       SELECT 6, ? || n, '节点绑定分页验证', 'https://example.com/archive', 'TRIAL', 'PUSHED', datetime('now'), datetime('now')
+       FROM numbers`,
+    ).run(versionPrefix);
+    db.prepare(
+      `INSERT INTO version_transfer_requests (package_version_id, project_id, status, integration_status, submitted_at, updated_at)
+       SELECT id, 1, 'TRIAL', 'PASSED', datetime('now'), datetime('now') FROM package_versions WHERE version LIKE ?`,
+    ).run(versionPrefix + "%");
+
+    await page.goto(`/trial?project=1&view=binding&f_binding_version=${versionPrefix}&f_release_version=1.6.0&binding_sort=version#binding-queue`);
+    const binding = page.getByRole("region", { name: "试制版本绑定验证", exact: true });
+    const rows = binding.locator("tbody tr");
+    const pagination = binding.getByRole("navigation", { name: "试制版本绑定验证分页", exact: true });
+    const filtersRetained = (url: URL) => url.searchParams.get("project") === "1" &&
+      url.searchParams.get("view") === "binding" && url.searchParams.get("f_binding_version") === versionPrefix &&
+      url.searchParams.get("f_release_version") === "1.6.0" && url.searchParams.get("binding_sort") === "version" &&
+      url.hash === "#binding-queue";
+
+    await expect(rows).toHaveCount(10);
+    await expect(pagination.getByRole("link", { name: "上一页", exact: true })).toHaveCount(0);
+    await pagination.getByRole("link", { name: "下一页", exact: true }).click();
+    await expect(page).toHaveURL((url) => filtersRetained(url) && url.searchParams.get("binding_page") === "2" && !url.searchParams.has("page"));
+    await expect(rows).toHaveCount(1);
+    await expect(pagination.getByRole("link", { name: "下一页", exact: true })).toHaveCount(0);
+    await pagination.getByRole("link", { name: "上一页", exact: true }).click();
+    await expect(page).toHaveURL((url) => filtersRetained(url) && !url.searchParams.has("binding_page"));
+    await expect(rows).toHaveCount(10);
+  } finally {
+    try {
+      db.prepare("DELETE FROM package_versions WHERE version LIKE ?").run(versionPrefix + "%");
+    } finally {
+      db.close();
+    }
+  }
 });
