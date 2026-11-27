@@ -1,6 +1,3 @@
-import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-
 import { createAuditLogWriter } from "./audit-log";
 import {
   bindingReleaseAvailability,
@@ -24,7 +21,7 @@ import {
 } from "./trial-eligibility";
 import type { SessionUser } from "./types";
 import { getPreviousBatchVersion } from "./workflow-queries";
-import { reportArchivePath, resolveReportPath } from "./report-storage";
+import { discardReportFile, reportArchivePath, resolveReportPath, writeReportFile } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
 import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggregate, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
@@ -519,14 +516,8 @@ export async function completeBatchTest(
       assert([...affected].every((id) => items.some((item) => item.version_id === id)), "问题影响的软件包必须属于当前批次。");
 
       const timestamp = now();
-      mkdirSync(dirname(absolutePath), { recursive: true });
-      const handle = openSync(absolutePath, "wx");
+      writeReportFile(absolutePath, bytes, batchId);
       reportWritten = true;
-      try {
-        writeFileSync(handle, bytes);
-      } finally {
-        closeSync(handle);
-      }
       const report = run(
         `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, uploaded_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -574,7 +565,7 @@ export async function completeBatchTest(
       return { voidedCount };
     });
   } catch (error) {
-    if (reportWritten) rmSync(absolutePath, { force: true });
+    if (reportWritten) discardReportFile(absolutePath, batchId);
     throw error;
   }
 }

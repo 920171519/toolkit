@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { resolveReportPath } from "@/lib/report-storage";
+import { readReportFile, resolveReportPath } from "@/lib/report-storage";
 import { getReadableTestReport } from "@/lib/workflow-queries";
 
 export async function GET(
@@ -18,7 +17,8 @@ export async function GET(
   const storagePath = resolveReportPath(report.storedPath);
   if (!storagePath) return new NextResponse("Not found", { status: 404 });
   try {
-    const data = await readFile(storagePath);
+    const data = await readReportFile(storagePath, reportId);
+    if (data === null) return new NextResponse("Not found", { status: 404 });
     return new NextResponse(data, {
       headers: {
         "Content-Type": report.mimeType,

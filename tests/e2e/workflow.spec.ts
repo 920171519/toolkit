@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { getE2eReportsDirectory, openE2eDatabase } from "./storage";
@@ -449,11 +449,33 @@ test.describe("工程协同台项目维度流程", () => {
     await expect(page.getByLabel("问题归属")).toHaveCount(0);
     await page.locator('textarea[name="testSummary"]').fill("集成测试责任田验证：N1 配置专项全部通过，无新增阻塞问题。");
     const reportContents = Buffer.alloc(1100 * 1024, "N1 验证：通过。\n");
-    await page.locator('input[name="reportFile"]').setInputFiles({
+    const upload = {
       name: "B120-verification-report.txt",
       mimeType: "text/plain",
       buffer: reportContents,
-    });
+    };
+    const reportDirectory = join(getE2eReportsDirectory(), "1-星云 N1", "B120");
+    await mkdir(reportDirectory, { recursive: true });
+    const previousFiles = (await readdir(reportDirectory)).sort();
+    const rollbackDb = openE2eDatabase();
+    try {
+      rollbackDb.exec(`CREATE TRIGGER e2e_report_metadata_failure BEFORE INSERT ON report_files
+        WHEN NEW.original_name = 'B120-verification-report.txt'
+        BEGIN SELECT RAISE(ABORT, 'e2e report metadata write failure'); END;`);
+      try {
+        await page.locator('input[name="reportFile"]').setInputFiles(upload);
+        await page.getByRole("button", { name: "提交验证结论" }).click();
+        await expect(page.getByText("操作未完成，系统出现异常，请稍后重试。")).toBeVisible();
+        expect(rollbackDb.prepare("SELECT status, test_report_file_id FROM integration_batches WHERE id = 4").get())
+          .toMatchObject({ status: "IN_TEST", test_report_file_id: null });
+        expect((await readdir(reportDirectory)).sort()).toEqual(previousFiles);
+      } finally {
+        rollbackDb.exec("DROP TRIGGER e2e_report_metadata_failure");
+      }
+    } finally {
+      rollbackDb.close();
+    }
+    await page.locator('input[name="reportFile"]').setInputFiles(upload);
     await page.getByRole("button", { name: "提交验证结论" }).click();
     await expectFlash(page, "验证报告已上传");
     const reportLink = page.getByRole("link", { name: "B120-verification-report.txt" });
@@ -476,14 +498,18 @@ test.describe("工程协同台项目维度流程", () => {
       const legacyName = `legacy-${randomUUID()}.txt`;
       const legacyPath = join(reportsDirectory, legacyName);
       const legacyStoredPath = ["data", "uploads", "reports", legacyName].join("\\");
-      await writeFile(legacyPath, "旧验证报告", { flag: "wx" });
       try {
         const legacy = db.prepare(
           `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at, uploaded_by)
            VALUES (?, ?, ?, ?, ?, (SELECT id FROM users WHERE employee_id = 'TEST001'))`,
         ).run(legacyName, legacyStoredPath, "text/plain; charset=utf-8", Buffer.byteLength("旧验证报告"), new Date().toISOString());
         try {
-          const legacyDownload = await page.request.get(`/api/reports/${legacy.lastInsertRowid}`);
+          const legacyUrl = `/api/reports/${legacy.lastInsertRowid}`;
+          const missingReport = await page.request.get(legacyUrl);
+          expect(missingReport.status()).toBe(404);
+          expect(await missingReport.text()).toBe("Not found");
+          await writeFile(legacyPath, "旧验证报告", { flag: "wx" });
+          const legacyDownload = await page.request.get(legacyUrl);
           expect(legacyDownload.ok()).toBe(true);
           expect(await legacyDownload.text()).toBe("旧验证报告");
         } finally {

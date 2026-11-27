@@ -1,7 +1,9 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { isAbsolute, posix, relative, resolve, sep, win32 } from "node:path";
+import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { dirname, isAbsolute, posix, relative, resolve, sep, win32 } from "node:path";
 import { REPORT_STORAGE_KEY_PREFIX, resolveReportStoragePath } from "./runtime-config";
 
 function readableSegment(value: string, limit: number, fallback: string) {
@@ -30,4 +32,56 @@ export function resolveReportPath(storedPath: string) {
   const insideRoot = relative(storedRoot, storagePath);
   if (!insideRoot || insideRoot === ".." || insideRoot.startsWith(`..${sep}`) || isAbsolute(insideRoot)) return null;
   return resolveReportStoragePath(storagePath, insideRoot);
+}
+
+function fileErrorCode(error: unknown) {
+  const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{1,39}$/.test(code) ? code : "UNKNOWN";
+}
+
+function logReportStorageFailure(operation: "read" | "close" | "discard", target: { reportId: number } | { batchId: number }, code: string) {
+  console.error("[report-storage]", { operation, ...target, code });
+}
+
+function writeAndCloseReport(handle: number, bytes: Uint8Array, batchId: number) {
+  try {
+    writeFileSync(handle, bytes);
+  } catch (writeError) {
+    try {
+      closeSync(handle);
+    } catch (closeError) {
+      logReportStorageFailure("close", { batchId }, fileErrorCode(closeError));
+    }
+    throw writeError;
+  }
+  closeSync(handle);
+}
+
+export function writeReportFile(storagePath: string, bytes: Uint8Array, batchId: number) {
+  mkdirSync(dirname(storagePath), { recursive: true });
+  const handle = openSync(storagePath, "wx");
+  try {
+    writeAndCloseReport(handle, bytes, batchId);
+  } catch (error) {
+    discardReportFile(storagePath, batchId);
+    throw error;
+  }
+}
+
+export function discardReportFile(storagePath: string, batchId: number) {
+  try {
+    rmSync(storagePath, { force: true });
+  } catch (error) {
+    logReportStorageFailure("discard", { batchId }, fileErrorCode(error));
+  }
+}
+
+export async function readReportFile(storagePath: string, reportId: number) {
+  try {
+    return await readFile(storagePath);
+  } catch (error) {
+    const code = fileErrorCode(error);
+    if (code !== "ENOENT") logReportStorageFailure("read", { reportId }, code);
+    return null;
+  }
 }
