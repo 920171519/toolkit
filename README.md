@@ -348,7 +348,7 @@ pnpm dev
 
 打开 [http://localhost:3000](http://localhost:3000)。首次启动会自动创建数据库并写入演示数据（`data/toolkit.db`）。
 
-Node.js 22.5 至 22.12 需要为 Node 进程启用 `--experimental-sqlite`，并选择兼容该版本的 pnpm。项目完整回归使用 Node.js 24.19.0 和 pnpm 11.19.0。 [Node.js SQLite 文档](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html) · [22.13.0 发布说明](https://nodejs.org/en/blog/release/v22.13.0)
+Node.js 22.5 至 22.12 需要为 Node 进程启用 `--experimental-sqlite`，并选择兼容该版本的 pnpm。项目完整回归使用 Node.js 24.19.0 和 pnpm 11.19.0。pnpm 11.19.0 本身需要 Node.js 22.13 或更高版本。 [Node.js SQLite 文档](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html) · [22.13.0 发布说明](https://nodejs.org/en/blog/release/v22.13.0)
 
 ### 演示账号
 
@@ -543,7 +543,7 @@ data/                         # SQLite 数据文件与上传报告（部署需�
   3. `pnpm build`；
   4. 启动新服务；
   5. 浏览器强制刷新或无痕窗口验证。
-- 可使用脚本。默认 systemd 服务为 `toolkit.service`，识别、停止和启动使用同一单元名。
+- 部署脚本在停服前检查 pnpm 能否运行。执行构建时同时检查当前 Node.js 能否加载 `node:sqlite`。使用 `DO_BUILD=0` 跳过构建时，服务运行环境仍需支持 `node:sqlite`。默认 systemd 服务为 `toolkit.service`，识别、停止和启动使用同一单元名。
 
 ```bash
 cd /opt/toolkit

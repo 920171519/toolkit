@@ -39,6 +39,16 @@ start_service() {
   fi
 }
 
+echo "==> 检查部署环境"
+if [[ "${DO_BUILD}" == "1" ]] && ! node -e 'require("node:sqlite")' >/dev/null; then
+  echo "当前 Node.js 无法加载 node:sqlite，请检查 Node.js 版本和 NODE_OPTIONS。" >&2
+  exit 1
+fi
+if ! pnpm --version >/dev/null; then
+  echo "当前环境无法运行 pnpm，请检查 pnpm 是否已安装并与 Node.js 版本兼容。" >&2
+  exit 1
+fi
+
 echo "==> 停止旧服务（必须先停，避免 .next 构建产物与旧进程混用）"
 stop_service
 
