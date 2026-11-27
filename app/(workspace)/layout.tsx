@@ -2,7 +2,7 @@ import Link from "next/link";
 import { KeyRound, LogOut, MapPinned } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
-import { getLedAreaIds, getManagedProjectScope } from "@/lib/access";
+import { getSettingsNavigation } from "@/lib/settings-navigation";
 import { getAccountAreaLabel } from "@/lib/organization-queries";
 import { getWorkspaceProjectNavigation } from "@/lib/project-scope";
 import { Avatar } from "@/components/ui";
@@ -17,9 +17,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const user = await requireUser();
   const areaLabel = getAccountAreaLabel(user.id);
   const accountLabel = `${ROLE_META[user.role].label} · ${user.employeeId}`;
-  const isAdmin = user.role === "ADMIN";
-  const canConfigure = getManagedProjectScope(user, { includeArchived: true })?.length !== 0;
-  const canManagePackages = isAdmin || getLedAreaIds(user.id).length > 0;
+  const configItems = getSettingsNavigation(user).map(({ href, label, icon }) => ({ href, label, icon }));
 
   const departmentItems: SidebarItem[] = [
     { href: "/dashboard", label: "我的工作台", icon: "dashboard" },
@@ -51,12 +49,6 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
     { href: "/versions", label: "版本全链路", icon: "versions" },
   ];
 
-  const configItems: SidebarItem[] = [
-    { href: "/settings/areas", label: "责任田", icon: "areas" },
-    ...(canConfigure ? [{ href: "/settings/projects", label: "项目配置", icon: "projectSettings" } satisfies SidebarItem] : []),
-    ...(canManagePackages ? [{ href: "/settings/packages", label: "软件包配置", icon: "packageSettings" } satisfies SidebarItem] : []),
-    ...(isAdmin ? [{ href: "/settings/users", label: "人员与角色", icon: "users" } satisfies SidebarItem] : []),
-  ];
   const groups = [
     { label: "部门协同", items: departmentItems },
     { label: "基础配置", items: configItems },
