@@ -3,21 +3,24 @@ import "server-only";
 import { assertVersionProjectManager, canSubmitTransferForArea } from "./access";
 import { createAuditLogWriter } from "./audit-log";
 import { db, one, run, transaction } from "./db";
-import { assert } from "./domain-error";
+import { assert, DomainError } from "./domain-error";
+import { invalidTransferFields, TRANSFER_CHANGE_SUMMARY_MIN_LENGTH, type TransferFormFields } from "./transfer-form-validation";
 import { getActiveTransferProjects, insertTransferRequest } from "./transfer-requests";
 import type { SessionUser } from "./types";
 
 const audit = createAuditLogWriter(db);
 const now = () => new Date().toISOString();
 
-export function submitTransfer(
-  actor: SessionUser,
-  input: { packageId: number; version: string; changeSummary: string; archiveUrl: string; buildUrl: string; scopeProjectId?: number },
-) {
-  assert(input.version.trim().length > 0, "请填写版本号。");
-  assert(input.changeSummary.trim().length >= 5, "请填写版本变更说明（至少 5 个字符）。");
-  assert(/^https?:\/\//i.test(input.archiveUrl.trim()), "归档链接必须以 http:// 或 https:// 开头。");
-  assert(/^https?:\/\//i.test(input.buildUrl.trim()), "构建地址必须以 http:// 或 https:// 开头。");
+const transferFieldErrors: Record<keyof TransferFormFields, string> = {
+  version: "请填写版本号。",
+  changeSummary: `请填写版本变更说明（至少 ${TRANSFER_CHANGE_SUMMARY_MIN_LENGTH} 个字符）。`,
+  archiveUrl: "归档链接必须以 http:// 或 https:// 开头。",
+  buildUrl: "构建地址必须以 http:// 或 https:// 开头。",
+};
+
+export function submitTransfer(actor: SessionUser, input: TransferFormFields & { packageId: number; scopeProjectId?: number }) {
+  const [invalidField] = invalidTransferFields(input);
+  if (invalidField) throw new DomainError(transferFieldErrors[invalidField]);
 
   return transaction(() => {
     const pkg = one<{ id: number; name: string; area_id: number | null; is_active: number }>(

@@ -8,6 +8,7 @@ import { submitTransferAction } from "@/lib/actions/workflow";
 import type { ActionState } from "@/lib/action-state";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
+import { invalidTransferFields, TRANSFER_CHANGE_SUMMARY_MIN_LENGTH, type TransferFormFields } from "@/lib/transfer-form-validation";
 import nameVisibility from "./package-name-toggle.module.css";
 import styles from "./workflow-queue.module.css";
 
@@ -16,6 +17,13 @@ type PackageOption = {
   name: string;
   code: string;
   ownerName: string | null;
+};
+
+const transferFieldGuidance: Record<keyof TransferFormFields, { title: string; detail?: string }> = {
+  version: { title: "填写版本号" },
+  changeSummary: { title: "填写变更说明", detail: `至少填写 ${TRANSFER_CHANGE_SUMMARY_MIN_LENGTH} 个字。` },
+  archiveUrl: { title: "补齐归档链接", detail: "链接以 http:// 或 https:// 开头。" },
+  buildUrl: { title: "补齐构建地址", detail: "地址以 http:// 或 https:// 开头。" },
 };
 
 export function TransferRequestForm({ packages, scopeProjectId, initialPackageId, returnTo }: {
@@ -49,13 +57,8 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
   const pageSize = 12;
   const { current: page, pages, offset, end } = getPageWindow(filtered.length, pageSize, requestedPage);
   const visible = filtered.slice(offset, end);
-  const conditions = [
-    !selected ? { title: "选择软件包", detail: "按编码、名称或责任人搜索并选择软件包。" } : null,
-    !version.trim() ? { title: "填写版本号" } : null,
-    changeSummary.trim().length < 5 ? { title: "填写变更说明", detail: "至少填写 5 个字。" } : null,
-    !/^https?:\/\//i.test(archiveUrl.trim()) ? { title: "补齐归档链接", detail: "链接以 http:// 或 https:// 开头。" } : null,
-    !/^https?:\/\//i.test(buildUrl.trim()) ? { title: "补齐构建地址", detail: "地址以 http:// 或 https:// 开头。" } : null,
-  ].filter((item): item is NonNullable<typeof item> => item !== null);
+  const conditions = invalidTransferFields({ version, changeSummary, archiveUrl, buildUrl }).map((field) => transferFieldGuidance[field]);
+  if (!selected) conditions.unshift({ title: "选择软件包", detail: "按编码、名称或责任人搜索并选择软件包。" });
 
   return (
     <form action={formAction} data-testid="transfer-form">
@@ -117,9 +120,9 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
         <div className="field">
           <div className="label">
             <label htmlFor={summaryId}>变更说明 <span className="required-mark" aria-hidden="true">*</span></label>
-            <span className="hint" id={`${summaryId}-hint`}>至少 5 个字</span>
+            <span className="hint" id={`${summaryId}-hint`}>至少 {TRANSFER_CHANGE_SUMMARY_MIN_LENGTH} 个字</span>
           </div>
-          <textarea className="textarea" id={summaryId} name="changeSummary" value={changeSummary} onChange={(event) => setChangeSummary(event.target.value)} aria-describedby={`${summaryId}-hint`} required minLength={5} />
+          <textarea className="textarea" id={summaryId} name="changeSummary" value={changeSummary} onChange={(event) => setChangeSummary(event.target.value)} aria-describedby={`${summaryId}-hint`} required minLength={TRANSFER_CHANGE_SUMMARY_MIN_LENGTH} />
         </div>
         <label className="field"><span className="label">包归档链接 <span className="required-mark" aria-hidden="true">*</span></span><input className="input" name="archiveUrl" type="url" value={archiveUrl} onChange={(event) => setArchiveUrl(event.target.value)} placeholder="https://packages.example.com/…" required /></label>
         <label className="field"><span className="label">构建地址 <span className="required-mark" aria-hidden="true">*</span></span><input className="input" name="buildUrl" type="url" value={buildUrl} onChange={(event) => setBuildUrl(event.target.value)} placeholder="https://ci.example.com/…" required /></label>
