@@ -100,6 +100,27 @@ type ProjectNode = {
   requiredBindingCount: number;
 };
 
+type ProjectNodeOption = Pick<ProjectNode, "id" | "name" | "description">;
+export type ProjectOptionWithNodes = ProjectOption & { nodes: ProjectNodeOption[] };
+
+const projectNodeOptionColumns = "n.id, n.name, n.description";
+
+export function getProjectOptionsWithNodes(): ProjectOptionWithNodes[] {
+  const projects: ProjectOptionWithNodes[] = getProjectOptions(true).map((project) => ({ ...project, nodes: [] }));
+  if (projects.length === 0) return projects;
+
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  const nodes = all<ProjectNodeOption & { projectId: number }>(
+    `SELECT n.project_id AS projectId, ${projectNodeOptionColumns}
+     FROM project_nodes n
+     WHERE n.project_id IN (SELECT value FROM json_each(?))
+     ORDER BY n.project_id, n.sort_order, n.id`,
+    JSON.stringify(projects.map(({ id }) => id)),
+  );
+  for (const { projectId, ...node } of nodes) byId.get(projectId)?.nodes.push(node);
+  return projects;
+}
+
 type NodeApprover = {
   id: number;
   userId: number;
@@ -125,7 +146,7 @@ export function getProjectConfigs(projectId?: number): ProjectConfig[] {
     softwareManagerName: project.softwareManagers.map((person) => person.name).join(" / ") || null,
     packageCount: Number(project.packageCount),
     nodes: all<ProjectNode>(
-      `SELECT n.id, n.name, n.description, n.binding_owner_id AS bindingOwnerId,
+      `SELECT ${projectNodeOptionColumns}, n.binding_owner_id AS bindingOwnerId,
               bo.name AS bindingOwnerName, n.binding_approver_id AS bindingApproverId,
               ba.name AS bindingApproverName, n.required_binding_count AS requiredBindingCount
        FROM project_nodes n

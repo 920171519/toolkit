@@ -3,12 +3,9 @@
 import Link from "next/link";
 import { ChevronRight, Search } from "lucide-react";
 import { useState } from "react";
-import type { ProjectConfig } from "@/lib/project-queries";
+import type { ProjectOptionWithNodes } from "@/lib/project-queries";
 
-type ProjectNodes = Pick<ProjectConfig, "id" | "name" | "code" | "status"> & {
-  configureHref?: string;
-  nodes: Array<Pick<ProjectConfig["nodes"][number], "id" | "name" | "description">>;
-};
+type ProjectNodes = ProjectOptionWithNodes & { configureHref?: string };
 
 export function PackageUsagePicker({ projects, defaultNodeIds, createProjectHref }: { projects: ProjectNodes[]; defaultNodeIds: number[]; createProjectHref?: string }) {
   const [search, setSearch] = useState("");

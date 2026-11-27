@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, getLedAreaIds } from "@/lib/access";
+import { getLedAreaIds, getManagedProjectScope } from "@/lib/access";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE } from "@/lib/package-identity";
 import { directoryFilters, directoryHref, directoryPage } from "@/lib/settings-directory";
-import { getProjectConfigs } from "@/lib/project-queries";
+import { getProjectOptionsWithNodes } from "@/lib/project-queries";
 import { getAreaConfigs, getPackageDetail, getPeople, parseFlash } from "@/lib/queries";
 import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings";
@@ -48,11 +48,12 @@ export default async function PackageSettingsDetailPage({
   const allAreas = getAreaConfigs();
   const areas = isAdmin ? allAreas : allAreas.filter((area) => ledAreaIds.includes(area.id));
   const people = getPeople();
-  const projects = getProjectConfigs();
   const { package: pkg, usages } = data;
   const identity = packageIdentity(pkg);
   const usedNodeIds = new Set(usages.flatMap((usage) => usage.nodes.map((node) => node.nodeId)));
   const usageBlockers = getPackageUsageBlockingVersions(pkg.id);
+  const usageProjects = usageBlockers.length > 0 ? [] : getProjectOptionsWithNodes();
+  const managedProjectIds = usageProjects.length > 0 ? getManagedProjectScope(user, { includeArchived: true }) : [];
   const deactivationBlockers = getPackageDeactivationBlockingVersions(pkg.id);
   const history = directoryPage(getImportedPackageVersions(pkg.id), listParams.historyPage, 10);
   const packagePath = `/settings/packages/${pkg.id}`;
@@ -147,10 +148,10 @@ export default async function PackageSettingsDetailPage({
                 </div>
               ) : (
                 <ActionForm action={savePackageUsagesAction} testId="package-usage-form" hidden={{ ...listParams, packageId: pkg.id }} submitText="保存使用范围">
-                  <PackageUsagePicker createProjectHref={isAdmin ? "/settings/projects" : undefined} projects={projects.map((project) => ({
-                    id: project.id, name: project.name, code: project.code, status: project.status,
-                    configureHref: canManageProjectWorkflowForProject(user, project.id) ? `/settings/projects/${project.id}#nodes` : undefined,
-                    nodes: project.nodes.map(({ id, name, description }) => ({ id, name, description })),
+                  <PackageUsagePicker createProjectHref={isAdmin ? "/settings/projects" : undefined} projects={usageProjects.map(({ nodes, ...project }) => ({
+                    ...project,
+                    configureHref: managedProjectIds === null || managedProjectIds.includes(project.id) ? `/settings/projects/${project.id}#nodes` : undefined,
+                    nodes,
                   }))} defaultNodeIds={[...usedNodeIds]} />
                 </ActionForm>
               )}
