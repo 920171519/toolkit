@@ -27,7 +27,7 @@ function main() {
     }
     if (requests.length) {
       console.table(requests.map((request) => ({
-        软件包: request.packageCode,
+        软件包编码: request.packageCode,
         版本: request.version,
         项目: request.projectName,
         项目代号: request.projectCode,

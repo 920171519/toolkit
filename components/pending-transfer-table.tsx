@@ -161,13 +161,14 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
           <tbody>{visibleRows.map(({ item, identity, checked }) => (
             <tr key={item.requestId}>
               {selection && <td className={styles.selectionCell}>{item.canInclude ? <input type="checkbox"
-                aria-label={`本轮转测 ${item.packageName} ${item.version}`}
+                aria-label={`本轮转测 ${identity.code} ${item.version}`}
                 checked={checked}
                 onChange={(event) => choose(item.packageId, event.target.checked ? item.versionId : null)} /> : item.draftBatchId !== null
                   ? <Link href={workflowHref(`/integration/${item.draftBatchId}`, scopeProjectId, { ...returnState, fromRequests: "1" })} prefetch={false} className="archive-link">{item.draftBatchCode} 草稿占用</Link>
                   : <span className="small muted">{item.packageActive ? "不在项目使用范围" : "软件包已停用"}</span>}</td>}
               <th scope="row">
                 <strong className="mono">{identity.code}</strong>
+                {identity.name !== identity.code && <div className={`small muted ${styles.packageName}`}>{identity.name}</div>}
               </th>
               <td><Badge tone="slate">{item.version}</Badge><p className={styles.tableExcerpt} title={item.changeSummary}>{item.changeSummary}</p></td>
               <td>{item.submittedByName ?? "未知申请人"}</td>
@@ -175,7 +176,7 @@ export function PendingTransferTable({ group, scopeProjectId, selection, returnS
               <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
               <td className="cell-actions"><div className={styles.cardActions}>
                 <Link href={workflowHref("/packages", projectId, { open: item.packageId })} prefetch={false} className="button button-secondary button-sm"
-                  aria-label={`查看 ${item.packageName} 详情`}
+                  aria-label={`查看 ${identity.code} 详情`}
                   onClick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();

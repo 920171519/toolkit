@@ -1,9 +1,11 @@
 import "server-only";
 
 import { all } from "./db";
+import { packageIdentity } from "./package-identity";
 
 type DraftItem = {
-  packageName: string;
+  name: string;
+  code: string;
   version: string;
   transferRequestId: number | null;
   requestStatus: string | null;
@@ -17,7 +19,7 @@ type DraftBlocker = { message: string; batchId?: number };
 
 export function getBatchSendCheck(batchId: number) {
   const items = all<DraftItem>(
-    `SELECT p.name AS packageName, bi.version, bi.transfer_request_id AS transferRequestId,
+    `SELECT p.name, p.code, bi.version, bi.transfer_request_id AS transferRequestId,
             CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
               THEN COALESCE(r.integration_status, r.status) ELSE r.status END AS requestStatus,
             bi.package_version_id AS versionId, pv.status AS versionStatus,
@@ -32,20 +34,20 @@ export function getBatchSendCheck(batchId: number) {
      WHERE bi.batch_id = ?
      ORDER BY bi.id`,
     batchId,
-  );
+  ).map((item) => ({ ...item, packageCode: packageIdentity(item).code }));
   const changes = items.filter((item) => item.transferRequestId !== null);
   const blockers: DraftBlocker[] = items.filter((item) => item.versionStatus === "VOID").map((item) => ({
-    message: `${item.packageName} ${item.version} 已作废，请在配套中更换或移除该版本。`,
+    message: `${item.packageCode} ${item.version} 已作废，请在配套中更换或移除该版本。`,
   }));
   if (!changes.length) blockers.push({ message: "批次中没有待转测的新版本，至少纳入一个待转测版本。" });
   for (const item of changes) {
     if (item.versionStatus === "VOID") continue;
     if (item.conflictingBatchId !== null) blockers.push({
-      message: `${item.packageName} ${item.version} 已在批次 ${item.conflictingBatchCode} 集成测试中。`,
+      message: `${item.packageCode} ${item.version} 已在批次 ${item.conflictingBatchCode} 集成测试中。`,
       batchId: item.conflictingBatchId,
     });
     else if (item.requestStatus !== "PENDING") blockers.push({
-      message: `${item.packageName} ${item.version} 的转测申请已不在待测试状态，请更换本轮配套。`,
+      message: `${item.packageCode} ${item.version} 的转测申请已不在待测试状态，请更换本轮配套。`,
     });
   }
   return { changes, blockers };

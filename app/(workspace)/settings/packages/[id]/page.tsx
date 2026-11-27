@@ -61,8 +61,8 @@ export default async function PackageSettingsDetailPage({
   return (
     <div className={styles.detail}>
       <PageHeader
-        title={identity.name}
-        description={<>{identity.code} · {pkg.areaName ?? "未归属责任田"} · {pkg.isActive ? "启用" : "停用"}</>}
+        title={identity.code}
+        description={<>{identity.name !== identity.code && <>{identity.name} · </>}{pkg.areaName ?? "未归属责任田"} · {pkg.isActive ? "启用" : "停用"}</>}
         actions={
           <><Link href={directoryHref("/settings/packages", listParams)} className="button button-secondary" prefetch={false}><ArrowLeft size={14} aria-hidden="true" /> 返回软件包配置</Link>
             <Link href={directoryHref("/settings/packages/import", { ...listParams, package: String(pkg.id) })} className="button button-secondary" prefetch={false}>导入历史版本</Link></>
@@ -77,10 +77,6 @@ export default async function PackageSettingsDetailPage({
             <div className="card-body" style={{ paddingTop: 14 }}>
               <ActionForm className="workspace-edit-form" action={savePackageAction} testId="package-meta-form" hidden={{ ...listParams, id: pkg.id, areaId: isAdmin ? undefined : pkg.areaId }} submitText="保存责任信息">
                 <div className={`form-grid ${styles.formGrid}`}>
-                  <label className="field">
-                    <span className="label">软件包名称</span>
-                    <input className="input" name="name" defaultValue={identity.name} required />
-                  </label>
                   <div className="field">
                     <span className="settings-label-help">
                       <label className="label" htmlFor="settings-package-code">软件包编码</label>
@@ -88,6 +84,10 @@ export default async function PackageSettingsDetailPage({
                     </span>
                     <input className="input" id="settings-package-code" name="code" defaultValue={identity.code} placeholder={"例如 " + PACKAGE_CODE_EXAMPLE} required />
                   </div>
+                  <label className="field">
+                    <span className="label">软件包名称</span>
+                    <input className="input" name="name" defaultValue={identity.name} required />
+                  </label>
                   <SettingsSelect name="ownerId" label="责任人" dialogSearchPlaceholder="姓名或工号"
                     options={people.map((person) => ({ id: person.id, label: `${person.name} · ${person.employeeId}` }))} defaultValue={pkg.ownerId ?? ""} />
                   {isAdmin ? <label className="field">

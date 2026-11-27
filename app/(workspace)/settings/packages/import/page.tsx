@@ -49,7 +49,7 @@ export default async function ImportLegacyVersionPage({ searchParams }: {
               <div className={`form-grid ${styles.formGrid}`}>
                 <SettingsSelect name="packageId" label="软件包" dialogSearchPlaceholder="软件包编码或名称" options={packages.map((pkg) => {
                   const { code, name } = packageIdentity(pkg);
-                  return { id: pkg.id, label: `${code} · ${name}` };
+                  return { id: pkg.id, label: name === code ? code : `${code} · ${name}` };
                 })} defaultValue={chosen?.id ?? ""} />
                 <div className="field">
                   <span className="settings-label-help">

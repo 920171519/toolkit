@@ -4,6 +4,7 @@ import { AlertCircle, ArrowRight, Bell, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { BINDING_FLOW_STATUS_META, PACKAGE_STATUS_META, ROLE_META, type PackageStatus } from "@/lib/constants";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { getPersonalDashboard, type PersonalAlert } from "@/lib/workflow-queries";
@@ -124,11 +125,12 @@ export default async function DashboardPage({ searchParams }: {
               <ul className={styles.entries}>
                 {myVersions.map((version) => {
                   const meta = PACKAGE_STATUS_META[version.status as PackageStatus];
+                  const { code } = packageIdentity({ name: version.packageName, code: version.packageCode });
                   return (
                     <li key={version.id}>
                       <Link className={styles.entry} href={`/versions/${version.id}`} prefetch={false}>
                         <span className={styles.entryCopy}>
-                          <strong>{version.packageName} <span className="mono">{version.version}</span></strong>
+                          <strong>{code} <span className="mono">{version.version}</span></strong>
                           <span className={styles.entryMeta}>
                             {version.projectSummary && <span>{version.projectSummary}</span>}
                             <time dateTime={version.updatedAt}>{formatDateTime(version.updatedAt)}</time>
@@ -149,12 +151,13 @@ export default async function DashboardPage({ searchParams }: {
               <ul className={styles.entries}>
                 {myBindingFlows.map((flow) => {
                   const meta = BINDING_FLOW_STATUS_META[flow.status as keyof typeof BINDING_FLOW_STATUS_META];
+                  const { code } = packageIdentity({ name: flow.packageName, code: flow.packageCode });
                   return (
                     <li key={flow.id}>
                       <Link className={styles.entry} href={`/trial/${flow.requestId}#binding-flow-${flow.id}`} prefetch={false}>
                         <span className={styles.entryCopy}>
                           <strong>{flow.flowNo}</strong>
-                          <span>{flow.packageName} {flow.version} · {flow.projectName}/{flow.nodeName}</span>
+                          <span>{code} {flow.version} · {flow.projectName}/{flow.nodeName}</span>
                           <span>{flow.barcodeCount} 个条码{flow.reviewComment && ` · ${flow.reviewComment}`}</span>
                         </span>
                         <Badge tone={meta?.tone ?? "slate"}>{meta?.label ?? flow.status}</Badge>

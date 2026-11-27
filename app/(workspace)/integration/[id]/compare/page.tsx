@@ -133,7 +133,7 @@ export default async function BatchComparisonPage({ params, searchParams }: {
                 <table className={`data-table ${styles.table}`}>
                   <thead><tr><th scope="col">软件包编码</th><th scope="col">基准版本</th><th scope="col">当前版本</th><th scope="col">差异</th></tr></thead>
                   <tbody>{visibleRows.map((row) => <tr key={row.packageId}>
-                    <th scope="row"><span className="mono">{row.packageCode}</span><span className={styles.packageName}>{row.packageName}</span></th>
+                    <th scope="row"><span className="mono">{row.packageCode}</span>{row.packageName !== row.packageCode && <span className={styles.packageName}>{row.packageName}</span>}</th>
                     <td className="mono">{row.baseVersion ?? "—"}</td>
                     <td className={`mono ${row.change === "changed" || row.change === "added" ? styles.changedVersion : ""}`}>{row.currentVersion ?? "—"}</td>
                     <td><Badge tone={comparisonLabels[row.change].tone}>{comparisonLabels[row.change].label}</Badge></td>

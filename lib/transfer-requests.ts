@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
 
@@ -84,8 +85,8 @@ export function findMissingTrialTransferRequests(database: DatabaseSync, scope: 
     parameters.push(scope.projectId);
   }
 
-  return database.prepare(
-    `SELECT DISTINCT p.code AS packageCode, pv.id AS versionId, pv.version,
+  const rows = database.prepare(
+    `SELECT DISTINCT p.name, p.code, pv.id AS versionId, pv.version,
             pr.id AS projectId, pr.code AS projectCode, pr.name AS projectName
      FROM package_versions pv
      JOIN packages p ON p.id = pv.package_id AND p.is_active = 1
@@ -104,7 +105,11 @@ export function findMissingTrialTransferRequests(database: DatabaseSync, scope: 
          WHERE r.package_version_id = pv.id AND r.project_id = pr.id
        )
      ORDER BY p.code, pv.id, pr.sort_order, pr.id`,
-  ).all(...parameters) as MissingTransferRequest[];
+  ).all(...parameters) as Array<Omit<MissingTransferRequest, "packageCode"> & { name: string; code: string }>;
+  return rows.map(({ name, code, ...request }): MissingTransferRequest => ({
+    ...request,
+    packageCode: packageIdentity({ name, code }).code,
+  }));
 }
 
 // Call within the transaction that changes the scope or applies a reviewed backfill.

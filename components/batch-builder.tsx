@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import type { BatchCandidatePackage, ProjectOption } from "@/lib/workflow-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
+import { packageIdentity } from "@/lib/package-identity";
 import { Badge, EmptyState } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { DialogSurface } from "@/components/form-dialog";
@@ -73,7 +74,7 @@ export function BatchBuilder({
     const included = includeOverrides.get(candidate.packageId) ?? (draft ? Boolean(savedVersion(candidate)) : choice !== null || previous !== null);
     const carryPrevious = manualVersion === undefined && previous !== null;
     const changed = !carryPrevious && version?.requestStatus === "PENDING" && version.status !== "VOID";
-    return { candidate, versionId, version, included, carryPrevious, changed };
+    return { candidate, identity: packageIdentity({ name: candidate.packageName, code: candidate.packageCode }), versionId, version, included, carryPrevious, changed };
   });
   const included = rows.filter((row) => row.included);
   const changedCount = included.filter((row) => row.changed).length;
@@ -85,7 +86,7 @@ export function BatchBuilder({
   }));
   const term = query.trim().toLocaleLowerCase();
   const hasPendingVersion = (candidate: BatchCandidatePackage) => candidate.versions.some(({ status, requestStatus }) => status !== "VOID" && requestStatus === "PENDING");
-  const matches = rows.filter(({ candidate }) => (!pendingOnly || hasPendingVersion(candidate)) && `${candidate.packageName} ${candidate.packageCode} ${candidate.ownerName ?? ""}`.toLocaleLowerCase().includes(term));
+  const matches = rows.filter(({ candidate, identity }) => (!pendingOnly || hasPendingVersion(candidate)) && `${identity.code} ${identity.name} ${candidate.ownerName ?? ""}`.toLocaleLowerCase().includes(term));
   const pageSize = 25;
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
   const visibleRows = matches.slice((page - 1) * pageSize, page * pageSize);
@@ -145,13 +146,13 @@ export function BatchBuilder({
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map(({ candidate, versionId, version, included: includedInBatch, carryPrevious, changed }) => (
+              {visibleRows.map(({ candidate, identity, versionId, version, included: includedInBatch, carryPrevious, changed }) => (
                 <tr key={candidate.packageId} className={styles.selectionRow} data-included={includedInBatch}>
                   <td>
                     <input
                       type="checkbox"
                       checked={includedInBatch}
-                      aria-label={`本轮转测 ${candidate.packageName}`}
+                      aria-label={`本轮转测 ${identity.code}`}
                       onChange={(event) => {
                         const include = event.target.checked;
                         setIncludeOverrides((current) => new Map(current).set(candidate.packageId, include));
@@ -159,8 +160,8 @@ export function BatchBuilder({
                     />
                   </td>
                   <td>
-                    <strong className={styles.packageName}>{candidate.packageName}</strong>
-                    <div className={`small muted ${styles.packageName}`}>{candidate.packageCode} · {candidate.ownerName ?? "责任人待定"}</div>
+                    <strong className={`mono ${styles.packageName}`}>{identity.code}</strong>
+                    <div className={`small muted ${styles.packageName}`}>{identity.name !== identity.code && `${identity.name} · `}{candidate.ownerName ?? "责任人待定"}</div>
                   </td>
                   <td className={styles.snapshotColumn}>
                     <div className="small muted">正式 <span className="mono">{candidate.formalVersion ?? "—"}</span></div>
@@ -172,7 +173,7 @@ export function BatchBuilder({
                       className="select"
                       value={versionId}
                       disabled={!includedInBatch}
-                      aria-label={`${candidate.packageName} 本次转测版本`}
+                      aria-label={`${identity.code} 本次转测版本`}
                       onChange={(event) => {
                         const value = Number(event.target.value);
                         setSelected((current) => {

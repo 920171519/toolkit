@@ -76,15 +76,15 @@ export function PackageOverviewTable({
       matchesChoiceFilter(filters, "usage_project", [String(usage.projectId)]) &&
       matchesChoiceFilter(filters, "usage_node", usage.nodeNames.map(nodeOptionValue)));
     return usageMatches &&
-      (matchesTextFilter(filters, "name", identity.name) || matchesTextFilter(filters, "name", pkg.name)) &&
-      (matchesTextFilter(filters, "code", identity.code) || matchesTextFilter(filters, "code", pkg.code)) &&
+      matchesTextFilter(filters, "name", identity.name) &&
+      matchesTextFilter(filters, "code", identity.code) &&
       matchesChoiceFilter(filters, "area", [String(pkg.areaId ?? empty)]) &&
       matchesChoiceFilter(filters, "owner", [String(pkg.ownerId ?? empty)]) &&
       matchesTextFilter(filters, "formal", pkg.formalVersion) &&
       (!filters.f_trial || pkg.trialVersions.some((version) => matchesTextFilter(filters, "trial", version))) &&
       [pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion].some((version) => matchesTextFilter(filters, "current", version)) &&
       matchesChoiceFilter(filters, "status", [pkg.currentStatus ?? (pkg.formalVersion ? "FORMAL_ONLY" : empty)]) &&
-      matchesDirectorySearch(query, pkg.name, pkg.code, pkg.ownerName, pkg.areaName, pkg.formalVersion,
+      matchesDirectorySearch(query, identity.code, identity.name, pkg.ownerName, pkg.areaName, pkg.formalVersion,
         pkg.currentVersion, pkg.inTestVersion, pkg.pendingTransferVersion, ...pkg.trialVersions,
         ...pkg.usages.flatMap((usage) => [usage.projectName, usage.projectCode, ...usage.nodeNames]));
   });
@@ -143,7 +143,7 @@ export function PackageOverviewTable({
             <table className="data-table">
               <thead>
                 <tr>
-                  {column("软件包", [fields.name, fields.code])}
+                  {column("软件包", [fields.code, fields.name])}
                   {column("责任田 / 责任人", [fields.area, fields.owner])}
                   {column("使用范围", [fields.project, fields.node])}
                   {column("正式版", [fields.formal])}

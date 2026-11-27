@@ -41,6 +41,7 @@ test("在测、未通过和缺少验收证据的风险入口按当前项目权�
 });
 
 test("在测风险登记后遇到未通过结论，重新登记时按本次结论说明风险", async ({ page }) => {
+  const packageCode = "90017RQA";
   const packageName = "项目验收回归组件";
   const version = "1.0.17";
 
@@ -49,7 +50,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await page.getByTestId("new-package-trigger").click();
   const packageForm = page.getByTestId("new-package-form");
   await packageForm.getByRole("textbox", { name: "软件包名称" }).fill(packageName);
-  await packageForm.getByRole("textbox", { name: "软件包编码" }).fill("90017RQA");
+  await packageForm.getByRole("textbox", { name: "软件包编码" }).fill(packageCode);
   await selectOptionContaining(packageForm.locator('select[name="areaId"]'), "系统底座");
   await selectOptionContaining(packageForm.locator('select[name="ownerId"]'), "OWNER001");
   await packageForm.getByRole("button", { name: "创建并配置使用范围" }).click();
@@ -66,7 +67,7 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await page.goto("/submissions?project=1");
   await page.getByTestId("submit-transfer-trigger").click();
   const transfer = page.getByTestId("transfer-form");
-  await transfer.getByLabel("搜索软件包").fill("90017RQA");
+  await transfer.getByLabel("搜索软件包").fill(packageCode);
   await transfer.getByTestId(/transfer-package-/).filter({ hasText: packageName }).click();
   await transfer.locator('input[name="version"]').fill(version);
   await transfer.locator('textarea[name="changeSummary"]').fill("验证进行中与不通过风险登记来源。");
@@ -79,9 +80,10 @@ test("在测风险登记后遇到未通过结论，重新登记时按本次结�
   await page.goto("/submissions?project=1");
   await page.getByTestId("open-batch-1").click();
   const builder = page.getByTestId("batch-builder-form");
-  await expect(builder.getByRole("checkbox", { name: "本轮转测 " + packageName, exact: true })).toBeChecked();
+  const includedLabel = `本轮转测 ${packageCode}`;
+  await expect(builder.getByRole("checkbox", { name: includedLabel, exact: true })).toBeChecked();
   for (const checkbox of await builder.getByRole("checkbox").all()) {
-    if ((await checkbox.getAttribute("aria-label")) !== "本轮转测 " + packageName) await checkbox.uncheck();
+    if ((await checkbox.getAttribute("aria-label")) !== includedLabel) await checkbox.uncheck();
   }
   await expect(builder.getByRole("checkbox", { checked: true })).toHaveCount(1);
   await builder.getByLabel("批次号").fill("B117");

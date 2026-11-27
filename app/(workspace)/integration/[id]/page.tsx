@@ -17,6 +17,7 @@ import { getBatchSendCheck } from "@/lib/batch-send-check";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { all } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
+import { packageIdentity } from "@/lib/package-identity";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
 import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
 import { ActionForm } from "@/components/action-form";
@@ -103,7 +104,7 @@ export default async function BatchDetailPage({
     view: returnView,
   }) + (returnView === "history" ? "#integration-history" : "");
 
-  function nextStep(item: BatchItemRow) {
+  function nextStep(item: BatchItemRow, code: string) {
     if (!item.isChanged) return <span className="small muted">配套基线，本轮结论不更新该版本</span>;
     const context = { returnTo: listState.returnTo };
     const traceHref = workflowHref(`/versions/${item.versionId}`, project?.id, context);
@@ -124,7 +125,7 @@ export default async function BatchDetailPage({
     const trial = trialGuidance.get(item.versionId);
     if (trial?.href && !trial.items.length) return <Link href={trial.href} prefetch={false} className="archive-link">
       {trial.canManage ? "查看发布试制" : "查看试制进度"}</Link>;
-    if (trial?.items.length) return <GuidanceDialog label="检查试制条件" title={`${item.packageName} ${item.version} · 试制条件`} description={trial.description}
+    if (trial?.items.length) return <GuidanceDialog label="检查试制条件" title={`${code} ${item.version} · 试制条件`} description={trial.description}
       items={trial.items} fallbackHref={traceHref} triggerClassName="button button-secondary button-sm" />;
     if (item.requestStatus === "FAILED" || item.requestStatus === "BLOCKED") {
       return <Link href={workflowHref("/submissions/transfer", queueProject, { ...context, package: item.packageId })}
@@ -144,7 +145,7 @@ export default async function BatchDetailPage({
           {canTest && <FormDialog label={<><ClipboardCheck size={16} aria-hidden="true" />提交测试结论</>} title={`${batch.code} · 提交项目测试结论`} description={batch.projectName ?? undefined} cancelLabel="取消">
             <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论" preserveValuesOnSubmit>
               <div className={styles.formFields}>
-                <BatchConclusionFields items={items.map(({ versionId, packageName, version, parallelRiskTrial }) => ({ versionId, packageName, version, parallelRiskTrial }))} />
+                <BatchConclusionFields items={items.map(({ versionId, packageName, packageCode, version, parallelRiskTrial }) => ({ versionId, packageName, packageCode, version, parallelRiskTrial }))} />
                 <label className="field"><span className="label">测试总结</span><textarea className="textarea" name="testSummary" required minLength={10} placeholder="验证范围、结果及问题定位" /></label>
                 <BatchReportField />
               </div>
@@ -178,14 +179,18 @@ export default async function BatchDetailPage({
                   <thead><tr><th>软件包</th><th>正式版本</th><th>试制版本</th><th>上次转测</th><th>本次转测</th><th>归档地址</th><th>变更</th>{showRisk && <th scope="col">风险试制</th>}{showContinuation && <th scope="col">下一步</th>}</tr></thead>
                   <tbody>
                     {items.map((item) => {
+                      const { code, name } = packageIdentity({ name: item.packageName, code: item.packageCode });
                       const entry = item.transferRequestId ? riskEntries[item.transferRequestId] : undefined;
                       const riskEntry = entry?.stage === riskStage && entry.batchId === batch.id ? entry : undefined;
                       return <tr key={item.id}>
-                        <td><Link href={workflowHref("/packages", project?.id, { open: item.packageId })} prefetch={false} className={styles.packageName} style={{ fontWeight: 600 }}>{item.packageName}</Link><div className={`small muted ${styles.packageName}`}>{item.packageCode} · {item.ownerName ?? "责任人待定"}</div></td>
+                        <td>
+                          <Link href={workflowHref("/packages", project?.id, { open: item.packageId })} prefetch={false} className={`archive-link mono ${styles.packageName}`}>{code}</Link>
+                          <div className={`small muted ${styles.packageName}`}>{name !== code && `${name} · `}{item.ownerName ?? "责任人待定"}</div>
+                        </td>
                         <td><span className="mono small">{item.formalVersion ?? "—"}</span></td>
                         <td><span className="mono small">{item.trialVersions || "—"}</span></td>
                         <td><span className="mono small">{item.previousTestVersion ?? "首次"}</span></td>
-                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} prefetch={false} className="version-badge" aria-label={`查看 ${item.packageName} ${item.version} 版本全链路`}>{item.version}</Link>{item.requestStatus === "VOID" && <div><Badge tone="rose">已作废</Badge></div>}{item.isChanged && <div><Badge tone="amber">本轮变更</Badge></div>}</td>
+                        <td><Link href={workflowHref(`/versions/${item.versionId}`, project?.id)} prefetch={false} className="version-badge" aria-label={`查看 ${code} ${item.version} 版本全链路`}>{item.version}</Link>{item.requestStatus === "VOID" && <div><Badge tone="rose">已作废</Badge></div>}{item.isChanged && <div><Badge tone="amber">本轮变更</Badge></div>}</td>
                         <td><ExternalLink href={item.archiveUrl}>归档包</ExternalLink></td>
                         <td>
                           {!item.previousTestVersion ? <Badge tone="slate">首次转测</Badge> : item.changedVsPrevious ? <Badge tone="violet">有变更</Badge> : <Badge tone="slate">无变化</Badge>}
@@ -193,7 +198,7 @@ export default async function BatchDetailPage({
                           {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
                         </td>
                         {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={batch.projectName ?? "未指定项目"} returnTo={listState.returnTo} />}</td>}
-                        {showContinuation && <td>{nextStep(item)}</td>}
+                        {showContinuation && <td>{nextStep(item, code)}</td>}
                       </tr>;
                     })}
                   </tbody>

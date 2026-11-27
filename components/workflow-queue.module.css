@@ -169,6 +169,14 @@
   overflow-wrap: anywhere;
 }
 
+.packageChoiceLabel > strong {
+  font-size: 13px;
+}
+
+.packageChoiceLabel > span {
+  font-size: 12px;
+}
+
 .packageChoiceAside {
   flex: none;
   max-inline-size: 40%;

@@ -258,10 +258,11 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
 
   const pkg = detail?.package;
   const identity = pkg && packageIdentity(pkg);
+  const titleId = `${id}-package-code`;
   const currentTabId = `${id}-tab-${panel}`;
 
   return (
-    <dialog ref={drawer} open className="package-drawer workspace-package-drawer" aria-label="软件包详情" data-testid="package-drawer"
+    <dialog ref={drawer} open className="package-drawer workspace-package-drawer" aria-label="软件包详情" aria-describedby={identity ? titleId : undefined} data-testid="package-drawer"
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -277,7 +278,7 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
       }}>
       <header className={styles.header}>
         <div>
-          <h2 className={identity ? "mono" : undefined}>{identity?.code ?? "软件包详情"}</h2>
+          <h2 id={titleId} className={identity ? "mono" : undefined}>{identity?.code ?? "软件包详情"}</h2>
           {pkg && <p className="small muted">{pkg.areaName || "未归属责任田"}{!pkg.isActive && " · 已停用"}</p>}
         </div>
         <button type="button" className="drawer-close" onClick={onClose} aria-label="关闭详情" disabled={pending}><X size={18} aria-hidden="true" /></button>

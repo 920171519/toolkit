@@ -2,6 +2,7 @@ import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { all, db, one, run, transaction } from "./db";
+import { packageIdentity } from "./package-identity";
 import {
   canApproveBindingFlow,
   canSubmitBindingFlow,
@@ -202,8 +203,9 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
     const existingCode = one<{ id: number }>("SELECT id FROM integration_batches WHERE UPPER(code) = ? AND id != ?", code, draftId);
     assert(!existingCode, `批次号 ${code} 已存在，请更换批次号。`);
     const items = selectedPackages.map((pkg) => {
+      const packageCode = packageIdentity({ name: pkg.packageName, code: pkg.packageCode }).code;
       const selection = selectedByPackage.get(pkg.packageId);
-      assert(selection, `请选择 ${pkg.packageName} 的转测版本。`);
+      assert(selection, `请选择 ${packageCode} 的转测版本。`);
       const selected = one<{
         id: number;
         version: string;
@@ -216,20 +218,20 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
         selection.packageVersionId,
         pkg.packageId,
       );
-      assert(selected, `${pkg.packageName} 选择的版本不存在。`);
-      assert(selected.status !== "VOID", `${pkg.packageName} ${selected.version} 已作废，请更换该配套版本。`);
+      assert(selected, `${packageCode} 选择的版本不存在。`);
+      assert(selected.status !== "VOID", `${packageCode} ${selected.version} 已作废，请更换该配套版本。`);
       const usedInProject = one<{ id: number }>(
         `SELECT u.id FROM package_usages u JOIN packages p ON p.id = u.package_id AND p.is_active = 1
          WHERE u.package_id = ? AND u.project_id = ? LIMIT 1`,
         pkg.packageId,
         input.projectId,
       );
-      assert(usedInProject, `${pkg.packageName} 不在 ${project.name} 项目的使用范围内。`);
+      assert(usedInProject, `${packageCode} 不在 ${project.name} 项目的使用范围内。`);
       const previous = getPreviousBatchVersion(input.projectId, pkg.packageId);
       if (selection.carryPrevious) {
         assert(
           previous?.canCarry && previous.versionId === selected.id,
-          `${pkg.packageName} 无法沿用所选的上次转测版本，请刷新后重试。`,
+          `${packageCode} 无法沿用所选的上次转测版本，请刷新后重试。`,
         );
       }
       const pendingRequest = selection.carryPrevious ? null : one<{ id: number }>(
@@ -244,7 +246,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
            WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') AND b.id != ? LIMIT 1`,
           pendingRequest.id, draftId,
         );
-        assert(!conflict, `${pkg.packageName} ${selected.version} 已在另一个转测批次中。`);
+        assert(!conflict, `${packageCode} ${selected.version} 已在另一个转测批次中。`);
       }
       const formal = one<{ version: string }>(
         `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
@@ -264,7 +266,8 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
         pkg.packageId,
       );
       return {
-        ...pkg,
+        packageId: pkg.packageId,
+        packageCode,
         versionId: selected.id,
         version: selected.version,
         archiveUrl: selected.archiveUrl,
@@ -306,7 +309,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
            )`,
           item.requestId,
         );
-        assert(available, `${item.packageName} ${item.version} 的转测状态已变化，请刷新后重试。`);
+        assert(available, `${item.packageCode} ${item.version} 的转测状态已变化，请刷新后重试。`);
       }
       run(
         `INSERT INTO batch_items

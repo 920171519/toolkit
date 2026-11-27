@@ -15,6 +15,8 @@ import { TrialBindingFocus } from "./trial-binding-focus";
 export type TrialTableColumn<Row> = {
   key: TrialColumnKey;
   label: string;
+  filterLabel?: string;
+  sortLabel?: string;
   value: (row: Row) => string | number;
   sortValue?: (row: Row) => string | number;
   cell?: (row: Row) => ReactNode;
@@ -44,7 +46,7 @@ export function TrialQueueTable<Row>({
   const search = query[field("q")] ?? "";
   const terms = normalize(search).split(/\s+/).filter(Boolean);
   const columnFilters = columns.map((column) => {
-    const filter = trialColumnFilter(kind, column.key, column.label);
+    const filter = trialColumnFilter(kind, column.key, column.filterLabel ?? column.label);
     if (column.choices && !filter.options) {
       filter.options = filterOptions(rows.flatMap(column.choices));
     }
@@ -115,7 +117,7 @@ export function TrialQueueTable<Row>({
                   params={listParams}
                   fields={fields}
                   sortKey={column.key}
-                  sortLabel={"按" + column.label + "排序"}
+                  sortLabel={column.sortLabel ?? "按" + column.label + "排序"}
                   sortParam={field("sort")}
                   orderParam={field("direction")}
                   pageParam={field("page")}

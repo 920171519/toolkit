@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { packageIdentity } from "@/lib/package-identity";
 import { readTestReport, testReportAccept, testReportHint } from "@/lib/test-report-validation";
 import styles from "./workflow-queue.module.css";
 
 type TestedVersion = {
   versionId: number;
   packageName: string;
+  packageCode: string;
   version: string;
   parallelRiskTrial: boolean;
 };
@@ -48,22 +50,28 @@ export function BatchConclusionFields({ items }: { items: TestedVersion[] }) {
         <fieldset className="field">
           <legend className="label">受影响的软件包版本 · 至少选择一项</legend>
           <p className="risk-callout">提交后，选中的风险试制版本会被作废，相关绑定电子流需要撤销。</p>
-          {items.map((item, index) => (
-            <label key={item.versionId} className={styles.affectedVersion}>
-              <input type="checkbox" name="affectedVersionId" value={item.versionId} checked={affected.has(item.versionId)}
-                required={index === 0 && affected.size === 0}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setAffected((current) => {
-                    const next = new Set(current);
-                    if (checked) next.add(item.versionId);
-                    else next.delete(item.versionId);
-                    return next;
-                  });
-                }} />
-              <span className={styles.packageChoiceLabel}>{item.packageName} {item.version}{item.parallelRiskTrial ? " · 风险试制中" : ""}</span>
-            </label>
-          ))}
+          {items.map((item, index) => {
+            const { code, name } = packageIdentity({ name: item.packageName, code: item.packageCode });
+            return (
+              <label key={item.versionId} className={styles.affectedVersion}>
+                <input type="checkbox" name="affectedVersionId" value={item.versionId} checked={affected.has(item.versionId)}
+                  required={index === 0 && affected.size === 0}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setAffected((current) => {
+                      const next = new Set(current);
+                      if (checked) next.add(item.versionId);
+                      else next.delete(item.versionId);
+                      return next;
+                    });
+                  }} />
+                <span className={styles.packageChoiceLabel}>
+                  <strong className="mono">{code} {item.version}</strong>{item.parallelRiskTrial && " · 风险试制中"}
+                  {name !== code && <span className="small muted"> · {name}</span>}
+                </span>
+              </label>
+            );
+          })}
         </fieldset>
       )}
     </>

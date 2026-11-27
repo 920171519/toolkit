@@ -5,6 +5,7 @@ import { canEditPackageById, getManagedProjectIdsForUser, getProjectWorkflowProj
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus, PackageStatus, Role } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
+import { packageCodeSql } from "./package-identity";
 import type { ProjectStage } from "./project-stage";
 import type {
   BatchItemSummary,
@@ -121,7 +122,8 @@ const PACKAGE_SUMMARY_SQL = `
 
 function readPackagesOverview(includeInactive: boolean): PackageSummary[] {
   const packages = all<Omit<PackageSummary, "isActive" | "trialVersions"> & { isActive: number }>(
-    `${PACKAGE_SUMMARY_SQL} ${includeInactive ? "" : "WHERE p.is_active = 1"} ORDER BY p.name`,
+    `${PACKAGE_SUMMARY_SQL} ${includeInactive ? "" : "WHERE p.is_active = 1"}
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
   ).map((row) => ({
     ...row,
     isActive: Boolean(row.isActive),
@@ -176,7 +178,7 @@ export function getTransferPackageOptions(user: SessionUser, projectId?: number)
        SELECT 1 FROM package_usages usage JOIN projects pr ON pr.id = usage.project_id
        WHERE usage.package_id = p.id AND pr.status != 'ARCHIVED' ${projectId ? "AND pr.id = ?" : ""}
      )
-     ORDER BY p.name`,
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
     ...(areaIds ?? []),
     ...(projectId ? [projectId] : []),
   );

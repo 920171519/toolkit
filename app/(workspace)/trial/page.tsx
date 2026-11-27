@@ -22,10 +22,14 @@ import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStat
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
 import { getManagedProjectIds, getReadableTrialDetail, getTrialReadyVersions, getTrialVersionCount, getTrialVersions, getWorkflowProjectScope, type TrialReadyVersion, type TrialVersionRow } from "@/lib/workflow-queries";
-import workflowStyles from "@/components/workflow-queue.module.css";
+import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "试制与绑定验证" };
+
+function displayPackage({ packageName, packageCode }: Pick<TrialReadyVersion, "packageName" | "packageCode">) {
+  return packageIdentity({ name: packageName, code: packageCode });
+}
 
 function riskRelease(row: TrialReadyVersion) {
   return row.riskProjectCount > 0;
@@ -98,12 +102,27 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
-  const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
-    <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link ${workflowStyles.packageName}`}>{row.packageName}</Link>
-  );
+  const packageLink = (row: TrialReadyVersion | TrialVersionRow) => {
+    const { code, name } = displayPackage(row);
+    return <>
+      <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link mono ${identityStyles.code}`}>{code}</Link>
+      {name !== code && <div className={identityStyles.tableName} title={name}>{name}</div>}
+    </>;
+  };
 
   const identityColumns: TrialTableColumn<TrialReadyVersion | TrialVersionRow>[] = [
-    { key: "package", label: "软件包", value: (row) => row.packageName, cell: packageLink },
+    {
+      key: "package",
+      label: "软件包",
+      filterLabel: "软件包编码或名称",
+      sortLabel: "按软件包编码排序",
+      value: (row) => displayPackage(row).code,
+      filterValues: (row) => {
+        const { code, name } = displayPackage(row);
+        return [code, name];
+      },
+      cell: packageLink,
+    },
     { key: "version", label: "版本", value: (row) => row.version, cell: (row) => <span className={`mono ${styles.version}`}>{row.version}</span> },
     { key: "project", label: "项目", value: (row) => row.projectName, choices: (row) => [{ value: String(row.projectId), label: row.projectName }] },
     {
@@ -192,11 +211,11 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
 
       {!showBindings && <TrialQueueTable
         kind="release" title="待发布试制" rows={ready} columns={releaseColumns} query={query} projectId={projectId}
-        rowKey={(row) => row.versionId} details={(row) => [row.packageCode, ...row.records.map((record) => record.projectCode)]}
+        rowKey={(row) => row.versionId} details={(row) => [displayPackage(row).name, ...row.records.map((record) => record.projectCode)]}
         emptyTitle="没有待发试制的项目版本"
         actions={(row) => {
           const risk = riskRelease(row);
-          const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
+          const identity = displayPackage(row);
           const title = `${identity.code} ${row.version}`;
           const releaseFields = { ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) };
           return (
@@ -227,7 +246,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
 
       {showBindings && <TrialQueueTable
         kind="binding" title="试制版本绑定验证" rows={trials} columns={bindingColumns} query={query} projectId={projectId}
-        rowKey={(row) => row.requestId} details={(row) => [row.packageCode, row.projectCode]}
+        rowKey={(row) => row.requestId} details={(row) => [displayPackage(row).name, row.projectCode]}
         emptyTitle="没有正在绑定验证的试制版本"
         actions={(row) => <Link href={workflowHref("/trial/" + row.requestId, projectId, query)} prefetch={false} className="archive-link">
           {row.bindingMode === "PENDING" && canManageProjectWorkflowForProject(user, row.projectId) ? "决定绑定方式" : "查看节点与审批"} <ArrowRight size={12} />

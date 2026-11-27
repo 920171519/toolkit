@@ -79,7 +79,7 @@ export default async function VersionsPage({ searchParams }: {
                       fields={[traceColumnFields[key]]}
                       sortKey={key}
                       orderParam="dir"
-                      sortLabel={`按${label}${descendingNext ? "降序" : "升序"}`}
+                      sortLabel={`按${key === "package" ? "软件包编码" : label}${descendingNext ? "降序" : "升序"}`}
                     />
                   );
                 })}

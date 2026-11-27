@@ -26,7 +26,7 @@ test("待转测表头筛选保留互斥选择和暂缓项，核对完整配套�
   const newRequest = pending.getByRole("row").filter({ hasText: "1003COM" }).filter({ hasText: "2.9.70" });
   await expect(oldRequest.getByRole("cell", { name: "陈曦", exact: true })).toBeVisible();
   await expect(oldRequest.locator("time")).toHaveAttribute("datetime", /2026-11-12/);
-  await expect(oldRequest.getByRole("rowheader")).toHaveText("1003COM");
+  await expect(oldRequest.getByRole("rowheader", { name: "1003COM COM", exact: true }).locator("strong")).toHaveText("1003COM");
   await expect(oldRequest.getByRole("link", { name: "归档包", exact: true })).toHaveAttribute("href", /^https?:\/\//);
   const archiveUrl = "https://packages.example.com/issue7/com-2.9.70.tar.gz";
   const archiveLink = newRequest.getByRole("link", { name: "归档包", exact: true });

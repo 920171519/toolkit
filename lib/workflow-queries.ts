@@ -3,6 +3,7 @@ import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjec
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
 import type { BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
+import { packageCodeSql, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
@@ -180,7 +181,7 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
      LEFT JOIN users u ON u.id = p.owner_id
      LEFT JOIN areas a ON a.id = p.area_id
      WHERE usage.project_id = ? AND p.is_active = 1
-     ORDER BY p.name`,
+     ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
     projectId,
   );
   if (packages.length === 0) return [];
@@ -492,7 +493,7 @@ export function getBatchDetail(batchId: number, projectIds: number[] | null): Ba
      LEFT JOIN version_transfer_requests r ON r.id = bi.transfer_request_id
      LEFT JOIN users u ON u.id = p.owner_id
      WHERE bi.batch_id = ?
-     ORDER BY bi.is_changed DESC, p.name`,
+     ORDER BY bi.is_changed DESC, ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
     batchId,
   ).map((item) => ({
     ...item,
@@ -1039,6 +1040,7 @@ export type MyVersion = {
   id: number;
   packageId: number;
   packageName: string;
+  packageCode: string;
   version: string;
   status: string;
   updatedAt: string;
@@ -1049,6 +1051,7 @@ export type MyBindingFlow = {
   id: number;
   flowNo: string;
   packageName: string;
+  packageCode: string;
   version: string;
   projectName: string;
   nodeName: string;
@@ -1068,6 +1071,11 @@ export type PersonalDashboard = {
   counts: { tasks: number; alerts: number; notifications: number; myActiveVersions: number };
 };
 
+function workbenchVersionLabel(row: { packageName: string; packageCode: string; version: string }) {
+  const { code } = packageIdentity({ name: row.packageName, code: row.packageCode });
+  return `${code} ${row.version}`;
+}
+
 export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   const tasks: PersonalTask[] = [];
   const alerts: PersonalAlert[] = [];
@@ -1081,12 +1089,13 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     requestId: number;
     versionId: number;
     packageName: string;
+    packageCode: string;
     version: string;
     projectName: string;
     status: string;
     updatedAt: string;
   }>(
-    `SELECT r.id AS requestId, pv.id AS versionId, p.name AS packageName, pv.version,
+    `SELECT r.id AS requestId, pv.id AS versionId, p.name AS packageName, p.code AS packageCode, pv.version,
             pr.name AS projectName, COALESCE(r.integration_status, r.status) AS status, r.updated_at AS updatedAt
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
@@ -1099,7 +1108,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   for (const failure of failedTests) {
     alerts.push({
       key: `failed-${failure.requestId}`,
-      title: `${failure.packageName} ${failure.version} 在 ${failure.projectName} 测试异常`,
+      title: `${workbenchVersionLabel(failure)} 在 ${failure.projectName} 测试异常`,
       description: `集成测试：${failure.status === "FAILED" ? "不通过" : "无法验证"}`,
       href: `/versions/${failure.versionId}`,
       tone: failure.status === "FAILED" ? "danger" : "warning",
@@ -1110,11 +1119,13 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   const voidedRiskTrials = all<{
     versionId: number;
     packageName: string;
+    packageCode: string;
     version: string;
     voidReason: string;
     voidedAt: string;
   }>(
-    `SELECT pv.id AS versionId, p.name AS packageName, pv.version, pv.void_reason AS voidReason, pv.voided_at AS voidedAt
+    `SELECT pv.id AS versionId, p.name AS packageName, p.code AS packageCode, pv.version,
+            pv.void_reason AS voidReason, pv.voided_at AS voidedAt
      FROM package_versions pv JOIN packages p ON p.id = pv.package_id
      WHERE pv.void_kind = 'RISK_TEST_FAILURE' AND (
        pv.submitted_by = ? OR EXISTS (
@@ -1131,7 +1142,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   for (const trial of voidedRiskTrials) {
     alerts.push({
       key: `void-risk-trial-${trial.versionId}`,
-      title: `${trial.packageName} ${trial.version} 风险试制已作废`,
+      title: `${workbenchVersionLabel(trial)} 风险试制已作废`,
       description: trial.voidReason,
       href: `/versions/${trial.versionId}`,
       tone: "danger",
@@ -1143,6 +1154,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     id: number;
     flowNo: string;
     packageName: string;
+    packageCode: string;
     version: string;
     requestId: number;
     projectName: string;
@@ -1150,7 +1162,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     reviewComment: string | null;
     reviewedAt: string | null;
   }>(
-    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId,
+    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, p.code AS packageCode, pv.version, r.id AS requestId,
             pr.name AS projectName, n.name AS nodeName, f.review_comment AS reviewComment,
             f.reviewed_at AS reviewedAt
      FROM binding_flows f
@@ -1168,7 +1180,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     alerts.push({
       key: `rejected-flow-${flow.id}`,
       title: `绑定电子流 ${flow.flowNo} 被驳回`,
-      description: `${flow.packageName} ${flow.version} · ${flow.projectName}/${flow.nodeName}${flow.reviewComment ? `：${flow.reviewComment}` : ""}`,
+      description: `${workbenchVersionLabel(flow)} · ${flow.projectName}/${flow.nodeName}${flow.reviewComment ? `：${flow.reviewComment}` : ""}`,
       href: `/trial/${flow.requestId}#binding-flow-${flow.id}`,
       tone: "danger",
       at: flow.reviewedAt ?? undefined,
@@ -1179,6 +1191,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     id: number;
     flowNo: string;
     packageName: string;
+    packageCode: string;
     version: string;
     requestId: number;
     projectName: string;
@@ -1186,7 +1199,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     voidReason: string | null;
     status: string;
   }>(
-    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId,
+    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, p.code AS packageCode, pv.version, r.id AS requestId,
             pr.name AS projectName, n.name AS nodeName, r.void_reason AS voidReason, f.status
      FROM binding_flows f
      JOIN binding_requirements br ON br.id = f.requirement_id
@@ -1203,7 +1216,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     alerts.push({
       key: `void-flow-${flow.id}`,
       title: flow.status === "APPROVED" ? "试制版本已作废，请撤销已通过的外部绑定" : "试制版本已作废，请撤销绑定电子流",
-      description: `${flow.packageName} ${flow.version} · ${flow.projectName}/${flow.nodeName} · ${flow.flowNo}${flow.voidReason ? ` · ${flow.voidReason}` : ""}`,
+      description: `${workbenchVersionLabel(flow)} · ${flow.projectName}/${flow.nodeName} · ${flow.flowNo}${flow.voidReason ? ` · ${flow.voidReason}` : ""}`,
       href: `/trial/${flow.requestId}#binding-flow-${flow.id}`,
       tone: "danger",
     });
@@ -1216,6 +1229,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     packageOwnerId: number | null;
     bindingOwnerId: number | null;
     packageName: string;
+    packageCode: string;
     version: string;
     projectName: string;
     nodeName: string;
@@ -1226,7 +1240,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     submittedCount: number;
     pendingFlowId: number | null;
   }>(
-    `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, pv.version, pr.id AS projectId,
+    `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, p.code AS packageCode, pv.version, pr.id AS projectId,
             p.owner_id AS packageOwnerId, br.binding_owner_id AS bindingOwnerId,
             pr.name AS projectName, n.name AS nodeName, br.required_count AS requiredCount,
             (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
@@ -1266,7 +1280,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       + (task.failedCount > 0 ? ` · ${task.failedCount} 条 FAIL` : "");
     tasks.push({
       key: `binding-${task.requirementId}`,
-      title: `${action}：${task.packageName} ${task.version}`,
+      title: `${action}：${workbenchVersionLabel(task)}`,
       description: waitingApproval ? `${progress} · 已登记足量条码，等待审批` : progress,
       href: `/trial/${task.requestId}#${linkTarget}`,
       category: "bind",
@@ -1277,6 +1291,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     id: number;
     flowNo: string;
     packageName: string;
+    packageCode: string;
     version: string;
     requestId: number;
     projectId: number;
@@ -1285,7 +1300,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     submittedByName: string | null;
     barcodeCount: number;
   }>(
-    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version, r.id AS requestId, pr.id AS projectId,
+    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, p.code AS packageCode, pv.version, r.id AS requestId, pr.id AS projectId,
             pr.name AS projectName, n.name AS nodeName, su.name AS submittedByName,
             (SELECT COUNT(*) FROM binding_flow_barcodes b WHERE b.flow_id = f.id) AS barcodeCount
      FROM binding_flows f
@@ -1308,7 +1323,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     tasks.push({
       key: `approval-${approval.id}`,
       title: `审批绑定电子流：${approval.flowNo}`,
-      description: `${approval.packageName} ${approval.version} · ${approval.projectName}/${approval.nodeName} · ${approval.barcodeCount} 个条码${approval.submittedByName ? ` · ${approval.submittedByName}提交` : ""}`,
+      description: `${workbenchVersionLabel(approval)} · ${approval.projectName}/${approval.nodeName} · ${approval.barcodeCount} 个条码${approval.submittedByName ? ` · ${approval.submittedByName}提交` : ""}`,
       href: `/trial/${approval.requestId}#binding-flow-${approval.id}`,
       category: "approve",
     });
@@ -1320,7 +1335,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       tasks.push({
         key: `transfer-${group.projectId}`,
         title: `${group.projectName} · ${group.items.length} 项待安排转测`,
-        description: group.items.slice(0, 4).map((item) => `${item.packageName} ${item.version}`).join("、")
+        description: group.items.slice(0, 4).map(workbenchVersionLabel).join("、")
           + (group.items.length > 4 ? " 等" : ""),
         href: workflowHref("/submissions", group.projectId),
         category: "test",
@@ -1351,13 +1366,14 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       tasks.push({
         key: "trial-ready",
         title: `${ready.length} 个版本待发试制${riskCount > 0 ? `（${riskCount} 个风险试制）` : ""}`,
-        description: ready.slice(0, 4).map((version) => `${version.projectName} · ${version.packageName} ${version.version}`).join("、"),
+        description: ready.slice(0, 4).map((version) => `${version.projectName} · ${workbenchVersionLabel(version)}`).join("、"),
         href: "/trial",
         category: "manage",
       });
     }
-    const pendingDecisions = all<{ requestId: number; versionId: number; projectId: number; projectName: string; packageName: string; version: string }>(
-      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName, p.name AS packageName, pv.version
+    const pendingDecisions = all<{ requestId: number; versionId: number; projectId: number; projectName: string; packageName: string; packageCode: string; version: string }>(
+      `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+              p.name AS packageName, p.code AS packageCode, pv.version
        FROM package_versions pv
        JOIN packages p ON p.id = pv.package_id
        JOIN version_transfer_requests r ON r.package_version_id = pv.id
@@ -1372,7 +1388,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     for (const version of bindingDecisions.values()) {
       tasks.push({
         key: `binding-decision-${version.versionId}`,
-        title: `决定绑定方式：${version.packageName} ${version.version}`,
+        title: `决定绑定方式：${workbenchVersionLabel(version)}`,
         description: `${version.projectName} · 已发布试制，待推送绑定或登记整版免绑`,
         href: workflowHref(`/trial/${version.requestId}`, version.projectId),
         category: "manage",
@@ -1384,7 +1400,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       const pending = pendingFlows.get(version.versionId) ?? 0;
       tasks.push({
         key: `formal-${version.versionId}`,
-        title: `${pending > 0 ? "处理待审批电子流" : "核对并转正"}：${version.packageName} ${version.version}`,
+        title: `${pending > 0 ? "处理待审批电子流" : "核对并转正"}：${workbenchVersionLabel(version)}`,
         description: `${version.projectName} · ${pending > 0 ? `${pending} 条绑定电子流待处理` : "待提交转正电子流"}`,
         href: workflowHref(`/formal/${version.versionId}`, version.projectId),
         category: "manage",
@@ -1406,7 +1422,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   }
 
   const myVersions = all<MyVersion>(
-    `SELECT pv.id, p.id AS packageId, p.name AS packageName, pv.version, pv.status, pv.updated_at AS updatedAt,
+    `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version, pv.status, pv.updated_at AS updatedAt,
             COALESCE((
               SELECT GROUP_CONCAT(pr.name || '·' || CASE r.status
                 WHEN 'PENDING' THEN '待测试' WHEN 'IN_TEST' THEN '测试中'
@@ -1426,7 +1442,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
   );
 
   const myBindingFlows = all<MyBindingFlow>(
-    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, pv.version,
+    `SELECT f.id, f.flow_no AS flowNo, p.name AS packageName, p.code AS packageCode, pv.version,
             pr.name AS projectName, n.name AS nodeName, f.status,
             f.review_comment AS reviewComment, f.reviewed_at AS reviewedAt, r.id AS requestId,
             (SELECT COUNT(*) FROM binding_flow_barcodes b WHERE b.flow_id = f.id) AS barcodeCount
@@ -1446,7 +1462,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       notifications.push({
         key: `flow-notice-${flow.id}`,
         title: `绑定电子流 ${flow.flowNo} 已通过`,
-        description: `${flow.packageName} ${flow.version} · ${flow.projectName}/${flow.nodeName}${flow.reviewComment ? `：${flow.reviewComment}` : ""}`,
+        description: `${workbenchVersionLabel(flow)} · ${flow.projectName}/${flow.nodeName}${flow.reviewComment ? `：${flow.reviewComment}` : ""}`,
         href: `/trial/${flow.requestId}#binding-flow-${flow.id}`,
         tone: "success",
         at: flow.reviewedAt ?? undefined,
@@ -1708,7 +1724,7 @@ const traceVersionFields = `SELECT pv.id, p.id AS packageId, p.name AS packageNa
 const traceVersionsFrom = "FROM package_versions pv JOIN packages p ON p.id = pv.package_id";
 const traceSubmittedDate = "date(pv.submitted_at, '+8 hours')";
 const traceSortSql = {
-  package: "p.name COLLATE NOCASE",
+  package: `${packageCodeSql("p.name", "p.code")} COLLATE NOCASE`,
   version: "pv.version COLLATE NOCASE",
   status: `CASE pv.status
     WHEN 'PENDING_TRANSFER' THEN 1 WHEN 'IN_TEST' THEN 2 WHEN 'PENDING_TRIAL' THEN 3

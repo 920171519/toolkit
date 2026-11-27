@@ -738,7 +738,8 @@ test.describe("工程协同台项目维度流程", () => {
     await form.getByRole("button", { name: "创建并配置使用范围" }).click();
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/settings\/packages\/\d+(\?|$)/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("测试辅助服务");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("90001TST");
+    await expect(page.locator(".page-head p")).toContainText("测试辅助服务");
     await expect(page.getByText("软件包已创建，请继续配置使用范围。")).toBeVisible();
     const editForm = page.getByTestId("package-meta-form");
     await expect(editForm.getByRole("textbox", { name: "软件包名称" })).toHaveValue("测试辅助服务");

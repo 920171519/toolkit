@@ -210,7 +210,7 @@ test("新增使用项目时补建一条转测申请，并保留原项目的结�
   await expect(pendingRow).toHaveCount(1);
   await page.getByTestId("open-batch-2").click();
   const builder = page.getByTestId("batch-builder-form");
-  const includedLabel = `本轮转测 ${sample.name}`;
+  const includedLabel = `本轮转测 ${sample.code}`;
   await expect(builder.getByRole("checkbox", { name: includedLabel, exact: true })).toBeChecked();
   for (const checkbox of await builder.getByRole("checkbox").all()) {
     if (await checkbox.getAttribute("aria-label") !== includedLabel) await checkbox.uncheck();

@@ -58,15 +58,15 @@ test("草稿占用可直达，作废配套可在原草稿修正且过期修改�
     await occupied.click();
     await page.getByRole("link", { name: "发起转测", exact: true }).click();
     const guidance = page.getByRole("dialog", { name: "B9886 · 发起转测条件" });
-    await expect(guidance).toContainText("草稿引导测试包 2 9.8.6 已作废");
+    await expect(guidance).toContainText("98281TQA 9.8.6 已作废");
     await guidance.getByRole("link", { name: "调整配套" }).click();
     const stale = await page.context().newPage();
     try {
       await stale.goto(page.url());
       const editor = page.getByTestId("batch-builder-form");
       await expect(editor.locator('input[name="code"]')).toHaveValue("B9886");
-      await expect(editor.getByRole("checkbox", { name: "本轮转测 草稿引导测试包 1" })).toBeChecked();
-      await expect(editor.getByRole("checkbox", { name: "本轮转测 草稿引导测试包 2" })).not.toBeChecked();
+      await expect(editor.getByRole("checkbox", { name: "本轮转测 98280TQA" })).toBeChecked();
+      await expect(editor.getByRole("checkbox", { name: "本轮转测 98281TQA" })).not.toBeChecked();
       await editor.getByRole("button", { name: "保存草稿并核对" }).click();
       await expectFlash(page, "转测草稿已更新");
       await expect(page).toHaveURL((url) => url.pathname === `/integration/${draftId}` && url.searchParams.get("project") === "1");

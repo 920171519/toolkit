@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { submitTransferAction } from "@/lib/actions/workflow";
 import type { ActionState } from "@/lib/action-state";
+import { packageIdentity } from "@/lib/package-identity";
 import styles from "./workflow-queue.module.css";
 
 type PackageOption = {
@@ -33,6 +34,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
   const submitHintId = useId();
 
   const selected = packages.find((pkg) => pkg.id === packageId) ?? null;
+  const selectedIdentity = selected ? packageIdentity(selected) : null;
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return packages;
@@ -44,7 +46,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
   const conditions = [
-    !selected ? { title: "选择软件包", detail: "按名称、编码或责任人搜索并选择软件包。" } : null,
+    !selected ? { title: "选择软件包", detail: "按编码、名称或责任人搜索并选择软件包。" } : null,
     !version.trim() ? { title: "填写版本号" } : null,
     changeSummary.trim().length < 5 ? { title: "填写变更说明", detail: "至少填写 5 个字。" } : null,
     !/^https?:\/\//i.test(archiveUrl.trim()) ? { title: "补齐归档链接", detail: "链接以 http:// 或 https:// 开头。" } : null,
@@ -59,9 +61,12 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
       <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
         <div className="field" role="group" aria-labelledby={packageLabelId}>
           <span className="label" id={packageLabelId}>软件包 <span className="required-mark" aria-hidden="true">*</span></span>
-          {selected ? (
+          {selected && selectedIdentity ? (
             <div className="package-picked">
-              <span className={styles.packageChoiceLabel}><strong>{selected.name}</strong> · {selected.code}{selected.ownerName ? ` · 责任人 ${selected.ownerName}` : ""}</span>
+              <span className={styles.packageChoiceLabel}>
+                <strong className="mono">{selectedIdentity.code}</strong>
+                <span className="small muted">{selectedIdentity.name !== selectedIdentity.code && ` · ${selectedIdentity.name}`}{selected.ownerName && ` · 责任人 ${selected.ownerName}`}</span>
+              </span>
               <button type="button" className={`button button-ghost button-sm ${styles.packageChoiceAside}`} aria-label="更换软件包" onClick={() => setPackageId(null)}>更换</button>
             </div>
           ) : (
@@ -72,7 +77,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                   type="search"
                   value={search}
                   onChange={(event) => { setSearch(event.target.value); setPage(1); }}
-                  placeholder="名称、编码或责任人"
+                  placeholder="编码、名称或责任人"
                   aria-label="搜索软件包"
                   data-testid="transfer-package-search"
                 />
@@ -81,12 +86,16 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                 {filtered.length === 0 ? <div className="toolbar">
                   <span className="small muted">没有匹配的软件包</span>
                   <button type="button" className="button button-secondary button-sm" onClick={() => { setSearch(""); setPage(1); }}>清除搜索</button>
-                </div> : visible.map((pkg) => (
-                  <button type="button" className="package-pick-item" key={pkg.id} onClick={() => setPackageId(pkg.id)} data-testid={`transfer-package-${pkg.id}`}>
-                    <span className={styles.packageChoiceLabel}><strong>{pkg.name}</strong> · {pkg.code}</span>
+                </div> : visible.map((pkg) => {
+                  const { code, name } = packageIdentity(pkg);
+                  return <button type="button" className="package-pick-item" key={pkg.id} onClick={() => setPackageId(pkg.id)} data-testid={`transfer-package-${pkg.id}`}>
+                    <span className={styles.packageChoiceLabel}>
+                      <strong className="mono">{code}</strong>
+                      {name !== code && <span className="small muted"> · {name}</span>}
+                    </span>
                     <span className={`small muted ${styles.packageChoiceAside}`}>{pkg.ownerName ?? "待指定责任人"}</span>
-                  </button>
-                ))}
+                  </button>;
+                })}
               </div>
               {pages > 1 && <nav className={styles.pagination} aria-label="可提交软件包分页">
                 <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>上一页</button>
