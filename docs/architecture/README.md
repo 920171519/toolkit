@@ -13,7 +13,8 @@
 | 批次写入 | `lib/actions/workflow.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/workflow.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/workflow.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
-| 配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理账号分工、责任田及项目节点。 |
+| 项目与节点配置写入 | `lib/actions/settings.ts` → `lib/project-settings.ts` | 管理项目、经理与节点配置，保留归档恢复及审批人快照。 |
+| 组织与账号配置写入 | `lib/actions/settings.ts` → `lib/settings.ts` | 管理责任田、分工和账号。 |
 | 软件包配置写入 | `lib/actions/settings.ts` → `lib/package-settings.ts` | 管理软件包资料、使用范围和历史补录，配置联动复用 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
 | 工作台读取 | `lib/workbench-queries.ts` | 按角色和项目组合待办、提醒、个人版本和电子流，复用各队列及通知模块。 |

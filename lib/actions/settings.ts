@@ -13,21 +13,23 @@ import {
 } from "@/lib/action-helpers";
 import { correctLegacyVersion, importLegacyVersion, savePackage, savePackageUsages, updatePackageResponsibility } from "@/lib/package-settings";
 import {
-  addAreaLeader,
   addProjectNode,
   addProjectNodeApprover,
-  updateProjectNode,
-  assignAreaProjectLead,
-  deleteArea,
   deleteProject,
   deleteProjectNode,
+  removeProjectNodeApprover,
+  saveProject,
+  updateProjectNode,
+} from "@/lib/project-settings";
+import {
+  addAreaLeader,
+  assignAreaProjectLead,
+  deleteArea,
   removeAreaLeader,
   removeAreaProjectLead,
   removeAreaProjectMember,
-  removeProjectNodeApprover,
   saveArea,
   assignAreaProjectMember,
-  saveProject,
   saveUserProfile,
   setUserActive,
   updateUserRole,

@@ -61,7 +61,7 @@ const workflowPageQueries = new Set([
   "lib/pending-transfer-queries.ts",
   "lib/release-queue-queries.ts",
 ]);
-const settingsMutationModules = new Set(["lib/settings.ts", "lib/package-settings.ts"]);
+const settingsMutationModules = new Set(["lib/settings.ts", "lib/package-settings.ts", "lib/project-settings.ts"]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();

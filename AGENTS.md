@@ -13,7 +13,8 @@
 | 转测、测试、试制、绑定、转正 | 流程操作由 `lib/actions/workflow.ts` 提交，风险登记另由 `lib/actions/risk-trial.ts` 提交。`lib/release-workflow.ts` 负责试制和转正，`lib/batch-workflow.ts` 负责批次和测试，`lib/transfer-workflow.ts` 负责提交与撤回转测，`lib/binding-workflow.ts` 负责绑定写入。流程查询见 `lib/pending-transfer-queries.ts`、`lib/batch-queries.ts`、`lib/binding-queries.ts` 和 `lib/release-queue-queries.ts`。试制资格和转正校验分别由 `lib/trial-eligibility.ts` 和 `lib/trial-readiness.ts` 提供。领域校验错误统一由 `lib/domain-error.ts` 定义。 |
 | 工作台与版本追溯 | `lib/workbench-queries.ts`、`lib/version-trace-queries.ts` |
 | 读取查询与权限 | `lib/queries.ts`、`lib/access.ts`、`lib/permissions.ts` |
-| 责任田、项目节点与账号配置 | `lib/settings.ts` |
+| 责任田与账号配置 | `lib/settings.ts` |
+| 项目和节点配置 | `lib/project-settings.ts` |
 | 软件包配置与历史版本补录 | `lib/package-settings.ts` |
 | SQLite 表结构、启动迁移和演示数据 | `lib/schema.ts`、`lib/db.ts`、`lib/seed.ts` |
 | 端到端测试与 Ubuntu 部署 | `tests/e2e/`、`playwright.config.ts`、`scripts/deploy-ubuntu.sh` |
