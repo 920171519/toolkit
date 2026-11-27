@@ -2,6 +2,58 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 import { openE2eDatabase } from "./storage";
 
+test("项目归档后保留版本超期历史，退出绑定催办", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const db = openE2eDatabase();
+  const releaseAt = "2000-01-01T00:00:00Z";
+  const packageCode = "PW-TRIAL-OVERDUE";
+  let projectId: number | undefined;
+  let packageId: number | undefined;
+
+  try {
+    db.exec("PRAGMA busy_timeout = 5000");
+    projectId = Number(db.prepare("INSERT INTO projects (name, code, created_at) VALUES ('试制超期历史回归', 'PW-OVERDUE', ?)")
+      .run(releaseAt).lastInsertRowid);
+    packageId = Number(db.prepare("INSERT INTO packages (name, code, created_at) VALUES ('超期回归软件包', ?, ?)")
+      .run(packageCode, releaseAt).lastInsertRowid);
+    const versionId = Number(db.prepare(
+      `INSERT INTO package_versions (package_id, version, change_summary, archive_url, status, submitted_at, updated_at)
+       VALUES (?, '1.0.0', '超期回归', 'https://example.test/archive', 'TRIAL', ?, ?)`,
+    ).run(packageId, releaseAt, releaseAt).lastInsertRowid);
+    const requestId = Number(db.prepare(
+      `INSERT INTO version_transfer_requests (package_version_id, project_id, status, trial_released_at, submitted_at, updated_at)
+       VALUES (?, ?, 'TRIAL', ?, ?, ?)`,
+    ).run(versionId, projectId, releaseAt, releaseAt, releaseAt).lastInsertRowid);
+
+    const detailUrl = `/trial/${requestId}`;
+    const reminder = page.getByText("已超期 · 试制发布超过 7 天，尚未转正", { exact: true });
+    await page.goto(detailUrl);
+    await expect(reminder).toBeVisible();
+
+    db.prepare("UPDATE projects SET status = 'ARCHIVED' WHERE id = ?").run(projectId);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: `${packageCode} 1.0.0 · 绑定验证` })).toBeVisible();
+    await expect(reminder).toHaveCount(0);
+
+    await page.goto(`/projects/${projectId}`);
+    const activity = page.getByRole("region", { name: "版本流程记录", exact: true });
+    await expect(activity.getByRole("listitem").filter({ hasText: packageCode })).toContainText("已超期");
+    await expect(page.getByRole("region", { name: "当前流程", exact: true })).toHaveCount(0);
+
+    await page.goto("/trial?view=binding");
+    const queue = page.getByRole("region", { name: "试制版本绑定验证", exact: true });
+    await expect(queue).toBeVisible();
+    await expect(queue.getByRole("row").filter({ hasText: packageCode })).toHaveCount(0);
+  } finally {
+    try {
+      if (packageId !== undefined) db.prepare("DELETE FROM packages WHERE id = ?").run(packageId);
+      if (projectId !== undefined) db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("发布队列表头筛选、排序及分页，详情返回保留筛选条件", async ({ page }) => {
   await login(page, "ADMIN001");
   await page.goto("/trial");

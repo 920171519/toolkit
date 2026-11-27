@@ -4,7 +4,7 @@ import { getProjectWorkflowProjectIds, type LinkedBatchEvidence } from "./access
 import { bindingBarcodeEvidenceKey, summarizeBindingBarcodes, type BindingBarcodeResult } from "./binding-barcode-results";
 import { all, db, one } from "./db";
 import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
-import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
+import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts, TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
 
 export type BindingBarcodeRow = {
@@ -209,9 +209,7 @@ function readTrialDetail(requestId: number): TrialDetail | null {
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
             pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
             p.trial_overdue_days AS trialOverdueDays,
-            CASE WHEN r.trial_released_at IS NOT NULL
-                 AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
-                 THEN 1 ELSE 0 END AS isOverdue,
+            CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
             b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
             r.void_reason AS voidReason, pv.void_kind AS voidKind, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId

@@ -13,6 +13,7 @@ import { all, one } from "./db";
 import { getPageWindow } from "./list-pagination";
 import { packageCodeSql } from "./package-identity";
 import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
+import { TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
 
@@ -183,8 +184,7 @@ export function getProjectVersionRows(projectId: number, limit = -1): ProjectVer
             r.trial_released_at AS trialReleasedAt, r.form_flow_no AS formFlowNo,
             r.formal_released_at AS formalReleasedAt, r.release_mode AS releaseMode,
             r.risk_conclusion AS riskConclusion, pv.binding_mode AS bindingMode,
-            CASE WHEN r.trial_released_at IS NOT NULL AND pv.status NOT IN ('FORMAL','VOID')
-                 AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
+            CASE WHEN pv.status NOT IN ('FORMAL','VOID') AND ${TRIAL_RELEASE_OVERDUE_SQL}
                  THEN 1 ELSE 0 END AS isOverdue,
             b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus,
             b.conclusion AS batchConclusion

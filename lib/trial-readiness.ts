@@ -20,6 +20,10 @@ export const ACTIVE_INTEGRATION_BATCH_COUNT_SQL = `(
   SELECT COUNT(DISTINCT b.id) ${activeIntegrationBatch} AND bi.package_version_id = pv.id
 )`;
 
+// Elapsed trial time for reminders, using r for the request and p for the package.
+export const TRIAL_RELEASE_OVERDUE_SQL = `r.trial_released_at IS NOT NULL
+  AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')`;
+
 export function getActiveReleaseRequests(database: DatabaseSync, versionId: number) {
   return database.prepare(
     `SELECT r.id, r.project_id AS projectId, pr.name AS projectName, r.status

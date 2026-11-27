@@ -4,6 +4,7 @@ import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds, type 
 import type { TrialQueueBindingCounts } from "./binding-queries";
 import { all, one } from "./db";
 import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, transferRequestProjectScope } from "./transfer-requests";
+import { TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
 
 export type TrialVersionRow = LinkedBatchEvidence & TrialQueueBindingCounts & {
@@ -38,8 +39,6 @@ const versionRequestFrom = `FROM version_transfer_requests r
 const versionRequestWithPackageFrom = `${versionRequestFrom}
   JOIN packages p ON p.id = pv.package_id`;
 const activeReleaseStage = "pr.status != 'ARCHIVED' AND r.status = pv.status";
-const trialOverdue = `r.trial_released_at IS NOT NULL
-  AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')`;
 
 function trialQueueScope(projectIds: number[] | null, assignedRequestIds: number[]) {
   const activeTrial = `${activeReleaseStage} AND pv.status = 'TRIAL'`;
@@ -57,7 +56,7 @@ export function getTrialVersionCount(projectIds: number[] | null, assignedReques
 
 export function getProjectTrialAndFormalCounts(projectId: number) {
   const rows = all<{ status: "TRIAL" | "PENDING_FORMAL"; total: number; overdue: number }>(
-    `SELECT r.status, COUNT(*) AS total, COUNT(*) FILTER (WHERE ${trialOverdue}) AS overdue
+    `SELECT r.status, COUNT(*) AS total, COUNT(*) FILTER (WHERE ${TRIAL_RELEASE_OVERDUE_SQL}) AS overdue
      ${versionRequestWithPackageFrom}
      WHERE r.project_id = ? AND ${activeReleaseStage} AND r.status IN ('TRIAL','PENDING_FORMAL')
      GROUP BY r.status`,
@@ -79,7 +78,7 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
               r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
               pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
               p.trial_overdue_days AS trialOverdueDays,
-              CASE WHEN ${trialOverdue} THEN 1 ELSE 0 END AS isOverdue,
+              CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
               b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
@@ -172,7 +171,7 @@ export function getPendingFormalVersions(projectIds: number[] | null = null, ver
             pv.binding_mode AS bindingMode, r.release_mode AS releaseMode,
             o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
             p.trial_overdue_days AS trialOverdueDays,
-            CASE WHEN ${trialOverdue} THEN 1 ELSE 0 END AS isOverdue,
+            CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
             (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
             (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
              AND br.confirmed_at IS NOT NULL) AS requirementPassed,
