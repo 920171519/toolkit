@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Info } from "lucide-react";
+import { getPopoverLeft, getPopoverViewport, observePopoverViewport, POPOVER_EDGE } from "./popover-viewport";
 import styles from "./info-tooltip.module.css";
 
 export function InfoTooltip({ label, children }: { label: string; children: string }) {
@@ -27,35 +28,21 @@ export function InfoTooltip({ label, children }: { label: string; children: stri
     function reposition() {
       if (!button || !panel || !panel.matches(":popover-open")) return;
       const rect = button.getBoundingClientRect();
-      const edge = 8;
-      const leftEdge = viewport?.offsetLeft ?? 0;
-      const topEdge = viewport?.offsetTop ?? 0;
-      const width = viewport?.width ?? document.documentElement.clientWidth;
-      const bottomEdge = topEdge + (viewport?.height ?? document.documentElement.clientHeight);
-      if (rect.bottom <= topEdge || rect.top >= bottomEdge) {
+      const bounds = getPopoverViewport(viewport);
+      if (rect.bottom <= bounds.top || rect.top >= bounds.bottom) {
         panel.hidePopover();
         return;
       }
-      panel.style.maxWidth = `${Math.min(280, width - edge * 2)}px`;
-      const left = Math.min(rect.left, leftEdge + width - panel.offsetWidth - edge);
-      const above = rect.top - topEdge;
-      const below = bottomEdge - rect.bottom;
+      panel.style.maxWidth = `${Math.min(280, bounds.width - POPOVER_EDGE * 2)}px`;
+      const above = rect.top - bounds.top;
+      const below = bounds.bottom - rect.bottom;
       const top = below >= panel.offsetHeight || below >= above ? rect.bottom : rect.top - panel.offsetHeight;
-      panel.style.left = `${Math.max(leftEdge + edge, left)}px`;
-      panel.style.top = `${Math.max(topEdge + edge, top)}px`;
+      panel.style.left = `${getPopoverLeft(rect.left, panel.offsetWidth, bounds)}px`;
+      panel.style.top = `${Math.max(bounds.top + POPOVER_EDGE, top)}px`;
     }
 
     reposition();
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    viewport?.addEventListener("resize", reposition);
-    viewport?.addEventListener("scroll", reposition);
-    return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-      viewport?.removeEventListener("resize", reposition);
-      viewport?.removeEventListener("scroll", reposition);
-    };
+    return observePopoverViewport(viewport, reposition, true);
   }, [open]);
 
   return (

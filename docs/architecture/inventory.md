@@ -56,6 +56,7 @@
 | 批次办理与发布作废在跨阶段写入模块中共享私有事务逻辑 | [批次写入](../../lib/batch-workflow.ts)、[版本作废记录](../../lib/version-void-workflow.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) | 批次命令拥有报告及事务，作废记录由实际命令在既有事务内写入。 |
 | 三个视图各自计算试制释放时间与超期天数 | [截止时间定义](../../lib/trial-readiness.ts)、[归档回归](../../tests/e2e/trial-queue.spec.ts) | 共用 SQLite 时间条件，保留每处使用结果的业务范围。 |
 | 转测表单将可提交条件与服务端四项字段校验分别实现 | [字段校验](../../lib/transfer-form-validation.ts)、[转测表单](../../components/transfer-request-form.tsx) | 共用字段条件及顺序，界面提示与服务端业务错误分别由调用方呈现。 |
+| 帮助提示与表头筛选重复读取视口、约束横向位置和订阅事件 | [弹层视口](../../components/popover-viewport.ts)、[提示](../../components/info-tooltip.tsx)、[表头筛选](../../components/column-filter-popover.tsx) | 通用定位与事件订阅集中，弹层交互由各组件负责。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

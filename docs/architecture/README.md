@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | 公开目录、登录和项目导航 | `app/page.tsx`、`app/(auth)`、`app/(workspace)/layout.tsx`、`components/workspace-navigation.tsx` | App Router 组合页面。公开目录读取在行项目联系人。工作区渲染登录状态和已授权的项目入口。 |
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
+| 锚定弹层 | `components/popover-viewport.ts` | 共用视口范围、横向定位和事件清理。帮助提示与表头筛选各自管理打开、关闭和焦点。 |
 | 工作流写入 | `lib/actions/workflow.ts`、`lib/actions/risk-trial.ts` → `lib/workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
 | 批次写入 | `lib/actions/workflow.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/workflow.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |

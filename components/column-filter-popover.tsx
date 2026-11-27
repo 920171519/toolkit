@@ -7,6 +7,7 @@ import { ListFilter, X } from "lucide-react";
 import { columnFilterKeys, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { normalizeSearchText } from "@/lib/search-text";
 import { directoryHref } from "@/lib/settings-directory";
+import { getPopoverLeft, getPopoverViewport, observePopoverViewport, POPOVER_EDGE } from "./popover-viewport";
 import styles from "./column-filter-header.module.css";
 
 type Params = Record<string, string | undefined>;
@@ -132,36 +133,24 @@ export function ColumnFilterPopover({ label, path, params, otherParams, fields, 
     function reposition(event?: Event) {
       if (event?.target instanceof Node && popover.contains(event.target)) return;
       const rect = anchor.getBoundingClientRect();
-      const edge = 8;
-      const viewportLeft = viewport?.offsetLeft ?? 0;
-      const viewportTop = viewport?.offsetTop ?? 0;
-      const viewportWidth = viewport?.width ?? document.documentElement.clientWidth;
-      const viewportBottom = viewportTop + (viewport?.height ?? document.documentElement.clientHeight);
-      if (rect.right <= viewportLeft || rect.left >= viewportLeft + viewportWidth || rect.bottom <= viewportTop || rect.top >= viewportBottom) {
+      const bounds = getPopoverViewport(viewport);
+      if (rect.right <= bounds.left || rect.left >= bounds.left + bounds.width || rect.bottom <= bounds.top || rect.top >= bounds.bottom) {
         popover.hidePopover();
         return;
       }
 
-      const left = Math.min(rect.left, viewportLeft + viewportWidth - popover.offsetWidth - edge);
-      const below = viewportBottom - rect.bottom - edge * 2;
-      const above = rect.top - viewportTop - edge * 2;
+      const below = bounds.bottom - rect.bottom - POPOVER_EDGE * 2;
+      const above = rect.top - bounds.top - POPOVER_EDGE * 2;
       const opensBelow = below >= Math.min(popover.scrollHeight, 280) || below >= above;
-      popover.style.left = `${Math.max(viewportLeft + edge, left)}px`;
+      popover.style.left = `${getPopoverLeft(rect.left, popover.offsetWidth, bounds)}px`;
       popover.style.maxHeight = `${Math.min(440, Math.max(0, opensBelow ? below : above))}px`;
-      popover.style.top = opensBelow ? `${rect.bottom + edge}px` : "auto";
-      popover.style.bottom = opensBelow ? "auto" : `${document.documentElement.clientHeight - rect.top + edge}px`;
+      popover.style.top = opensBelow ? `${rect.bottom + POPOVER_EDGE}px` : "auto";
+      popover.style.bottom = opensBelow ? "auto" : `${document.documentElement.clientHeight - rect.top + POPOVER_EDGE}px`;
     }
 
     reposition();
     heading.current?.focus({ preventScroll: true });
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    viewport?.addEventListener("resize", reposition);
-    return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-      viewport?.removeEventListener("resize", reposition);
-    };
+    return observePopoverViewport(viewport, reposition);
   }, [open]);
 
   function closeAndFocus() {
