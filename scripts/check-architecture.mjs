@@ -46,7 +46,12 @@ function importSpecifiers(source) {
 }
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
-const workflowPageQueries = new Set(["lib/workflow-queries.ts", "lib/binding-queries.ts", "lib/batch-queries.ts"]);
+const workflowPageQueries = new Set([
+  "lib/workflow-queries.ts",
+  "lib/binding-queries.ts",
+  "lib/batch-queries.ts",
+  "lib/pending-transfer-queries.ts",
+]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();

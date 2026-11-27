@@ -12,7 +12,7 @@ import { getTransferPackageOptions, parseFlash } from "@/lib/queries";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
-import { getPendingTransferGroups } from "@/lib/workflow-queries";
+import { getPendingTransferGroups } from "@/lib/pending-transfer-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { PendingTransferTable } from "@/components/pending-transfer-table";

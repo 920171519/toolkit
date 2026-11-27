@@ -14,9 +14,9 @@ import { getProjectPackagePreview, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 import { getProjectTrialReadyCount } from "@/lib/trial-eligibility";
 import { getProjectBatchCounts, getRecentProjectBatches } from "@/lib/batch-queries";
+import { getProjectPendingTransferCount } from "@/lib/pending-transfer-queries";
 import { workflowHref } from "@/lib/workflow-links";
 import {
-  getProjectPendingTransferCount,
   getProjectTrialAndFormalCounts,
   getProjectVersionRows,
 } from "@/lib/workflow-queries";

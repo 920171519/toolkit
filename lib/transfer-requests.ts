@@ -15,6 +15,13 @@ export const EFFECTIVE_INTEGRATION_STATUS_SQL = `CASE WHEN r.status IN ('PENDING
   THEN COALESCE(r.integration_status, r.status) ELSE r.status END`;
 export const PENDING_BATCH_REQUEST_SQL = `(${EFFECTIVE_INTEGRATION_STATUS_SQL}) = 'PENDING'`;
 
+export function transferRequestProjectScope(projectIds: number[] | null) {
+  return projectIds === null ? { predicate: "", params: [] } : {
+    predicate: "AND r.project_id IN (SELECT value FROM json_each(?))",
+    params: [JSON.stringify(projectIds)],
+  };
+}
+
 const openBatchReservation = `SELECT 1 FROM batch_items bi
   JOIN integration_batches b ON b.id = bi.batch_id
   WHERE bi.transfer_request_id = r.id AND b.status IN ('DRAFT','IN_TEST')`;

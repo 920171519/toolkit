@@ -18,7 +18,7 @@ import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
-import type { PendingTransferGroup, PendingTransferItem } from "@/lib/workflow-queries";
+import type { PendingTransferGroup, PendingTransferItem } from "@/lib/pending-transfer-queries";
 import styles from "./workflow-queue.module.css";
 
 const PackageDrawer = dynamic(() => import("@/components/package-drawer").then((module) => module.PackageDrawer), { ssr: false });
