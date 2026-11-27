@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { promisify } from "node:util";
 import { expect, test, type TestInfo } from "@playwright/test";
 import ts from "typescript";
 import type { SessionUser } from "../../lib/types";
+import { verifyPassword } from "../../lib/password";
 
 function loadCommands(connection: DatabaseSync) {
   // Each command module needs its own application DB cache for the two real SQLite connections.
@@ -71,6 +73,45 @@ function withConnections(testInfo: TestInfo, run: (first: DatabaseSync, second: 
     first.close();
   }
 }
+
+test("并发初始化同一工号的管理员时，在写事务内选择创建或提升并保留原密码", async ({}, testInfo) => {
+  const path = testInfo.outputPath("admin.db");
+  const env = { ...process.env, DATABASE_PATH: path, TOOLKIT_SKIP_SEED: "1" };
+  const childOptions = { env, timeout: 15_000, encoding: "utf8" as const };
+  execFileSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], childOptions);
+
+  // Assert the CLI lookup itself waits for a write transaction, regardless of process scheduling.
+  const probe = encodeURIComponent(`
+    import { strictEqual } from "node:assert";
+    import { DatabaseSync } from "node:sqlite";
+    const prepare = DatabaseSync.prototype.prepare;
+    DatabaseSync.prototype.prepare = function (statement) {
+      if (statement.includes("FROM users WHERE employee_id")) strictEqual(this.isTransaction, true);
+      return prepare.call(this, statement);
+    };
+  `);
+  const adminArgs = ["--import", "tsx", "--import", `data:text/javascript,${probe}`, "scripts/create-admin.ts", "--"];
+  const runAdmin = promisify(execFile);
+  const applicants = [
+    { name: "验收管理员甲", employeeId: "QA-CLI01", password: "fixture-secret-a" },
+    { name: "验收管理员乙", employeeId: "qa-cli01", password: "fixture-secret-b" },
+  ];
+  const results = await Promise.all(applicants.map(({ name, employeeId, password }) =>
+    runAdmin(process.execPath, [...adminArgs, name, employeeId, password], childOptions)));
+  const creator = results.findIndex(({ stdout }) => stdout.includes("已创建系统管理员"));
+  expect(creator).toBeGreaterThanOrEqual(0);
+  expect(results[1 - creator].stdout).toContain("提升为系统管理员，密码保持不变");
+
+  const database = new DatabaseSync(path, { readOnly: true });
+  try {
+    const accounts = database.prepare("SELECT name, employee_id, password_hash, role, is_active FROM users").all();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({ name: applicants[1 - creator].name, employee_id: "QA-CLI01", role: "ADMIN", is_active: 1 });
+    expect(verifyPassword(applicants[creator].password, String(accounts[0].password_hash))).toBe(true);
+  } finally {
+    database.close();
+  }
+});
 
 test("抽屉保存停用前重新核对并发启用的软件包及新增转测申请", ({}, testInfo) => {
   withConnections(testInfo, (first, second) => {
