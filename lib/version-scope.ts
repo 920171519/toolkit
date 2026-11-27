@@ -1,7 +1,13 @@
+// The stored pair also identifies imports in databases written by earlier versions.
+export const LEGACY_VERSION_IMPORT_EVENT = {
+  action: "IMPORT_LEGACY_VERSION",
+  entityType: "PACKAGE_VERSION",
+} as const;
+
 export const LEGACY_VERSION_IMPORT_SQL = `
   EXISTS (
     SELECT 1 FROM audit_logs log
-    WHERE log.entity_type = 'PACKAGE_VERSION' AND log.entity_id = pv.id AND log.action = 'IMPORT_LEGACY_VERSION'
+    WHERE log.entity_type = '${LEGACY_VERSION_IMPORT_EVENT.entityType}' AND log.entity_id = pv.id AND log.action = '${LEGACY_VERSION_IMPORT_EVENT.action}'
   )
 `;
 

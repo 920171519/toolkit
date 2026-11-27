@@ -15,6 +15,7 @@ import {
 } from "./settings-queries";
 import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
 import type { SessionUser } from "./types";
+import { LEGACY_VERSION_IMPORT_EVENT } from "./version-scope";
 
 const audit = createAuditLogWriter(db);
 
@@ -228,8 +229,8 @@ export function importLegacyVersion(actor: SessionUser, input: ImportLegacyVersi
     const versionId = Number(result.lastInsertRowid);
     audit(
       actor.id,
-      "IMPORT_LEGACY_VERSION",
-      "PACKAGE_VERSION",
+      LEGACY_VERSION_IMPORT_EVENT.action,
+      LEGACY_VERSION_IMPORT_EVENT.entityType,
       versionId,
       `导入历史版本：${pkg.name} ${version}（${input.status === "FORMAL" ? "已转正" : "试制中"}）`,
     );
