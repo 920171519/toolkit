@@ -28,9 +28,13 @@ import { getActiveTransferProjects, insertTransferRequest, refreshVersionAggrega
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
 import {
+  ACTIVE_BINDING_FLOW_STATUSES_SQL,
   BINDING_BARCODE_FAILURE_REASON_LIMIT,
   bindingBarcodeEvidenceKey,
+  bindingBarcodeProgress,
+  isActiveBindingFlow,
   isBindingBarcodeResult,
+  summarizeBindingBarcodes,
   type BindingBarcodeResult,
 } from "./binding-barcode-results";
 
@@ -1066,7 +1070,7 @@ function bindingBarcodeEvidence(actor: SessionUser, requirementId: number, evide
     "该节点未推送、已关闭或已免绑。");
 
   const flows = all<{ id: number; status: string }>(
-    "SELECT id, status FROM binding_flows WHERE requirement_id = ? AND status IN ('PENDING','APPROVED')",
+    `SELECT id, status FROM binding_flows WHERE requirement_id = ? AND status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL}`,
     requirementId,
   );
   assert(bindingBarcodeEvidenceKey(requirement.barcode_revision, flows) === evidenceKey, "绑定电子流或条码判定已变化，请刷新后重新核对。");
@@ -1075,13 +1079,13 @@ function bindingBarcodeEvidence(actor: SessionUser, requirementId: number, evide
     flowId: number;
     flowStatus: "PENDING" | "APPROVED";
     barcode: string;
-    validationResult: BindingBarcodeResult;
+    result: BindingBarcodeResult;
     failureReason: string | null;
   }>(
     `SELECT b.id, f.id AS flowId, f.status AS flowStatus, b.barcode,
-            b.validation_result AS validationResult, b.failure_reason AS failureReason
+            b.validation_result AS result, b.failure_reason AS failureReason
      FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-     WHERE f.requirement_id = ? AND f.status IN ('PENDING','APPROVED') ORDER BY b.id`,
+     WHERE f.requirement_id = ? AND f.status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL} ORDER BY b.id`,
     requirementId,
   );
   return { requirement, barcodes };
@@ -1112,7 +1116,7 @@ export function saveBindingBarcodeResults(
       const barcode = barcodeById.get(barcodeId);
       assert(barcode, "该电子流或设备条码已变化，请刷新后重新核对。");
       assert(isBindingBarcodeResult(result), "请选择有效的设备条码判定。");
-      if (barcode.validationResult === result) continue;
+      if (barcode.result === result) continue;
       run(
         `UPDATE binding_flow_barcodes
          SET validation_result = ?, validated_at = ?, validated_by = ?, failure_reason = NULL, failure_reason_at = NULL, failure_reason_by = NULL
@@ -1120,7 +1124,7 @@ export function saveBindingBarcodeResults(
         result, result === "UNREVIEWED" ? null : timestamp, result === "UNREVIEWED" ? null : actor.id, barcodeId,
       );
       audit(actor.id, "SET_BINDING_BARCODE_RESULT", "BINDING_FLOW_BARCODE", barcodeId,
-        `设备条码 ${barcode.barcode}：${barcode.validationResult} → ${result}${barcode.failureReason ? `。原失败原因：${barcode.failureReason}` : ""}`);
+        `设备条码 ${barcode.barcode}：${barcode.result} → ${result}${barcode.failureReason ? `。原失败原因：${barcode.failureReason}` : ""}`);
       changed = true;
     }
     if (changed) recordBindingBarcodeUpdate(requirementId, timestamp);
@@ -1138,7 +1142,7 @@ export function confirmBindingRequirement(
   return transaction(() => {
     const { requirement, barcodes } = bindingBarcodeEvidence(actor, requirementId, evidenceKey);
     assert(requirement.status === "PENDING", "该节点已确认，请核对最新的绑定验证状态。");
-    const failed = new Map(barcodes.filter((barcode) => barcode.validationResult === "FAIL").map((barcode) => [barcode.id, barcode]));
+    const failed = new Map(barcodes.filter((barcode) => barcode.result === "FAIL").map((barcode) => [barcode.id, barcode]));
     for (const [barcodeId, reason] of failureReasons) {
       const barcode = failed.get(barcodeId);
       assert(barcode, "待记录失败原因的设备条码已变化，请刷新后重新核对。");
@@ -1149,11 +1153,11 @@ export function confirmBindingRequirement(
       assert((failureReasons.get(barcode.id) ?? barcode.failureReason)?.trim(), `请填写设备条码 ${barcode.barcode} 的失败原因。`);
     }
 
-    const approved = barcodes.filter((barcode) => barcode.flowStatus === "APPROVED");
-    const passedCount = new Set(approved.filter((barcode) => barcode.validationResult === "PASS").map((barcode) => barcode.barcode)).size;
+    const counts = summarizeBindingBarcodes(barcodes);
     if (!saveReasonsOnly) {
-      assert(!approved.some((barcode) => barcode.validationResult === "UNREVIEWED"), "请先判定已审批电子流的全部设备条码。");
-      assert(passedCount > 0 && passedCount >= requirement.required_count, "已审批且判定通过的有效条码数量尚未达标，不能确认节点通过。");
+      const progress = bindingBarcodeProgress(requirement.required_count, counts);
+      assert(counts.unreviewedApprovedCount === 0, "请先判定已审批电子流的全部设备条码。");
+      assert(progress.canConfirm, "已审批且判定通过的有效条码数量尚未达标，不能确认节点通过。");
     }
 
     const timestamp = now();
@@ -1179,7 +1183,7 @@ export function confirmBindingRequirement(
     );
     const enteredFormal = refreshTrialReadiness(db, requirement.version_id, timestamp);
     audit(actor.id, "CONFIRM_BINDING_REQUIREMENT", "BINDING_REQUIREMENT", requirementId,
-      `确认 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定验证通过，已审批且判定通过的条码 ${passedCount} 个，已记录失败原因 ${failed.size} 个`);
+      `确认 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定验证通过，已审批且判定通过的条码 ${counts.passedBarcodeCount} 个，已记录失败原因 ${failed.size} 个`);
     return { requestId: requirement.request_id, enteredFormal };
   });
 }
@@ -1249,7 +1253,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     for (const barcode of normalizedBarcodes) {
       const duplicate = one<{ id: number }>(
         `SELECT f.id FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-         WHERE f.requirement_id = ? AND b.barcode = ? AND f.status IN ('PENDING','APPROVED') LIMIT 1`,
+         WHERE f.requirement_id = ? AND b.barcode = ? AND f.status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL} LIMIT 1`,
         requirementId,
         barcode,
       );
@@ -1314,7 +1318,7 @@ export function cancelBindingFlow(actor: SessionUser, flowId: number, reason: st
       "只有提交人、本项目软件经理或管理员可以撤销绑定电子流。",
       "FORBIDDEN",
     );
-    assert(flow.status === "PENDING" || flow.status === "APPROVED", "该绑定电子流已结束，无需撤销。");
+    assert(isActiveBindingFlow(flow.status), "该绑定电子流已结束，无需撤销。");
     const beforeFormal = flow.project_status !== "ARCHIVED" && isBindingOpen(flow.version_status) && isBindingOpen(flow.request_status);
     assert(beforeFormal || flow.version_status === "VOID", "仅未转正或已作废的版本允许撤销绑定电子流。");
     const timestamp = now();

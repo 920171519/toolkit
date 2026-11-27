@@ -1,6 +1,13 @@
 import { all, db, one } from "./db";
 import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
-import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
+import {
+  ACTIVE_BINDING_FLOW_STATUSES_SQL,
+  bindingBarcodeEvidenceKey,
+  bindingBarcodeProgress,
+  summarizeBindingBarcodes,
+  type BindingBarcodeFact,
+  type BindingBarcodeResult,
+} from "./binding-barcode-results";
 import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
 import { getPageWindow } from "./list-pagination";
@@ -754,28 +761,11 @@ export type TrialDetail = {
 };
 
 function bindingFlowCounts(flows: BindingFlowRow[]) {
-  const approvedBarcodes = new Set<string>();
-  const submittedBarcodes = new Set<string>();
-  const passedBarcodes = new Set<string>();
-  let unreviewedApprovedCount = 0;
-  let failedBarcodeCount = 0;
-  for (const flow of flows) {
-    if (flow.status !== "PENDING" && flow.status !== "APPROVED") continue;
-    for (const { barcode, result } of flow.barcodeResults) {
-      submittedBarcodes.add(barcode);
-      if (result === "FAIL") failedBarcodeCount += 1;
-      if (flow.status !== "APPROVED") continue;
-      approvedBarcodes.add(barcode);
-      if (result === "UNREVIEWED") unreviewedApprovedCount += 1;
-      if (result === "PASS") passedBarcodes.add(barcode);
-    }
-  }
+  const facts = flows.flatMap(({ status, barcodeResults }) =>
+    barcodeResults.map(({ barcode, result }) => ({ barcode, result, flowStatus: status })),
+  );
   return {
-    approvedCount: approvedBarcodes.size,
-    passedBarcodeCount: passedBarcodes.size,
-    unreviewedApprovedCount,
-    failedBarcodeCount,
-    submittedCount: submittedBarcodes.size,
+    ...summarizeBindingBarcodes(facts),
     pendingCount: flows.filter((flow) => flow.status === "PENDING").length,
   };
 }
@@ -1188,7 +1178,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
      JOIN packages p ON p.id = pv.package_id
      JOIN projects pr ON pr.id = f.project_id
      JOIN project_nodes n ON n.id = f.node_id
-     WHERE f.submitted_by = ? AND pv.status = 'VOID' AND f.status IN ('PENDING','APPROVED')
+     WHERE f.submitted_by = ? AND pv.status = 'VOID' AND f.status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL}
      ORDER BY f.submitted_at DESC`,
     user.id,
   );
@@ -1214,25 +1204,17 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     projectName: string;
     nodeName: string;
     requiredCount: number;
-    passedCount: number;
-    unreviewedCount: number;
-    failedCount: number;
-    submittedCount: number;
     pendingFlowId: number | null;
+    barcodeFacts: string;
   }>(
     `SELECT br.id AS requirementId, r.id AS requestId, p.name AS packageName, p.code AS packageCode, pv.version, pr.id AS projectId,
             p.owner_id AS packageOwnerId, br.binding_owner_id AS bindingOwnerId,
             pr.name AS projectName, n.name AS nodeName, br.required_count AS requiredCount,
-            (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-             WHERE f.requirement_id = br.id AND f.status = 'APPROVED' AND b.validation_result = 'PASS') AS passedCount,
-            (SELECT COUNT(*) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-             WHERE f.requirement_id = br.id AND f.status = 'APPROVED' AND b.validation_result = 'UNREVIEWED') AS unreviewedCount,
-            (SELECT COUNT(*) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-             WHERE f.requirement_id = br.id AND f.status IN ('APPROVED','PENDING') AND b.validation_result = 'FAIL') AS failedCount,
-            (SELECT COUNT(DISTINCT b.barcode) FROM binding_flow_barcodes b JOIN binding_flows f ON f.id = b.flow_id
-             WHERE f.requirement_id = br.id AND f.status IN ('APPROVED','PENDING')) AS submittedCount,
             (SELECT f.id FROM binding_flows f WHERE f.requirement_id = br.id AND f.status = 'PENDING'
-             ORDER BY f.submitted_at, f.id LIMIT 1) AS pendingFlowId
+             ORDER BY f.submitted_at, f.id LIMIT 1) AS pendingFlowId,
+            (SELECT json_group_array(json_object('barcode', b.barcode, 'result', b.validation_result, 'flowStatus', f.status))
+             FROM binding_flows f JOIN binding_flow_barcodes b ON b.flow_id = f.id
+             WHERE f.requirement_id = br.id AND f.status IN ${ACTIVE_BINDING_FLOW_STATUSES_SQL}) AS barcodeFacts
      FROM binding_requirements br
      JOIN version_transfer_requests r ON r.id = br.request_id
      JOIN package_versions pv ON pv.id = br.package_version_id
@@ -1246,18 +1228,19 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     user.id, user.id, user.role === "ADMIN" ? 1 : 0, JSON.stringify(managedProjectIds),
   );
   for (const task of bindingTasks) {
-    const ready = task.passedCount >= task.requiredCount && task.unreviewedCount === 0;
+    const counts = summarizeBindingBarcodes(JSON.parse(task.barcodeFacts) as BindingBarcodeFact[]);
+    const { passedBarcodeCount, unreviewedApprovedCount, failedBarcodeCount } = counts;
+    const { canConfirm: ready, submissionShortfall } = bindingBarcodeProgress(task.requiredCount, counts);
     const canConfirm = task.packageOwnerId === user.id || managerScope === null || managedProjectIds.includes(task.projectId);
-    const reviewAction = !canConfirm ? null : ready ? "确认节点通过" : task.unreviewedCount > 0 ? "判定设备条码"
-      : task.failedCount > 0 ? "核对失败条码" : null;
+    const reviewAction = !canConfirm ? null : ready ? "确认节点通过" : unreviewedApprovedCount > 0 ? "判定设备条码"
+      : failedBarcodeCount > 0 ? "核对失败条码" : null;
     if (!reviewAction && (ready || task.bindingOwnerId !== user.id)) continue;
-    const waitingApproval = !reviewAction && task.pendingFlowId !== null
-      && task.submittedCount - task.failedCount >= task.requiredCount;
+    const waitingApproval = !reviewAction && task.pendingFlowId !== null && submissionShortfall === 0;
     const action = reviewAction ?? (waitingApproval ? "跟进电子流审批" : "提交绑定电子流");
     const linkTarget = waitingApproval ? `binding-flow-${task.pendingFlowId}` : `binding-node-${task.requirementId}`;
-    const progress = `${task.projectName} / ${task.nodeName}，通过条码 ${task.passedCount}/${task.requiredCount}`
-      + (task.unreviewedCount > 0 ? ` · ${task.unreviewedCount} 条待判定` : "")
-      + (task.failedCount > 0 ? ` · ${task.failedCount} 条 FAIL` : "");
+    const progress = `${task.projectName} / ${task.nodeName}，通过条码 ${passedBarcodeCount}/${task.requiredCount}`
+      + (unreviewedApprovedCount > 0 ? ` · ${unreviewedApprovedCount} 条待判定` : "")
+      + (failedBarcodeCount > 0 ? ` · ${failedBarcodeCount} 条 FAIL` : "");
     tasks.push({
       key: `binding-${task.requirementId}`,
       title: `${action}：${workbenchVersionLabel(task)}`,

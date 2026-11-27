@@ -223,6 +223,50 @@ test("只有软件包责任人、本项目软件经理和管理员可确认节�
   }
 });
 
+test("历史重复条码不能凑足通过数量，只有不同的已审批 PASS 计入", async ({ page }) => {
+  await login(page, "MGR001");
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-duplicate-barcodes-e2e", ["N1"], 2);
+  const trial = `/trial/${requestId}?project=1`;
+  const node = page.locator(".binding-requirement");
+  const summary = node.locator("summary").first();
+  const confirm = node.getByRole("button", { name: "确认节点通过", exact: true });
+
+  try {
+    const addFlow = db.prepare(`INSERT INTO binding_flows
+       (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode, submitted_by, approver_id, status, submitted_at)
+       SELECT ?, id, package_version_id, project_id, node_id, ?, binding_owner_id, approver_id, ?, datetime('now')
+       FROM binding_requirements WHERE request_id = ?`);
+    const addPass = db.prepare(`INSERT INTO binding_flow_barcodes (flow_id, barcode, validation_result, created_at)
+       VALUES (?, ?, 'PASS', datetime('now'))`);
+    const seedPass = (flowNo: string, barcode: string, status: string) =>
+      addPass.run(addFlow.run(flowNo, barcode, status, requestId).lastInsertRowid, barcode).lastInsertRowid;
+    seedPass("BF-LEGACY-CASE-1", "LEGACY-COUNT", "APPROVED");
+    const second = seedPass("BF-LEGACY-CASE-2", "legacy-count", "APPROVED");
+    seedPass("BF-LEGACY-CASE-3", "CANCELLED-COUNT", "CANCELLED");
+
+    await page.goto(trial);
+    await expect(summary).toContainText("2/2 条码通过");
+
+    // Model pre-deduplication data imported without changing the flow identities or the form revision.
+    db.prepare("UPDATE binding_flow_barcodes SET barcode = ? WHERE id = ?").run("LEGACY-COUNT", second);
+    await confirm.click();
+    await expect(node.getByRole("alert")).toContainText("有效条码数量尚未达标");
+    expect(db.prepare("SELECT status FROM binding_requirements WHERE request_id = ?").get(requestId)?.status).toBe("PENDING");
+
+    await page.goto(trial);
+    await expect(summary).toContainText("1/2 条码通过");
+    await confirm.click();
+    await expect(page.getByRole("dialog", { name: /节点通过条件/ })).toContainText("还需 1 个通过条码");
+    await login(page, "VALID001");
+    await expect(page.getByRole("link", { name: /提交绑定电子流.*duplicate-barcodes/ })).toContainText("通过条码 1/2");
+  } finally {
+    db.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    db.close();
+  }
+});
+
 test("逐条记录混合判定，原因可先保存，补齐获批 PASS 后确认节点", async ({ page }) => {
   await login(page, "VALID001");
   const db = openE2eDatabase();

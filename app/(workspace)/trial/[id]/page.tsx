@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { BINDING_BARCODE_FAILURE_REASON_LIMIT, bindingBarcodeProgress, isActiveBindingFlow } from "@/lib/binding-barcode-results";
 import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "@/lib/permissions";
 import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
@@ -166,10 +167,9 @@ export default async function TrialDetailPage({
                   const canSubmit = open && canSubmitBindingFlow(user, requirement.bindingOwnerId);
                   const showWaive = acceptsBinding && request.status === "TRIAL" && requirement.status === "PENDING"
                     && (manager || requirement.bindingOwnerId === user.id);
-                  const requiredBarcodes = Math.max(1, requirement.requiredCount);
-                  const passShortfall = Math.max(0, requiredBarcodes - requirement.passedBarcodeCount);
-                  const readyToConfirm = open && requirement.status === "PENDING"
-                    && passShortfall === 0 && requirement.unreviewedApprovedCount === 0;
+                  const { passShortfall, submissionShortfall: missing, canConfirm: meetsBarcodeRequirements } =
+                    bindingBarcodeProgress(requirement.requiredCount, requirement);
+                  const readyToConfirm = open && requirement.status === "PENDING" && meetsBarcodeRequirements;
                   const canConfirm = readyToConfirm && canConfirmNodes;
                   const showConfirm = acceptsBinding && requirement.status === "PENDING" && canConfirmNodes;
                   const pushGuidance = [{
@@ -178,20 +178,18 @@ export default async function TrialDetailPage({
                     href: pendingDecision ? "#binding-decision" : undefined,
                     actionLabel: "查看绑定方式",
                   }];
-                  const needsWithdrawal = (status: string) => status === "PENDING" || status === "APPROVED";
                   const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
                     && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
                   const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
-                    && needsWithdrawal(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
+                    && isActiveBindingFlow(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
                   const pendingFlows = requirement.flows.filter((flow) => flow.status === "PENDING");
                   const unreviewedFlows = requirement.flows.filter((flow) => flow.status === "APPROVED"
                     && flow.barcodeResults.some((barcode) => barcode.result === "UNREVIEWED"));
-                  const failedFlows = requirement.flows.filter((flow) => needsWithdrawal(flow.status)).flatMap((flow) => {
+                  const failedFlows = requirement.flows.filter((flow) => isActiveBindingFlow(flow.status)).flatMap((flow) => {
                     const barcodes = flow.barcodeResults.filter((barcode) => barcode.result === "FAIL");
                     return barcodes.length > 0 ? [{ flow, barcodes }] : [];
                   });
                   const missingReasonId = failedFlows.flatMap(({ barcodes }) => barcodes).find((barcode) => !barcode.failureReason?.trim())?.id;
-                  const missing = Math.max(0, requiredBarcodes - requirement.submittedCount + requirement.failedBarcodeCount);
                   const qualificationHint = [
                     missing > 0 ? `由绑定责任人补充至少 ${missing} 个条码并提交电子流。` : undefined,
                     passShortfall > 0 && pendingFlows.length > 0 ? "由指定审批人处理待审批电子流。" : undefined,
@@ -263,7 +261,7 @@ export default async function TrialDetailPage({
                                       <label className="field" key={barcode.id}>
                                         <span className="label"><span className="mono">{barcode.barcode}</span> 失败原因 <span className="required-mark" aria-hidden="true">*</span></span>
                                         <textarea className="textarea" name={`failureReason_${barcode.id}`} aria-label={`条码 ${barcode.barcode} 失败原因`}
-                                          defaultValue={barcode.failureReason ?? ""} required maxLength={2000} rows={2} data-dialog-autofocus={barcode.id === missingReasonId || undefined} />
+                                          defaultValue={barcode.failureReason ?? ""} required maxLength={BINDING_BARCODE_FAILURE_REASON_LIMIT} rows={2} data-dialog-autofocus={barcode.id === missingReasonId || undefined} />
                                       </label>
                                     ))}
                                   </fieldset>
@@ -315,7 +313,7 @@ export default async function TrialDetailPage({
                                       </BindingBarcodeEditor>
                                     ) : <>
                                       <BindingBarcodeList barcodes={flow.barcodeResults} />
-                                      {open && needsWithdrawal(flow.status) && <p className="small muted">
+                                      {open && isActiveBindingFlow(flow.status) && <p className="small muted">
                                         {requirement.status === "PASSED" && flow.status === "APPROVED"
                                           ? "节点已确认，已审批的条码结果已锁定。"
                                           : "由软件包责任人、本项目软件经理或管理员判定。"}
@@ -364,7 +362,7 @@ export default async function TrialDetailPage({
                                     )}
                                   </div>
                                 )}
-                                {request.status === "VOID" && needsWithdrawal(flow.status) && flow.submittedById === user.id && (
+                                {request.status === "VOID" && isActiveBindingFlow(flow.status) && flow.submittedById === user.id && (
                                   <div className="risk-callout" data-tone="danger" style={{ marginTop: 7 }}>试制版本已作废，请在原网页撤销绑定电子流，再在此登记撤销。</div>
                                 )}
                               </div>

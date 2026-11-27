@@ -4,6 +4,7 @@ import {
   canManageProjectWorkflowForProject,
   canReadPackageWorkflow,
 } from "./access";
+import { bindingBarcodeProgress } from "./binding-barcode-results";
 import { db, one } from "./db";
 import { packageIdentity } from "./package-identity";
 import { canApproveBindingFlow, canSubmitBindingFlow, isBindingOpen } from "./permissions";
@@ -201,8 +202,8 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
         : (node.status === "CANCELLED" && node.waivedAt !== null) || (node.status === "PASSED" && node.confirmedAt !== null);
       if (!settled) shownUnsettled += 1;
       if (settled || version.bindingMode === "PENDING") continue;
-      const ready = node.pushedAt !== null && node.passedBarcodeCount >= node.requiredCount && node.unreviewedApprovedCount === 0;
-      const missing = Math.max(0, node.requiredCount - (node.submittedCount - node.failedBarcodeCount));
+      const { canConfirm, submissionShortfall: missing } = bindingBarcodeProgress(node.requiredCount, node);
+      const ready = node.pushedAt !== null && canConfirm;
       if (!ready && pending.length > 0 && missing === 0 && node.unreviewedApprovedCount === 0 && node.failedBarcodeCount === 0) continue;
       const reviewTitle = ready ? "待确认节点通过" : node.unreviewedApprovedCount > 0 ? "待判定设备条码"
         : node.failedBarcodeCount > 0 ? "待核对失败条码" : null;

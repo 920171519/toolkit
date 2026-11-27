@@ -26,7 +26,7 @@
 | 共享版本状态 | `package_versions` | `workflow` 更新共享试制、转正及作废。 |
 | 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `workflow` 更新。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
 | 批次与完整配套 | `integration_batches`、`batch_items` | `workflow` 保存状态和版本快照。批次对比读取两份快照。 |
-| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `workflow` 写入。`trial-readiness` 根据持久化证据计算转正条件。 |
+| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `workflow` 写入。`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 目录和流程筛选 | URL 参数、浏览器当前页面状态 | 各列表保留既有 URL 参数。`lib/list-pagination.ts` 统一计算筛选后分页范围，数组和 SQLite 分页都使用该结果。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
 
