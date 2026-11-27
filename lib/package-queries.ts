@@ -419,20 +419,29 @@ function getReadablePackageDetail(user: SessionUser, packageId: number, projectI
   const versionIds = getReadableVersionIds(user);
   const packageIds = getReadablePackageIds(user, versionIds);
   if (packageIds !== null && !packageIds.includes(packageId)) return null;
-  const data = getPackageDetail(packageId, true, projectId);
-  if (!data) return null;
-  const canEdit = canEditPackageResponsibility(user, data.package.areaId);
-  if (versionIds === null) return { ...data, canEdit };
-  const versions = data.versions.filter((version) => versionIds.includes(version.id));
+  const pkg = projectId
+    ? readPackageOverviewRows(projectId, packageId)[0]
+    : readGlobalPackageSummary(packageId, true);
+  if (!pkg) return null;
+
+  const canEdit = canEditPackageResponsibility(user, pkg.areaId);
+  const data = {
+    package: pkg,
+    usages: readPackageDetailUsages(packageId),
+    versions: readPackageDetailVersions(packageId, projectId, versionIds),
+    audits: versionIds === null || canEdit ? readPackageDetailAudits(packageId) : [],
+    canEdit,
+  };
+  if (versionIds === null) return data;
+
+  const { versions } = data;
   const readableBatches = getReadableBatchEvidenceIds(user, versions.flatMap((version) => version.batchId ?? []));
   return {
     ...data,
-    package: restrictPackageSummary(data.package, new Set(versions.map(({ version }) => version))),
+    package: restrictPackageSummary(pkg, new Set(versions.map(({ version }) => version))),
     versions: versions.map((version) => version.batchId === null || readableBatches === null || readableBatches.has(version.batchId) ? version : {
       ...version, batchId: null, batchCode: null, batchStatus: null, batchConclusion: null,
     }),
-    canEdit,
-    audits: canEdit ? data.audits : [],
   };
 }
 
@@ -492,13 +501,10 @@ export function getPackageConfiguration(packageId: number) {
   return pkg ? { package: pkg, usages: readPackageDetailUsages(packageId) } : null;
 }
 
-function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
-  const base = projectId
-    ? readPackageOverviewRows(projectId, packageId)[0]
-    : readGlobalPackageSummary(packageId, includeInactive);
-  if (!base) return null;
-  const usages = readPackageDetailUsages(packageId);
-  const versions = all<PackageVersionSummary>(
+function readPackageDetailVersions(packageId: number, projectId: number | undefined, versionIds: readonly number[] | null) {
+  if (versionIds?.length === 0) return [];
+  const scope = packageSelectionFilter("pv.id", versionIds ?? undefined);
+  return all<PackageVersionSummary>(
     `SELECT pv.id, pv.package_id AS packageId, p.name AS packageName, p.code AS packageCode,
             pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl, pv.build_url AS buildUrl,
             pv.void_kind AS voidKind, pv.status,
@@ -532,12 +538,14 @@ function getPackageDetail(packageId: number, includeInactive = false, projectId?
         AND (? IS NULL OR bi.id IS NOT NULL OR EXISTS (
           SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id AND r.project_id = ?
         ) OR (${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL}))
+        ${scope.condition ? `AND ${scope.condition}` : ""}
      ORDER BY pv.submitted_at DESC, pv.id DESC`,
     projectId ?? null, projectId ?? null,
     projectId ?? null, projectId ?? null,
     projectId ?? null, projectId ?? null,
     packageId,
     projectId ?? null, projectId ?? null, projectId ?? null,
+    ...scope.values,
   ).map((version) => ({
     ...version,
     bindingTotal: Number(version.bindingTotal),
@@ -545,7 +553,10 @@ function getPackageDetail(packageId: number, includeInactive = false, projectId?
     gateLabel: null,
     gateStatus: null,
   }));
-  const audits = all<{
+}
+
+function readPackageDetailAudits(packageId: number): PackageDetailData["audits"] {
+  return all<{
     id: number;
     action: string;
     detail: string;
@@ -558,10 +569,4 @@ function getPackageDetail(packageId: number, includeInactive = false, projectId?
      ORDER BY l.created_at DESC, l.id DESC LIMIT 20`,
     packageId,
   );
-  return {
-    package: base,
-    usages,
-    versions,
-    audits,
-  };
 }
