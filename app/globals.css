@@ -1679,30 +1679,6 @@ h4 {
   gap: 16px;
 }
 
-.person-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-
-.person-inline-copy {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.45;
-}
-
-.person-inline-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.person-inline-meta {
-  color: var(--muted-light);
-  font-size: 10px;
-}
-
 .contact-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1981,11 +1957,6 @@ h4 {
   margin-top: 9px;
 }
 
-.empty-inline {
-  color: var(--muted-light);
-  font-size: 11px;
-}
-
 .muted-panel {
   border: 1px dashed var(--line-strong);
   border-radius: 10px;
@@ -2019,16 +1990,6 @@ h4 {
   color: var(--muted-light);
   min-width: 20px;
   padding-top: 2px;
-}
-
-.status-band {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 14px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-muted);
 }
 
 .example-versions {

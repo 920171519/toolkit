@@ -1,12 +1,9 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowUpRight, Inbox } from "lucide-react";
 import {
   BATCH_STATUS_META,
-  BINDING_STATUS_META,
   BATCH_STATUSES,
   PACKAGE_PROGRESS_META,
-  REVIEW_STATUS_META,
   type BatchStatus,
   type PackageProgressStatus,
 } from "@/lib/constants";
@@ -167,43 +164,6 @@ export function BatchStatusPill({ status }: { status: BatchStatus }) {
   );
 }
 
-export function ReviewStatusPill({ status }: { status: keyof typeof REVIEW_STATUS_META }) {
-  const meta = REVIEW_STATUS_META[status];
-  return (
-    <Badge tone={meta.tone} dot>
-      {meta.label}
-    </Badge>
-  );
-}
-
-export function BindingStatusPill({ status }: { status: keyof typeof BINDING_STATUS_META }) {
-  const meta = BINDING_STATUS_META[status];
-  return (
-    <Badge tone={meta.tone} dot>
-      {meta.label}
-    </Badge>
-  );
-}
-
-export function StatusBanded({
-  tone,
-  title,
-  children,
-}: {
-  tone: "emerald" | "amber" | "sky" | "violet" | "rose" | "teal" | "slate";
-  title: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="status-band">
-      <Badge tone={tone} dot>
-        {title}
-      </Badge>
-      {children && <span className="small muted">{children}</span>}
-    </div>
-  );
-}
-
 export function FlashMessage({ notice }: { notice: Notice | null }) {
   if (!notice) return null;
   return (
@@ -228,35 +188,5 @@ export function ExternalLink({
       {children}
       <ArrowUpRight size={12} strokeWidth={2} />
     </a>
-  );
-}
-
-export function InlinePerson({
-  name,
-  meta,
-  size = "sm",
-}: {
-  name: string | null;
-  meta?: string | null;
-  size?: "sm" | "md";
-}) {
-  if (!name) return <span className="empty-inline">未指定</span>;
-  return (
-    <span className="person-inline">
-      <Avatar name={name} size={size} />
-      <span className="person-inline-copy">
-        <span className="person-inline-name">{name}</span>
-        {meta && <span className="person-inline-meta">{meta}</span>}
-      </span>
-    </span>
-  );
-}
-
-export function TextLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Link href={href} className="archive-link">
-      {children}
-      <ArrowUpRight size={12} strokeWidth={2} />
-    </Link>
   );
 }

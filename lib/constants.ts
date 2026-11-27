@@ -120,18 +120,6 @@ export const ATTRIBUTION_META = {
 
 export type IssueAttribution = keyof typeof ATTRIBUTION_META;
 
-export const REVIEW_STATUS_META = {
-  PENDING: { label: "待评审", tone: "amber" },
-  APPROVED: { label: "评审通过", tone: "emerald" },
-  REJECTED: { label: "评审驳回", tone: "rose" },
-} as const;
-
-export const BINDING_STATUS_META = {
-  PENDING: { label: "待验证", tone: "amber" },
-  PASSED: { label: "验证通过", tone: "emerald" },
-  FAILED: { label: "验证不通过", tone: "rose" },
-} as const;
-
 export const PROJECT_STATUS_META = {
   ACTIVE: { label: "进行中", tone: "emerald" },
   PAUSED: { label: "已暂停", tone: "amber" },

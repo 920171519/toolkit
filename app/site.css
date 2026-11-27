@@ -342,7 +342,6 @@ a.side-list-item.notification-link:hover .personal-task-title { color: var(--bra
 .node-approver-add > div { position: fixed; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; box-shadow: var(--shadow-md); }
 
 /* Modal dialogs */
-.modal-backdrop { position: fixed; inset: 0; z-index: 80; background: var(--dialog-backdrop); display: flex; align-items: flex-start; justify-content: center; padding: 7vh 20px 30px; overflow-y: auto; }
 .modal-panel { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-md); }
 .modal-panel-wide { width: min(1100px, 100%); }
 .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
