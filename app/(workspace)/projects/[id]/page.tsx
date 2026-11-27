@@ -12,11 +12,11 @@ import { getProjectCatalogEntries } from "@/lib/project-queries";
 import { PROJECT_STAGE_META } from "@/lib/project-stage";
 import { getPackageOverviewRows, parseFlash } from "@/lib/queries";
 import { safeOverviewReturnPath } from "@/lib/return-to";
-import { getTrialReadyVersions } from "@/lib/trial-eligibility";
+import { getProjectTrialReadyCount } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import {
-  getPendingTransferGroups,
   getProjectBatchCounts,
+  getProjectPendingTransferCount,
   getProjectTrialAndFormalCounts,
   getProjectVersionRows,
   getRecentProjectBatches,
@@ -96,9 +96,9 @@ export default async function ProjectOverviewPage({
   const packageRows = getPackageOverviewRows(projectId, true);
   const projectVersions = getProjectVersionRows(projectId, previewLength);
   const batchScope = getBatchEvidenceReadScope(user);
-  const pending = currentProject ? getPendingTransferGroups([projectId])[0]?.items.length ?? 0 : 0;
+  const pending = currentProject ? getProjectPendingTransferCount(projectId) : 0;
   const batches = currentProject ? getProjectBatchCounts(projectId, canPrepare) : { draft: 0, inTest: 0 };
-  const ready = canPrepare ? getTrialReadyVersions([projectId]).length : 0;
+  const ready = canPrepare ? getProjectTrialReadyCount(projectId) : 0;
   const releaseCounts = currentProject ? getProjectTrialAndFormalCounts(projectId) : null;
   const stages = [
     {

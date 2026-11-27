@@ -66,6 +66,27 @@ export type PendingTransferGroup = {
   items: PendingTransferItem[];
 };
 
+const pendingTransferFrom = `FROM version_transfer_requests r
+  JOIN package_versions pv ON pv.id = r.package_version_id
+  JOIN packages p ON p.id = pv.package_id
+  JOIN projects pr ON pr.id = r.project_id
+  LEFT JOIN integration_batches draft ON draft.id = (
+    SELECT b.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+    WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT' ORDER BY b.id LIMIT 1
+  )`;
+const activePendingTransfer = `pv.status != 'VOID' AND ${PENDING_BATCH_REQUEST_SQL} AND pr.status != 'ARCHIVED'`;
+const unreservedTransferInUse = `draft.id IS NULL AND EXISTS (
+  SELECT 1 FROM package_usages u WHERE u.package_id = p.id AND u.project_id = r.project_id
+)`;
+
+export function getProjectPendingTransferCount(projectId: number): number {
+  return one<{ total: number }>(
+    `SELECT COUNT(*) AS total ${pendingTransferFrom}
+     WHERE r.project_id = ? AND ${activePendingTransfer} AND ${unreservedTransferInUse}`,
+    projectId,
+  )?.total ?? 0;
+}
+
 export function getPendingTransferGroups(
   projectIds: number[] | null = null,
   guidanceProjectIds: number[] | null = [],
@@ -79,27 +100,15 @@ export function getPendingTransferGroups(
             p.code AS packageCode, pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
             su.name AS submittedByName, pv.submitted_by AS submittedById, pv.status AS versionStatus,
             pv.submitted_at AS submittedAt, o.name AS ownerName,
-            draft.id IS NULL AND p.is_active = 1 AND EXISTS (
-              SELECT 1 FROM package_usages usage WHERE usage.package_id = p.id AND usage.project_id = r.project_id
-            ) AS canInclude,
+            p.is_active = 1 AND ${unreservedTransferInUse} AS canInclude,
             p.is_active AS packageActive, draft.id AS draftBatchId, draft.project_id AS draftBatchProjectId, draft.code AS draftBatchCode,
             pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode
-     FROM version_transfer_requests r
-     JOIN package_versions pv ON pv.id = r.package_version_id
-     JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = r.project_id
+     ${pendingTransferFrom}
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
-     LEFT JOIN integration_batches draft ON draft.id = (
-       SELECT b.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-       WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT' ORDER BY b.id LIMIT 1
-     )
-     WHERE pv.status != 'VOID' AND ${PENDING_BATCH_REQUEST_SQL}
-       AND pr.status != 'ARCHIVED'
+     WHERE ${activePendingTransfer}
        ${scope.predicate}
-       AND ((draft.id IS NULL AND EXISTS (
-         SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id
-       )) OR ${guideScope})
+       AND ((${unreservedTransferInUse}) OR ${guideScope})
      ORDER BY pr.sort_order, pr.id, pv.submitted_at DESC, pv.id DESC`,
     ...scope.params, ...(guidanceProjectIds ?? []),
   );

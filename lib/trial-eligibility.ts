@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { getBatchEvidenceReadScope, getReadableLinkedBatchEvidence, type LinkedBatchEvidence } from "./access";
-import { all } from "./db";
+import { all, one } from "./db";
 import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
@@ -189,6 +189,25 @@ export type TrialReadyVersion = LinkedBatchEvidence & {
 
 type TrialReadyScope = { requestId?: number; versionId?: number };
 
+const trialReadyFrom = `FROM trial_eligibility q
+  JOIN trial_project_evidence e ON e.versionId = q.versionId
+  JOIN version_transfer_requests r ON r.id = e.requestId
+  JOIN package_versions pv ON pv.id = q.versionId
+  JOIN packages p ON p.id = pv.package_id
+  JOIN projects pr ON pr.id = e.projectId`;
+const trialReadyCondition = "q.releaseMode IS NOT NULL";
+
+export function getProjectTrialReadyCount(projectId: number): number {
+  // Limit candidate versions while keeping every active use in the eligibility check.
+  const versionScope = "AND package_id IN (SELECT package_id FROM package_usages WHERE project_id = ?)";
+  return one<{ total: number }>(
+    `WITH ${trialEligibilityCtes(versionScope)}
+     SELECT COUNT(*) AS total ${trialReadyFrom}
+     WHERE ${trialReadyCondition} AND e.projectId = ?`,
+    projectId, projectId,
+  )?.total ?? 0;
+}
+
 export function getTrialReadyVersions(
   projectIds: number[] | null = null,
   options: TrialReadyScope = {},
@@ -209,17 +228,12 @@ export function getTrialReadyVersions(
             e.batchId, e.batchCode, e.batchProjectId, e.batchStatus, e.batchConclusion,
             b.test_summary AS batchTestSummary, b.test_report_url AS batchReportUrl,
             ${ACTIVE_INTEGRATION_BATCH_COUNT_SQL} AS ongoingTestCount
-     FROM trial_eligibility q
-     JOIN trial_project_evidence e ON e.versionId = q.versionId
-     JOIN version_transfer_requests r ON r.id = e.requestId
-     JOIN package_versions pv ON pv.id = q.versionId
-     JOIN packages p ON p.id = pv.package_id
-     JOIN projects pr ON pr.id = e.projectId
+     ${trialReadyFrom}
      LEFT JOIN users su ON su.id = pv.submitted_by
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
      LEFT JOIN integration_batches b ON b.id = e.batchId
-     WHERE q.releaseMode IS NOT NULL
+     WHERE ${trialReadyCondition}
        ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectsScope}
      ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC`,
     ...(options.requestId === undefined ? [] : [options.requestId]),
