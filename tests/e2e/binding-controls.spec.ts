@@ -80,7 +80,8 @@ test("绑定权限按节点和单据指派，审批人只查看指派给自己�
   await login(page, "VALID001");
   const db = openE2eDatabase();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
-  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, "2.0.0-binding-assignment-scope-e2e", ["N1"]);
+  const version = "2.0.0-binding-assignment-scope-e2e";
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(db, version, ["N1"]);
   const trial = `/trial/${requestId}?project=1`;
   const node = page.locator(".binding-requirement");
   const newFlow = page.getByRole("button", { name: "新增绑定电子流", exact: true, includeHidden: true });
@@ -105,12 +106,22 @@ test("绑定权限按节点和单据指派，审批人只查看指派给自己�
        FROM binding_flows f JOIN users u ON u.employee_id = 'MGR001'
        WHERE f.package_version_id = ? AND f.device_barcode = ?`).run(otherFlow, versionId, assignedBarcode);
     await login(page, "OWNER001");
+    const queuePath = "/trial?view=binding";
+    const queueRow = page.getByRole("region", { name: "试制版本绑定验证", exact: true })
+      .getByRole("row").filter({ hasText: version });
+    await page.goto(queuePath);
+    await expect(queueRow.getByRole("cell", { name: "0 / 1", exact: true })).toBeVisible();
+    await expect(queueRow.getByRole("cell", { name: "1", exact: true })).toBeVisible();
+
     await page.goto(trial);
     await expect(node).toHaveCount(1);
     await expect(flowRow(page, assignedBarcode)).toBeVisible();
     await expect(page.getByText(otherFlow, { exact: true })).toHaveCount(0);
     await expect(newFlow).toHaveCount(0);
     await approveFlow(page, assignedBarcode, "王磊");
+    await page.goto(queuePath);
+    await expect(queueRow.getByRole("cell", { name: "0 / 1", exact: true })).toBeVisible();
+    await expect(queueRow.getByRole("cell", { name: "0", exact: true })).toBeVisible();
 
     await login(page, "MGR001");
     await page.goto(trial);

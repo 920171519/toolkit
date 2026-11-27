@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableBatchEvidenceIds, getReadableLinkedBatchEvidence, getReadableVersionIds, type LinkedBatchEvidence } from "./access";
+import { canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableBatchEvidenceIds, getReadableLinkedBatchEvidence, getReadableVersionIds, type LinkedBatchEvidence } from "./access";
 import { OPEN_BINDING_RELEASE_STATUSES_SQL, OPEN_BINDING_REQUIREMENT_STATUSES_SQL } from "./binding-availability";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
@@ -864,16 +864,94 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
   return { request, requirements };
 }
 
+type TrialRequestReadFacts = Pick<TrialDetail["request"], "projectId" | "packageOwnerId">;
+type RequirementReadFacts = Pick<BindingRequirementRow, "bindingOwnerId" | "pushedAt">;
+type FlowReadFacts = Pick<BindingFlowRow, "approverId" | "submittedById">;
+
+function canReadEntireTrialRequest(userId: number, request: TrialRequestReadFacts, projectIds: number[] | null) {
+  return projectIds === null || projectIds.includes(request.projectId) || request.packageOwnerId === userId;
+}
+
+function isPushedBindingOwner(userId: number, requirement: RequirementReadFacts) {
+  return requirement.bindingOwnerId === userId && requirement.pushedAt !== null;
+}
+
+function isBindingFlowParticipant(userId: number, flow: FlowReadFacts) {
+  return flow.approverId === userId || flow.submittedById === userId;
+}
+
 export function getReadableTrialDetail(user: SessionUser, requestId: number): TrialDetail | null {
   const detail = getTrialDetail(requestId);
   if (!detail) return null;
-  if (canAccessProjectPage(user, detail.request.projectId) || detail.request.packageOwnerId === user.id) return detail;
+  const projectIds = getProjectWorkflowProjectIds(user, true);
+  if (canReadEntireTrialRequest(user.id, detail.request, projectIds)) return detail;
   const requirements = detail.requirements.flatMap((requirement) => {
-    if (requirement.bindingOwnerId === user.id && requirement.pushedAt !== null) return [requirement];
-    const flows = requirement.flows.filter((flow) => flow.approverId === user.id || flow.submittedById === user.id);
+    if (isPushedBindingOwner(user.id, requirement)) return [requirement];
+    const flows = requirement.flows.filter((flow) => isBindingFlowParticipant(user.id, flow));
     return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
   });
   return requirements.length ? { ...detail, requirements } : null;
+}
+
+type TrialQueueBindingCounts = Pick<TrialVersionRow, "requirementTotal" | "requirementPassed" | "requirementWaived" | "pendingFlowCount">;
+type TrialQueueBindingRow = TrialRequestReadFacts & RequirementReadFacts & FlowReadFacts & {
+  requestId: number;
+  requirementId: number | null;
+  confirmedAt: string | null;
+  waivedAt: string | null;
+  flowPendingCount: number;
+};
+
+export function getReadableTrialQueueCounts(user: SessionUser, requestIds: number[]) {
+  const countsByRequest = new Map<number, TrialQueueBindingCounts>();
+  if (requestIds.length === 0) return countsByRequest;
+  const projectIds = getProjectWorkflowProjectIds(user, true);
+  // Any assigned flow makes its requirement visible. Only pending flows contribute to the queue count.
+  const rows = all<TrialQueueBindingRow>(
+    `WITH selected_requests AS (SELECT DISTINCT value AS id FROM json_each(?)),
+          requirements AS MATERIALIZED (
+            SELECT br.id, br.request_id, br.binding_owner_id, br.pushed_at,
+                   CASE WHEN br.status = 'PASSED' THEN br.confirmed_at END AS confirmedAt, br.waived_at
+            FROM selected_requests selected
+            JOIN binding_requirements br ON br.request_id = selected.id
+            JOIN projects project ON project.id = br.project_id
+            JOIN project_nodes node ON node.id = br.node_id
+          ),
+          flow_counts AS MATERIALIZED (
+            SELECT requirement_id, approver_id, submitted_by, COUNT(CASE WHEN status = 'PENDING' THEN 1 END) AS pendingCount
+            FROM binding_flows WHERE requirement_id IN (SELECT id FROM requirements)
+            GROUP BY requirement_id, approver_id, submitted_by
+          )
+     SELECT r.id AS requestId, pr.id AS projectId, p.owner_id AS packageOwnerId, br.id AS requirementId,
+            br.binding_owner_id AS bindingOwnerId, br.pushed_at AS pushedAt, br.confirmedAt, br.waived_at AS waivedAt,
+            COALESCE(f.pendingCount, 0) AS flowPendingCount, f.approver_id AS approverId, f.submitted_by AS submittedById
+     FROM selected_requests selected
+     JOIN version_transfer_requests r ON r.id = selected.id
+     JOIN projects pr ON pr.id = r.project_id
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN packages p ON p.id = pv.package_id
+     LEFT JOIN requirements br ON br.request_id = r.id
+     LEFT JOIN flow_counts f ON f.requirement_id = br.id`,
+    JSON.stringify(requestIds),
+  );
+  for (const [requestId, records] of Map.groupBy(rows, (row) => row.requestId)) {
+    const readAll = canReadEntireTrialRequest(user.id, records[0], projectIds);
+    const counts = { requirementTotal: 0, requirementPassed: 0, requirementWaived: 0, pendingFlowCount: 0 };
+    for (const [requirementId, flowGroups] of Map.groupBy(records, (row) => row.requirementId)) {
+      if (requirementId === null) continue;
+      const requirement = flowGroups[0];
+      const readableGroups = readAll || isPushedBindingOwner(user.id, requirement)
+        ? flowGroups
+        : flowGroups.filter((flow) => isBindingFlowParticipant(user.id, flow));
+      if (readableGroups.length === 0) continue;
+      counts.requirementTotal += 1;
+      counts.requirementPassed += Number(requirement.confirmedAt !== null);
+      counts.requirementWaived += Number(requirement.waivedAt !== null);
+      counts.pendingFlowCount += readableGroups.reduce((total, group) => total + group.flowPendingCount, 0);
+    }
+    if (readAll || counts.requirementTotal > 0) countsByRequest.set(requestId, counts);
+  }
+  return countsByRequest;
 }
 
 export function getManagedTrialRequestState(user: SessionUser, requestId: number, projectId?: number) {

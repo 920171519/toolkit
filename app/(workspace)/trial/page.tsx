@@ -21,7 +21,7 @@ import { parseFlash } from "@/lib/queries";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
-import { getReadableTrialDetail, getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
+import { getReadableTrialQueueCounts, getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/workflow-queries";
 import identityStyles from "@/components/package-identity.module.css";
 
 export const dynamic = "force-dynamic";
@@ -94,21 +94,14 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const canReadProject = (id: number) => scope === null || scope.includes(id);
   const assignedRequestIds = !project && scope !== null ? getAssignedTrialRequestIds(user) : [];
   const batchScope = showBindings ? getBatchEvidenceReadScope(user) : undefined;
-  const trials = showBindings ? getTrialVersions(scope, assignedRequestIds).flatMap((row) => {
-    if (canReadProject(row.projectId)) return [row];
-    const detail = getReadableTrialDetail(user, row.requestId);
-    if (!detail) return [];
-    return [{
-      ...row,
-      requirementTotal: detail.requirements.length,
-      requirementPassed: detail.requirements.filter(({ confirmedAt }) => confirmedAt !== null).length,
-      requirementWaived: detail.requirements.filter(({ waivedAt }) => waivedAt !== null).length,
-      pendingFlowCount: detail.requirements.flatMap(({ flows }) => flows).filter(({ status }) => status === "PENDING").length,
-    }];
-  }).map((row) => ({
-    ...row,
-    readableBatch: canReadProject(row.projectId) ? getReadableLinkedBatchEvidence(user, row, batchScope) : null,
-  })).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
+  const trialRows = showBindings ? getTrialVersions(scope, assignedRequestIds) : [];
+  const assignedCounts = getReadableTrialQueueCounts(user, trialRows
+    .filter((row) => !canReadProject(row.projectId)).map((row) => row.requestId));
+  const trials = trialRows.flatMap((row) => {
+    if (canReadProject(row.projectId)) return [{ ...row, readableBatch: getReadableLinkedBatchEvidence(user, row, batchScope) }];
+    const counts = assignedCounts.get(row.requestId);
+    return counts ? [{ ...row, ...counts, readableBatch: null }] : [];
+  }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
   const canRelease = (row: TrialReadyDisplayVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyDisplayVersion | TrialVersionRow) => (
