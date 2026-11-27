@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canAccessProjectPage, canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, getBatchEvidenceReadScope, getReadableLinkedBatchEvidence } from "@/lib/access";
 import { CONCLUSION_META, PACKAGE_STATUS_META, PROJECT_STATUS_META, TRANSFER_REQUEST_STATUS_META, type PackageStatus } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
@@ -99,6 +99,7 @@ export default async function ProjectOverviewPage({
   const recentBatches = getRecentProjectBatches(projectId, previewLength, canPrepare);
   const packageRows = getPackageOverviewRows(projectId, true);
   const projectVersions = getProjectVersionRows(projectId, previewLength);
+  const batchScope = getBatchEvidenceReadScope(user);
   const pending = currentProject ? getPendingTransferGroups([projectId])[0]?.items.length ?? 0 : 0;
   const batches = currentProject ? getProjectBatchCounts(projectId, canPrepare) : { draft: 0, inTest: 0 };
   const ready = canPrepare ? getTrialReadyVersions([projectId]).length : 0;
@@ -193,6 +194,7 @@ export default async function ProjectOverviewPage({
             <ul className={styles.activityList}>
               {projectVersions.map((version) => {
                 const status = projectVersionStatus(version.status);
+                const batch = getReadableLinkedBatchEvidence(user, version, batchScope);
                 const { code } = packageIdentity({ code: version.packageCode, name: version.packageName });
                 return (
                   <li key={version.requestId} className={styles.activityItem}>
@@ -200,7 +202,7 @@ export default async function ProjectOverviewPage({
                       <div>
                         <Link href={scopedHref(`/versions/${version.versionId}`)} className="mono" prefetch={false}>{code} {version.version}</Link>
                       </div>
-                      {version.batchCode && <p>集成批次 <span className="mono">{version.batchCode}</span></p>}
+                      {batch?.batchCode && <p>集成批次 <span className="mono">{batch.batchCode}</span></p>}
                     </div>
                     <div className={styles.activityMeta}>
                       <Badge tone={status.tone}>{status.label}</Badge>

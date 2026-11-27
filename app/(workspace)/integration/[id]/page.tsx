@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, FileText, GitCompareArrows } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { batchSelectionKey, DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-preparation";
-import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject } from "@/lib/access";
 import { parseFlash } from "@/lib/queries";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -45,8 +45,7 @@ export default async function BatchDetailPage({
   const { id } = await params;
   const batchId = Number(id);
   if (!Number.isInteger(batchId)) notFound();
-  const scope = getProjectWorkflowProjectIds(user, true);
-  const data = getBatchDetail(batchId, scope);
+  const data = getBatchDetail(user, batchId);
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
@@ -63,7 +62,6 @@ export default async function BatchDetailPage({
   const isDraft = batch.status === "DRAFT";
   const isActive = batch.status === "IN_TEST";
   const canTest = isActive && !archived && canSubmitIntegrationConclusionForProject(user, batch.projectId);
-  if (isDraft && !manager) notFound();
   const requestListState = isDraft && !archived ? draftRequestListState(search) : {};
   const fromRequests = requestListState.fromRequests === "1";
   const batchFormFields = { batchId: batch.id, scopeProjectId: project?.id, ...listState, ...requestListState };
@@ -108,7 +106,7 @@ export default async function BatchDetailPage({
     const traceHref = workflowHref(`/versions/${item.versionId}`, project?.id, context);
     if (item.versionStatus === "VOID" || item.requestStatus === "VOID") return <Link href={traceHref} prefetch={false} className="archive-link">查看作废记录</Link>;
     if (item.versionStatus === "FORMAL") return <Link href={traceHref} prefetch={false} className="archive-link">查看转正记录</Link>;
-    const queueProject = batch.projectId && (scope === null || scope.includes(batch.projectId)) ? batch.projectId : undefined;
+    const queueProject = batch.projectId || undefined;
     if (item.requestStatus === "PENDING" && item.transferRequestId) {
       return queueProject ? <Link href={workflowHref("/submissions", queueProject, { ...context, request: item.transferRequestId })}
         prefetch={false} className="archive-link">查看待安排申请</Link> : <span className="small muted">请联系该项目的软件经理安排转测。</span>;

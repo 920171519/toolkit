@@ -215,6 +215,24 @@ export function canReadBatchEvidence(
   return ids === null || ids.includes(projectId);
 }
 
+export type LinkedBatchEvidence = {
+  batchId: number | null;
+  batchProjectId: number | null;
+  batchStatus: string | null;
+  batchCode: string | null;
+  batchConclusion: string | null;
+};
+
+export function getReadableLinkedBatchEvidence(
+  user: SessionUser,
+  evidence: LinkedBatchEvidence,
+  scope?: ReturnType<typeof getBatchEvidenceReadScope>,
+) {
+  const { batchId, batchProjectId, batchStatus, batchCode, batchConclusion } = evidence;
+  if (batchId === null || batchProjectId === null || !canReadBatchEvidence(user, batchProjectId, batchStatus, scope)) return null;
+  return { batchId, batchProjectId, batchCode, batchConclusion };
+}
+
 const batchEvidenceScopeCtes = `readable_projects AS (SELECT value AS id FROM json_each(?)),
   managed_projects AS (SELECT value AS id FROM json_each(?))`;
 

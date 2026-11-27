@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { BINDING_BARCODE_FAILURE_REASON_LIMIT, bindingBarcodeProgress, isActiveBindingFlow } from "@/lib/binding-barcode-results";
 import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
 import { bindingReleaseAvailability, bindingRequirementAvailability } from "@/lib/binding-availability";
-import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject } from "@/lib/access";
+import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, getReadableLinkedBatchEvidence } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
@@ -88,7 +88,8 @@ export default async function TrialDetailPage({
   const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL"
     ? formalGuidance?.pendingFlowCount ?? getPendingBindingFlowCount(request.versionId)
     : 0;
-  const batchConclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
+  const batch = canReadProject ? getReadableLinkedBatchEvidence(user, request) : null;
+  const batchConclusion = batch?.batchConclusion ? CONCLUSION_META[batch.batchConclusion as BatchConclusion] : null;
   const transferStatusMeta = TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META] ?? {
     label: request.status === "TRIAL" ? "试制中" : request.status === "PENDING_FORMAL" ? "待转正" : request.status === "FORMAL" ? "已转正" : request.status === "VOID" ? "已作废" : request.status,
     tone: request.status === "TRIAL" ? "teal" : request.status === "FORMAL" ? "emerald" : request.status === "VOID" ? "slate" : "violet",
@@ -393,7 +394,7 @@ export default async function TrialDetailPage({
             <dl className="detail-list">
               <div className="detail-row"><dt>项目软件经理</dt><dd>{request.softwareManagerName ?? "未指定"}</dd></div>
               <div className="detail-row"><dt>发布来源</dt><dd>{riskRelease ? <Badge tone="rose">风险发布</Badge> : <Badge tone="violet">集成测试通过</Badge>}</dd></div>
-              {request.batchId && canReadProject && <div className="detail-row"><dt>转测批次</dt><dd><Link href={workflowHref(`/integration/${request.batchId}`, scopeProjectId)} prefetch={false} className="archive-link">{request.batchCode} · {batchConclusion?.label ?? "待提交结论"}</Link></dd></div>}
+              {batch && <div className="detail-row"><dt>转测批次</dt><dd><Link href={workflowHref(`/integration/${batch.batchId}`, scopeProjectId === undefined ? undefined : batch.batchProjectId)} prefetch={false} className="archive-link">{batch.batchCode} · {batchConclusion?.label ?? "待提交结论"}</Link></dd></div>}
               {request.status === "VOID" && request.riskConclusion && <div className="detail-row"><dt>风险结论</dt><dd>{request.riskConclusion}</dd></div>}
               <div className="detail-row"><dt>归档地址</dt><dd><ExternalLink href={request.archiveUrl}>下载归档</ExternalLink></dd></div>
             </dl>

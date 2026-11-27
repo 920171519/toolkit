@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getIntegrationManagedProjectIds, getManagedProjectScope, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableBatchEvidenceIds, getReadableVersionIds, type LinkedBatchEvidence } from "./access";
 import { OPEN_BINDING_RELEASE_STATUSES_SQL, OPEN_BINDING_REQUIREMENT_STATUSES_SQL } from "./binding-availability";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
@@ -497,12 +497,12 @@ export function getReadableTestReport(user: SessionUser, reportId: number) {
   return readable ? file : null;
 }
 
-export function getBatchDetail(batchId: number, projectIds: number[] | null): BatchDetailRow | null {
-  if (projectIds?.length === 0) return null;
-  const scope = projectIds ? `AND b.project_id IN (${projectIds.map(() => "?").join(", ")})` : "";
+export function getBatchDetail(user: SessionUser, batchId: number, projectId?: number): BatchDetailRow | null {
+  const readableBatchIds = getReadableBatchEvidenceIds(user, [batchId]);
+  if (readableBatchIds !== null && !readableBatchIds.has(batchId)) return null;
   const batch = one<BatchSummaryRow>(
-    `SELECT ${batchSummaryColumns} ${batchSummaryFrom} WHERE b.id = ? ${scope}`,
-    batchId, ...(projectIds ?? []),
+    `SELECT ${batchSummaryColumns} ${batchSummaryFrom} WHERE b.id = ? AND (? IS NULL OR b.project_id = ?)`,
+    batchId, projectId ?? null, projectId ?? null,
   );
   if (!batch) return null;
   const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious" | "parallelRiskTrial" | "issueAffected"> & {
@@ -551,7 +551,7 @@ export function getBatchDetail(batchId: number, projectIds: number[] | null): Ba
   return { batch, items, progressNotes };
 }
 
-export type TrialVersionRow = {
+export type TrialVersionRow = LinkedBatchEvidence & {
   requestId: number;
   versionId: number;
   projectId: number;
@@ -575,9 +575,6 @@ export type TrialVersionRow = {
   bindingReason: string | null;
   trialOverdueDays: number;
   isOverdue: number;
-  batchId: number | null;
-  batchCode: string | null;
-  batchConclusion: string | null;
   requirementTotal: number;
   requirementPassed: number;
   requirementWaived: number;
@@ -616,7 +613,7 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
               CASE WHEN r.trial_released_at IS NOT NULL
                    AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
                    THEN 1 ELSE 0 END AS isOverdue,
-              b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
+              b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
               (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
                AND br.confirmed_at IS NOT NULL) AS requirementPassed,
@@ -707,7 +704,7 @@ export type BindingRequirementRow = {
 };
 
 export type TrialDetail = {
-  request: {
+  request: LinkedBatchEvidence & {
     id: number;
     projectId: number;
     projectName: string;
@@ -734,9 +731,6 @@ export type TrialDetail = {
     bindingReason: string | null;
     trialOverdueDays: number;
     isOverdue: number;
-    batchId: number | null;
-    batchCode: string | null;
-    batchConclusion: string | null;
     voidReason: string | null;
     voidKind: string | null;
     voidedAt: string | null;
@@ -771,7 +765,7 @@ export function getTrialDetail(requestId: number): TrialDetail | null {
             CASE WHEN r.trial_released_at IS NOT NULL
                  AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
                  THEN 1 ELSE 0 END AS isOverdue,
-            b.id AS batchId, b.code AS batchCode, b.conclusion AS batchConclusion,
+            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
             r.void_reason AS voidReason, pv.void_kind AS voidKind, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
      FROM version_transfer_requests r
@@ -1601,7 +1595,7 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
   return { version, requests: projectedRequests, batches: readableBatches, details };
 }
 
-export type ProjectVersionRow = {
+export type ProjectVersionRow = LinkedBatchEvidence & {
   requestId: number;
   versionId: number;
   packageId: number;
@@ -1615,9 +1609,6 @@ export type ProjectVersionRow = {
   formalReleasedAt: string | null;
   releaseMode: "INTEGRATION" | "RISK";
   riskConclusion: string | null;
-  batchId: number | null;
-  batchCode: string | null;
-  batchConclusion: string | null;
   bindingMode: "PENDING" | "PUSHED" | "SKIPPED" | null;
   isOverdue: number;
 };
@@ -1632,7 +1623,7 @@ export function getProjectVersionRows(projectId: number, limit = -1): ProjectVer
             CASE WHEN r.trial_released_at IS NOT NULL AND pv.status NOT IN ('FORMAL','VOID')
                  AND datetime(r.trial_released_at, '+' || p.trial_overdue_days || ' days') < datetime('now')
                  THEN 1 ELSE 0 END AS isOverdue,
-            b.id AS batchId, b.code AS batchCode,
+            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus,
             b.conclusion AS batchConclusion
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id

@@ -11,7 +11,7 @@ import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
-import { canAccessProjectPage, canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getBatchEvidenceReadScope, getReadableLinkedBatchEvidence, getProjectWorkflowProjectIds } from "@/lib/access";
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
@@ -71,6 +71,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
     .map((requestId) => getTrialDetail(requestId))
     .filter((detail): detail is NonNullable<ReturnType<typeof getTrialDetail>> => detail !== null);
   const projects = evidence.map(({ request }) => request.projectName);
+  const batchScope = getBatchEvidenceReadScope(user);
   const trialReviewMinutes = evidence[0]?.request.trialReviewMinutes;
   const canPublish = Boolean(manageable && guidance?.href);
   const publishGuidance = guidance?.items.length ? guidance.items : [{
@@ -113,16 +114,18 @@ export default async function FormalDetailPage({ params, searchParams }: {
           <div className="card-body">
             <div className={styles.nodeList}>
               {evidence.map(({ request, requirements }, index) => {
-                const conclusion = request.batchConclusion ? CONCLUSION_META[request.batchConclusion as BatchConclusion] : null;
+                const canReadProject = batchScope.projectIds === null || batchScope.projectIds.includes(request.projectId);
                 const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
                 const waived = requirements.filter((requirement) => requirement.waivedAt).length;
                 const progress = request.bindingMode === "SKIPPED" ? <Badge tone="slate">无需绑定</Badge>
                   : <Badge tone="teal">{passed + waived}/{requirements.length} 节点已完成</Badge>;
-                if (!canAccessProjectPage(user, request.projectId)) return manageable
+                if (!canReadProject) return manageable
                   ? <div className="binding-table-item" key={request.id}>
                     <div className={styles.nodeHeading}><strong>{request.projectName}</strong>{progress}</div>
                   </div>
                   : null;
+                const batch = getReadableLinkedBatchEvidence(user, request, batchScope);
+                const conclusion = batch?.batchConclusion ? CONCLUSION_META[batch.batchConclusion as BatchConclusion] : null;
                 const trialUrl = releaseFlowUrl(request.trialFormNo);
                 return <details className="binding-table-item" key={request.id} open={project ? request.projectId === project.id : index === 0}>
                   <summary className={styles.nodeHeading}>
@@ -134,7 +137,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
                     <div className={styles.rowActions}>
                       {trialUrl && <ReleaseFlowEvidence value={trialUrl} label="查看试制电子流" />}
                       {request.releaseMode === "RISK" && <Badge tone="amber">风险发布</Badge>}
-                      {request.batchId && <Link href={workflowHref(`/integration/${request.batchId}`, request.projectId)} prefetch={false} className="archive-link">转测批次 {request.batchCode} · {conclusion?.label ?? "已提交"}</Link>}
+                      {batch && <Link href={workflowHref(`/integration/${batch.batchId}`, batch.batchProjectId)} prefetch={false} className="archive-link">转测批次 {batch.batchCode} · {conclusion?.label ?? "已提交"}</Link>}
                       {!request.batchId && <span className="small muted">无关联转测批次</span>}
                       <Link href={workflowHref(`/trial/${request.id}`, request.projectId)} prefetch={false} className="archive-link">查看绑定验证记录</Link>
                     </div>

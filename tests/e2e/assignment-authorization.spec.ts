@@ -133,6 +133,111 @@ test("版本追溯隐藏最新草稿的批次字段，仍保留项目申请和�
   }
 });
 
+test("项目活动、节点绑定和转正核对按项目分工展示批次证据", async ({ page }) => {
+  await login(page, "MGR001");
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const packageId = (db.prepare("SELECT id FROM packages WHERE name = '1004NET'").get() as { id: number }).id;
+  const projectId = (db.prepare("SELECT id FROM projects WHERE code = 'N1'").get() as { id: number }).id;
+  const versions: number[] = [];
+  const batches: number[] = [];
+  const stamp = "2026-12-01T00:00:00.000Z";
+  const createFixture = (version: string, status: "TRIAL" | "PENDING_FORMAL", batchCode: string) => {
+    const versionId = Number(db.prepare(
+      `INSERT INTO package_versions
+         (package_id, version, change_summary, archive_url, status, binding_mode, trial_released_at, submitted_at, updated_at)
+       VALUES (?, ?, '批次证据展示回归', 'https://example.com/archive/batch-evidence', ?, 'PUSHED', ?, ?, ?)`,
+    ).run(packageId, version, status, stamp, stamp, stamp).lastInsertRowid);
+    versions.push(versionId);
+    const requestId = Number(db.prepare(
+      `INSERT INTO version_transfer_requests
+         (package_version_id, project_id, status, integration_status, trial_released_at, submitted_at, updated_at)
+       VALUES (?, ?, ?, 'PASSED', ?, ?, ?)`,
+    ).run(versionId, projectId, status, stamp, stamp, stamp).lastInsertRowid);
+    const batchId = Number(db.prepare(
+      "INSERT INTO integration_batches (code, project_id, title, status, created_at) VALUES (?, ?, '批次证据展示回归', 'DRAFT', ?)",
+    ).run(batchCode, projectId, stamp).lastInsertRowid);
+    batches.push(batchId);
+    db.prepare(
+      `INSERT INTO batch_items (batch_id, package_id, package_version_id, version, archive_url, transfer_request_id)
+       VALUES (?, ?, ?, ?, 'https://example.com/archive/batch-evidence', ?)`,
+    ).run(batchId, packageId, versionId, version, requestId);
+    return { versionId, requestId, batchId };
+  };
+
+  try {
+    const bindingVersion = "2.0.0-evidence-binding";
+    const bindingDraftCode = "QA-BINDING-DRAFT";
+    const formalDraftCode = "QA-FORMAL-DRAFT";
+    const binding = createFixture(bindingVersion, "TRIAL", bindingDraftCode);
+    const formal = createFixture("2.0.0-evidence-formal", "PENDING_FORMAL", formalDraftCode);
+    const activityHref = `/projects/${projectId}`;
+    const queueHref = `/trial?project=${projectId}&view=binding`;
+    const detailHref = `/trial/${binding.requestId}?project=${projectId}`;
+    const formalHref = `/formal/${formal.versionId}?project=${projectId}`;
+    const activity = page.getByRole("region", { name: "版本流程记录" }).getByRole("listitem").filter({ hasText: bindingVersion });
+    const queue = page.getByRole("region", { name: "试制版本绑定验证表格" });
+    const bindingRow = queue.getByRole("row").filter({ hasText: bindingVersion });
+    const batchFilter = queue.getByRole("button", { name: "筛选转测批次", exact: true });
+    const batchMenu = page.getByRole("dialog", { name: "筛选转测批次", exact: true });
+    const formalEvidence = page.getByRole("region", { name: "项目验收与绑定证据" });
+    const filterBindingBatch = async () => {
+      await batchFilter.click();
+      await batchMenu.getByRole("combobox", { name: "转测批次匹配方式", exact: true }).selectOption("exact");
+      await batchMenu.getByRole("textbox", { name: "转测批次", exact: true }).fill(bindingDraftCode);
+      await batchMenu.getByRole("button", { name: "应用", exact: true }).click();
+      await expect(page).toHaveURL(/f_binding_batch=QA-BINDING-DRAFT/);
+    };
+
+    await page.goto(activityHref);
+    await expect(activity).toContainText(bindingDraftCode);
+    await page.goto(queueHref);
+    await expect(bindingRow.getByRole("link", { name: bindingDraftCode })).toBeVisible();
+    await filterBindingBatch();
+    await expect(bindingRow).toBeVisible();
+    await page.goto(detailHref);
+    await page.getByRole("link", { name: new RegExp(bindingDraftCode) }).click();
+    await expect(page.getByRole("heading", { name: new RegExp(bindingDraftCode) })).toBeVisible();
+    await page.goto(formalHref);
+    await expect(formalEvidence.getByRole("link", { name: new RegExp(formalDraftCode) })).toBeVisible();
+
+    await login(page, "TEST001");
+    await page.goto(activityHref);
+    await expect(activity).toBeVisible();
+    await expect(activity).not.toContainText(bindingDraftCode);
+    await page.goto(queueHref);
+    await expect(bindingRow).toBeVisible();
+    await expect(bindingRow).not.toContainText(bindingDraftCode);
+    await expect(bindingRow).not.toContainText("风险发布");
+    await filterBindingBatch();
+    await expect(bindingRow).toHaveCount(0);
+    await page.goto(detailHref);
+    await expect(page.getByText("集成测试通过", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(bindingDraftCode) })).toHaveCount(0);
+    await expect(page.getByRole("main")).not.toContainText(bindingDraftCode);
+    await page.goto(formalHref);
+    await expect(formalEvidence.getByRole("link", { name: "查看绑定验证记录" })).toBeVisible();
+    await expect(formalEvidence.getByRole("link", { name: new RegExp(formalDraftCode) })).toHaveCount(0);
+    await expect(formalEvidence).not.toContainText(formalDraftCode);
+    await page.goto(`/integration?project=${projectId}&view=history`);
+    await page.getByRole("link", { name: /B119/ }).click();
+    await expect(page.getByRole("heading", { name: /B119/ })).toBeVisible();
+
+    db.prepare("UPDATE integration_batches SET status = 'IN_TEST', sent_at = ? WHERE id = ?").run(stamp, binding.batchId);
+    await page.goto(queueHref);
+    await expect(bindingRow.getByRole("link", { name: bindingDraftCode, exact: true })).toBeVisible();
+    await filterBindingBatch();
+    await expect(bindingRow).toBeVisible();
+  } finally {
+    try {
+      for (const batch of batches) db.prepare("DELETE FROM integration_batches WHERE id = ?").run(batch);
+      for (const version of versions) db.prepare("DELETE FROM package_versions WHERE id = ?").run(version);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("仅负责归档项目的软件经理保留配置和历史读取权限", async ({ page }) => {
   await login(page, "MEMBER001");
   const db = openE2eDatabase();

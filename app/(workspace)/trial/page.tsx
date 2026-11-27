@@ -12,7 +12,7 @@ import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds, getManagedProjectScope, getProjectWorkflowProjectIds } from "@/lib/access";
+import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds, getBatchEvidenceReadScope, getManagedProjectScope, getProjectWorkflowProjectIds, getReadableLinkedBatchEvidence } from "@/lib/access";
 import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
@@ -46,7 +46,7 @@ function bindingStatusOptions(row: TrialVersionRow) {
   return statuses.map((value) => ({ value, label: trialBindingStatuses[value] }));
 }
 
-function batchLink(row: TrialReadyVersion | TrialVersionRow, projectId?: number) {
+function batchLink(row: Pick<TrialVersionRow, "batchId" | "batchCode">, projectId?: number) {
   if (!row.batchId) return <span className="small muted">未关联转测批次</span>;
   return <Link href={workflowHref("/integration/" + row.batchId, projectId)} className="archive-link" prefetch={false}>
     {row.batchCode ? <span className="mono">{row.batchCode}</span> : "查看批次"}
@@ -88,6 +88,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
   const canReadProject = (id: number) => scope === null || scope.includes(id);
   const assignedRequestIds = !project && scope !== null ? getAssignedTrialRequestIds(user) : [];
+  const batchScope = showBindings ? getBatchEvidenceReadScope(user) : undefined;
   const trials = showBindings ? getTrialVersions(scope, assignedRequestIds).flatMap((row) => {
     if (canReadProject(row.projectId)) return [row];
     const detail = getReadableTrialDetail(user, row.requestId);
@@ -99,7 +100,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       requirementWaived: detail.requirements.filter(({ waivedAt }) => waivedAt !== null).length,
       pendingFlowCount: detail.requirements.flatMap(({ flows }) => flows).filter(({ status }) => status === "PENDING").length,
     }];
-  }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
+  }).map((row) => ({
+    ...row,
+    readableBatch: canReadProject(row.projectId) ? getReadableLinkedBatchEvidence(user, row, batchScope) : null,
+  })).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount) : [];
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
   const canRelease = (row: TrialReadyVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyVersion | TrialVersionRow) => (
@@ -120,17 +124,12 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       cell: packageLink,
     },
     { key: "version", label: "版本", value: (row) => row.version, cell: (row) => <span className={`mono ${styles.version}`}>{row.version}</span> },
-    { key: "project", label: "项目", value: (row) => row.projectName, choices: (row) => [{ value: String(row.projectId), label: row.projectName }] },
-    {
-      key: "batch",
-      label: "转测批次",
-      value: (row) => canReadProject(row.projectId) ? row.batchCode ?? "未关联转测批次" : "—",
-      cell: (row) => canReadProject(row.projectId) ? batchLink(row, projectId) : <span className="small muted">—</span>,
-    },
-    { key: "submitter", label: "提交人", value: (row) => row.submittedByName ?? "未知" },
   ];
+  const submitterColumn: TrialTableColumn<TrialReadyVersion | TrialVersionRow> = {
+    key: "submitter", label: "提交人", value: (row) => row.submittedByName ?? "未知",
+  };
   const releaseColumns: TrialTableColumn<(typeof ready)[number]>[] = [
-    ...identityColumns.slice(0, 2),
+    ...identityColumns,
     {
       key: "project",
       label: "项目",
@@ -145,7 +144,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       filterValues: (row) => row.records.map((record) => record.batchCode ?? "未关联转测批次"),
       cell: (row) => <div className={styles.bindingStatus}>{row.records.map((record) => <span key={record.requestId}>{batchLink(record, record.projectId)}</span>)}</div>,
     },
-    identityColumns[4],
+    submitterColumn,
     {
       key: "status",
       label: "发布状态",
@@ -158,8 +157,22 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       </>,
     },
   ];
-  const bindingColumns: TrialTableColumn<TrialVersionRow>[] = [
+  const bindingBatchLabel = (row: (typeof trials)[number]) => {
+    if (row.readableBatch) return row.readableBatch.batchCode ?? "未关联转测批次";
+    return canReadProject(row.projectId) && row.batchId === null ? "未关联转测批次" : "—";
+  };
+  const bindingColumns: TrialTableColumn<(typeof trials)[number]>[] = [
     ...identityColumns,
+    { key: "project", label: "项目", value: (row) => row.projectName, choices: (row) => [{ value: String(row.projectId), label: row.projectName }] },
+    {
+      key: "batch",
+      label: "转测批次",
+      value: bindingBatchLabel,
+      cell: (row) => row.readableBatch
+        ? batchLink(row.readableBatch, projectId === undefined ? undefined : row.readableBatch.batchProjectId)
+        : <span className="small muted">{bindingBatchLabel(row)}</span>,
+    },
+    submitterColumn,
     {
       key: "status",
       label: "绑定状态",

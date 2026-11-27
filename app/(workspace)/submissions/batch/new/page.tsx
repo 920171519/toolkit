@@ -22,7 +22,7 @@ export default async function NewTransferBatchPage({ searchParams }: { searchPar
   const project = requireWorkflowProject(user, search.project);
   if (!project || project.status === "ARCHIVED" || !canManageProjectWorkflowForProject(user, project.id)) notFound();
   const draftId = typeof search.draft === "string" && /^[1-9][0-9]*$/.test(search.draft) ? Number(search.draft) : undefined;
-  const draft = draftId && Number.isSafeInteger(draftId) ? getBatchDetail(draftId, [project.id]) : null;
+  const draft = draftId && Number.isSafeInteger(draftId) ? getBatchDetail(user, draftId, project.id) : null;
   const listState = getWorkflowListState(search);
   const draftListState = { ...listState, ...draftRequestListState(search) };
   const returnScope = search.from === "all" ? undefined : project.id;
