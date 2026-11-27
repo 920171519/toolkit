@@ -529,7 +529,7 @@ data/                         # SQLite 数据文件与上传报告（部署需�
   3. `pnpm build`；
   4. 启动新服务；
   5. 浏览器强制刷新或无痕窗口验证。
-- 可使用脚本（默认 systemd 服务名 `toolkit`）：
+- 可使用脚本。默认 systemd 服务为 `toolkit.service`，识别、停止和启动使用同一单元名。
 
 ```bash
 cd /opt/toolkit

@@ -8,15 +8,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SERVICE_NAME="${SERVICE_NAME:-toolkit}"
+SERVICE_UNIT="${SERVICE_NAME%.service}.service"
 START_CMD="${START_CMD:-}"
 STOP_CMD="${STOP_CMD:-}"
 DO_BUILD="${DO_BUILD:-1}"
 
+has_systemd_service() {
+  # Consume the full listing so an early match cannot break the pipe.
+  systemctl list-unit-files --no-legend --no-pager 2>/dev/null |
+    TOOLKIT_TARGET_UNIT="$SERVICE_UNIT" awk '$1 == ENVIRON["TOOLKIT_TARGET_UNIT"] { found = 1 } END { exit !found }'
+}
+
 stop_service() {
   if [[ -n "${STOP_CMD}" ]]; then
     eval "${STOP_CMD}"
-  elif systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
-    sudo systemctl stop "${SERVICE_NAME}"
+  elif has_systemd_service; then
+    sudo systemctl stop "$SERVICE_UNIT"
   else
     echo "未找到 systemd 服务 ${SERVICE_NAME}，也无法自动停止；请在外部先停止旧进程。"
   fi
@@ -25,8 +32,8 @@ stop_service() {
 start_service() {
   if [[ -n "${START_CMD}" ]]; then
     eval "${START_CMD}"
-  elif systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
-    sudo systemctl start "${SERVICE_NAME}"
+  elif has_systemd_service; then
+    sudo systemctl start "$SERVICE_UNIT"
   else
     echo "未找到 systemd 服务 ${SERVICE_NAME}。请手动启动：pnpm start --port 3000"
   fi

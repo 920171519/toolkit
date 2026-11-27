@@ -46,4 +46,4 @@
 
 ## 自动验证
 
-GitHub Actions 在 Ubuntu 24.04 上用 Node.js 24.19.0 和 pnpm 11.19.0 冻结安装，执行 `pnpm lint`、`pnpm test:e2e:full` 和 `pnpm typecheck`。本机可用相同命令复验。浏览器回归使用隔离的演示数据库和报告目录。 [工作流配置](../../.github/workflows/verify.yml)
+GitHub Actions 在 Ubuntu 24.04 上先用 `bash tests/deploy-ubuntu.sh` 验证部署顺序，再用 Node.js 24.19.0 和 pnpm 11.19.0 冻结安装，执行 `pnpm lint`、`pnpm test:e2e:full` 和 `pnpm typecheck`。部署测试使用模拟命令，浏览器回归使用隔离的演示数据库和报告目录。本机可用相同命令复验。 [工作流配置](../../.github/workflows/verify.yml)
