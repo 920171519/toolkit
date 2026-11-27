@@ -196,4 +196,22 @@ test.describe("公开项目联系人与账号", () => {
     await expect(page).toHaveURL(/\/versions\?project=1&q=1001OTA$/);
     await expect(page.getByRole("searchbox", { name: "软件包或版本" })).toHaveValue("1001OTA");
   });
+
+  test("登录后可继续前往多级详情和独立账号页面", async ({ page }) => {
+    const destinations = [
+      { path: "/settings/projects/1/nodes/1?listQ=N1&listPage=2", heading: "配置节点 EVT" },
+      { path: "/account/password", heading: "修改密码" },
+    ];
+    for (const { path, heading } of destinations) {
+      await page.context().clearCookies();
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/login\?next=/);
+      expect(new URL(page.url()).searchParams.get("next")).toBe(path);
+      await page.locator('input[name="employeeId"]').fill("MGR001");
+      await page.locator('input[name="password"]').fill("Demo@1234");
+      await page.getByRole("button", { name: "登录并继续", exact: true }).click();
+      await expect(page).toHaveURL(new URL(path, page.url()).href);
+      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    }
+  });
 });

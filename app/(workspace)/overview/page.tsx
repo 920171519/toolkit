@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { filterOptions, matchesChoiceFilter, matchesTextFilter, readColumnFilters, type ColumnFilterField } from "@/lib/column-filters";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { getProjectCatalogEntries, type ProjectCatalogEntry } from "@/lib/project-queries";
+import { projectOverviewFields } from "@/lib/project-overview-filters";
 import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
 import { getWorkflowProjectOptions } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
@@ -20,14 +21,9 @@ export const metadata: Metadata = { title: "项目总览" };
 
 const path = "/overview";
 const unassigned = { value: "empty", label: "未分配" };
-const projectFields: ColumnFilterField[] = [
-  { key: "name", label: "项目名称", kind: "text" },
-  { key: "code", label: "项目编码", kind: "text" },
-];
+const projectFields = projectOverviewFields.project;
 const stageField: ColumnFilterField = {
-  key: "stage",
-  label: "产品阶段",
-  kind: "choices",
+  ...projectOverviewFields.stage,
   options: PROJECT_STAGES.map((stage) => ({ value: stage, label: PROJECT_STAGE_META[stage].label })),
 };
 
@@ -53,15 +49,11 @@ export default async function OverviewPage({
   const catalog = getProjectCatalogEntries();
   const workflowProjectIds = new Set(getWorkflowProjectOptions(user, true).map((project) => project.id));
   const pmField: ColumnFilterField = {
-    key: "pm",
-    label: "PM",
-    kind: "choices",
+    ...projectOverviewFields.pm,
     options: contactOptions(catalog.flatMap((project) => project.pms)),
   };
   const managerField: ColumnFilterField = {
-    key: "manager",
-    label: "软件经理",
-    kind: "choices",
+    ...projectOverviewFields.manager,
     options: contactOptions(catalog.flatMap((project) => project.softwareManagers)),
   };
   const columnFilters = readColumnFilters(
