@@ -18,7 +18,7 @@ import { BindingBarcodeList } from "@/components/binding-barcode-list";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { createTrialDetailReader, getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
-import { canVoidPackageVersion } from "@/lib/workflow";
+import { canVoidPackageVersion } from "@/lib/version-void";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { releaseFlowUrl } from "@/lib/release-flow";

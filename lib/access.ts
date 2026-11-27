@@ -122,6 +122,29 @@ export function canManageProjectWorkflowForProject(user: SessionUser | null, pro
   return isProjectSoftwareManager(user.id, projectId);
 }
 
+export function versionProjectManagementBlocker(
+  user: SessionUser,
+  versionId: number,
+): "NO_PROJECT" | "FORBIDDEN" | null {
+  if (user.role === "ADMIN") return null;
+  const scope = one<{ eligible: number; managed: number }>(
+    `SELECT COUNT(*) AS eligible, COUNT(manager.user_id) AS managed
+     FROM version_transfer_requests r
+     JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN projects pr ON pr.id = r.project_id
+     LEFT JOIN project_software_managers manager ON manager.project_id = r.project_id AND manager.user_id = ?
+     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
+       AND CASE WHEN pv.status IN ('TRIAL','PENDING_FORMAL','FORMAL')
+         THEN r.trial_released_at IS NOT NULL OR r.formal_released_at IS NOT NULL
+         ELSE EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
+       END`,
+    user.id,
+    versionId,
+  );
+  if (!scope?.eligible) return "NO_PROJECT";
+  return scope.managed > 0 ? null : "FORBIDDEN";
+}
+
 export function canConfirmBindingNodeForProject(
   user: SessionUser,
   packageOwnerId: number | null,

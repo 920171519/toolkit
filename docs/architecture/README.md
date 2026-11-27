@@ -42,7 +42,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截它直接依赖聚合页面查询 `lib/workflow-queries.ts`。领域模块可以同时服务工作流事务和页面查询。
+`lib/workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截它直接依赖聚合页面查询 `lib/workflow-queries.ts`，也拦截工作区页面直接导入该写入模块。领域模块可以同时服务工作流事务和页面查询，页面通过 Server Action 执行写入。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 

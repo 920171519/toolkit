@@ -8,7 +8,13 @@ import {
 import { all, db, one, run, transaction } from "./db";
 import { packageIdentity } from "./package-identity";
 import { bindingFlowApprovalBlocker, canSubmitBindingFlow } from "./permissions";
-import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
+import {
+  canConfirmBindingNodeForProject,
+  canManageProjectWorkflowForProject,
+  canSubmitIntegrationConclusionForProject,
+  canSubmitTransferForArea,
+  versionProjectManagementBlocker,
+} from "./access";
 import { assert, DomainError } from "./domain-error";
 import type { BatchConclusion } from "./constants";
 import { integrationAttributionRules, integrationConclusionImpact, PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
@@ -36,6 +42,7 @@ import {
 } from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
+import { getVersionForVoid, type ManualVersionVoidKind } from "./version-void";
 import {
   ACTIVE_BINDING_FLOW_STATUSES_SQL,
   BINDING_BARCODE_FAILURE_REASON_LIMIT,
@@ -580,7 +587,7 @@ function voidParallelRiskTrial(
   audit(actor.id, "VOID_RISK_TRIAL_TEST_FAILURE", "PACKAGE_VERSION", item.version_id, `作废 ${item.package_name} ${item.version} 风险试制。${reason}`);
 }
 
-type VersionVoidKind = "RISK_TEST_FAILURE" | "FORMAL" | "TRIAL" | "ABANDON";
+type VersionVoidKind = "RISK_TEST_FAILURE" | ManualVersionVoidKind;
 
 function voidVersionRecords(actor: SessionUser, versionId: number, kind: VersionVoidKind, reason: string, timestamp: string) {
   run(
@@ -789,31 +796,10 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
   });
 }
 
-function activeVersionProjectRequests(versionId: number) {
-  return all<{ project_id: number }>(
-    `SELECT r.project_id FROM version_transfer_requests r
-     JOIN package_versions pv ON pv.id = r.package_version_id
-     JOIN projects pr ON pr.id = r.project_id
-     WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
-       AND CASE WHEN pv.status IN ('TRIAL','PENDING_FORMAL','FORMAL')
-         THEN r.trial_released_at IS NOT NULL OR r.formal_released_at IS NOT NULL
-         ELSE EXISTS (SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id)
-       END`,
-    versionId,
-  );
-}
-
 function assertVersionProjectManager(actor: SessionUser, versionId: number) {
-  const requests = activeVersionProjectRequests(versionId);
-  if (requests.length === 0) {
-    assert(actor.role === "ADMIN", "该版本没有可操作的项目记录。", "NOT_FOUND");
-    return;
-  }
-  assert(
-    requests.some((request) => canManageProjectWorkflowForProject(actor, request.project_id)),
-    "只有使用该软件包的项目软件经理或系统管理员可以执行该操作。",
-    "FORBIDDEN",
-  );
+  const blocker = versionProjectManagementBlocker(actor, versionId);
+  assert(blocker !== "NO_PROJECT", "该版本没有可操作的项目记录。", "NOT_FOUND");
+  assert(blocker !== "FORBIDDEN", "只有使用该软件包的项目软件经理或系统管理员可以执行该操作。", "FORBIDDEN");
 }
 
 export function pushBindingTasks(actor: SessionUser, requestId: number) {
@@ -970,34 +956,11 @@ export function abandonTrialRelease(actor: SessionUser, requestId: number, concl
   });
 }
 
-function versionForVoid(versionId: number) {
-  return one<{ status: string; package_id: number; package_name: string; version: string; admitted: number }>(
-    `SELECT pv.status, p.id AS package_id, p.name AS package_name, pv.version,
-            EXISTS (SELECT 1 FROM trial_risk_admissions a
-                    WHERE a.package_version_id = pv.id AND a.invalidated_at IS NULL) AS admitted
-     FROM package_versions pv JOIN packages p ON p.id = pv.package_id WHERE pv.id = ?`,
-    versionId,
-  );
-}
-
-function voidKindForVersion(version: NonNullable<ReturnType<typeof versionForVoid>>): VersionVoidKind | null {
-  if (version.status === "FORMAL") return "FORMAL";
-  if (version.status === "TRIAL" || version.status === "PENDING_FORMAL") return "TRIAL";
-  if (version.status === "PENDING_TRIAL" || (version.admitted && ["PENDING_TRANSFER", "IN_TEST"].includes(version.status))) return "ABANDON";
-  return null;
-}
-
-export function canVoidPackageVersion(actor: SessionUser, versionId: number) {
-  const version = versionForVoid(versionId);
-  return Boolean(version && voidKindForVersion(version)) &&
-    (actor.role === "ADMIN" || activeVersionProjectRequests(versionId).some((row) => canManageProjectWorkflowForProject(actor, row.project_id)));
-}
-
 export function voidPackageVersion(actor: SessionUser, versionId: number, reason: string, readyContext?: { requestId: number; eligibility: string }) {
   const trimmedReason = reason.trim();
   assert(trimmedReason.length >= 5, "请填写作废原因。");
   return transaction(() => {
-    const version = versionForVoid(versionId);
+    const version = getVersionForVoid(versionId);
     assert(version, "软件包版本不存在。", "NOT_FOUND");
     assertVersionProjectManager(actor, versionId);
     if (readyContext) {
@@ -1009,11 +972,10 @@ export function voidPackageVersion(actor: SessionUser, versionId: number, reason
       );
       assertProjectManager(actor, project.projectId);
     }
-    const kind = voidKindForVersion(version);
-    assert(kind, "当前版本状态不支持作废。");
-    voidVersionRecords(actor, versionId, kind, trimmedReason, now());
-    audit(actor.id, "VOID_VERSION", "PACKAGE_VERSION", versionId, `作废 ${version.package_name} ${version.version} 版本：${trimmedReason}`);
-    return version.package_id;
+    assert(version.kind, "当前版本状态不支持作废。");
+    voidVersionRecords(actor, versionId, version.kind, trimmedReason, now());
+    audit(actor.id, "VOID_VERSION", "PACKAGE_VERSION", versionId, `作废 ${version.packageName} ${version.version} 版本：${trimmedReason}`);
+    return version.packageId;
   });
 }
 

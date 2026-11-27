@@ -46,6 +46,7 @@ function importSpecifiers(source) {
 }
 
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
+const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();
 const routeSources = new Map();
 const dependencyBoundaryErrors = [];
@@ -62,6 +63,11 @@ for (const file of files.sort()) {
     if (isEntrypoint && (dependency === "lib/db.ts" || specifier === "node:sqlite" || specifier === "sqlite")) {
       dependencyBoundaryErrors.push(
         `${name} imports ${specifier} directly. Use the corresponding server-side service or query module.`,
+      );
+    }
+    if (workspacePagePattern.test(name) && dependency === "lib/workflow.ts") {
+      dependencyBoundaryErrors.push(
+        `${name} imports the workflow mutation module directly. Use actions for writes and domain modules for reads.`,
       );
     }
     if (name === "lib/workflow.ts" && dependency === "lib/workflow-queries.ts") {
@@ -125,7 +131,7 @@ function workspaceRouteErrors() {
   for (const path of matchers) if (!expected.includes(path)) problems.push(`Proxy matcher is outside the workspace path policy: ${path}.`);
 
   const pages = [...graph.keys()].flatMap((file) => {
-    const match = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/.exec(file);
+    const match = workspacePagePattern.exec(file);
     return match ? ["/" + (match[1] ?? "").split("/").filter((segment) => segment && !segment.startsWith("(") && !segment.startsWith("@")).join("/")] : [];
   });
   const inSection = (page, prefix) => page === prefix || page.startsWith(`${prefix}/`);
