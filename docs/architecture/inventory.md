@@ -90,6 +90,7 @@
 | 部署直到停服后才检验 Node 与 pnpm 能否运行 | [部署脚本](../../scripts/deploy-ubuntu.sh)、[部署模拟](../../tests/deploy-ubuntu.sh) | 先检查运行能力，沿用现有服务、外部命令及构建分支。 |
 | 补派预览直接依赖运行时支持只读连接 | [补派命令](../../scripts/backfill-trial-transfer-requests.ts)、[SQLite 回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 用内存连接检验只读选项实际生效。继续使用原有补派事务和路径校验。 |
 | 管理员命令在事务外决定创建或提升同一工号 | [管理员命令](../../scripts/create-admin.ts)、[写入回归](../../tests/e2e/settings-write-transactions.spec.ts) | 在同一写锁内查找并更新，用原有工号匹配、密码和部门规则。提交后输出成功。 |
+| 软件包抽屉为单包加载全站可见版本和包 ID | [授权域](../../lib/access.ts)、[抽屉读取](../../lib/package-queries.ts)、[接口回归](../../tests/e2e/package-experience.spec.ts) | 同一授权关系支持按包查询。存在可读版本时直接确认软件包可读，保留没有可读版本时的资料权限。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

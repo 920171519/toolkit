@@ -328,7 +328,7 @@ export function getAssignedTrialRequestIds(user: SessionUser): number[] {
   ).map(({ id }) => id);
 }
 
-export function getReadableVersionIds(user: SessionUser): number[] | null {
+export function getReadableVersionIds(user: SessionUser, packageId?: number): number[] | null {
   if (user.role === "ADMIN") return null;
   return all<{ id: number }>(
     `WITH ${batchEvidenceScopeCtes},
@@ -337,7 +337,8 @@ export function getReadableVersionIds(user: SessionUser): number[] | null {
             UNION SELECT area_id, project_id FROM area_project_members WHERE user_id = ?
           )
      SELECT pv.id FROM package_versions pv JOIN packages p ON p.id = pv.package_id
-     WHERE p.owner_id = ? OR pv.submitted_by = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
+     WHERE ${packageId === undefined ? "" : "pv.package_id = ? AND "}(
+       p.owner_id = ? OR pv.submitted_by = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
        OR EXISTS (
          SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id
            AND (r.project_id IN (SELECT id FROM readable_projects)
@@ -351,24 +352,38 @@ export function getReadableVersionIds(user: SessionUser): number[] | null {
        OR EXISTS (
          SELECT 1 FROM binding_requirements br WHERE br.package_version_id = pv.id
            AND (${bindingReadAssignment})
-       )`,
-    ...batchEvidenceScopeSqlParams(user), user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id,
+       ))`,
+    ...batchEvidenceScopeSqlParams(user), user.id, user.id,
+    ...(packageId === undefined ? [] : [packageId]), user.id, user.id, user.id, user.id, user.id, user.id,
   ).map(({ id }) => id);
 }
 
-export function getReadablePackageIds(user: SessionUser, versionIds = getReadableVersionIds(user)): number[] | null {
-  if (versionIds === null) return null;
+export function getReadablePackageIds(
+  user: SessionUser,
+  versionIds?: readonly number[] | null,
+  packageId?: number,
+): number[] | null {
+  const readableVersionIds = versionIds === undefined ? getReadableVersionIds(user, packageId) : versionIds;
+  if (readableVersionIds === null) return null;
   return all<{ id: number }>(
     `SELECT p.id FROM packages p
-     WHERE p.owner_id = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
+     WHERE ${packageId === undefined ? "" : "p.id = ? AND "}(
+       p.owner_id = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
        OR EXISTS (SELECT 1 FROM package_usages pu WHERE pu.package_id = p.id AND (
          pu.project_id IN (SELECT value FROM json_each(?))
          OR EXISTS (SELECT 1 FROM area_project_leads duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
          OR EXISTS (SELECT 1 FROM area_project_members duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
        ))
-       OR EXISTS (SELECT 1 FROM package_versions v WHERE v.package_id = p.id AND v.id IN (SELECT value FROM json_each(?)))`,
-    user.id, user.id, JSON.stringify(getProjectWorkflowProjectIds(user, true)), user.id, user.id, JSON.stringify(versionIds),
+       OR EXISTS (SELECT 1 FROM package_versions v WHERE v.package_id = p.id AND v.id IN (SELECT value FROM json_each(?))))`,
+    ...(packageId === undefined ? [] : [packageId]), user.id, user.id, JSON.stringify(getProjectWorkflowProjectIds(user, true)), user.id, user.id, JSON.stringify(readableVersionIds),
   ).map(({ id }) => id);
+}
+
+export function getReadablePackageVersionScope(user: SessionUser, packageId: number): { versionIds: number[] | null } | null {
+  const versionIds = getReadableVersionIds(user, packageId);
+  // A readable version also grants access to its package.
+  if (versionIds?.length === 0 && !getReadablePackageIds(user, versionIds, packageId)?.length) return null;
+  return { versionIds };
 }
 
 export function canReadPackageWorkflow(user: SessionUser, packageId: number, projectId?: number): boolean {

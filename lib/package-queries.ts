@@ -1,7 +1,7 @@
 import "server-only";
 
 import { all, one } from "./db";
-import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadableVersionIds, getTransferAreaIds } from "./access";
+import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadablePackageVersionScope, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus } from "./constants";
 import { getTrialProgress } from "./trial-eligibility";
@@ -410,9 +410,9 @@ export function getReadablePackageOverviewRows(user: SessionUser, projectId?: nu
 }
 
 function getReadablePackageDetail(user: SessionUser, packageId: number, projectId?: number): (PackageDetailData & { canEdit: boolean }) | null {
-  const versionIds = getReadableVersionIds(user);
-  const packageIds = getReadablePackageIds(user, versionIds);
-  if (packageIds !== null && !packageIds.includes(packageId)) return null;
+  const scope = getReadablePackageVersionScope(user, packageId);
+  if (!scope) return null;
+  const { versionIds } = scope;
   const pkg = projectId
     ? readPackageOverviewRows(projectId, packageId)[0]
     : readGlobalPackageSummary(packageId, true);
