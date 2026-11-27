@@ -12,10 +12,9 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { getRiskTrialEntries } from "@/lib/trial-risk-entry";
 import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
-import { getBatchDetail, type BatchItemRow } from "@/lib/workflow-queries";
+import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/workflow-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
-import { all } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
@@ -86,15 +85,7 @@ export default async function BatchDetailPage({
     ? changedItems.filter(({ requestStatus }) => requestStatus === "PASSED")
       .map(({ versionId }) => [versionId, getTrialReleaseGuidance(user, versionId, { projectId: batch.projectId, returnTo: listState.returnTo })])
     : []);
-  const reportContacts = isActive && !archived && !canTest ? all<{ name: string }>(
-    `SELECT DISTINCT u.name FROM users u
-     WHERE u.is_active = 1 AND (
-       EXISTS (SELECT 1 FROM area_project_leads l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
-         WHERE l.project_id = ? AND l.user_id = u.id)
-       OR EXISTS (SELECT 1 FROM area_leaders l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
-         WHERE l.user_id = u.id)
-     ) ORDER BY u.name`, batch.projectId,
-  ).map(({ name }) => name) : [];
+  const reportContacts = isActive && !archived && !canTest ? getIntegrationConclusionContactNames(batch.projectId) : [];
   const draftBlockers = isDraft && canManage ? getBatchSendCheck(batch.id).blockers : [];
   const editHref = workflowHref("/submissions/batch/new", batch.projectId, { ...listState, ...requestListState, draft: batch.id, from: project ? undefined : "all" });
 

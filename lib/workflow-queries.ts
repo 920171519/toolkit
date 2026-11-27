@@ -1,5 +1,5 @@
 import { all, db, one } from "./db";
-import { canAccessProjectPage, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
+import { canAccessProjectPage, canManageProjectWorkflowForProject, canReadBatchEvidence, getIntegrationManagedProjectIds, getManagedProjectIdsForUser, getNarrowVersionRequestIds, getProjectWorkflowProjectIds, getReadableVersionIds } from "./access";
 import { bindingBarcodeEvidenceKey, type BindingBarcodeResult } from "./binding-barcode-results";
 import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
@@ -467,6 +467,40 @@ export type BatchProgressNote = {
 };
 
 export type BatchDetailRow = { batch: BatchSummaryRow; items: BatchItemRow[]; progressNotes: BatchProgressNote[] };
+
+export function getIntegrationConclusionContactNames(projectId: number): string[] {
+  return all<{ name: string }>(
+    `SELECT DISTINCT u.name FROM users u
+     WHERE u.is_active = 1 AND (
+       EXISTS (SELECT 1 FROM area_project_leads l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
+         WHERE l.project_id = ? AND l.user_id = u.id)
+       OR EXISTS (SELECT 1 FROM area_leaders l JOIN areas a ON a.id = l.area_id AND a.is_integration = 1
+         WHERE l.user_id = u.id)
+     ) ORDER BY u.name`,
+    projectId,
+  ).map(({ name }) => name);
+}
+
+export function getReadableTestReport(user: SessionUser, reportId: number) {
+  const report = one<{ originalName: string; storedPath: string; mimeType: string; uploadedBy: number | null }>(
+    `SELECT original_name AS originalName, stored_path AS storedPath, mime_type AS mimeType, uploaded_by AS uploadedBy
+     FROM report_files WHERE id = ?`,
+    reportId,
+  );
+  if (!report) return null;
+  const { uploadedBy, ...file } = report;
+  if (user.role === "ADMIN") return file;
+
+  const batches = all<{ projectId: number | null; status: string }>(
+    `SELECT project_id AS projectId, status FROM integration_batches
+     WHERE test_report_file_id = ? OR test_report_url = ?`,
+    reportId,
+    `/api/reports/${reportId}`,
+  );
+  const readable = batches.length === 0 ? uploadedBy === user.id
+    : batches.some(({ projectId, status }) => projectId !== null && canReadBatchEvidence(user, projectId, status));
+  return readable ? file : null;
+}
 
 export function getBatchDetail(batchId: number, projectIds: number[] | null): BatchDetailRow | null {
   if (projectIds?.length === 0) return null;
@@ -949,6 +983,38 @@ export function getReadableTrialDetail(user: SessionUser, requestId: number): Tr
     return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
   });
   return requirements.length ? { ...detail, requirements } : null;
+}
+
+export function getManagedTrialRequestState(user: SessionUser, requestId: number, projectId?: number) {
+  const request = one<{
+    versionId: number;
+    projectId: number;
+    trialReleasedAt: string | null;
+    versionStatus: string;
+    projectStatus: string;
+  }>(
+    `SELECT r.package_version_id AS versionId, r.project_id AS projectId, r.trial_released_at AS trialReleasedAt,
+            pv.status AS versionStatus, p.status AS projectStatus
+     FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
+     JOIN projects p ON p.id = r.project_id WHERE r.id = ?`,
+    requestId,
+  );
+  if (!request || (projectId !== undefined && projectId !== request.projectId)) return null;
+  return canManageProjectWorkflowForProject(user, request.projectId) ? request : null;
+}
+
+// Archived requests still provide a history landing when the last project leaves the formal queue.
+export function hasReadableFormalHistory(user: SessionUser, versionId: number, projectId?: number): boolean {
+  const readableProjects = getProjectWorkflowProjectIds(user, true);
+  if (projectId !== undefined && readableProjects !== null && !readableProjects.includes(projectId)) return false;
+  const scope = projectId === undefined ? readableProjects : [projectId];
+  return Boolean(one(
+    `SELECT 1 FROM version_transfer_requests
+     WHERE package_version_id = ? AND trial_released_at IS NOT NULL
+     ${scope === null ? "" : "AND project_id IN (SELECT value FROM json_each(?))"} LIMIT 1`,
+    versionId,
+    ...(scope === null ? [] : [JSON.stringify(scope)]),
+  ));
 }
 
 export type PendingFormalVersion = {

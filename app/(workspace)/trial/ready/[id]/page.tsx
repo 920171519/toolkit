@@ -9,7 +9,6 @@ import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
-import { one } from "@/lib/db";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
@@ -17,7 +16,7 @@ import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { trialReleaseStateKey } from "@/lib/trial-release-state";
 import { workflowHref } from "@/lib/workflow-links";
-import { getManagedProjectIds, getTrialReadyVersions } from "@/lib/workflow-queries";
+import { getManagedProjectIds, getManagedTrialRequestState, getTrialReadyVersions } from "@/lib/workflow-queries";
 import styles from "@/components/workflow-queue.module.css";
 
 export const dynamic = "force-dynamic";
@@ -44,14 +43,8 @@ export default async function TrialReadyDetailPage({
     <ArrowLeft size={14} />返回试制队列
   </Link>;
   if (!row) {
-    const request = one<{ versionId: number; projectId: number; trialReleasedAt: string | null; versionStatus: string; projectStatus: string }>(
-      `SELECT r.package_version_id AS versionId, r.project_id AS projectId, r.trial_released_at AS trialReleasedAt,
-              pv.status AS versionStatus, p.status AS projectStatus
-       FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
-       JOIN projects p ON p.id = r.project_id WHERE r.id = ?`, requestId,
-    );
-    if (!request || (projectId !== undefined && projectId !== request.projectId)
-      || !canManageProjectWorkflowForProject(user, request.projectId)) notFound();
+    const request = getManagedTrialRequestState(user, requestId, projectId);
+    if (!request) notFound();
     const guidance = getTrialReleaseGuidance(user, request.versionId, { projectId: request.projectId, returnTo });
     const ongoingTrial = request.trialReleasedAt && request.projectStatus !== "ARCHIVED";
     const nextHref = ongoingTrial && request.versionStatus === "PENDING_FORMAL"

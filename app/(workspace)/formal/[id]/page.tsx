@@ -15,7 +15,6 @@ import { canAccessProjectPage, canManageProjectWorkflowForProject, getProjectWor
 import { releaseFormalAction } from "@/lib/actions/workflow";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
-import { all } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { parseFlash } from "@/lib/queries";
@@ -23,7 +22,7 @@ import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds } from "@/lib/workflow-queries";
+import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/workflow-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
@@ -47,12 +46,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const traceHref = workflowHref(`/versions/${versionId}`, project?.id, { ...listState, from: "formal" });
   const records = getPendingFormalVersions(scope, versionId);
   if (records.length === 0) {
-    // A version can leave the live queue when its last project is archived.
-    const canViewHistory = !guidance && all<{ projectId: number }>(
-      `SELECT project_id AS projectId
-       FROM version_transfer_requests WHERE package_version_id = ? AND trial_released_at IS NOT NULL`, versionId,
-    ).some(({ projectId }) => (project === undefined || project.id === projectId) && canAccessProjectPage(user, projectId));
-    if (!guidance && !canViewHistory) notFound();
+    if (!guidance && !hasReadableFormalHistory(user, versionId, project?.id)) notFound();
     const title = guidance?.status === "FORMAL" ? "该版本已转正"
       : guidance?.status === "VOID" ? "该版本已作废" : "该版本暂未入列";
     return (
