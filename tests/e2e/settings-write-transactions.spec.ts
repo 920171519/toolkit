@@ -302,3 +302,72 @@ test("项目和节点写入按同一事务核对目标、指派与重名", ({}, 
     expect(second.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 });
+
+test("责任田名称和人员指派使用同一写事务及当前表单版本", ({}, testInfo) => {
+  withConnections(testInfo, (first, second) => {
+    const writer = loadCommands(first);
+    const otherWriter = loadCommands(second);
+    const supervisor: SessionUser = { ...actor, id: 2, role: "MEMBER" };
+    const projectLead: SessionUser = { ...supervisor, id: 3 };
+    second.exec(`
+      INSERT INTO users (id, name, employee_id, password_hash, role, created_at)
+      VALUES (3, '验收负责人', 'QA003', 'fixture', 'MEMBER', '2026-11-28'),
+             (4, '验收成员', 'QA004', 'fixture', 'MEMBER', '2026-11-28');
+    `);
+
+    const prepare = first.prepare.bind(first);
+    first.prepare = (statement) => {
+      if (/^SELECT[\s\S]*\bFROM (areas|area_leaders|area_project_leads|area_project_members|projects|users)\b/.test(statement.trim())) {
+        expect(first.isTransaction).toBe(true);
+      }
+      return prepare(statement);
+    };
+
+    let createdAreaId: number | undefined;
+    beforeNextWrite(first, () => {
+      createdAreaId = otherWriter.saveArea(actor, { name: "QA Area", description: "" });
+    });
+    expect(() => writer.saveArea(actor, { name: "qa area", description: "" })).toThrow("责任田名称已存在。");
+    assert(createdAreaId !== undefined);
+    const areaId = createdAreaId;
+
+    writer.addAreaLeader(actor, areaId, supervisor.id);
+    writer.assignAreaProjectLead(supervisor, areaId, 1, projectLead.id);
+    const assignment = second.prepare("SELECT id FROM area_project_leads WHERE area_id = ? AND project_id = 1").get(areaId) as { id: number } | undefined;
+    assert(assignment);
+    expect(() => writer.assignAreaProjectLead(supervisor, areaId, 1, 4, assignment.id + 1, projectLead.id))
+      .toThrow("当前负责人配置已变化，请刷新后再操作。");
+    expect(() => writer.assignAreaProjectLead(supervisor, areaId, 1, 4, assignment.id, supervisor.id))
+      .toThrow("当前负责人配置已变化，请刷新后再操作。");
+
+    otherWriter.setUserActive(actor, 4, false);
+    expect(() => writer.assignAreaProjectMember(projectLead, areaId, 1, 4)).toThrow("项目成员不存在或已停用。");
+    otherWriter.setUserActive(actor, 4, true);
+    writer.assignAreaProjectMember(projectLead, areaId, 1, 4);
+    const member = second.prepare("SELECT id FROM area_project_members WHERE area_id = ? AND user_id = 4").get(areaId) as { id: number } | undefined;
+    assert(member);
+    expect(writer.removeAreaProjectMember(projectLead, member.id)).toBe(areaId);
+
+    writer.assignAreaProjectLead(supervisor, areaId, 1, 4, assignment.id, projectLead.id);
+    expect(second.prepare("SELECT user_id FROM area_project_leads WHERE id = ?").get(assignment.id)).toEqual({ user_id: 4 });
+    expect(writer.removeAreaProjectLead(supervisor, assignment.id)).toBe(areaId);
+    expect(writer.saveArea(supervisor, { id: areaId, name: "QA Area Updated", description: "" })).toBe(areaId);
+    const leader = second.prepare("SELECT id FROM area_leaders WHERE area_id = ? AND user_id = ?").get(areaId, supervisor.id) as { id: number } | undefined;
+    assert(leader);
+    expect(writer.removeAreaLeader(actor, leader.id)).toBe(areaId);
+
+    expect(second.prepare("SELECT action FROM audit_logs WHERE entity_type = 'AREA' AND entity_id = ? ORDER BY id").all(areaId))
+      .toEqual([
+        { action: "CREATE_AREA" },
+        { action: "ADD_AREA_LEADER" },
+        { action: "ASSIGN_AREA_PROJECT_LEAD" },
+        { action: "ASSIGN_AREA_PROJECT_MEMBER" },
+        { action: "REMOVE_AREA_PROJECT_MEMBER" },
+        { action: "ASSIGN_AREA_PROJECT_LEAD" },
+        { action: "REMOVE_AREA_PROJECT_LEAD" },
+        { action: "UPDATE_AREA" },
+        { action: "REMOVE_AREA_LEADER" },
+      ]);
+    expect(second.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+});
