@@ -1,6 +1,6 @@
 import "server-only";
 
-import { all } from "./db";
+import { all, one } from "./db";
 import { getProjectStage, type ProjectStage } from "./project-stage";
 
 export type ProjectOption = {
@@ -99,13 +99,6 @@ export function getProjectCatalogEntries(projectId?: number): ProjectCatalogEntr
     .map((project) => ({ ...project, stage: getProjectStage(project.status, project.stage) }));
 }
 
-function projectContactNames({ pms, softwareManagers }: ProjectAssignments) {
-  return {
-    pmName: pms.map((person) => person.name).join(" / ") || null,
-    softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
-  };
-}
-
 export function getProjectSettingsDirectory(projectIds: readonly number[] | null) {
   return readProjectsWithContacts<Omit<ProjectRecord, "description"> & { nodeCount: number }>(
     `${projectOptionColumns}, p.stage,
@@ -113,7 +106,8 @@ export function getProjectSettingsDirectory(projectIds: readonly number[] | null
     { projectIds, includeArchived: true },
   ).map(({ pms, softwareManagers, ...project }) => ({
     ...project,
-    ...projectContactNames({ pms, softwareManagers }),
+    pmName: pms.map((person) => person.name).join(" / ") || null,
+    softwareManagerName: softwareManagers.map((person) => person.name).join(" / ") || null,
   }));
 }
 
@@ -157,38 +151,49 @@ type NodeApprover = {
 };
 
 export type ProjectConfig = ProjectRecord & ProjectAssignments & {
-  pmName: string | null;
-  softwareManagerName: string | null;
   nodes: Array<ProjectNode & { approvers: NodeApprover[] }>;
-  packageCount: number;
 };
 
-export function getProjectConfigs(projectId?: number): ProjectConfig[] {
-  return readProjectsWithContacts<ProjectRecord & { packageCount: number }>(
-    `${projectRecordColumns},
-     (SELECT COUNT(DISTINCT pu.package_id) FROM package_usages pu WHERE pu.project_id = p.id) AS packageCount`,
-    { projectId, includeArchived: true },
-  ).map((project) => ({
-    ...project,
-    ...projectContactNames(project),
-    packageCount: Number(project.packageCount),
-    nodes: all<ProjectNode>(
-      `SELECT ${projectNodeOptionColumns}, n.binding_owner_id AS bindingOwnerId,
-              bo.name AS bindingOwnerName, n.binding_approver_id AS bindingApproverId,
-              ba.name AS bindingApproverName, n.required_binding_count AS requiredBindingCount
-       FROM project_nodes n
-       LEFT JOIN users bo ON bo.id = n.binding_owner_id
-       LEFT JOIN users ba ON ba.id = n.binding_approver_id
-       WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
-      project.id,
-    ).map((node) => ({
-      ...node,
-      approvers: all<NodeApprover>(
-        `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
-         FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
-         WHERE pna.node_id = ? ORDER BY pna.id`,
-        node.id,
-      ),
-    })),
-  }));
+const projectNodeConfigColumns = `${projectNodeOptionColumns}, n.binding_owner_id AS bindingOwnerId,
+  bo.name AS bindingOwnerName, n.binding_approver_id AS bindingApproverId,
+  ba.name AS bindingApproverName, n.required_binding_count AS requiredBindingCount`;
+const projectNodeConfigFrom = `FROM project_nodes n
+  LEFT JOIN users bo ON bo.id = n.binding_owner_id
+  LEFT JOIN users ba ON ba.id = n.binding_approver_id`;
+
+function readNodeApprovers(nodeId: number): NodeApprover[] {
+  return all<NodeApprover>(
+    `SELECT pna.id, pna.user_id AS userId, u.name AS userName, u.employee_id AS userEmployeeId
+     FROM project_node_approvers pna JOIN users u ON u.id = pna.user_id
+     WHERE pna.node_id = ? ORDER BY pna.id`,
+    nodeId,
+  );
+}
+
+export function getProjectConfig(projectId: number): ProjectConfig | null {
+  const [project] = readProjectsWithContacts<ProjectRecord>(projectRecordColumns, { projectId, includeArchived: true });
+  if (!project) return null;
+  const nodes = all<ProjectNode>(
+    `SELECT ${projectNodeConfigColumns} ${projectNodeConfigFrom}
+     WHERE n.project_id = ? ORDER BY n.sort_order, n.id`,
+    projectId,
+  ).map((node) => ({ ...node, approvers: readNodeApprovers(node.id) }));
+  return { ...project, nodes };
+}
+
+export function getProjectNodeConfig(projectId: number, nodeId: number) {
+  const row = one<ProjectNode & { projectName: string; projectCode: string }>(
+    `SELECT ${projectNodeConfigColumns}, p.name AS projectName, p.code AS projectCode
+     ${projectNodeConfigFrom}
+     JOIN projects p ON p.id = n.project_id
+     WHERE p.id = ? AND n.id = ?`,
+    projectId,
+    nodeId,
+  );
+  if (!row) return null;
+  const { projectName, projectCode, ...node } = row;
+  return {
+    project: { name: projectName, code: projectCode },
+    node: { ...node, approvers: readNodeApprovers(nodeId) },
+  };
 }

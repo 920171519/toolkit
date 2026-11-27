@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowDown, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
-import { getProjectConfigs } from "@/lib/project-queries";
+import { getProjectConfig } from "@/lib/project-queries";
 import { getPeople, parseFlash } from "@/lib/queries";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
@@ -30,7 +30,7 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
   const canAssignManagers = user.role === "ADMIN";
   const projectId = Number((await params).id);
   if (!Number.isSafeInteger(projectId) || projectId < 1 || !canManageProjectWorkflowForProject(user, projectId)) notFound();
-  const [project] = getProjectConfigs(projectId);
+  const project = getProjectConfig(projectId);
   if (!project) notFound();
 
   const search = await searchParams;
