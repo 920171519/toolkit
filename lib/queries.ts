@@ -20,18 +20,8 @@ const PACKAGE_SUMMARY_SQL = `
           WHERE v.package_id = p.id AND v.trial_released_at IS NOT NULL
             AND v.status IN ('TRIAL','PENDING_FORMAL')
           ORDER BY v.trial_released_at DESC, v.id DESC LIMIT 1) AS trialVersion,
-         (SELECT pv.version FROM package_versions pv
-          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
-            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
-          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentVersion,
-         (SELECT pv.status FROM package_versions pv
-          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
-            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
-          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentStatus,
-         (SELECT pv.id FROM package_versions pv
-          WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
-            AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
-          ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1) AS currentVersionId,
+         current_version.version AS currentVersion, current_version.status AS currentStatus,
+         current_version.id AS currentVersionId,
          (SELECT v.version FROM package_versions v
           WHERE v.package_id = p.id AND v.status = 'IN_TEST'
           ORDER BY v.updated_at DESC, v.id DESC LIMIT 1) AS inTestVersion,
@@ -41,20 +31,34 @@ const PACKAGE_SUMMARY_SQL = `
   FROM packages p
   LEFT JOIN areas a ON a.id = p.area_id
   LEFT JOIN users o ON o.id = p.owner_id
+  LEFT JOIN package_versions current_version ON current_version.id = (
+    SELECT pv.id FROM package_versions pv
+    WHERE pv.package_id = p.id AND pv.status NOT IN ('FORMAL','VOID')
+      AND (pv.status != 'TRIAL' OR NOT ${STANDALONE_IMPORTED_VERSION_SQL})
+    ORDER BY pv.updated_at DESC, pv.id DESC LIMIT 1
+  )
 `;
 
-function readPackagesOverview(includeInactive: boolean): PackageSummary[] {
+function readPackagesOverview(includeInactive: boolean, packageId?: number): PackageSummary[] {
+  const conditions: string[] = [];
+  if (!includeInactive) conditions.push("p.is_active = 1");
+  if (packageId !== undefined) conditions.push("p.id = ?");
+  const values = packageId === undefined ? [] : [packageId];
   const packages = all<Omit<PackageSummary, "isActive" | "trialVersions"> & { isActive: number }>(
-    `${PACKAGE_SUMMARY_SQL} ${includeInactive ? "" : "WHERE p.is_active = 1"}
+    `${PACKAGE_SUMMARY_SQL} ${conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`}
      ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
+    ...values,
   ).map((row) => ({
     ...row,
     isActive: Boolean(row.isActive),
   }));
+  if (packages.length === 0) return [];
   const trials = all<{ packageId: number; version: string }>(
     `SELECT package_id AS packageId, version FROM package_versions
      WHERE status IN ('TRIAL','PENDING_FORMAL')
+     ${packageId === undefined ? "" : "AND package_id = ?"}
      ORDER BY package_id, trial_released_at DESC, id DESC`,
+    ...values,
   );
   const trialMap = new Map<number, string[]>();
   for (const trial of trials) {
@@ -121,7 +125,17 @@ export type PackageOverviewRow = PackageSummary & {
 };
 
 export function getPackageOverviewRows(projectId?: number, includeArchivedUsage = false): PackageOverviewRow[] {
-  let packages = readPackagesOverview(true);
+  return readPackageOverviewRows({ projectId, includeArchivedUsage });
+}
+
+function readPackageOverviewRows({ projectId, includeArchivedUsage, packageId }: {
+  projectId?: number;
+  includeArchivedUsage: boolean;
+  packageId?: number;
+}): PackageOverviewRow[] {
+  let packages = readPackagesOverview(true, packageId);
+  if (packages.length === 0) return [];
+  const packageValues = packageId === undefined ? [] : [packageId];
   const usageRows = all<{
     packageId: number;
     projectId: number;
@@ -136,8 +150,10 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
      JOIN projects pr ON pr.id = u.project_id
      JOIN project_nodes n ON n.id = u.node_id
      WHERE ${includeArchivedUsage ? "1 = 1" : "(pr.status != 'ARCHIVED' OR pr.id = ?)"}
+       ${packageId === undefined ? "" : "AND u.package_id = ?"}
      ORDER BY pr.sort_order, n.sort_order`,
     ...(includeArchivedUsage ? [] : [projectId ?? null]),
+    ...packageValues,
   );
   if (projectId) {
     const allowed = new Set(
@@ -145,6 +161,7 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
     );
     packages = packages.filter((pkg) => allowed.has(pkg.id));
   }
+  if (packages.length === 0) return [];
   const usageMap = new Map<number, PackageUsageScope[]>();
   for (const row of usageRows) {
     if (!includeArchivedUsage && row.projectStatus === "ARCHIVED") continue;
@@ -163,6 +180,7 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
     }
     scope.nodeNames.push(row.nodeName);
   }
+  const requestPackageCondition = packageId === undefined ? "" : "AND pv.package_id = ?";
   const requestRows = all<{
     packageId: number;
     versionId: number;
@@ -179,13 +197,15 @@ export function getPackageOverviewRows(projectId?: number, includeArchivedUsage 
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN projects pr ON pr.id = r.project_id
-     WHERE ${projectId ? "r.project_id = ?" : "pr.status != 'ARCHIVED'"}
+     WHERE ${projectId ? "r.project_id = ?" : "pr.status != 'ARCHIVED'"} ${requestPackageCondition}
      ${projectId ? `UNION ALL
        SELECT pv.package_id, pv.id, pv.version, pv.status, pv.formal_released_at,
               pv.trial_released_at, COALESCE(pv.formal_released_at, pv.trial_released_at, pv.updated_at), 1
-       FROM package_versions pv WHERE ${STANDALONE_VERSION_IN_PROJECT_SQL}` : ""}
+       FROM package_versions pv WHERE ${STANDALONE_VERSION_IN_PROJECT_SQL} ${requestPackageCondition}` : ""}
      ORDER BY updatedAt DESC, versionId DESC`,
-    ...(projectId ? [projectId, projectId] : []),
+    ...(projectId ? [projectId] : []),
+    ...packageValues,
+    ...(projectId ? [projectId, ...packageValues] : []),
   );
   const byPackage = new Map<number, typeof requestRows>();
   for (const row of requestRows) {
@@ -538,8 +558,9 @@ export function getReadablePackageDetail(user: SessionUser, packageId: number, p
 }
 
 export function getPackageDetail(packageId: number, includeInactive = false, projectId?: number): PackageDetailData | null {
-  const packages = projectId ? getPackageOverviewRows(projectId) : getPackagesOverview(includeInactive);
-  const base = packages.find((pkg) => pkg.id === packageId);
+  const [base] = projectId
+    ? readPackageOverviewRows({ projectId, includeArchivedUsage: false, packageId })
+    : withTrialProgress(readPackagesOverview(includeInactive, packageId));
   if (!base) return null;
   const usageRows = all<{
     projectId: number;
