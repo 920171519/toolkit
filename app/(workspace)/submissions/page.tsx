@@ -19,6 +19,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { PendingTransferTable } from "@/components/pending-transfer-table";
+import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
@@ -172,6 +173,7 @@ export default async function SubmissionsPage({
                 return <PendingTransferTable
                   key={`${group.projectId}-${focusedRequestId ?? "all"}`}
                   group={{ ...group, items: group.items.map(({ draftBatchId, draftBatchProjectId, draftBatchCode, ...item }) => {
+                    const riskEntry = riskEntries[item.requestId];
                     const draftReserved = draftBatchId !== null;
                     const draftBatch = managesGroup && draftBatchId !== null && draftBatchProjectId !== null
                       && canReadBatchEvidence(user, draftBatchProjectId, "DRAFT", batchEvidenceScope)
@@ -180,7 +182,14 @@ export default async function SubmissionsPage({
                       ...item,
                       draftReserved,
                       draftBatch,
-                      riskEntry: riskEntries[item.requestId],
+                      riskAction: riskEntry?.stage === "PENDING" ? renderRiskTrialEntryAction({
+                        entry: riskEntry,
+                        packageName: item.packageName,
+                        packageCode: item.packageCode,
+                        version: item.version,
+                        projectName: group.projectName,
+                        returnTo: returnState.returnTo,
+                      }) : null,
                       canCancel: !draftReserved && item.versionStatus === "PENDING_TRANSFER" && (managesGroup || user.id === item.submittedById),
                     };
                   }) }}

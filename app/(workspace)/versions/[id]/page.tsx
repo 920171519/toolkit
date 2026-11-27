@@ -8,7 +8,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { parseFlash } from "@/lib/queries";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
+import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { getFormalReleaseGuidance, getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
@@ -153,7 +153,7 @@ export default async function VersionTracePage({
                   <td><ReleaseFlowEvidence value={request.trialFormNo} label="查看试制电子流" />{request.riskConclusion && request.riskConclusion !== version.riskConclusion && <div className="small muted">风险：{request.riskConclusion}</div>}</td>
                   <td>{total > 0 ? <><ProgressBar value={passed} max={total} /><span className="small muted">{passed}/{total}</span></> : <span className="small muted">—</span>}</td>
                   <td><ReleaseFlowEvidence value={request.formFlowNo} label="查看转正电子流" /></td>
-                  <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && <RiskTrialEntryAction entry={riskEntry} packageName={version.packageName} packageCode={version.packageCode} version={version.version} projectName={request.projectName} returnTo={state.returnTo} />}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, request.projectId)} prefetch={false} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
+                  <td className="cell-actions">{riskEntry?.stage === "PASSED_NO_EVIDENCE" && renderRiskTrialEntryAction({ entry: riskEntry, packageName: version.packageName, packageCode: version.packageCode, version: version.version, projectName: request.projectName, returnTo: state.returnTo })}{detail && linked ? <Link href={workflowHref(`/trial/${request.requestId}`, request.projectId)} prefetch={false} className="archive-link">绑定详情 <ArrowRight size={11} /></Link> : null}</td>
                 </tr>
               );
             })}</tbody>

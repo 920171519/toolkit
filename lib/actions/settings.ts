@@ -1,14 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
 import {
+  actionUser,
   checkbox,
   failure,
   idList,
   numberValue,
+  refreshAll,
   text,
   successRedirect,
 } from "@/lib/action-helpers";
@@ -39,16 +38,6 @@ import {
 } from "@/lib/settings";
 import { ROLES, type Role } from "@/lib/constants";
 import { areaDirectoryDetailParams, areaDirectoryListParams, directoryActionHref, directoryFilters, directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
-
-async function actionUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  return user;
-}
-
-function refreshAll() {
-  revalidatePath("/", "layout");
-}
 
 function areaFormFilters(formData: FormData) {
   return Object.fromEntries([...formData.entries()].flatMap(([key, value]) => typeof value === "string" ? [[key, value]] : []));

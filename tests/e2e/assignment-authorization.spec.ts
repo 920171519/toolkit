@@ -357,6 +357,79 @@ test("历史跨项目关联按批次所属项目展示，试制资格与占用�
   }
 });
 
+test("风险登记隐藏历史批次编号，旧表单仍检查最新关联", async ({ page }) => {
+  await login(page, "MGR001");
+  const db = openE2eDatabase();
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const [n1, m2] = db.prepare("SELECT id FROM projects WHERE code IN ('N1','M2') ORDER BY sort_order").all() as { id: number }[];
+  const stamp = "2026-12-01T00:00:00.000Z";
+  const archive = "https://example.com/archive/risk-freshness";
+  const version = "1.2.3-risk-freshness";
+  let packageId: number | undefined;
+  const batches: number[] = [];
+  try {
+    const id = Number(db.prepare(
+      "INSERT INTO packages (name, code, created_at) VALUES ('风险登记回归包', 'QA-RISK-FRESHNESS', ?)",
+    ).run(stamp).lastInsertRowid);
+    packageId = id;
+    db.prepare(
+      "INSERT INTO package_usages (package_id, project_id, node_id) SELECT ?, ?, id FROM project_nodes WHERE project_id = ? AND name = 'EVT'",
+    ).run(id, n1.id, n1.id);
+    const versionId = Number(db.prepare(
+      `INSERT INTO package_versions (package_id, version, change_summary, archive_url, submitted_at, updated_at)
+       VALUES (?, ?, '风险登记回归', ?, ?, ?)`,
+    ).run(id, version, archive, stamp, stamp).lastInsertRowid);
+    const requestId = Number(db.prepare(
+      "INSERT INTO version_transfer_requests (package_version_id, project_id, submitted_at, updated_at) VALUES (?, ?, ?, ?)",
+    ).run(versionId, n1.id, stamp, stamp).lastInsertRowid);
+    const addHistoricalBatch = (code: string) => {
+      const batchId = Number(db.prepare(
+        "INSERT INTO integration_batches (code, project_id, title, status, created_at) VALUES (?, ?, '历史终止记录', 'TERMINATED', ?)",
+      ).run(code, m2.id, stamp).lastInsertRowid);
+      batches.push(batchId);
+      db.prepare(
+        `INSERT INTO batch_items (batch_id, package_id, package_version_id, version, archive_url, transfer_request_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(batchId, id, versionId, version, archive, requestId);
+      return batchId;
+    };
+    const originalBatch = addHistoricalBatch("QA-RISK-HISTORY-A");
+    const href = `/submissions?project=${n1.id}&q=${version}`;
+    const row = page.getByRole("row").filter({ hasText: version });
+    const dialog = page.getByRole("dialog", { name: "登记风险试制原因", exact: true });
+    const open = async () => {
+      await row.getByRole("button", { name: "登记风险原因", exact: true }).click();
+      await dialog.getByRole("textbox", { name: "风险试制原因", exact: true }).fill("演示环境验证历史关联更新后的登记。");
+    };
+    const submit = dialog.getByRole("button", { name: "纳入待发布试制", exact: true });
+    const admission = () => db.prepare("SELECT batch_id AS batchId FROM trial_risk_admissions WHERE request_id = ?").get(requestId);
+    const response = await page.goto(href);
+    const document = await response!.text();
+    expect(document).not.toMatch(/\\?"riskEntry\\?"\s*:/);
+    expect(document).not.toMatch(new RegExp(`\\\\?"batchId\\\\?"\\s*:\\s*${originalBatch}\\b`));
+    await open();
+    await expect(dialog.locator('input[name="batchId"]')).toHaveCount(0);
+
+    const replacementBatch = addHistoricalBatch("QA-RISK-HISTORY-B");
+    await submit.click();
+    await expect(dialog.getByRole("alert")).toContainText("转测状态已变化，请刷新页面并按当前阶段登记风险原因。");
+    expect(admission()).toBeUndefined();
+
+    await page.goto(href);
+    await open();
+    await submit.click();
+    await expectFlash(page, "风险试制原因已登记，版本已纳入待发布试制");
+    expect(admission()).toMatchObject({ batchId: replacementBatch });
+  } finally {
+    try {
+      for (const batchId of batches) db.prepare("DELETE FROM integration_batches WHERE id = ?").run(batchId);
+      if (packageId !== undefined) db.prepare("DELETE FROM packages WHERE id = ?").run(packageId);
+    } finally {
+      db.close();
+    }
+  }
+});
+
 test("仅负责归档项目的软件经理保留配置和历史读取权限", async ({ page }) => {
   await login(page, "MEMBER001");
   const db = openE2eDatabase();

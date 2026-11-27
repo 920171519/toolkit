@@ -4,11 +4,9 @@ import { DRAFT_CREATED_MESSAGE, draftRequestListState } from "@/lib/batch-prepar
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
-import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
+import { actionUser, failure, idList, numberValue, raw, refreshAll, successRedirect, text } from "@/lib/action-helpers";
 import { DomainError } from "@/lib/domain-error";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
@@ -18,7 +16,6 @@ import { directoryActionHref } from "@/lib/settings-directory";
 import { hasVersionRequest } from "@/lib/workflow-queries";
 import {
   addBatchProgress,
-  admitRiskTrial,
   cancelBindingFlow,
   cancelTransfer,
   completeBatchTest,
@@ -40,12 +37,6 @@ import {
   voidPackageVersion,
   waiveBindingRequirement,
 } from "@/lib/workflow";
-
-async function actionUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  return user;
-}
 
 function workflowSuccessRedirect(
   formData: FormData,
@@ -70,10 +61,6 @@ function workflowSuccessRedirect(
 
 function actionListState(formData: FormData) {
   return getWorkflowListState({ q: text(formData, "q"), page: text(formData, "page"), pageSize: text(formData, "pageSize"), returnTo: text(formData, "returnTo") });
-}
-
-function refreshAll() {
-  revalidatePath("/", "layout");
 }
 
 export async function submitTransferAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -231,27 +218,6 @@ export async function completeBatchAction(_prev: ActionState, formData: FormData
   workflowSuccessRedirect(formData, `/integration/${batchId}`, voidedCount > 0
     ? `测试结论已提交，${voidedCount} 个受影响的风险试制版本已作废。`
     : "测试结论已提交，验证报告已上传。", actionListState(formData));
-}
-
-export async function admitRiskTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await actionUser();
-  const requestId = numberValue(formData, "requestId");
-  if (!requestId) return { error: "项目版本参数无效。" };
-  let projectId: number;
-  try {
-    const result = admitRiskTrial(user, {
-      requestId,
-      stage: text(formData, "stage"),
-      batchId: numberValue(formData, "batchId") ?? undefined,
-      reason: text(formData, "reason"),
-    });
-    projectId = result.projectId;
-  } catch (error) {
-    return failure(error);
-  }
-  refreshAll();
-  const returnTo = safeOverviewReturnPath(text(formData, "returnTo"));
-  successRedirect(workflowHref("/trial", projectId, { returnTo }), "风险试制原因已登记，版本已纳入待发布试制。");
 }
 
 export async function releaseTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

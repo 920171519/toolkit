@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
-import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
@@ -17,7 +16,6 @@ import { cancelTransferAction } from "@/lib/actions/workflow";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesDateFilter, matchesTextFilter, type ColumnFilterField } from "@/lib/column-filters";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
-import type { RiskTrialEntry } from "@/lib/trial-eligibility";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
 import type { PendingTransferGroup, PendingTransferItem } from "@/lib/workflow-queries";
@@ -45,7 +43,7 @@ type TransferRow = Omit<PendingTransferItem, "draftBatchId" | "draftBatchProject
   draftReserved: boolean;
   draftBatch: { id: number; projectId: number; code: string | null } | null;
   canCancel: boolean;
-  riskEntry?: RiskTrialEntry;
+  riskAction: ReactNode;
 };
 
 type RequestGroup = Omit<PendingTransferGroup, "items"> & { items: TransferRow[] };
@@ -186,7 +184,7 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
                     detailTrigger.current = event.currentTarget;
                     setActivePackage(item.packageId);
                   }}>详情</Link>
-                {item.riskEntry?.stage === "PENDING" && <RiskTrialEntryAction entry={item.riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={projectName} returnTo={returnState.returnTo} />}
+                {item.riskAction}
                 {item.canCancel && <FormDialog label="撤回申请" title={`撤回 ${identity.code} ${item.version}`} description="将永久删除此版本记录及其在所有使用项目中的转测申请。" triggerClassName="button button-ghost button-sm" cancelLabel="取消">
                   <WorkflowPackageName {...identity} />
                   <ActionForm action={cancelTransferAction} hidden={{ versionId: item.versionId, scopeProjectId, ...returnState }}

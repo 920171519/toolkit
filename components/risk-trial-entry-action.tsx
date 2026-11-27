@@ -1,8 +1,11 @@
+import "server-only";
+
 import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { Badge } from "@/components/ui";
-import { admitRiskTrialAction } from "@/lib/actions/workflow";
+import type { ActionState } from "@/lib/action-state";
+import { registerRiskTrial } from "@/lib/actions/risk-trial";
 import { packageIdentity } from "@/lib/package-identity";
 import type { RiskTrialEntry, RiskTrialEntryStage } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
@@ -16,7 +19,7 @@ const stageLabel: Record<RiskTrialEntryStage, string> = {
   PASSED_NO_EVIDENCE: "缺少正式验收记录",
 };
 
-export function RiskTrialEntryAction({ entry, packageName, packageCode, version, projectName, returnTo }: {
+export function renderRiskTrialEntryAction({ entry, packageName, packageCode, version, projectName, returnTo }: {
   entry: RiskTrialEntry;
   packageName: string;
   packageCode: string;
@@ -31,6 +34,13 @@ export function RiskTrialEntryAction({ entry, packageName, packageCode, version,
     </Link>
   </>;
   const identity = packageIdentity({ name: packageName, code: packageCode });
+  // Keep the stale check inputs in the encrypted action closure and out of form fields.
+  const expected = { requestId: entry.requestId, stage: entry.stage, batchId: entry.batchId };
+
+  async function admitRiskTrialAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+    "use server";
+    return registerRiskTrial(expected, formData);
+  }
   return (
     <FormDialog
       label="登记风险原因"
@@ -42,7 +52,7 @@ export function RiskTrialEntryAction({ entry, packageName, packageCode, version,
       <WorkflowPackageName {...identity} />
       <ActionForm
         action={admitRiskTrialAction}
-        hidden={{ requestId: entry.requestId, stage: entry.stage, batchId: entry.batchId, returnTo }}
+        hidden={{ returnTo }}
         submitText="纳入待发布试制"
       >
         <label className="field">

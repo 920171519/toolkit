@@ -1,8 +1,20 @@
 import "server-only";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "./auth";
 import { DomainError } from "./domain-error";
 import type { ActionState } from "./action-state";
+
+export async function actionUser() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return user;
+}
+
+export function refreshAll() {
+  revalidatePath("/", "layout");
+}
 
 export function text(formData: FormData, key: string): string {
   const value = formData.get(key);

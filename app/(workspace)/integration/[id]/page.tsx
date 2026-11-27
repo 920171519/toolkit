@@ -11,7 +11,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
-import { RiskTrialEntryAction } from "@/components/risk-trial-entry-action";
+import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/workflow-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";
 import { getTrialReleaseGuidance } from "@/lib/release-guidance";
@@ -198,7 +198,7 @@ export default async function BatchDetailPage({
                           {item.parallelRiskTrial && <div><Badge tone="amber">并行风险试制</Badge></div>}
                           {item.issueAffected && <div><Badge tone="rose">涉及测试问题</Badge></div>}
                         </td>
-                        {showRisk && <td className="cell-actions">{riskEntry && <RiskTrialEntryAction entry={riskEntry} packageName={item.packageName} packageCode={item.packageCode} version={item.version} projectName={batch.projectName ?? "未指定项目"} returnTo={listState.returnTo} />}</td>}
+                        {showRisk && <td className="cell-actions">{riskEntry && renderRiskTrialEntryAction({ entry: riskEntry, packageName: item.packageName, packageCode: item.packageCode, version: item.version, projectName: batch.projectName ?? "未指定项目", returnTo: listState.returnTo })}</td>}
                         {showContinuation && <td>{nextStep(item, code)}</td>}
                       </tr>;
                     })}
