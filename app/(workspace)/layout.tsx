@@ -54,9 +54,9 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
 
   const configItems: SidebarItem[] = [
     { href: "/settings/areas", label: "责任田", icon: "areas" },
-    ...(canConfigure ? [{ href: "/settings/projects", label: "项目配置", icon: "projectSettings" } as SidebarItem] : []),
-    ...(canManagePackages ? [{ href: "/settings/packages", label: "软件包配置", icon: "packageSettings" } as SidebarItem] : []),
-    ...(isAdmin ? [{ href: "/settings/users", label: "人员与角色", icon: "users" } as SidebarItem] : []),
+    ...(canConfigure ? [{ href: "/settings/projects", label: "项目配置", icon: "projectSettings" } satisfies SidebarItem] : []),
+    ...(canManagePackages ? [{ href: "/settings/packages", label: "软件包配置", icon: "packageSettings" } satisfies SidebarItem] : []),
+    ...(isAdmin ? [{ href: "/settings/users", label: "人员与角色", icon: "users" } satisfies SidebarItem] : []),
   ];
   const groups = [
     { label: "部门协同", items: departmentItems },

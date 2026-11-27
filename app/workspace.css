@@ -32,7 +32,6 @@ html:has(dialog:modal) { overflow: hidden; }
   opacity: 0;
 }
 .sidebar-link > .workspace-link-pending { margin-inline-start: auto; }
-.sidebar-link-count + .workspace-link-pending { margin-inline-start: 0; }
 .workspace-back-icon { display: grid; place-items: center; flex: none; }
 .workspace-back-icon > * { grid-area: 1 / 1; }
 .workspace-back-icon:has([data-navigation-pending]) > svg { animation: workspace-pending-hide 100ms step-end forwards; }
