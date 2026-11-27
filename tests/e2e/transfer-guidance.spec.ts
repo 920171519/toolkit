@@ -59,11 +59,16 @@ test("草稿占用可直达，作废配套可在原草稿修正且过期修改�
     const guidance = page.getByRole("dialog", { name: "B9886 · 发起转测条件" });
     await expect(guidance).toContainText("98281TQA 9.8.6 已作废");
     await guidance.getByRole("link", { name: "调整配套" }).click();
+    await expect(page).toHaveURL((url) => url.pathname === "/submissions/batch/new"
+      && url.searchParams.get("draft") === String(draftId));
+    const editor = page.getByTestId("batch-builder-form");
+    await expect(editor.locator('input[name="code"]')).toHaveValue("B9886");
+    const revision = await editor.locator('input[name="expectedDraftRevision"]').inputValue();
     const stale = await page.context().newPage();
     try {
       await stale.goto(page.url());
-      const editor = page.getByTestId("batch-builder-form");
-      await expect(editor.locator('input[name="code"]')).toHaveValue("B9886");
+      const staleEditor = stale.getByTestId("batch-builder-form");
+      await expect(staleEditor.locator('input[name="expectedDraftRevision"]')).toHaveValue(revision);
       await expect(editor.getByRole("checkbox", { name: "本轮转测 98280TQA" })).toBeChecked();
       await expect(editor.getByRole("checkbox", { name: "本轮转测 98281TQA" })).not.toBeChecked();
       await editor.getByRole("button", { name: "保存草稿并核对" }).click();
@@ -71,8 +76,8 @@ test("草稿占用可直达，作废配套可在原草稿修正且过期修改�
       await expect(page).toHaveURL((url) => url.pathname === `/integration/${draftId}` && url.searchParams.get("project") === "1");
       await expect(page.getByRole("link", { name: "返回待安排申请" })).toHaveAttribute("href", /q=98280TQA.*pageSize=10/);
       await expect(page.getByRole("row").filter({ hasText: "草稿引导测试包 2" })).toHaveCount(0);
-      await stale.getByRole("button", { name: "保存草稿并核对" }).click();
-      await expect(stale.getByTestId("batch-builder-form").getByRole("alert")).toContainText("此草稿已被其他操作更新");
+      await staleEditor.getByRole("button", { name: "保存草稿并核对" }).click();
+      await expect(staleEditor.getByRole("alert")).toContainText("此草稿已被其他操作更新");
     } finally {
       await stale.close();
     }
