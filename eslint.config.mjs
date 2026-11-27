@@ -24,8 +24,9 @@ const eslintConfig = defineConfig([
       "app/(workspace)/**/*.{ts,tsx}",
       "app/(auth)/actions.ts",
       "app/**/{page,layout}.{ts,tsx}",
-      "app/api/reports/**/*.{ts,tsx}",
+      "app/api/**/*.{ts,tsx}",
       "components/**/*.{ts,tsx}",
+      "lib/actions/**/*.{ts,tsx}",
     ],
     rules: {
       "no-restricted-imports": ["error", {

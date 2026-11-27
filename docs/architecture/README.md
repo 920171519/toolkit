@@ -13,6 +13,7 @@
 | 工作流读取 | `lib/workflow-queries.ts`、`lib/batch-comparison.ts`、`lib/release-guidance.ts` | 为工作台、批次、试制与绑定、转正和追溯生成各自视图。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目目录、联系人和配置由项目查询模块投影。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务负责注册和会话写入。业务授权按项目、责任田、软件包、节点和单据检查。版本对象读取、项目工作区和写入办理各有权限。 |
+| 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
 | 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/seed.ts`、`lib/report-storage.ts` | `db` 统一连接、事务和启动迁移。演示数据经显式环境变量关闭。报告服务拥有路径校验，报告元数据存入 SQLite。 |
 | 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境和工作目录。部署脚本接入现有进程管理器。 |
 | 错误、日志与测试 | `lib/domain-error.ts`、`lib/action-helpers.ts`、`lib/audit-log.ts`、`tests/e2e` | 业务校验使用同一错误类型。`audit-log` 在调用方现有事务和连接上写入操作历史。Playwright 从真实页面、权限及数据库状态验证契约。测试服务与夹具共享同一运行目录中的数据库和报告。 |
@@ -28,6 +29,7 @@
 | 批次与完整配套 | `integration_batches`、`batch_items` | `workflow` 保存状态和版本快照。批次对比读取两份快照。 |
 | 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `workflow` 写入。`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
+| 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |
 | 目录和流程筛选 | URL 参数、浏览器当前页面状态 | 各列表保留既有 URL 参数。`lib/list-pagination.ts` 统一计算筛选后分页范围，数组和 SQLite 分页都使用该结果。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
 
 ## 依赖约束
@@ -38,6 +40,6 @@
 
 软件包抽屉的授权投影由 `getPackageDrawerData` 提供。ESLint 会拦截页面和客户端模块直接导入通用查询中的底层详情读取函数。
 
-页面、布局、组件和报告读取接口通过服务端查询模块获取数据。ESLint 拦截这些入口直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
+页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。ESLint 拦截这些入口直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。

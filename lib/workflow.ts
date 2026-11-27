@@ -385,6 +385,7 @@ export function sendBatch(actor: SessionUser, batchId: number) {
       refreshTrialReadiness(db, versionId, timestamp);
     }
     audit(actor.id, "SEND_BATCH", "BATCH", batchId, `发起 ${batch.code}（${batch.project_name}）整套配套转测，${changes.length} 个变更包`);
+    return batch.code;
   });
 }
 

@@ -11,6 +11,7 @@ import {
 import type { BatchConclusion, BatchStatus } from "./constants";
 import type { readIntegrationHistory } from "./integration-history";
 import { getPageWindow } from "./list-pagination";
+import { getReadNotificationKeys } from "./notification-reads";
 import { packageCodeSql, packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
@@ -1416,12 +1417,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
     }
   }
 
-  const readKeys = new Set(
-    all<{ notificationKey: string }>(
-      "SELECT notification_key AS notificationKey FROM notification_reads WHERE user_id = ?",
-      user.id,
-    ).map((row) => row.notificationKey),
-  );
+  const readKeys = getReadNotificationKeys(user.id);
   const unreadAlerts = alerts.filter((alert) => !readKeys.has(alert.key)
     && (!alert.key.startsWith("rejected-flow-") || !readKeys.has(alert.key.replace("rejected-flow-", "flow-notice-"))));
   const unreadNotifications = notifications.filter((notification) => !readKeys.has(notification.key));
@@ -1443,6 +1439,13 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
       myActiveVersions: activeVersions,
     },
   };
+}
+
+export function hasVersionRequest(requestId: number, versionId: number): boolean {
+  return Boolean(one(
+    "SELECT id FROM version_transfer_requests WHERE id = ? AND package_version_id = ?",
+    requestId, versionId,
+  ));
 }
 
 export function getVersionRequestIds(versionId: number): number[] {

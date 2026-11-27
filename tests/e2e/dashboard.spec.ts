@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 test("管理员只看到一条需要提交结论的在测批次任务", async ({ page }) => {
   await login(page, "ADMIN001");
@@ -33,4 +34,48 @@ test("已有足量待审批条码时工作台指向电子流审批记录", async
   await task.click();
   await expect(page).toHaveURL(/#binding-flow-\d+$/);
   await expect(page.locator(new URL(page.url()).hash)).toContainText("BF-2026-0005");
+});
+
+test("重复打开通知保留首次已读时间，每个账号单独记录", async ({ page }) => {
+  const key = "e2e-notification-read-marker";
+  const next = "/trial/32?project=1#binding-flow-5";
+  const href = `/api/notifications/read?${new URLSearchParams({ key, next })}`;
+  await page.goto("/");
+  const db = openE2eDatabase();
+  const readRecords = () => db.prepare(
+    `SELECT u.employee_id AS employeeId, n.read_at AS readAt FROM notification_reads n
+     JOIN users u ON u.id = n.user_id WHERE n.notification_key = ? ORDER BY u.employee_id`,
+  ).all(key);
+  const openNotification = () => page.request.get(href, { maxRedirects: 0 });
+
+  try {
+    const anonymous = await openNotification();
+    expect(anonymous.status()).toBe(303);
+    expect(anonymous.headers().location).toBe("/login");
+    expect(readRecords()).toHaveLength(0);
+
+    await login(page, "VALID001");
+    const opened = await openNotification();
+    expect(opened.status()).toBe(303);
+    expect(opened.headers().location).toBe(next);
+    expect(readRecords()).toEqual([{ employeeId: "VALID001", readAt: expect.any(String) }]);
+
+    const firstRead = "2000-01-01T00:00:00.000Z";
+    db.prepare("UPDATE notification_reads SET read_at = ? WHERE notification_key = ?").run(firstRead, key);
+    expect((await openNotification()).status()).toBe(303);
+    expect(readRecords()).toEqual([{ employeeId: "VALID001", readAt: firstRead }]);
+
+    await login(page, "MGR001");
+    expect((await openNotification()).status()).toBe(303);
+    expect(readRecords()).toEqual([
+      { employeeId: "MGR001", readAt: expect.any(String) },
+      { employeeId: "VALID001", readAt: firstRead },
+    ]);
+  } finally {
+    try {
+      db.prepare("DELETE FROM notification_reads WHERE notification_key = ?").run(key);
+    } finally {
+      db.close();
+    }
+  }
 });

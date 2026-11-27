@@ -9,13 +9,13 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/action-state";
 import { failure, idList, numberValue, raw, successRedirect, text } from "@/lib/action-helpers";
-import { one } from "@/lib/db";
 import { DomainError } from "@/lib/domain-error";
 import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { readTraceListState, traceListParams } from "@/lib/version-trace-list";
 import { directoryActionHref } from "@/lib/settings-directory";
+import { hasVersionRequest } from "@/lib/workflow-queries";
 import {
   addBatchProgress,
   admitRiskTrial,
@@ -178,14 +178,14 @@ export async function sendBatchAction(_prev: ActionState, formData: FormData): P
   const user = await actionUser();
   const batchId = numberValue(formData, "batchId");
   if (!batchId) return { error: "批次参数无效。" };
+  let batchCode: string;
   try {
-    sendBatch(user, batchId);
+    batchCode = sendBatch(user, batchId);
   } catch (error) {
     return failure(error);
   }
   refreshAll();
-  const batch = one<{ code: string }>("SELECT code FROM integration_batches WHERE id = ?", batchId);
-  workflowSuccessRedirect(formData, `/integration/${batchId}`, `${batch?.code ?? "批次"} 已发起集成测试，等待本项目集成测试负责人提交结论。`, actionListState(formData));
+  workflowSuccessRedirect(formData, `/integration/${batchId}`, `${batchCode} 已发起集成测试，等待本项目集成测试负责人提交结论。`, actionListState(formData));
 }
 
 export async function terminateBatchAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -417,7 +417,7 @@ export async function voidPackageVersionAction(_prev: ActionState, formData: For
   if (from === "trial-queue") {
     workflowSuccessRedirect(formData, "/trial", "该软件包版本及各项目转测申请已作废。", actionListState(formData));
   }
-  if (from === "trial" && requestId && one("SELECT id FROM version_transfer_requests WHERE id = ? AND package_version_id = ?", requestId, versionId)) {
+  if (from === "trial" && requestId && hasVersionRequest(requestId, versionId)) {
     workflowSuccessRedirect(formData, `/trial/${requestId}`, "共享试制版本已作废。", actionListState(formData));
   }
   const state = readTraceListState(Object.fromEntries(formData));
