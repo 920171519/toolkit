@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronDown, Link2, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { BINDING_BARCODE_FAILURE_REASON_LIMIT, bindingBarcodeProgress, isActiveBindingFlow } from "@/lib/binding-barcode-results";
-import { canApproveBindingFlow, canSubmitBindingFlow } from "@/lib/permissions";
+import { bindingFlowApprovalBlocker, canSubmitBindingFlow } from "@/lib/permissions";
 import { bindingReleaseAvailability, bindingRequirementAvailability } from "@/lib/binding-availability";
 import { canAccessProjectPage, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, getReadableLinkedBatchEvidence } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
@@ -190,7 +190,7 @@ export default async function TrialDetailPage({
                     actionLabel: "查看绑定方式",
                   }];
                   const canReview = (flow: typeof requirement.flows[number]) => open && flow.status === "PENDING"
-                    && canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id;
+                    && bindingFlowApprovalBlocker(user, flow) === null;
                   const canWithdraw = (flow: typeof requirement.flows[number]) => (request.status === "VOID" || canEditFlows)
                     && isActiveBindingFlow(flow.status) && (flow.submittedById === user.id || canManageProjectWorkflowForProject(user, request.projectId));
                   const pendingFlows = requirement.flows.filter((flow) => flow.status === "PENDING");

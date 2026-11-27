@@ -12,12 +12,12 @@ export function canSubmitBindingFlow(
   return isAdmin(user) || user.id === bindingOwnerId;
 }
 
-export function canApproveBindingFlow(
+export function bindingFlowApprovalBlocker(
   user: SessionUser | null,
-  approverId: number | null,
-): boolean {
-  if (!user) return false;
-  return isAdmin(user) || user.id === approverId;
+  flow: { approverId: number | null; submittedById: number | null },
+): "FORBIDDEN" | "SELF_REVIEW" | null {
+  if (!user || (!isAdmin(user) && user.id !== flow.approverId)) return "FORBIDDEN";
+  return user.id === flow.submittedById ? "SELF_REVIEW" : null;
 }
 
 export function canManageAreas(user: SessionUser | null): boolean {

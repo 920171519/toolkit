@@ -10,7 +10,7 @@ import { bindingBarcodeProgress } from "./binding-barcode-results";
 import { isBindingReleaseOpen } from "./binding-availability";
 import { db, one } from "./db";
 import { packageIdentity } from "./package-identity";
-import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
+import { bindingFlowApprovalBlocker, canSubmitBindingFlow } from "./permissions";
 import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignments } from "./trial-eligibility";
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import type { SessionUser } from "./types";
@@ -199,7 +199,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
         title: `${nodeTitle} · ${flow.flowNo} 待审批`,
         detail: `通过条码 ${node.passedBarcodeCount}/${node.requiredCount}。指定审批人：${flow.approverName ?? "未配置"}。`,
         href: `${trialHref}#binding-flow-${flow.id}`,
-        actionLabel: canApproveBindingFlow(user, flow.approverId) && flow.submittedById !== user.id ? "去审批" : "查看待审批电子流",
+        actionLabel: bindingFlowApprovalBlocker(user, flow) === null ? "去审批" : "查看待审批电子流",
       });
       const settled = version.bindingMode === "SKIPPED" ? node.status === "CANCELLED"
         : (node.status === "CANCELLED" && node.waivedAt !== null) || (node.status === "PASSED" && node.confirmedAt !== null);

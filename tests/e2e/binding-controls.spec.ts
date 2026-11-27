@@ -137,6 +137,70 @@ test("绑定权限按节点和单据指派，审批人只查看指派给自己�
   }
 });
 
+test("工作台审批待办与绑定详情一致，提交人仍可查看自审提示", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const database = openE2eDatabase();
+  database.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const { versionId, requestIds: [requestId] } = setupBindingFixture(database, "2.0.0-binding-approval-actor-e2e", ["N1"]);
+  const ownFlow = "BF-E2E-APPROVAL-OWN";
+  const legacyFlow = "BF-E2E-APPROVAL-LEGACY";
+  try {
+    const insertFlow = database.prepare(
+      `INSERT INTO binding_flows
+         (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode,
+          submitted_by, approver_id, status, submitted_at)
+       SELECT ?, br.id, br.package_version_id, br.project_id, br.node_id, ?,
+              submitter.id, approver.id, 'PENDING', '2026-11-15T09:30:00+08:00'
+       FROM binding_requirements br
+       LEFT JOIN users submitter ON submitter.employee_id = ?
+       JOIN users approver ON approver.employee_id = ?
+       WHERE br.request_id = ?`,
+    );
+    insertFlow.run(ownFlow, "TEST-APPROVAL-OWN", "ADMIN001", "OWNER001", requestId);
+    insertFlow.run(legacyFlow, "TEST-APPROVAL-LEGACY", null, "MGR001", requestId);
+
+    const trialHref = "/trial/" + requestId + "?project=1";
+    const task = (flowNo: string) => page.getByRole("link", { name: new RegExp("审批绑定电子流：" + flowNo) });
+    const ownRow = flowRow(page, ownFlow);
+    const legacyRow = flowRow(page, legacyFlow);
+    const approve = "审批电子流";
+    const blocked = "查看审批条件";
+    const formal = page.getByRole("dialog", { name: "转正发布条件", exact: true });
+
+    await page.goto("/dashboard");
+    await expect(task(ownFlow)).toHaveCount(0);
+    await expect(task(legacyFlow)).toBeVisible();
+    await page.goto(trialHref);
+    await expect(ownRow.getByRole("button", { name: approve, exact: true })).toHaveCount(0);
+    await expect(legacyRow.getByRole("button", { name: approve, exact: true })).toBeVisible();
+    await ownRow.getByRole("button", { name: blocked, exact: true }).click();
+    const hint = page.getByRole("dialog", { name: "审批 " + ownFlow + " 的条件", exact: true });
+    await expect(hint).toContainText("提交人不能审批自己的电子流");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "前往转正发布", exact: true }).click();
+    await expect(formal.getByRole("listitem").filter({ hasText: ownFlow })
+      .getByRole("link", { name: "查看待审批电子流" })).toBeVisible();
+    await expect(formal.getByRole("listitem").filter({ hasText: legacyFlow })
+      .getByRole("link", { name: "去审批" })).toBeVisible();
+
+    await login(page, "MGR001");
+    await expect(task(ownFlow)).toHaveCount(0);
+    await expect(task(legacyFlow)).toBeVisible();
+    await page.goto(trialHref);
+    await expect(ownRow.getByRole("button", { name: blocked, exact: true })).toBeVisible();
+
+    await login(page, "OWNER001");
+    await expect(task(ownFlow)).toBeVisible();
+    await expect(task(legacyFlow)).toHaveCount(0);
+    await task(ownFlow).click();
+    await expect(legacyRow).toHaveCount(0);
+    await approveFlow(page, ownFlow, "王磊");
+  } finally {
+    database.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    database.close();
+  }
+});
+
 test("只有软件包责任人、本项目软件经理和管理员可确认节点，通过记录可追溯", async ({ page }) => {
   await login(page, "VALID001");
   const db = openE2eDatabase();

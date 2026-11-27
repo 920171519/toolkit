@@ -23,7 +23,7 @@
 | 管理批次及登记风险试制 | 本项目软件经理或管理员。办理时重新校验项目和批次状态。 | [`canManageProjectWorkflowForProject`](../../lib/access.ts)、[`assertProjectManager`](../../lib/workflow.ts) |
 | 提交集成测试进展和结论 | 管理员、集成测试责任田主管或本项目的集成测试责任田负责人。 | [`canSubmitIntegrationConclusionForProject`](../../lib/access.ts)、[工作流服务](../../lib/workflow.ts) |
 | 共享试制、整版绑定决策及共享转正 | 管理员或有适用在行项目分工的软件经理。资格和同步范围按阶段校验。风险登记的项目范围与共享发布的范围分别校验。 | [`releaseTrial`、`pushBindingTasks`、`skipBindingAndEnterFormal`、`releaseFormal`](../../lib/workflow.ts) |
-| 提交、审批及撤销绑定电子流 | 节点绑定责任人或管理员可提交，从发布时的审批人快照选择指定人。旧要求缺少快照时沿用已保存的主审批人。该电子流指派的审批人或管理员可审批，均不得自审。提交人、本项目软件经理或管理员可在允许的状态下登记撤销。 | [`canSubmitBindingFlow`、`canApproveBindingFlow`](../../lib/permissions.ts)、[工作流服务](../../lib/workflow.ts) |
+| 提交、审批及撤销绑定电子流 | 节点绑定责任人或管理员可提交，从发布时的审批人快照选择指定人。旧要求缺少快照时沿用已保存的主审批人。该电子流指派的审批人或管理员可审批，均不得自审。提交人、本项目软件经理或管理员可在允许的状态下登记撤销。 | [`canSubmitBindingFlow`、`bindingFlowApprovalBlocker`](../../lib/permissions.ts)、[工作流服务](../../lib/workflow.ts) |
 | 判定条码、确认节点 | 软件包责任人、该节点所属项目的软件经理或管理员。 | [`canConfirmBindingNodeForProject`](../../lib/access.ts)、[工作流服务](../../lib/workflow.ts) |
 | 登记单节点免绑 | 该节点绑定责任人、本项目软件经理或管理员。 | [工作流服务](../../lib/workflow.ts) |
 | 修改软件包责任信息 | 管理员、该包责任田主管或该责任田的项目负责人。抽屉编辑资格、软件包审计可见性和保存使用同一权限。 | [`canEditPackageResponsibility`](../../lib/access.ts)、[软件包抽屉](../../lib/package-drawer-data.ts)、[`updatePackageResponsibility`](../../lib/settings.ts) |

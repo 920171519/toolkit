@@ -7,7 +7,7 @@ import {
 } from "./binding-availability";
 import { all, db, one, run, transaction } from "./db";
 import { packageIdentity } from "./package-identity";
-import { canApproveBindingFlow, canSubmitBindingFlow } from "./permissions";
+import { bindingFlowApprovalBlocker, canSubmitBindingFlow } from "./permissions";
 import { canConfirmBindingNodeForProject, canManageProjectWorkflowForProject, canSubmitIntegrationConclusionForProject, canSubmitTransferForArea } from "./access";
 import { assert, DomainError } from "./domain-error";
 import type { BatchConclusion } from "./constants";
@@ -1346,8 +1346,8 @@ export function decideBindingFlow(
   return transaction(() => {
     const flow = one<BindingReleaseFacts & {
       id: number;
-      submitted_by: number | null;
-      approver_id: number | null;
+      submittedById: number | null;
+      approverId: number | null;
       status: string;
       requirement_id: number;
       request_id: number;
@@ -1361,7 +1361,7 @@ export function decideBindingFlow(
       project_name: string;
       node_name: string;
     }>(
-      `SELECT f.id, f.submitted_by, f.approver_id, f.status, f.requirement_id, br.request_id,
+      `SELECT f.id, f.submitted_by AS submittedById, f.approver_id AS approverId, f.status, f.requirement_id, br.request_id,
               r.status AS requestStatus, br.status AS requirement_status, br.pushed_at, br.waived_at,
               f.package_version_id AS version_id, pv.status AS versionStatus, pr.status AS projectStatus, p.id AS package_id,
               p.name AS package_name, pv.version, pr.name AS project_name, n.name AS node_name
@@ -1376,8 +1376,9 @@ export function decideBindingFlow(
       flowId,
     );
     assert(flow, "绑定电子流不存在。", "NOT_FOUND");
-    assert(canApproveBindingFlow(actor, flow.approver_id), "只有该节点的绑定电子流审批人或管理员可以审批。", "FORBIDDEN");
-    assert(flow.submitted_by !== actor.id, "不能审批自己提交的绑定电子流。");
+    const approvalBlocker = bindingFlowApprovalBlocker(actor, flow);
+    assert(approvalBlocker !== "FORBIDDEN", "只有该节点的绑定电子流审批人或管理员可以审批。", "FORBIDDEN");
+    assert(approvalBlocker !== "SELF_REVIEW", "不能审批自己提交的绑定电子流。");
     assert(flow.status === "PENDING", "该绑定电子流已处理。");
     const releaseAvailability = bindingReleaseAvailability(flow);
     assert(releaseAvailability !== "ARCHIVED", "项目已归档，不能审批绑定电子流。");
