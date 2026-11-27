@@ -4,7 +4,7 @@ import { packageIdentity } from "./package-identity";
 
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
 
-// Both expressions read the current transfer request under alias r.
+// These SQL fragments read the current transfer request under alias r.
 export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
   SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
 )`;
@@ -13,6 +13,14 @@ export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
 // In other states the request status, including terminal states, takes precedence.
 export const EFFECTIVE_INTEGRATION_STATUS_SQL = `CASE WHEN r.status IN ('PENDING','TRIAL','PENDING_FORMAL')
   THEN COALESCE(r.integration_status, r.status) ELSE r.status END`;
+export const PENDING_BATCH_REQUEST_SQL = `(${EFFECTIVE_INTEGRATION_STATUS_SQL}) = 'PENDING'`;
+
+const openBatchReservation = `SELECT 1 FROM batch_items bi
+  JOIN integration_batches b ON b.id = bi.batch_id
+  WHERE bi.transfer_request_id = r.id AND b.status IN ('DRAFT','IN_TEST')`;
+
+export const OPEN_BATCH_RESERVATION_SQL = `EXISTS (${openBatchReservation})`;
+export const OTHER_OPEN_BATCH_RESERVATION_SQL = `EXISTS (${openBatchReservation} AND b.id != ?)`;
 
 type PreviousBatchVersion = { versionId: number; version: string; canCarry: number };
 

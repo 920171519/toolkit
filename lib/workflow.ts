@@ -23,7 +23,16 @@ import {
 import type { SessionUser } from "./types";
 import { discardReportFile, reportArchivePath, resolveReportPath, writeReportFile } from "./report-storage";
 import { releaseFlowUrl } from "./release-flow";
-import { getActiveTransferProjects, getPreviousBatchVersions, insertTransferRequest, refreshVersionAggregate, TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
+import {
+  getActiveTransferProjects,
+  getPreviousBatchVersions,
+  insertTransferRequest,
+  OPEN_BATCH_RESERVATION_SQL,
+  OTHER_OPEN_BATCH_RESERVATION_SQL,
+  PENDING_BATCH_REQUEST_SQL,
+  refreshVersionAggregate,
+  TRIAL_PENDING_VERSION_STATUSES_SQL,
+} from "./transfer-requests";
 import { getBatchSendCheck } from "./batch-send-check";
 import { readTestReport } from "./test-report-validation";
 import {
@@ -231,20 +240,15 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
           `${packageCode} 无法沿用所选的上次转测版本，请刷新后重试。`,
         );
       }
-      const pendingRequest = selection.carryPrevious ? null : one<{ id: number }>(
-        `SELECT id FROM version_transfer_requests WHERE package_version_id = ? AND project_id = ?
-         AND status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(integration_status, status) = 'PENDING'`,
+      const pendingRequest = selection.carryPrevious ? null : one<{ id: number; reserved: number }>(
+        `SELECT r.id, ${OTHER_OPEN_BATCH_RESERVATION_SQL} AS reserved
+         FROM version_transfer_requests r
+         WHERE r.package_version_id = ? AND r.project_id = ? AND ${PENDING_BATCH_REQUEST_SQL}`,
+        draftId,
         selected.id,
         input.projectId,
       );
-      if (pendingRequest) {
-        const conflict = one<{ id: number }>(
-          `SELECT bi.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-           WHERE bi.transfer_request_id = ? AND b.status IN ('DRAFT','IN_TEST') AND b.id != ? LIMIT 1`,
-          pendingRequest.id, draftId,
-        );
-        assert(!conflict, `${packageCode} ${selected.version} 已在另一个转测批次中。`);
-      }
+      assert(!pendingRequest?.reserved, `${packageCode} ${selected.version} 已在另一个转测批次中。`);
       const formal = one<{ version: string }>(
         `SELECT pv.version FROM version_transfer_requests r JOIN package_versions pv ON pv.id = r.package_version_id
          WHERE r.project_id = ? AND pv.package_id = ? AND r.status = 'FORMAL'
@@ -299,11 +303,7 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
       if (item.requestId) {
         const available = one<{ id: number }>(
           `SELECT r.id FROM version_transfer_requests r WHERE r.id = ?
-           AND r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
-           AND NOT EXISTS (
-             SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-             WHERE bi.transfer_request_id = r.id AND b.status IN ('DRAFT','IN_TEST')
-           )`,
+           AND ${PENDING_BATCH_REQUEST_SQL} AND NOT ${OPEN_BATCH_RESERVATION_SQL}`,
           item.requestId,
         );
         assert(available, `${item.packageCode} ${item.version} 的转测状态已变化，请刷新后重试。`);

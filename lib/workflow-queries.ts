@@ -21,7 +21,7 @@ import type { TraceListState } from "./version-trace-list";
 import { workflowHref } from "./workflow-links";
 import { getTrialReadyVersions } from "./trial-eligibility";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts } from "./trial-readiness";
-import { EFFECTIVE_INTEGRATION_STATUS_SQL, getPreviousBatchVersions, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
+import { EFFECTIVE_INTEGRATION_STATUS_SQL, getPreviousBatchVersions, LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, PENDING_BATCH_REQUEST_SQL } from "./transfer-requests";
 
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
@@ -91,7 +91,7 @@ export function getPendingTransferGroups(
        SELECT b.id FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
        WHERE bi.transfer_request_id = r.id AND b.status = 'DRAFT' ORDER BY b.id LIMIT 1
      )
-     WHERE pv.status != 'VOID' AND r.status IN ('PENDING','TRIAL','PENDING_FORMAL') AND COALESCE(r.integration_status, r.status) = 'PENDING'
+     WHERE pv.status != 'VOID' AND ${PENDING_BATCH_REQUEST_SQL}
        AND pr.status != 'ARCHIVED'
        AND ((draft.id IS NULL AND EXISTS (
          SELECT 1 FROM package_usages u WHERE u.package_id = pv.package_id AND u.project_id = r.project_id
