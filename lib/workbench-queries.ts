@@ -13,7 +13,7 @@ import { all, db, one } from "./db";
 import { getReadNotificationKeys } from "./notification-reads";
 import { packageIdentity } from "./package-identity";
 import { getPendingTransferPreviews } from "./pending-transfer-queries";
-import { getPendingFormalVersions } from "./release-queue-queries";
+import { getWorkbenchPendingFormalRows } from "./release-queue-queries";
 import { getWorkbenchTrialReadyRows } from "./trial-eligibility";
 import { getPendingBindingFlowCounts } from "./trial-readiness";
 import type { SessionUser } from "./types";
@@ -387,7 +387,7 @@ export function getPersonalDashboard(user: SessionUser): PersonalDashboard {
         category: "manage",
       });
     }
-    const pendingFormal = Array.from(new Map(getPendingFormalVersions(managerScope).map((item) => [item.versionId, item])).values());
+    const pendingFormal = Array.from(new Map(getWorkbenchPendingFormalRows(managerScope).map((item) => [item.versionId, item])).values());
     const pendingFlows = getPendingBindingFlowCounts(db, pendingFormal.map(({ versionId }) => versionId));
     for (const version of pendingFormal) {
       const pending = pendingFlows.get(version.versionId) ?? 0;

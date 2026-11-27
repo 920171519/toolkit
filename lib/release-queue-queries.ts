@@ -160,9 +160,37 @@ export type PendingFormalVersion = {
   isOverdue: number;
 };
 
-export function getPendingFormalVersions(projectIds: number[] | null = null, versionId?: number): PendingFormalVersion[] {
-  if (projectIds?.length === 0) return [];
+const pendingFormalOrder = "ORDER BY r.trial_released_at DESC, r.id DESC";
+
+function pendingFormalScope(projectIds: number[] | null, versionId?: number) {
+  if (projectIds?.length === 0) return null;
   const scope = transferRequestProjectScope(projectIds);
+  return {
+    where: `${activeReleaseStage} AND pv.status = 'PENDING_FORMAL'
+      ${versionId === undefined ? "" : "AND pv.id = ?"} ${scope.predicate}`,
+    params: [...(versionId === undefined ? [] : [versionId]), ...scope.params],
+  };
+}
+
+type WorkbenchPendingFormalVersion = Pick<PendingFormalVersion,
+  "versionId" | "projectId" | "projectName" | "packageName" | "packageCode" | "version">;
+
+export function getWorkbenchPendingFormalRows(projectIds: number[] | null): WorkbenchPendingFormalVersion[] {
+  const scope = pendingFormalScope(projectIds);
+  if (!scope) return [];
+  return all<WorkbenchPendingFormalVersion>(
+    `SELECT pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
+            p.name AS packageName, p.code AS packageCode, pv.version
+     ${versionRequestWithPackageFrom}
+     WHERE ${scope.where}
+     ${pendingFormalOrder}`,
+    ...scope.params,
+  );
+}
+
+export function getPendingFormalVersions(projectIds: number[] | null = null, versionId?: number): PendingFormalVersion[] {
+  const scope = pendingFormalScope(projectIds, versionId);
+  if (!scope) return [];
   return all<PendingFormalVersion>(
     `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
             pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
@@ -179,11 +207,9 @@ export function getPendingFormalVersions(projectIds: number[] | null = null, ver
      ${versionRequestWithPackageFrom}
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
-     WHERE ${activeReleaseStage} AND pv.status = 'PENDING_FORMAL'
-       ${versionId === undefined ? "" : "AND pv.id = ?"}
-       ${scope.predicate}
-     ORDER BY r.trial_released_at DESC, r.id DESC`,
-    ...(versionId === undefined ? [] : [versionId]), ...scope.params,
+     WHERE ${scope.where}
+     ${pendingFormalOrder}`,
+    ...scope.params,
   ).map((version) => ({
     ...version,
     requirementTotal: Number(version.requirementTotal),
