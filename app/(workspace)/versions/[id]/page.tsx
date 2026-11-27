@@ -17,7 +17,7 @@ import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { BindingBarcodeList } from "@/components/binding-barcode-list";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";
-import { getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
+import { createTrialDetailReader, getTraceVersionTabs, getVersionTrace } from "@/lib/workflow-queries";
 import { canVoidPackageVersion } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
@@ -58,7 +58,8 @@ export default async function VersionTracePage({
   const project = requireWorkflowProject(user, search.project);
   const projectId = project?.id;
   const readableIds = getReadableVersionIds(user);
-  const trace = getVersionTrace(user, versionId, projectId, readableIds);
+  const trialDetails = createTrialDetailReader(user);
+  const trace = getVersionTrace(trialDetails, versionId, projectId, readableIds);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
@@ -78,7 +79,7 @@ export default async function VersionTracePage({
   const releaseGuidance = project?.status === "ARCHIVED" || version.status === "FORMAL" || version.status === "VOID"
     ? null
     : isFormalStep
-      ? getFormalReleaseGuidance(user, versionId, releaseContext)
+      ? getFormalReleaseGuidance(trialDetails, versionId, releaseContext)
       : getTrialReleaseGuidance(user, versionId, releaseContext);
   const actionLabel = releaseGuidance?.canManage
     ? isFormalStep ? "前往转正发布" : "发布试制"

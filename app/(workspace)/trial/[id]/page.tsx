@@ -13,7 +13,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { trialQueueParams } from "@/lib/trial-queue";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { parseFlash } from "@/lib/queries";
-import { getPendingBindingFlowCount, getReadableTrialDetail } from "@/lib/workflow-queries";
+import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/workflow-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -59,7 +59,8 @@ export default async function TrialDetailPage({
   const { id } = await params;
   const requestId = Number(id);
   if (!Number.isInteger(requestId)) notFound();
-  const data = getReadableTrialDetail(user, requestId);
+  const trialDetails = createTrialDetailReader(user);
+  const data = trialDetails.getReadableTrialDetail(requestId);
   if (!data) notFound();
   const search = await searchParams;
   const notice = parseFlash(search.flash, search.tone === "error" ? "error" : "success");
@@ -82,7 +83,7 @@ export default async function TrialDetailPage({
   const pendingDecision = canEditFlows && request.status === "TRIAL" && request.bindingMode === "PENDING" && requirements.length > 0;
   const riskRelease = request.releaseMode === "RISK" || !request.batchId;
   const identity = packageIdentity({ name: request.packageName, code: request.packageCode });
-  const formalGuidance = canEditFlows ? getFormalReleaseGuidance(user, request.versionId, {
+  const formalGuidance = canEditFlows ? getFormalReleaseGuidance(trialDetails, request.versionId, {
     projectId: request.projectId, returnTo: listState.returnTo, bindingListState: listState,
   }) : null;
   const pendingReviews = canEditFlows && request.status === "PENDING_FORMAL"

@@ -22,7 +22,7 @@ import { releaseFlowUrl } from "@/lib/release-flow";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { getPendingBindingFlowCount, getPendingFormalVersions, getTrialDetail, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/workflow-queries";
+import { createTrialDetailReader, getPendingBindingFlowCount, getPendingFormalVersions, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/workflow-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,8 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const project = requireWorkflowProject(user, search.project);
   const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);
   const listState = getWorkflowListState(search);
-  const guidance = getFormalReleaseGuidance(user, versionId, { projectId: project?.id, returnTo: listState.returnTo });
+  const trialDetails = createTrialDetailReader(user);
+  const guidance = getFormalReleaseGuidance(trialDetails, versionId, { projectId: project?.id, returnTo: listState.returnTo });
   const returnHref = workflowHref("/formal", project?.id, listState);
   const traceHref = workflowHref(`/versions/${versionId}`, project?.id, { ...listState, from: "formal" });
   const records = getPendingFormalVersions(scope, versionId);
@@ -68,8 +69,8 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const pendingBindingFlows = guidance?.pendingFlowCount ?? getPendingBindingFlowCount(versionId);
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
   const evidence = getVersionRequestIds(version.versionId)
-    .map((requestId) => getTrialDetail(requestId))
-    .filter((detail): detail is NonNullable<ReturnType<typeof getTrialDetail>> => detail !== null);
+    .map(trialDetails.getTrialDetail)
+    .filter((detail) => detail !== null);
   const projects = evidence.map(({ request }) => request.projectName);
   const batchScope = getBatchEvidenceReadScope(user);
   const trialReviewMinutes = evidence[0]?.request.trialReviewMinutes;

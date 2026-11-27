@@ -1,5 +1,4 @@
 import {
-  canAccessProjectPage,
   canManagePackageArea,
   canManageProjectWorkflowForProject,
   canReadPackageWorkflow,
@@ -15,7 +14,7 @@ import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignm
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-import { getReadableTrialDetail } from "./workflow-queries";
+import type { TrialDetailReader } from "./workflow-queries";
 
 type ReleaseGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 type GuidanceContext = {
@@ -147,13 +146,14 @@ export function getTrialReleaseGuidance(user: SessionUser, versionId: number, co
 }
 
 /** Check the release prerequisites across active released requests, with links only for project records the actor can open. */
-export function getFormalReleaseGuidance(user: SessionUser, versionId: number, context: GuidanceContext = {}): FormalReleaseGuidance | null {
+export function getFormalReleaseGuidance(reader: TrialDetailReader, versionId: number, context: GuidanceContext = {}): FormalReleaseGuidance | null {
+  const { user, canReadProject } = reader;
   const version = versionRecord(versionId);
   if (!version) return null;
   const requests = getActiveReleaseRequests(db, versionId);
   if (!requests.length || (context.projectId && !requests.some((request) => request.projectId === context.projectId))) return null;
   const readable = requests.flatMap((request) => {
-    const detail = getReadableTrialDetail(user, request.id);
+    const detail = reader.getReadableTrialDetail(request.id);
     return detail ? [{ ...request, detail }] : [];
   });
   if (readable.length === 0) return null;
@@ -163,7 +163,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
   const identity = packageIdentity(version);
   const args = { returnTo: context.returnTo };
   const bindingArgs = { ...context.bindingListState, ...args };
-  const projectScope = (projectId: number) => canAccessProjectPage(user, projectId) ? projectId : undefined;
+  const projectScope = (projectId: number) => canReadProject(projectId) ? projectId : undefined;
   const traceHref = workflowHref(`/versions/${versionId}`, context.projectId === undefined ? undefined : projectScope(context.projectId), args);
   if (!isBindingReleaseOpen(version.status)) return {
     status: version.status, canManage, pendingFlowCount: 0,
@@ -231,7 +231,7 @@ export function getFormalReleaseGuidance(user: SessionUser, versionId: number, c
     detail: `还有 ${hiddenNodes} 个节点未完成。请联系相应项目的软件经理。`,
   });
   for (const batch of batches) {
-    if (!canAccessProjectPage(user, batch.projectId)
+    if (!canReadProject(batch.projectId)
       || (batch.status === "DRAFT" && !canManageProjectWorkflowForProject(user, batch.projectId))) {
       hiddenBatches += 1;
       continue;

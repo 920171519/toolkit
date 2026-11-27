@@ -799,7 +799,7 @@ function getBindingApproversByRequirement(
   return approversByRequirement;
 }
 
-export function getTrialDetail(requestId: number): TrialDetail | null {
+function readTrialDetail(requestId: number): TrialDetail | null {
   const request = one<TrialDetail["request"]>(
     `SELECT r.id, pr.id AS projectId, pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
             p.id AS packageId, p.name AS packageName, p.code AS packageCode, p.owner_id AS packageOwnerId, pv.id AS versionId,
@@ -884,18 +884,45 @@ function isBindingFlowParticipant(userId: number, flow: FlowReadFacts) {
   return flow.approverId === userId || flow.submittedById === userId;
 }
 
-export function getReadableTrialDetail(user: SessionUser, requestId: number): TrialDetail | null {
-  const detail = getTrialDetail(requestId);
-  if (!detail) return null;
-  const projectIds = getProjectWorkflowProjectIds(user, true);
-  if (canReadEntireTrialRequest(user.id, detail.request, projectIds)) return detail;
-  const requirements = detail.requirements.flatMap((requirement) => {
-    if (isPushedBindingOwner(user.id, requirement)) return [requirement];
-    const flows = requirement.flows.filter((flow) => isBindingFlowParticipant(user.id, flow));
-    return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
-  });
-  return requirements.length ? { ...detail, requirements } : null;
+// Keep detail and its access scope local to the page render that creates this reader.
+export function createTrialDetailReader(user: SessionUser) {
+  const viewer = { ...user };
+  const details = new Map<number, TrialDetail | null>();
+  let readableProjectIds: number[] | null | undefined;
+  function getReadableProjectIds() {
+    if (readableProjectIds === undefined) readableProjectIds = getProjectWorkflowProjectIds(viewer, true);
+    return readableProjectIds;
+  }
+
+  function canReadProject(projectId: number) {
+    const ids = getReadableProjectIds();
+    return ids === null || ids.includes(projectId);
+  }
+
+  function getTrialDetail(requestId: number) {
+    const cached = details.get(requestId);
+    if (cached !== undefined) return cached;
+    const detail = readTrialDetail(requestId);
+    details.set(requestId, detail);
+    return detail;
+  }
+
+  function getReadableTrialDetail(requestId: number): TrialDetail | null {
+    const detail = getTrialDetail(requestId);
+    if (!detail) return null;
+    if (canReadEntireTrialRequest(viewer.id, detail.request, getReadableProjectIds())) return detail;
+    const requirements = detail.requirements.flatMap((requirement) => {
+      if (isPushedBindingOwner(viewer.id, requirement)) return [requirement];
+      const flows = requirement.flows.filter((flow) => isBindingFlowParticipant(viewer.id, flow));
+      return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
+    });
+    return requirements.length ? { ...detail, requirements } : null;
+  }
+
+  return { user: viewer, canReadProject, getTrialDetail, getReadableTrialDetail };
 }
+
+export type TrialDetailReader = ReturnType<typeof createTrialDetailReader>;
 
 type TrialQueueBindingCounts = Pick<TrialVersionRow, "requirementTotal" | "requirementPassed" | "requirementWaived" | "pendingFlowCount">;
 type TrialQueueBindingRow = TrialRequestReadFacts & RequirementReadFacts & FlowReadFacts & {
@@ -1598,7 +1625,8 @@ export type VersionTrace = {
   details: TrialDetail[];
 };
 
-export function getVersionTrace(user: SessionUser, versionId: number, projectId?: number, readableIds = getReadableVersionIds(user)): VersionTrace | null {
+export function getVersionTrace(reader: TrialDetailReader, versionId: number, projectId?: number, readableIds = getReadableVersionIds(reader.user)): VersionTrace | null {
+  const { user } = reader;
   if (readableIds !== null && !readableIds.includes(versionId)) return null;
   const version = one<VersionTrace["version"]>(
     `SELECT pv.id, p.id AS packageId, p.name AS packageName, p.code AS packageCode, pv.version,
@@ -1676,7 +1704,7 @@ export function getVersionTrace(user: SessionUser, versionId: number, projectId?
     batchReportUrl: null,
   });
   const details = safeRequests.flatMap(({ requestId }) => {
-    const detail = getReadableTrialDetail(user, requestId);
+    const detail = reader.getReadableTrialDetail(requestId);
     if (!detail) return [];
     return [canReadLinkedBatch(detail.request) ? detail : { ...detail, request: { ...detail.request, ...hiddenBatch } }];
   });
