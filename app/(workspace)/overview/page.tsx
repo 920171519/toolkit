@@ -10,7 +10,7 @@ import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "@/lib/list-pagination";
 import { getProjectCatalogEntries, type ProjectCatalogEntry } from "@/lib/project-queries";
 import { projectOverviewFields } from "@/lib/project-overview-filters";
 import { PROJECT_STAGE_META, PROJECT_STAGES } from "@/lib/project-stage";
-import { getWorkflowProjectOptions } from "@/lib/project-scope";
+import { getProjectWorkflowProjectIds } from "@/lib/access";
 import { parseFlash } from "@/lib/flash";
 import styles from "../projects/projects.module.css";
 import { directoryHref, directoryPage } from "@/lib/settings-directory";
@@ -47,7 +47,8 @@ export default async function OverviewPage({
   const matchesSearch = wordSearchMatcher(query);
   const pageSize = getListPageSize(params.pageSize);
   const catalog = getProjectCatalogEntries();
-  const workflowProjectIds = new Set(getWorkflowProjectOptions(user, true).map((project) => project.id));
+  const allowedProjectIds = getProjectWorkflowProjectIds(user, true);
+  const workflowProjectIds = allowedProjectIds === null ? null : new Set(allowedProjectIds);
   const pmField: ColumnFilterField = {
     ...projectOverviewFields.pm,
     options: contactOptions(catalog.flatMap((project) => project.pms)),
@@ -104,7 +105,7 @@ export default async function OverviewPage({
             <tbody>
               {items.map((project) => {
                 const showCode = !project.name.toUpperCase().split(/\s+/).includes(project.code.toUpperCase());
-                const limitedAccess = !workflowProjectIds.has(project.id);
+                const limitedAccess = workflowProjectIds !== null && !workflowProjectIds.has(project.id);
                 return (
                   <tr key={project.id} className="project-overview-row">
                     <td>

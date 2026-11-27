@@ -4,8 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { ROLE_META } from "@/lib/constants";
 import { getLedAreaIds, getManagedProjectScope } from "@/lib/access";
 import { getAccountAreaLabel } from "@/lib/organization-queries";
-import { getWorkflowProjectOptions } from "@/lib/project-scope";
-import { getProjectOptions } from "@/lib/project-queries";
+import { getWorkspaceProjectNavigation } from "@/lib/project-scope";
 import { Avatar } from "@/components/ui";
 import { Brand } from "@/components/brand";
 import type { SidebarItem } from "@/components/sidebar-nav";
@@ -63,12 +62,14 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
     { label: "基础配置", items: configItems },
   ];
 
+  const { projects, catalogProjects } = getWorkspaceProjectNavigation(user);
+
   return (
     <WorkspaceNavigation
       groups={groups}
       workflow={workflowItems}
-      projects={getWorkflowProjectOptions(user, true)}
-      catalogProjects={getProjectOptions(true).map(({ id, name }) => ({ id, name }))}
+      projects={projects}
+      catalogProjects={catalogProjects}
       brand={<Brand href="/dashboard" subtitle={areaLabel} />}
       areaLabel={areaLabel}
       sidebarFooter={

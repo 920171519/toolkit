@@ -6,12 +6,14 @@ import { one } from "./db";
 import { getProjectOption, getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
 
-export function getWorkflowProjectOptions(user: SessionUser, includeArchived = false) {
-  const ids = getProjectWorkflowProjectIds(user, includeArchived);
-  const projects = getProjectOptions(includeArchived);
-  if (ids === null) return projects;
-  const allowed = new Set(ids);
-  return projects.filter((project) => allowed.has(project.id));
+export function getWorkspaceProjectNavigation(user: SessionUser) {
+  const ids = getProjectWorkflowProjectIds(user, true);
+  const projects = getProjectOptions(true);
+  const allowed = ids === null ? null : new Set(ids);
+  return {
+    projects: allowed === null ? projects : projects.filter((project) => allowed.has(project.id)),
+    catalogProjects: projects.map(({ id, name }) => ({ id, name })),
+  };
 }
 
 export function getReadablePackageProject(user: SessionUser, projectId: number) {
