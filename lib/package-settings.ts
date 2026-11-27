@@ -18,6 +18,11 @@ import type { SessionUser } from "./types";
 
 const audit = createAuditLogWriter(db);
 
+function assertActivePackageOwner(ownerId: number) {
+  const owner = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", ownerId);
+  assert(owner, "责任人不存在或已停用。");
+}
+
 function assertPackageCanDeactivate(packageId: number, isActive: (flag: number) => boolean) {
   const current = one<{ active: number }>("SELECT is_active AS active FROM packages WHERE id = ?", packageId);
   if (current && isActive(current.active)) {
@@ -67,18 +72,18 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
   assert(unchangedCode || isStandardPackageCode(code), "软件包编码需要 5 位数字加 3 位字母，例如 10001OTA。");
   const identityChanged = current?.name !== name || !unchangedCode;
   const identity = existingPackage && !identityChanged ? existingPackage : { name, code };
-  assert(input.ownerId, "请为软件包指定责任人。");
+  const ownerId = input.ownerId;
+  assert(ownerId, "请为软件包指定责任人。");
   assert(
     Number.isInteger(input.trialOverdueDays) && input.trialOverdueDays >= 1 && input.trialOverdueDays <= 365,
     "试制超期天数需为 1-365 的整数。",
   );
-  const owner = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", input.ownerId);
-  assert(owner, "责任人不存在或已停用。");
-  if (input.areaId) {
-    const area = one<{ id: number }>("SELECT id FROM areas WHERE id = ?", input.areaId);
-    assert(area, "责任田不存在。");
-  }
   return transaction(() => {
+    assertActivePackageOwner(ownerId);
+    if (input.areaId) {
+      const area = one<{ id: number }>("SELECT id FROM areas WHERE id = ?", input.areaId);
+      assert(area, "责任田不存在。");
+    }
     if (input.id && !input.isActive) {
       assertPackageCanDeactivate(input.id, Boolean);
     }
@@ -99,7 +104,7 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
         identity.code,
         input.description.trim(),
         input.areaId,
-        input.ownerId,
+        ownerId,
         input.isActive ? 1 : 0,
         input.trialOverdueDays,
         packageId,
@@ -112,7 +117,7 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
         identity.code,
         input.description.trim(),
         input.areaId,
-        input.ownerId,
+        ownerId,
         input.isActive ? 1 : 0,
         input.trialOverdueDays,
         new Date().toISOString(),
@@ -308,20 +313,17 @@ export function updatePackageResponsibility(
     "只有责任田主管、项目负责人或系统管理员可以修改软件包责任信息。",
     "FORBIDDEN",
   );
-  assert(input.ownerId, "请为软件包指定责任人。");
-  const owner = one<{ id: number }>(
-    "SELECT id FROM users WHERE id = ? AND is_active = 1",
-    input.ownerId,
-  );
-  assert(owner, "责任人不存在或已停用。");
+  const ownerId = input.ownerId;
+  assert(ownerId, "请为软件包指定责任人。");
   transaction(() => {
+    assertActivePackageOwner(ownerId);
     if (!input.isActive) {
       // The drawer has historically treated only a stored 1 as enabled.
       assertPackageCanDeactivate(packageId, (flag) => flag === 1);
     }
     run(
       "UPDATE packages SET owner_id = ?, description = ?, is_active = ? WHERE id = ?",
-      input.ownerId,
+      ownerId,
       input.description.trim(),
       input.isActive ? 1 : 0,
       packageId,
