@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getReadableTestReport } from "@/lib/batch-queries";
 import { readReportFile, resolveReportPath } from "@/lib/report-storage";
+import { getTestReportMediaType } from "@/lib/test-report-validation";
 
 export async function GET(
   _request: Request,
@@ -19,10 +20,12 @@ export async function GET(
   try {
     const data = await readReportFile(storagePath, reportId);
     if (data === null) return new NextResponse("Not found", { status: 404 });
+    const mediaType = getTestReportMediaType(report.originalName, report.storedMediaType);
+    const disposition = mediaType ? "inline" : "attachment";
     return new NextResponse(data, {
       headers: {
-        "Content-Type": report.mimeType,
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(report.originalName)}`,
+        "Content-Type": mediaType ?? "application/octet-stream",
+        "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(report.originalName)}`,
         "Cache-Control": "private, no-store",
       },
     });
