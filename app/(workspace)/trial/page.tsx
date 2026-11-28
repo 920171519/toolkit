@@ -12,7 +12,7 @@ import { WorkflowQueueNav } from "@/components/workflow-queue-nav";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getWorkflowListState } from "@/lib/workflow-list";
-import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds, getBatchEvidenceReadScope, getManagedProjectScope, getProjectWorkflowProjectIds, getReadableLinkedBatchEvidence } from "@/lib/access";
+import { getAssignedTrialRequestIds, getBatchEvidenceReadScope, getManagedProjectScope, getProjectWorkflowProjectIds, getReadableLinkedBatchEvidence } from "@/lib/access";
 import { abandonTrialReleaseAction } from "@/lib/actions/release";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
@@ -67,8 +67,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const projectId = project?.id;
   const scope = project ? [project.id] : getProjectWorkflowProjectIds(user);
   const managerScope = getManagedProjectScope(user);
+  const managedProjects = managerScope === null ? null : new Set(managerScope);
+  const managesActiveProject = (id: number) => managedProjects === null || managedProjects.has(id);
   const archived = project?.status === "ARCHIVED";
-  const canViewReleaseQueue = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);
+  const canViewReleaseQueue = !archived && (project ? managesActiveProject(project.id) : managerScope === null || managerScope.length > 0);
   const showBindings = !canViewReleaseQueue || params.view === "binding";
   const currentKind = showBindings ? "binding" : "release";
   const queueParams = trialQueueParams({
@@ -89,7 +91,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     }
   }
   const ready = [...byVersion.values()].map((records) => ({
-    ...(records.find((row) => canManageProjectWorkflowForProject(user, row.projectId)) ?? records[0]),
+    ...(records.find((row) => managesActiveProject(row.projectId)) ?? records[0]),
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
   const canReadProject = (id: number) => scope === null || scope.includes(id);
@@ -104,7 +106,6 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     return counts ? [{ ...row, ...counts, readableBatch: null }] : [];
   }).sort((first, second) => second.isOverdue - first.isOverdue || second.pendingFlowCount - first.pendingFlowCount);
   const bindingCount = showBindings ? trials.length : getTrialVersionCount(scope, assignedRequestIds);
-  const canRelease = (row: TrialReadyDisplayVersion) => canManageProjectWorkflowForProject(user, row.projectId);
   const packageLink = (row: TrialReadyDisplayVersion | TrialVersionRow) => (
     <Link href={workflowHref("/packages", projectId, { open: row.packageId })} prefetch={false} className={`archive-link mono ${identityStyles.code}`}>{displayPackage(row).code}</Link>
   );
@@ -230,7 +231,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
           const releaseFields = { ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) };
           return (
             <div className={styles.actions}>
-              {canRelease(row) && <>
+              {managesActiveProject(row.projectId) && <>
                 <TrialReleaseAction actor={user} row={row} records={row.records} projectId={projectId} query={query} />
                 <FormDialog label={risk ? "撤回风险试制" : "放弃"} title={risk ? `撤回 ${title} 风险试制` : `放弃发布 ${title} 试制`}
                   description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
@@ -259,7 +260,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
         rowKey={(row) => row.requestId} details={(row) => [displayPackage(row).name, row.projectCode]}
         emptyTitle="没有正在绑定验证的试制版本"
         actions={(row) => <Link href={workflowHref("/trial/" + row.requestId, projectId, query)} prefetch={false} className="archive-link">
-          {row.bindingMode === "PENDING" && canManageProjectWorkflowForProject(user, row.projectId) ? "决定绑定方式" : "查看节点与审批"} <ArrowRight size={12} />
+          {row.bindingMode === "PENDING" && managesActiveProject(row.projectId) ? "决定绑定方式" : "查看节点与审批"} <ArrowRight size={12} />
         </Link>}
       />}
     </>
