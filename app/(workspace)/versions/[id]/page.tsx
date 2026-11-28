@@ -31,17 +31,13 @@ import styles from "@/components/workflow-queue.module.css";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "版本全链路" };
 
-const transferStatusFallback: Record<string, { label: string; tone: string }> = {
-  PENDING: { label: "待转测", tone: "amber" },
-  IN_TEST: { label: "集成测试中", tone: "sky" },
-  PASSED: { label: "测试通过", tone: "emerald" },
-  FAILED: { label: "测试不通过", tone: "rose" },
-  BLOCKED: { label: "无法验证", tone: "amber" },
+const traceTransferStatusMeta: Record<string, { label: string; tone: string }> = {
+  ...TRANSFER_REQUEST_STATUS_META,
+  PENDING: { ...TRANSFER_REQUEST_STATUS_META.PENDING, label: "待转测" },
   TRIAL: { label: "试制中", tone: "teal" },
   PENDING_FORMAL: { label: "待转正", tone: "orange" },
   FORMAL: { label: "已转正", tone: "emerald" },
   VOID: { label: "已作废", tone: "slate" },
-  CANCELLED: { label: "已取消", tone: "slate" },
 };
 
 export default async function VersionTracePage({
@@ -141,8 +137,8 @@ export default async function VersionTracePage({
           {requests.length === 0 ? <div className="muted-panel" style={{ margin: 16 }}>暂无项目转测记录。</div> : <div className={`table-wrap ${styles.queueTable}`} role="region" aria-label="项目版本证据表格" tabIndex={0}><table className="data-table">
             <thead><tr><th>项目</th><th>转测/验收状态</th><th>集成测试批次</th><th>试制电子流</th><th>绑定进度</th><th>转正</th><th aria-label="操作" /></tr></thead>
             <tbody>{requests.map((request) => {
-              const meta = transferStatusFallback[request.status] ?? TRANSFER_REQUEST_STATUS_META[request.status as keyof typeof TRANSFER_REQUEST_STATUS_META];
-              const testMeta = request.integrationStatus ? transferStatusFallback[request.integrationStatus] : null;
+              const meta = traceTransferStatusMeta[request.status];
+              const testMeta = request.integrationStatus ? traceTransferStatusMeta[request.integrationStatus] : null;
               const detail = detailByRequest.get(request.requestId);
               const passed = detail?.requirements.filter((requirement) => requirement.confirmedAt || requirement.waivedAt).length ?? 0;
               const total = detail?.requirements.length ?? 0;
