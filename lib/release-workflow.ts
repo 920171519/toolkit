@@ -1,3 +1,4 @@
+import type { StatementSync } from "node:sqlite";
 import { createAuditLogWriter } from "./audit-log";
 import { all, db, one, run, transaction } from "./db";
 import {
@@ -153,12 +154,14 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       timestamp,
       anchor.package_version_id,
     );
-    for (const request of requests) {
-      run(
-        `UPDATE version_transfer_requests
+    const releaseRequest = db.prepare(
+      `UPDATE version_transfer_requests
          SET integration_status = status, status = 'TRIAL', trial_form_no = ?, trial_released_at = ?, trial_released_by = ?,
              release_mode = ?, risk_conclusion = ?, updated_at = ?
          WHERE id = ?`,
+    );
+    for (const request of requests) {
+      releaseRequest.run(
         trialUrl,
         timestamp,
         actor.id,
@@ -168,11 +171,14 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
         request.requestId,
       );
     }
-    for (const item of requirementsToCreate) {
-      const insertResult = run(
-        `INSERT INTO binding_requirements
+    const insertRequirement = db.prepare(
+      `INSERT INTO binding_requirements
           (request_id, package_version_id, project_id, node_id, required_count, binding_owner_id, approver_id, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
+    );
+    let insertApprover: StatementSync | undefined;
+    for (const item of requirementsToCreate) {
+      const insertResult = insertRequirement.run(
         item.requestId,
         anchor.package_version_id,
         item.projectId,
@@ -185,12 +191,9 @@ export function releaseTrial(actor: SessionUser, requestId: number, trialFormNo:
       );
       const requirementId = Number(insertResult.lastInsertRowid);
       for (const approverId of approverPools.get(item.nodeId) ?? [item.bindingApproverId]) {
-        run(
+        (insertApprover ??= db.prepare(
           "INSERT OR IGNORE INTO binding_requirement_approvers (requirement_id, user_id, created_at) VALUES (?, ?, ?)",
-          requirementId,
-          approverId,
-          timestamp,
-        );
+        )).run(requirementId, approverId, timestamp);
       }
     }
     refreshVersionAggregate(db, anchor.package_version_id, timestamp);
