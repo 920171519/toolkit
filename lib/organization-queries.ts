@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAreaMemberships } from "./area-memberships";
 import type { ProjectStatus, Role } from "./domain-values";
 import { all, one } from "./db";
 
@@ -93,23 +94,6 @@ type AreaConfig = {
   projectLeads: AreaProjectLead[];
   projectMembers: AreaProjectMember[];
 };
-
-export function getAreaMemberships(userId?: number) {
-  return all<{ userId: number; areaId: number; name: string }>(
-    `WITH memberships AS (
-      SELECT user_id, area_id FROM area_leaders
-      UNION
-      SELECT user_id, area_id FROM area_project_leads
-      UNION
-      SELECT user_id, area_id FROM area_project_members
-    )
-    SELECT m.user_id AS userId, m.area_id AS areaId, a.name
-    FROM memberships m JOIN areas a ON a.id = m.area_id
-    ${userId === undefined ? "" : "WHERE m.user_id = ?"}
-    ORDER BY a.name, a.id`,
-    ...(userId === undefined ? [] : [userId]),
-  );
-}
 
 export function getAccountAreaLabel(userId: number): string {
   return getAreaMemberships(userId).map(({ name }) => name).join("、") || "未分配责任田";

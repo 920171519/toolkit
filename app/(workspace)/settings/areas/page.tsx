@@ -8,6 +8,7 @@ import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-d
 import styles from "@/components/settings-directory.module.css";
 import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
 import { saveAreaAction } from "@/lib/actions/area-settings";
+import { getAreaMemberships } from "@/lib/area-memberships";
 import { requireUser } from "@/lib/auth";
 import {
   filterOptions,
@@ -17,7 +18,7 @@ import {
   readColumnFilters,
 } from "@/lib/column-filters";
 import { getListPageSize } from "@/lib/list-pagination";
-import { getAreaDirectory, getAreaMemberships } from "@/lib/organization-queries";
+import { getAreaDirectory } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import {
   areaDirectoryDetailParams,

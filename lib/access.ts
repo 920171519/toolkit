@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAssignedAreaIds, hasAreaMembership } from "./area-memberships";
 import { all, one } from "./db";
 import { assert } from "./domain-error";
 import type { LinkedBatchEvidence } from "./transfer-requests";
@@ -216,20 +217,11 @@ export function getSettingsNavigationGrants(userId: number) {
 }
 
 export function getTransferAreaIds(user: SessionUser): number[] | null {
-  if (user.role === "ADMIN") return null;
-  return all<{ areaId: number }>(
-    `SELECT area_id AS areaId FROM area_leaders WHERE user_id = ?
-     UNION SELECT area_id FROM area_project_leads WHERE user_id = ?
-     UNION SELECT area_id FROM area_project_members WHERE user_id = ?`,
-    user.id,
-    user.id,
-    user.id,
-  ).map((row) => row.areaId);
+  return user.role === "ADMIN" ? null : getAssignedAreaIds(user.id);
 }
 
 export function canSubmitTransferForArea(user: SessionUser, areaId: number | null): boolean {
-  const areaIds = getTransferAreaIds(user);
-  return areaIds === null || (areaId !== null && areaIds.includes(areaId));
+  return user.role === "ADMIN" || (areaId !== null && hasAreaMembership(user.id, areaId));
 }
 
 export function canAccessProjectPage(user: SessionUser | null, projectId: number): boolean {
