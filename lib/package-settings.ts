@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canEditPackageResponsibility, canManagePackageArea } from "./access";
+import { hasActiveAssignmentAccount } from "./assignment-accounts";
 import { createAuditLogWriter } from "./audit-log";
 import { all, db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
@@ -20,8 +21,7 @@ import { LEGACY_VERSION_IMPORT_EVENT } from "./version-scope";
 const audit = createAuditLogWriter(db);
 
 function assertActivePackageOwner(ownerId: number) {
-  const owner = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", ownerId);
-  assert(owner, "责任人不存在或已停用。");
+  assert(hasActiveAssignmentAccount(ownerId), "责任人不存在或已停用。");
 }
 
 function assertPackageCanDeactivate(packageId: number, isActive: (flag: number) => boolean) {

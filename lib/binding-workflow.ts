@@ -1,6 +1,7 @@
 import "server-only";
 
 import { assertVersionProjectManager, canConfirmBindingNodeForProject, canManageProjectWorkflowForProject } from "./access";
+import { getActiveAssignmentAccount } from "./assignment-accounts";
 import { createAuditLogWriter } from "./audit-log";
 import {
   bindingReleaseAvailability,
@@ -380,7 +381,7 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     assert(approverPool.length > 0, "该节点未配置绑定电子流审批人范围。");
     assert(approverPool.includes(approverId), "请选择该节点审批人范围内的审批人。");
     assert(approverId !== actor.id, "绑定电子流审批人不能与提交人相同。");
-    const selectedApprover = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", approverId);
+    const selectedApprover = getActiveAssignmentAccount(approverId);
     assert(selectedApprover, "选择的审批人不存在或已停用。");
     for (const barcode of normalizedBarcodes) {
       const duplicate = one<{ id: number }>(

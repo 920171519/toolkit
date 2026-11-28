@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canManageProjectWorkflowForProject, getProjectSoftwareManagerIds } from "./access";
+import { getActiveAssignmentAccount, hasActiveAssignmentAccount } from "./assignment-accounts";
 import { createAuditLogWriter } from "./audit-log";
 import { db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
@@ -52,8 +53,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
   const softwareManagerIds = [...new Set(input.softwareManagerIds)];
   assert(pmUserIds.length > 0, "请至少为项目指定一位 PM。");
   for (const pmUserId of pmUserIds) {
-    const pm = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", pmUserId);
-    assert(pm, "选择的 PM 不存在或已停用。");
+    assert(hasActiveAssignmentAccount(pmUserId), "选择的 PM 不存在或已停用。");
   }
   assert(isProjectStatus(input.status), "项目状态无效。");
   const requestedStage = input.stage;
@@ -64,8 +64,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     if (canAssignManagers) {
       assert(softwareManagerIds.length > 0, "请至少为项目指定一位软件经理。");
       for (const softwareManagerId of softwareManagerIds) {
-        const softwareManager = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", softwareManagerId);
-        assert(softwareManager, "选择的软件经理不存在或已停用。");
+        assert(hasActiveAssignmentAccount(softwareManagerId), "选择的软件经理不存在或已停用。");
       }
     } else {
       assertProjectConfigurationAccess(actor, projectId);
@@ -171,16 +170,8 @@ function validateNodeOwners(input: NodeOwnersInput) {
       input.requiredBindingCount <= 20,
     "单节点绑定通过数量需为 1-20 的整数。",
   );
-  const owner = one<{ id: number }>(
-    "SELECT id FROM users WHERE id = ? AND is_active = 1",
-    input.bindingOwnerId,
-  );
-  assert(owner, "绑定验证责任人不存在或已停用。");
-  const approver = one<{ id: number }>(
-    "SELECT id FROM users WHERE id = ? AND is_active = 1",
-    input.bindingApproverId,
-  );
-  assert(approver, "绑定审批责任人不存在或已停用。");
+  assert(hasActiveAssignmentAccount(input.bindingOwnerId), "绑定验证责任人不存在或已停用。");
+  assert(hasActiveAssignmentAccount(input.bindingApproverId), "绑定审批责任人不存在或已停用。");
 }
 
 export function addProjectNode(
@@ -296,7 +287,7 @@ export function addProjectNodeApprover(actor: SessionUser, nodeId: number, userI
     );
     assert(node, "项目节点不存在。", "NOT_FOUND");
     assertProjectConfigurationAccess(actor, node.project_id);
-    const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
+    const person = getActiveAssignmentAccount(userId);
     assert(person, "审批人不存在或已停用。");
     const existing = one<{ id: number }>(
       "SELECT id FROM project_node_approvers WHERE node_id = ? AND user_id = ?",

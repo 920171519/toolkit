@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isAreaLeader, isAreaProjectLeadForProject } from "./access";
+import { getActiveAssignmentAccount } from "./assignment-accounts";
 import { createAuditLogWriter } from "./audit-log";
 import { db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
@@ -14,7 +15,7 @@ export function addAreaLeader(actor: SessionUser, areaId: number, userId: number
   transaction(() => {
     const area = one<{ id: number; name: string }>("SELECT id, name FROM areas WHERE id = ?", areaId);
     assert(area, "责任田不存在。", "NOT_FOUND");
-    const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
+    const person = getActiveAssignmentAccount(userId);
     assert(person, "责任田主管不存在或已停用。");
     const existing = one<{ id: number }>("SELECT id FROM area_leaders WHERE area_id = ? AND user_id = ?", areaId, userId);
     assert(!existing, "该人员已经是此责任田主管。");
@@ -55,7 +56,7 @@ export function assignAreaProjectMember(
     assert(area, "责任田不存在。", "NOT_FOUND");
     const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
     assert(project, "项目不存在。", "NOT_FOUND");
-    const person = one<{ id: number; name: string }>("SELECT id, name FROM users WHERE id = ? AND is_active = 1", userId);
+    const person = getActiveAssignmentAccount(userId);
     assert(person, "项目成员不存在或已停用。");
     const existing = one<{ id: number }>(
       "SELECT id FROM area_project_members WHERE area_id = ? AND project_id = ? AND user_id = ?",
@@ -166,10 +167,7 @@ export function assignAreaProjectLead(
     assert(area, "责任田不存在。", "NOT_FOUND");
     const project = one<{ id: number; name: string }>("SELECT id, name FROM projects WHERE id = ?", projectId);
     assert(project, "项目不存在。", "NOT_FOUND");
-    const person = one<{ id: number; name: string }>(
-      "SELECT id, name FROM users WHERE id = ? AND is_active = 1",
-      userId,
-    );
+    const person = getActiveAssignmentAccount(userId);
     assert(person, "负责人不存在或已停用。");
     const existing = one<{ id: number; user_id: number }>(
       "SELECT id, user_id FROM area_project_leads WHERE area_id = ? AND project_id = ?",
