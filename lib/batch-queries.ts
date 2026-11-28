@@ -113,43 +113,49 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
   }).filter((item): item is BatchCandidatePackage => item !== null);
 }
 
-export type BatchSummaryRow = {
+type BatchListRow = {
   id: number;
   code: string;
   title: string;
   status: string;
   projectId: number;
   projectName: string;
-  projectCode: string;
-  projectStatus: string;
-  softwareManagerId: number | null;
   conclusion: string | null;
-  issueAttribution: string | null;
   createdAt: string;
   sentAt: string | null;
   completedAt: string | null;
   terminatedAt: string | null;
+  itemCount: number;
+  changedCount: number;
+};
+
+export type BatchSummaryRow = BatchListRow & {
+  projectCode: string;
+  projectStatus: string;
+  softwareManagerId: number | null;
+  issueAttribution: string | null;
   terminateReason: string | null;
   testSummary: string | null;
   testReportUrl: string | null;
   testReportName: string | null;
   testReportFileId: number | null;
   createdByName: string | null;
-  itemCount: number;
-  changedCount: number;
 };
 
 const batchItemCount = "(SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id)";
 const batchChangedCount = "(SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = b.id AND bi.is_changed = 1)";
-const batchSummaryColumns = `b.id, b.code, b.title, b.status, b.project_id AS projectId,
-            pr.name AS projectName, pr.code AS projectCode, pr.status AS projectStatus,
+const batchIdentityColumns = `b.id, b.code, b.title, b.status, b.project_id AS projectId, pr.name AS projectName`;
+const batchTimingColumns = `b.created_at AS createdAt, b.sent_at AS sentAt,
+            b.completed_at AS completedAt, b.terminated_at AS terminatedAt`;
+const batchCountColumns = `${batchItemCount} AS itemCount, ${batchChangedCount} AS changedCount`;
+const batchListColumns = `${batchIdentityColumns}, b.conclusion, ${batchTimingColumns}, ${batchCountColumns}`;
+const batchSummaryColumns = `${batchIdentityColumns}, pr.code AS projectCode, pr.status AS projectStatus,
             pr.software_manager_id AS softwareManagerId, b.conclusion,
-            b.issue_attribution AS issueAttribution, b.created_at AS createdAt,
-            b.sent_at AS sentAt, b.completed_at AS completedAt, b.terminated_at AS terminatedAt,
+            b.issue_attribution AS issueAttribution, ${batchTimingColumns},
             b.terminate_reason AS terminateReason, b.test_summary AS testSummary,
             b.test_report_url AS testReportUrl, b.test_report_name AS testReportName,
             b.test_report_file_id AS testReportFileId, c.name AS createdByName,
-            ${batchItemCount} AS itemCount, ${batchChangedCount} AS changedCount`;
+            ${batchCountColumns}`;
 const batchProjectFrom = `FROM integration_batches b JOIN projects pr ON pr.id = b.project_id`;
 const batchSummaryFrom = `${batchProjectFrom}
      LEFT JOIN users c ON c.id = b.created_by`;
@@ -180,11 +186,11 @@ function batchWhere(predicates: string[]) {
   return predicates.length > 0 ? `WHERE ${predicates.join(" AND ")}` : "";
 }
 
-export function getBatches(limit = 80, projectIds: number[] | null = null, filters: BatchFilters = {}): BatchSummaryRow[] {
+export function getBatches(limit = 80, projectIds: number[] | null = null, filters: BatchFilters = {}): BatchListRow[] {
   if (projectIds?.length === 0) return [];
   const { predicates, values } = batchFilterConditions(projectIds, filters);
-  return all<BatchSummaryRow>(
-    `SELECT ${batchSummaryColumns} ${batchSummaryFrom}
+  return all<BatchListRow>(
+    `SELECT ${batchListColumns} ${batchProjectFrom}
      ${batchWhere(predicates)} ${batchSummaryOrder} LIMIT ? OFFSET ?`,
     ...values, limit, filters.offset ?? 0,
   );
@@ -286,10 +292,10 @@ export function getIntegrationHistoryPage(
   }
 
   const where = conditions.join(" AND ");
-  const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${batchSummaryFrom} WHERE ${where}`, ...values)?.total ?? 0;
+  const total = one<{ total: number }>(`SELECT COUNT(*) AS total ${batchProjectFrom} WHERE ${where}`, ...values)?.total ?? 0;
   const { current: page, pages, offset } = getPageWindow(total, pageSize, state.page);
-  const rows = total === 0 ? [] : all<BatchSummaryRow>(
-    `SELECT ${batchSummaryColumns} ${batchSummaryFrom}
+  const rows = total === 0 ? [] : all<BatchListRow>(
+    `SELECT ${batchListColumns} ${batchProjectFrom}
      WHERE ${where} ${batchSummaryOrder} LIMIT ? OFFSET ?`,
     ...values, pageSize, offset,
   );
