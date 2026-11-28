@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { createAuditLogWriter } from "./audit-log";
+import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";
 import { hashPassword } from "./password";
 import { withImmediateTransaction } from "./sqlite-lifecycle";
 
@@ -578,9 +579,7 @@ function seedAll(db: DatabaseSync) {
        submitted_by, approver_id, status, submitted_at, reviewed_at, review_comment, cancelled_at, cancel_reason)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
   );
-  const insertFlowBarcode = db.prepare(
-    "INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)",
-  );
+  const writeBarcodes = prepareBindingBarcodeWriter(db);
   const confirmDemoRequirement = db.prepare(
     "UPDATE binding_requirements SET status = 'PASSED', confirmed_at = ?, confirmed_by = ? WHERE id = ?",
   );
@@ -598,6 +597,7 @@ function seedAll(db: DatabaseSync) {
   ) => {
     flowSequence += 1;
     const approver = nodeApprover(nodeId);
+    const timestamp = iso(submittedAt);
     const result = insertFlow.run(
       `BF-2026-${String(flowSequence).padStart(4, "0")}`,
       requirementId,
@@ -609,14 +609,12 @@ function seedAll(db: DatabaseSync) {
       hanSong,
       approver,
       status,
-      iso(submittedAt),
+      timestamp,
       reviewedAt ? iso(reviewedAt) : null,
       comment,
     );
     const flowId = Number(result.lastInsertRowid);
-    for (const barcode of barcodes) {
-      insertFlowBarcode.run(flowId, barcode, iso(submittedAt));
-    }
+    writeBarcodes(flowId, barcodes, timestamp);
     return flowId;
   };
   const createRequirements = (

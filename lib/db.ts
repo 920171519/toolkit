@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parseBindingBarcodeText } from "./binding-barcode-results";
+import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
 import { ADDITIVE_COLUMNS, SCHEMA_SQL, type AdditiveTable } from "./schema";
 import { seedDatabase } from "./seed";
@@ -75,10 +76,10 @@ function migrateSchema(database: DatabaseSync) {
      WHERE trim(f.device_barcode) <> ''
        AND NOT EXISTS (SELECT 1 FROM binding_flow_barcodes b WHERE b.flow_id = f.id)`,
   ).all() as Array<{ id: number; barcodes: string; submittedAt: string }>;
-  const insertBarcode = database.prepare("INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)");
+  const writeBarcodes = prepareBindingBarcodeWriter(database);
   for (const flow of legacyBarcodeFlows) {
     const barcodes = new Set(parseBindingBarcodeText(flow.barcodes));
-    for (const barcode of barcodes) insertBarcode.run(flow.id, barcode, flow.submittedAt);
+    writeBarcodes(flow.id, barcodes, flow.submittedAt);
   }
   addMissingColumns(database, "version_transfer_requests");
   addMissingColumns(database, "batch_items");

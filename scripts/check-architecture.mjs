@@ -62,6 +62,7 @@ function importSpecifiers(source) {
 const entrypointDirectories = ["app/", "components/", "lib/actions/"];
 const workflowMutationCallers = new Map([
   ["lib/batch-workflow.ts", ["lib/actions/batch.ts"]],
+  ["lib/binding-barcode-writer.ts", ["lib/binding-workflow.ts", "lib/db.ts", "lib/seed.ts"]],
   ["lib/binding-workflow.ts", ["lib/actions/binding.ts"]],
   ["lib/release-workflow.ts", ["lib/actions/release.ts", "lib/actions/risk-trial.ts"]],
   ["lib/transfer-workflow.ts", ["lib/actions/transfer.ts"]],

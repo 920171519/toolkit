@@ -35,6 +35,7 @@ const sources = {
   "lib/version-void-workflow.ts": 'export { invalidateAdmission } from "./trial-risk-admissions"; export function voidVersionRecords() {}',
   "lib/trial-risk-admissions.ts": "export function invalidateAdmission() {}",
   "lib/batch-queries.ts": "export function getBatch() {}",
+  "lib/binding-barcode-writer.ts": "export function prepareBindingBarcodeWriter() {} export type BarcodeInput = string;",
 };
 
 function checkFixture(t, overrides = {}, compilerOptions = {}) {
@@ -66,12 +67,16 @@ function checkFixture(t, overrides = {}, compilerOptions = {}) {
 test("allows registered runtime owners and explicit type-only dependencies", (t) => {
   const result = checkFixture(t, {
     "lib/user-settings.ts": sources["lib/user-settings.ts"] + ' export { session } from "./session-store";',
+    "lib/db.ts": sources["lib/db.ts"] + ' import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
+    "lib/seed.ts": 'import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
+    "lib/binding-workflow.ts": sources["lib/binding-workflow.ts"] + ' import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
     "scripts/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "tests/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "components/example.ts": [
       'import type { BatchInput } from "@/lib/batch-workflow";',
       'import { type BatchInput as NamedBatchInput } from "@/lib/batch-workflow";',
       'import type { ProjectInput } from "@/lib/project-settings";',
+      'import type { BarcodeInput } from "@/lib/binding-barcode-writer";',
       'export type Input = BatchInput | NamedBatchInput | import("@/lib/batch-workflow").BatchInput | ProjectInput;',
       'export { deleteArea } from "@/lib/actions/area-settings";',
     ].join("\n"),
@@ -94,6 +99,7 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "lib/actions/transfer.ts": sources["lib/actions/transfer.ts"] + ' export { submitBindingFlow } from "../binding-workflow";',
     "components/example.ts": 'import "@/lib/db"; import "node:sqlite";',
     "lib/other.ts": 'export { session } from "./session-store"; export { invalidateAdmission } from "./trial-risk-admissions";',
+    "lib/binding-queries.ts": 'export { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
     "lib/batch-workflow.ts": sources["lib/batch-workflow.ts"] + ' export { getBatch } from "./batch-queries";',
   });
 
@@ -108,6 +114,7 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "proxy.ts imports session storage directly",
     "lib/other.ts imports session storage directly",
     "lib/other.ts imports the workflow mutation module directly (lib/trial-risk-admissions.ts)",
+    "lib/binding-queries.ts imports the workflow mutation module directly (lib/binding-barcode-writer.ts)",
     "lib/batch-workflow.ts depends on a page query",
   ]) {
     assert.ok(result.stderr.includes(diagnostic), result.stderr);

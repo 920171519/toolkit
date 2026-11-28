@@ -19,6 +19,7 @@ import {
   summarizeBindingBarcodes,
   type BindingBarcodeResult,
 } from "./binding-barcode-results";
+import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";
 import { all, db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
 import { bindingFlowApprovalBlocker, canSubmitBindingFlow } from "./permissions";
@@ -412,9 +413,8 @@ export function submitBindingFlow(actor: SessionUser, requirementId: number, bar
     const flowId = Number(result.lastInsertRowid);
     const flowNo = `BF-${new Date().getFullYear()}-${String(flowId).padStart(4, "0")}`;
     run("UPDATE binding_flows SET flow_no = ? WHERE id = ?", flowNo, flowId);
-    for (const barcode of normalizedBarcodes) {
-      run("INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)", flowId, barcode, timestamp);
-    }
+    const writeBarcodes = prepareBindingBarcodeWriter(db);
+    writeBarcodes(flowId, normalizedBarcodes, timestamp);
     audit(actor.id, "SUBMIT_BINDING_FLOW", "BINDING_FLOW", flowId, `提交 ${requirement.package_name} ${requirement.version} 在 ${requirement.project_name}/${requirement.node_name} 的绑定电子流，审批人 ${selectedApprover.name}，条码：${normalizedBarcodes.join("、")}`);
     return { flowId, flowNo, requestId: requirement.request_id, approverName: selectedApprover.name };
   });
