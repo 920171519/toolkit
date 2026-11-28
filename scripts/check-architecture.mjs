@@ -114,8 +114,7 @@ for (const file of files.sort()) {
         );
       }
     }
-    if (dependency === "lib/session-store.ts" && (isEntrypoint || name.startsWith("lib/"))
-      && !sessionStoreCallers.has(name)) {
+    if (dependency === "lib/session-store.ts" && isApplicationModule && !sessionStoreCallers.has(name)) {
       dependencyBoundaryErrors.push(
         `${name} imports session storage directly. Use authentication or account settings.`,
       );
