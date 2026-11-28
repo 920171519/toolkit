@@ -1,6 +1,7 @@
 import { isValidEmployeeId, normalizeEmployeeId } from "../lib/account-identity";
 import { DEPARTMENT_NAME } from "../lib/constants";
 import { hashPassword } from "../lib/password";
+import { minimumNewPasswordLengthError } from "../lib/password-policy";
 import { one, run, transaction } from "../lib/db";
 
 const args = process.argv.slice(2);
@@ -19,8 +20,9 @@ if (!isValidEmployeeId(employeeId)) {
   console.error("工号需为 3-32 位字母、数字、下划线或中划线。");
   process.exit(1);
 }
-if (password.length < 8) {
-  console.error("密码至少需要 8 个字符。");
+const passwordError = minimumNewPasswordLengthError(password);
+if (passwordError) {
+  console.error(passwordError);
   process.exit(1);
 }
 

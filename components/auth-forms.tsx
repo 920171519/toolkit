@@ -6,6 +6,7 @@ import { AlertCircle, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { changePasswordAction, loginAction, registerAction } from "@/app/(auth)/actions";
 import styles from "@/app/(auth)/auth.module.css";
 import type { ActionState } from "@/lib/action-state";
+import { WEB_NEW_PASSWORD_LENGTH_HINT } from "@/lib/password-policy";
 
 const initial: ActionState = {};
 
@@ -110,7 +111,7 @@ export function RegisterForm() {
         <input id="register-employee-id" className="input" name="employeeId" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} autoComplete="username" autoCapitalize="characters" spellCheck={false} minLength={3} maxLength={32} aria-invalid={Boolean(errors?.employeeId) || undefined} aria-describedby={errors?.employeeId ? "register-employee-id-error" : undefined} required />
         <FieldError id="register-employee-id-error" message={errors?.employeeId} />
       </div>
-      <PasswordField id="register-password" name="password" label="密码" autoComplete="new-password" hint="8–72 个字符" error={errors?.password} />
+      <PasswordField id="register-password" name="password" label="密码" autoComplete="new-password" hint={WEB_NEW_PASSWORD_LENGTH_HINT} error={errors?.password} />
       <PasswordField id="register-confirm-password" name="confirmPassword" label="确认密码" autoComplete="new-password" error={errors?.confirmPassword} />
       <button type="submit" className="button button-primary" disabled={pending}>
         {pending && <LoaderCircle className={styles.spinner} size={16} aria-hidden="true" />}
@@ -129,7 +130,7 @@ export function ChangePasswordForm() {
     <form action={formAction} className={styles.form} data-testid="change-password-form" aria-busy={pending}>
       <FormError message={state?.error} />
       <PasswordField id="change-current-password" name="currentPassword" label="当前密码" autoComplete="current-password" error={errors?.currentPassword} />
-      <PasswordField id="change-new-password" name="newPassword" label="新密码" autoComplete="new-password" hint="8–72 个字符" error={errors?.newPassword} />
+      <PasswordField id="change-new-password" name="newPassword" label="新密码" autoComplete="new-password" hint={WEB_NEW_PASSWORD_LENGTH_HINT} error={errors?.newPassword} />
       <PasswordField id="change-confirm-password" name="confirmPassword" label="确认新密码" autoComplete="new-password" error={errors?.confirmPassword} />
       <div className="form-footer">
         <Link href="/dashboard" prefetch={false} className="button button-secondary">取消</Link>

@@ -5,12 +5,8 @@ import { changeCurrentPassword, destroySession, getCurrentUser, loginWithPasswor
 import { isValidAccountDisplayName, isValidEmployeeId, normalizeEmployeeId } from "@/lib/account-identity";
 import type { ActionState } from "@/lib/action-state";
 import { failure, raw, text } from "@/lib/action-helpers";
+import { webNewPasswordLengthError } from "@/lib/password-policy";
 import { safeWorkspacePath } from "@/lib/return-to";
-
-function passwordLengthError(password: string): string | undefined {
-  if (password.length < 8) return "密码至少需要 8 个字符。";
-  if (password.length > 72) return "密码不能超过 72 个字符。";
-}
 
 export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const name = text(formData, "name");
@@ -22,7 +18,7 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   if (!isValidEmployeeId(employeeId)) {
     fieldErrors.employeeId = "工号需为 3-32 位字母、数字、下划线或中划线。";
   }
-  const passwordError = passwordLengthError(password);
+  const passwordError = webNewPasswordLengthError(password);
   if (passwordError) fieldErrors.password = passwordError;
   if (password !== confirmPassword) fieldErrors.confirmPassword = "两次输入的密码不一致。";
   if (Object.keys(fieldErrors).length > 0) return { error: "请检查注册信息。", fieldErrors };
@@ -60,7 +56,7 @@ export async function changePasswordAction(_prev: ActionState, formData: FormDat
   const confirmation = text(formData, "confirmPassword");
   const fieldErrors: Record<string, string> = {};
   if (!currentPassword) fieldErrors.currentPassword = "请输入当前密码。";
-  const lengthError = passwordLengthError(newPassword);
+  const lengthError = webNewPasswordLengthError(newPassword);
   if (lengthError) fieldErrors.newPassword = lengthError;
   else if (newPassword === currentPassword) fieldErrors.newPassword = "新密码不能与当前密码相同。";
   if (newPassword !== confirmation) fieldErrors.confirmPassword = "两次输入的新密码不一致。";
