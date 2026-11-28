@@ -128,6 +128,10 @@
 | 已无调用的表单错误助手及旧展示数据 | [Action 助手](../../lib/action-helpers.ts)、[状态元数据](../../lib/constants.ts) | 删除闲置声明和字段，错误反馈、标签和样式沿用当前页面引用的内容。 |
 | 风险表单三处入口与 Action 会话检查 | [风险表单](../../components/risk-trial-entry-action.tsx)、[Action 助手](../../lib/action-helpers.ts) | 三处入口共用一个服务端表单。配置和流程 Action 共用会话与刷新规则。 |
 | 部署与本机验证的脚本行为 | [部署脚本](../../scripts/deploy-ubuntu.sh)、[模拟回归](../../tests/deploy-ubuntu.sh) | systemd 检测和停启共用完整服务单元名。生产依赖和页面构建由同一个部署入口执行。 |
+| 新建库与旧库重复声明兼容补列 | [列定义](../../lib/schema.ts)、[启动迁移](../../lib/db.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 八张表的 33 个补列使用相同声明，保留补列、建索引和回填顺序。 |
+| 待转测、集成测试和转正各自处理列表搜索及页码 | [列表参数](../../lib/workflow-list.ts)、[页码窗口](../../lib/list-pagination.ts)、[集成历史回归](../../tests/e2e/integration-history-filters.spec.ts) | 共用读取和序列化。列表修正超范围页码，详情保留有效请求页码。 |
+| 配置导航读取完整项目及责任田分工来判断入口是否可见 | [授权查询](../../lib/access.ts)、[配置导航](../../lib/settings-navigation.ts) | 单次查询返回两项权限是否存在。归档项目经理和责任田主管仍按原分工判断。 |
+| 默认部门和启动可用性缺少部署阶段说明 | [配置示例](../../.env.example)、[部署与运行配置](../../README.md) | 记录浏览器构建、命令进程及账号持久化的实际行为，启动后通过首页验证数据库可用。 |
 
 ## 待核对的规范偏离
 
