@@ -10,13 +10,12 @@ import { integrationAttributionRules, integrationConclusionImpact, PARALLEL_RISK
 import { packageIdentity } from "./package-identity";
 import { discardReportFile, reportArchivePath, resolveReportPath, writeReportFile } from "./report-storage";
 import { readTestReport } from "./test-report-validation";
+import { recordBatchRequestIntegration, refreshVersionAggregate } from "./transfer-request-writes";
 import {
   getPreviousBatchVersions,
   OPEN_BATCH_RESERVATION_SQL,
   OTHER_OPEN_BATCH_RESERVATION_SQL,
   PENDING_BATCH_REQUEST_SQL,
-  recordBatchRequestIntegration,
-  refreshVersionAggregate,
 } from "./transfer-requests";
 import { refreshTrialReadiness } from "./trial-readiness";
 import { invalidateInTestRiskAdmissionsForBatch, invalidateUnreleasedRiskTrialAdmission } from "./trial-risk-admissions";

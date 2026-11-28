@@ -9,7 +9,7 @@ import { isProjectStatus, type ProjectStatus } from "./domain-values";
 import { isAdmin } from "./permissions";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { getNodeApproverRemovalBlocker, getNodeDeletionBlockers, getProjectDeletionBlockers } from "./settings-queries";
-import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
+import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-request-writes";
 import { refreshProjectTrialReadiness } from "./trial-readiness";
 import type { SessionUser } from "./types";
 

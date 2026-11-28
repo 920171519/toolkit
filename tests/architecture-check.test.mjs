@@ -34,6 +34,8 @@ const sources = {
   "lib/actions/risk-trial.ts": 'export { admitRiskTrial } from "../release-workflow";',
   "lib/version-void-workflow.ts": 'export { invalidateAdmission } from "./trial-risk-admissions"; export function voidVersionRecords() {}',
   "lib/trial-risk-admissions.ts": "export function invalidateAdmission() {}",
+  "lib/transfer-requests.ts": 'export const EFFECTIVE_INTEGRATION_STATUS_SQL = "fixture";',
+  "lib/transfer-request-writes.ts": "export function recordBatchRequestIntegration() {}",
   "lib/batch-queries.ts": "export function getBatch() {}",
   "lib/binding-barcode-writer.ts": "export function prepareBindingBarcodeWriter() {} export type BarcodeInput = string;",
 };
@@ -70,6 +72,9 @@ test("allows registered runtime owners and explicit type-only dependencies", (t)
     "lib/db.ts": sources["lib/db.ts"] + ' import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
     "lib/seed.ts": 'import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
     "lib/binding-workflow.ts": sources["lib/binding-workflow.ts"] + ' import { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
+    "lib/batch-workflow.ts": sources["lib/batch-workflow.ts"] + ' import { recordBatchRequestIntegration } from "./transfer-request-writes";',
+    "lib/package-settings.ts": sources["lib/package-settings.ts"] + ' import "./transfer-request-writes";',
+    "scripts/backfill-trial-transfer-requests.ts": 'import "../lib/transfer-request-writes";',
     "scripts/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "tests/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "components/example.ts": [
@@ -77,6 +82,7 @@ test("allows registered runtime owners and explicit type-only dependencies", (t)
       'import { type BatchInput as NamedBatchInput } from "@/lib/batch-workflow";',
       'import type { ProjectInput } from "@/lib/project-settings";',
       'import type { BarcodeInput } from "@/lib/binding-barcode-writer";',
+      'import { EFFECTIVE_INTEGRATION_STATUS_SQL } from "@/lib/transfer-requests";',
       'export type Input = BatchInput | NamedBatchInput | import("@/lib/batch-workflow").BatchInput | ProjectInput;',
       'export { deleteArea } from "@/lib/actions/area-settings";',
     ].join("\n"),
@@ -100,10 +106,13 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
       "export type Input = BatchInput;",
     ].join("\n"),
     "lib/actions/other.ts": 'export const area = require("../area-settings");',
-    "lib/actions/transfer.ts": sources["lib/actions/transfer.ts"] + ' export { submitBindingFlow } from "../binding-workflow";',
+    "lib/actions/transfer.ts": sources["lib/actions/transfer.ts"] + ' export { submitBindingFlow } from "../binding-workflow";'
+      + ' import { recordBatchRequestIntegration } from "../transfer-request-writes";',
     "components/example.ts": 'import "@/lib/db"; import "node:sqlite";',
     "lib/other.ts": 'export { session } from "./session-store"; export { invalidateAdmission } from "./trial-risk-admissions";',
+    "lib/batch-queries.ts": sources["lib/batch-queries.ts"] + ' export { recordBatchRequestIntegration } from "./transfer-request-writes";',
     "lib/binding-queries.ts": 'export { prepareBindingBarcodeWriter } from "./binding-barcode-writer";',
+    "lib/transfer-requests.ts": sources["lib/transfer-requests.ts"] + ' export * from "./transfer-request-writes";',
     "lib/batch-workflow.ts": sources["lib/batch-workflow.ts"] + ' export { getBatch } from "./batch-queries";',
   });
 
@@ -113,6 +122,7 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "lib/wrapper.ts imports the workflow mutation module directly (lib/batch-workflow.ts)",
     "lib/actions/other.ts imports the settings mutation module directly (lib/area-settings.ts)",
     "lib/actions/transfer.ts imports the workflow mutation module directly (lib/binding-workflow.ts)",
+    "lib/actions/transfer.ts imports the workflow mutation module directly (lib/transfer-request-writes.ts)",
     "components/example.ts imports @/lib/db directly",
     "components/example.ts imports node:sqlite directly",
     "proxy.ts imports session storage directly",
@@ -120,7 +130,9 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "proxy.ts imports node:sqlite directly",
     "lib/other.ts imports session storage directly",
     "lib/other.ts imports the workflow mutation module directly (lib/trial-risk-admissions.ts)",
+    "lib/batch-queries.ts imports the workflow mutation module directly (lib/transfer-request-writes.ts)",
     "lib/binding-queries.ts imports the workflow mutation module directly (lib/binding-barcode-writer.ts)",
+    "lib/transfer-requests.ts imports the workflow mutation module directly (lib/transfer-request-writes.ts)",
     "lib/batch-workflow.ts depends on a page query",
   ]) {
     assert.ok(result.stderr.includes(diagnostic), result.stderr);

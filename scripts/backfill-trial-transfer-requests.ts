@@ -2,7 +2,8 @@ import { realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { closeDatabaseAfterError, withImmediateTransaction } from "../lib/sqlite-lifecycle";
-import { backfillTrialTransferRequests, findMissingTrialTransferRequests } from "../lib/transfer-requests";
+import { backfillTrialTransferRequests } from "../lib/transfer-request-writes";
+import { findMissingTrialTransferRequests } from "../lib/transfer-requests";
 
 const SQLITE_READONLY = 8;
 

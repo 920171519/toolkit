@@ -65,6 +65,9 @@ const workflowMutationCallers = new Map([
   ["lib/binding-barcode-writer.ts", ["lib/binding-workflow.ts", "lib/db.ts", "lib/seed.ts"]],
   ["lib/binding-workflow.ts", ["lib/actions/binding.ts"]],
   ["lib/release-workflow.ts", ["lib/actions/release.ts", "lib/actions/risk-trial.ts"]],
+  ["lib/transfer-request-writes.ts", [
+    "lib/batch-workflow.ts", "lib/package-settings.ts", "lib/project-settings.ts", "lib/release-workflow.ts", "lib/transfer-workflow.ts",
+  ]],
   ["lib/transfer-workflow.ts", ["lib/actions/transfer.ts"]],
   ["lib/trial-risk-admissions.ts", ["lib/batch-workflow.ts", "lib/release-workflow.ts", "lib/version-void-workflow.ts"]],
   ["lib/version-void-workflow.ts", ["lib/batch-workflow.ts", "lib/release-workflow.ts"]],

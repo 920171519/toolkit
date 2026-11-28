@@ -18,10 +18,8 @@ import {
 import { insertTrialRiskAdmission, invalidateTrialRiskAdmissionForVersion } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import { releaseFlowUrl } from "./release-flow";
-import {
-  refreshVersionAggregate,
-  TRIAL_PENDING_VERSION_STATUSES_SQL,
-} from "./transfer-requests";
+import { refreshVersionAggregate } from "./transfer-request-writes";
+import { TRIAL_PENDING_VERSION_STATUSES_SQL } from "./transfer-requests";
 import { getVersionForVoid } from "./version-void";
 import { voidVersionRecords } from "./version-void-workflow";
 

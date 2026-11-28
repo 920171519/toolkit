@@ -14,7 +14,7 @@ import {
   type LegacyReleaseStatus,
   type LegacyVersionMetadata,
 } from "./settings-queries";
-import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-requests";
+import { backfillTrialTransferRequests, refreshScopedPendingVersions } from "./transfer-request-writes";
 import type { SessionUser } from "./types";
 import { LEGACY_VERSION_IMPORT_EVENT } from "./version-scope";
 

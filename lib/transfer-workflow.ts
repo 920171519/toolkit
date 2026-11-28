@@ -5,7 +5,8 @@ import { createAuditLogWriter } from "./audit-log";
 import { db, one, run, transaction } from "./db";
 import { assert, DomainError } from "./domain-error";
 import { invalidTransferFields, TRANSFER_CHANGE_SUMMARY_MIN_LENGTH, type TransferFormFields } from "./transfer-form-validation";
-import { getActiveTransferProjects, insertTransferRequest } from "./transfer-requests";
+import { insertTransferRequest } from "./transfer-request-writes";
+import { getActiveTransferProjects } from "./transfer-requests";
 import type { SessionUser } from "./types";
 
 const audit = createAuditLogWriter(db);
