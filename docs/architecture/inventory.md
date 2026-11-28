@@ -149,6 +149,10 @@
 | 数据库结构包含空闲版本常量 | [启动迁移](../../lib/db.ts)、[建表和补列](../../lib/schema.ts)、[冷启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 以实际数据库结构及共用列定义执行迁移，保留已有库的持久值。 |
 | 集成历史为直接跳转的版本读取试制引导，并逐行加载账号范围 | [集成详情](../../app/(workspace)/integration/[id]/page.tsx)、[发布引导](../../lib/release-guidance.ts)、[试制回归](../../tests/e2e/trial-eligibility.spec.ts) | 先走原有跳转分支，试制引导使用同次渲染的授权范围。旧配套仍按通过项的版本编号关联。 |
 | 按项目查看软件包时在全量摘要读取后过滤使用范围 | [软件包查询](../../lib/package-queries.ts)、[包工作区](../../app/(workspace)/packages/page.tsx)、[浏览器回归](../../tests/e2e/package-experience.spec.ts) | SQL 在读取摘要前取交集。其余在行项目、历史权限和详情接口沿用原业务定义。 |
+| 未筛选的历史页同范围计数发生两次 | [集成列表](../../app/(workspace)/integration/page.tsx)、[历史筛选回归](../../tests/e2e/integration-history-filters.spec.ts) | 共用分页总数。筛选时保留全范围标签数字，归档使用列表分页数量。 |
+| 批次列表读取完整详情和报告字段 | [批次读取](../../lib/batch-queries.ts)、[工作流验证](../../tests/e2e/workflow.spec.ts) | 列表读取 13 个字段，详情继续提供完整证据。范围、顺序和分页相同。 |
+| 三条电子流写入各自维护条码插入 SQL | [条码写入](../../lib/binding-barcode-writer.ts)、[旧库补列](../../lib/db.ts)、[流程验证](../../tests/e2e/binding-controls.spec.ts) | 共用预编译写入，调用方保留连接、事务、顺序和审计。 |
+| 批次的三个集成动作分别写入转测申请双状态 | [转测申请](../../lib/transfer-requests.ts)、[批次流程](../../lib/batch-workflow.ts)、[试制资格回归](../../tests/e2e/trial-eligibility.spec.ts) | 共用有类型约束的集成状态写入，原状态和阶段资格各按原命令检查。 |
 
 ## 待核对的规范偏离
 

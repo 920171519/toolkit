@@ -41,7 +41,7 @@
 | 共享版本状态 | `package_versions` | `release-workflow` 办理共享试制及转正，`version-void-workflow` 负责写入作废记录。 |
 | 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `transfer-workflow` 创建申请，`batch-workflow` 写入验收，`release-workflow` 更新发布状态。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
 | 批次与完整配套 | `integration_batches`、`batch_items` | `batch-workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
-| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `release-workflow` 保存试制时的配置快照，`binding-workflow` 写入后续绑定和节点结果。`binding-availability` 定义绑定办理所需的发布阶段和节点状态，`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
+| 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `release-workflow` 保存试制配置快照，`binding-workflow` 记录后续办理，`binding-barcode-writer` 统一条码插入。`binding-availability` 定义办理状态，`binding-barcode-results` 定义判定和门槛，`trial-readiness` 根据节点确认、免绑及证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |
 | 目录和流程筛选 | URL 参数、浏览器当前页面状态 | `lib/search-text.ts` 提供普通搜索输入规则，专用队列保留各自参数。`lib/list-pagination.ts` 计算筛选后范围。筛选弹窗根据字段推导提交和清除参数。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
@@ -56,7 +56,7 @@
 
 页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
-`lib/release-workflow.ts`、`lib/binding-workflow.ts`、`lib/transfer-workflow.ts`、`lib/batch-workflow.ts` 和 `lib/version-void-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts`、`lib/release-queue-queries.ts`、`lib/package-queries.ts` 和 `lib/organization-queries.ts`。流程和设置写入按运行时允许调用方检查，涵盖页面、布局、组件、接口、业务模块和代理入口。流程命令由对应 Action 调用，批次和发布命令可以调用整版作废记录写入。风险试制登记由 `lib/trial-risk-admissions.ts` 保存，只允许发布、批次和整版作废命令调用。设置命令由设置 Action 调用。类型依赖仍纳入循环检查，测试和维护脚本按各自职责验证。应用中的会话存储调用来自认证和账号设置模块。
+`lib/release-workflow.ts`、`lib/binding-workflow.ts`、`lib/transfer-workflow.ts`、`lib/batch-workflow.ts` 和 `lib/version-void-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts`、`lib/release-queue-queries.ts`、`lib/package-queries.ts` 和 `lib/organization-queries.ts`。流程和设置写入按运行时允许调用方检查，涵盖页面、布局、组件、接口、业务模块和代理入口。流程命令由对应 Action 调用，批次和发布命令可以调用整版作废记录写入。风险试制登记由 `lib/trial-risk-admissions.ts` 保存，只允许发布、批次和整版作废命令调用。设置命令由设置 Action 调用。应用中的条码写入调用来自绑定办理、启动补列与演示初始化。类型依赖仍纳入循环检查，测试和维护脚本按各自职责验证。应用中的会话存储调用来自认证和账号设置模块。
 
 架构检查同时核对工作区的实际页面、`lib/return-to.ts` 回跳范围和 `proxy.ts` 的静态 matcher。项目总览表头和返回地址共用 `lib/project-overview-filters.ts` 的列定义，责任田、软件包和人员目录共用 `lib/settings-directory.ts` 的定义。
 
