@@ -95,8 +95,8 @@ for (const file of files.sort()) {
   const name = displayPath(file);
   if (name === "proxy.ts" || name === "lib/return-to.ts") routeSources.set(name, source);
   const dependencies = new Set();
-  const isEntrypoint = entrypointDirectories.some((directory) => name.startsWith(directory));
-  const isApplicationModule = isEntrypoint || name.startsWith("lib/") || name === "proxy.ts";
+  const isEntrypoint = name === "proxy.ts" || entrypointDirectories.some((directory) => name.startsWith(directory));
+  const isApplicationModule = isEntrypoint || name.startsWith("lib/");
   for (const [specifier, runtime] of importSpecifiers(source)) {
     const resolved = ts.resolveModuleName(specifier, file, options, ts.sys, cache).resolvedModule;
     const dependency = resolved && ownedFiles.get(canonicalPath(resolved.resolvedFileName));

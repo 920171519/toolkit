@@ -54,7 +54,7 @@
 
 软件包抽屉的授权投影由 `lib/package-queries.ts` 的 `getPackageDrawerData` 提供。底层详情读取为模块私有，由页面首屏与 HTTP 入口共用的授权投影负责权限与字段裁剪。
 
-页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/` 和 `lib/actions/` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
+页面、布局、组件、HTTP 接口和业务 Action 通过服务端业务或查询模块访问数据。架构检查按解析后的模块核对 `app/`、`components/`、`lib/actions/` 和 `proxy.ts` 的数据库依赖，拦截直接导入数据库连接或 `node:sqlite`。报告查询按批次读取权限投影证据，接口处理登录、状态码和下载。公开首页只读取在行项目联系人，登录后的目录和配置按各自范围读取归档项目。
 
 `lib/release-workflow.ts`、`lib/binding-workflow.ts`、`lib/transfer-workflow.ts`、`lib/batch-workflow.ts` 和 `lib/version-void-workflow.ts` 从领域模块读取事务需要的事实。架构检查拦截这些写入模块直接依赖 `lib/workbench-queries.ts`、`lib/version-trace-queries.ts`、`lib/binding-queries.ts`、`lib/batch-queries.ts`、`lib/pending-transfer-queries.ts`、`lib/release-queue-queries.ts`、`lib/package-queries.ts` 和 `lib/organization-queries.ts`。流程和设置写入按运行时允许调用方检查，涵盖页面、布局、组件、接口、业务模块和代理入口。流程命令由对应 Action 调用，批次和发布命令可以调用整版作废记录写入。风险试制登记由 `lib/trial-risk-admissions.ts` 保存，只允许发布、批次和整版作废命令调用。设置命令由设置 Action 调用。应用中的条码写入调用来自绑定办理、启动补列与演示初始化。类型依赖仍纳入循环检查，测试和维护脚本按各自职责验证。应用中的会话存储调用来自认证和账号设置模块。
 

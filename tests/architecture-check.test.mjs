@@ -88,7 +88,11 @@ test("allows registered runtime owners and explicit type-only dependencies", (t)
 
 test("rejects invalid workflow, settings, SQLite and session-store dependencies", (t) => {
   const result = checkFixture(t, {
-    "proxy.ts": sources["proxy.ts"] + ' import { session } from "./lib/session-store"; export const data = session;',
+    "proxy.ts": [
+      sources["proxy.ts"],
+      'import "@/lib/db"; import "node:sqlite";',
+      'import { session } from "./lib/session-store"; export const data = session;',
+    ].join("\n"),
     "app/api/example/route.ts": 'export const batch = import("@/lib/batch-workflow");',
     "lib/wrapper.ts": [
       'export { voidVersionRecords } from "./batch-workflow";',
@@ -112,6 +116,8 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
     "components/example.ts imports @/lib/db directly",
     "components/example.ts imports node:sqlite directly",
     "proxy.ts imports session storage directly",
+    "proxy.ts imports @/lib/db directly",
+    "proxy.ts imports node:sqlite directly",
     "lib/other.ts imports session storage directly",
     "lib/other.ts imports the workflow mutation module directly (lib/trial-risk-admissions.ts)",
     "lib/binding-queries.ts imports the workflow mutation module directly (lib/binding-barcode-writer.ts)",
