@@ -16,24 +16,68 @@ function sqlValues(values: readonly string[]) {
   return values.map((value) => `'${value}'`).join(",");
 }
 
-export const PROJECT_STAGE_COLUMN_SQL =
-  `stage TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${sqlValues(PROJECT_STAGES)}))`;
-
-export const PACKAGE_VERSION_BUILD_URL_COLUMN_SQL = "build_url TEXT";
-export const TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL = "release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'";
-export const TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL = "risk_conclusion TEXT";
-
-export const BINDING_BARCODE_REVIEW_COLUMNS = {
-  validation_result: `TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN (${sqlValues(BINDING_BARCODE_RESULTS)}))`,
-  validated_at: "TEXT",
-  validated_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
-  failure_reason: "TEXT",
-  failure_reason_at: "TEXT",
-  failure_reason_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+export const ADDITIVE_COLUMNS = {
+  projects: {
+    software_manager_id: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    stage: `TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${sqlValues(PROJECT_STAGES)}))`,
+  },
+  binding_flows: {
+    web_url: "TEXT",
+    reviewed_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+  },
+  binding_flow_barcodes: {
+    validation_result: `TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN (${sqlValues(BINDING_BARCODE_RESULTS)}))`,
+    validated_at: "TEXT",
+    validated_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    failure_reason: "TEXT",
+    failure_reason_at: "TEXT",
+    failure_reason_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+  },
+  version_transfer_requests: {
+    release_mode: "TEXT NOT NULL DEFAULT 'INTEGRATION'",
+    risk_conclusion: "TEXT",
+    integration_status: "TEXT CHECK (integration_status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED'))",
+  },
+  batch_items: {
+    issue_affected: "INTEGER NOT NULL DEFAULT 0 CHECK (issue_affected IN (0,1))",
+  },
+  packages: {
+    trial_overdue_days: "INTEGER NOT NULL DEFAULT 7",
+  },
+  package_versions: {
+    build_url: "TEXT",
+    binding_mode: "TEXT NOT NULL DEFAULT 'PENDING'",
+    binding_reason: "TEXT",
+    binding_decided_at: "TEXT",
+    binding_decided_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    void_kind: "TEXT",
+    voided_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    trial_review_minutes: "TEXT",
+    formal_review_minutes: "TEXT",
+  },
+  binding_requirements: {
+    pushed_at: "TEXT",
+    pushed_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    decision_reason: "TEXT",
+    waived_at: "TEXT",
+    waived_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    confirmed_at: "TEXT",
+    confirmed_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    barcode_revision: "INTEGER NOT NULL DEFAULT 0 CHECK (barcode_revision >= 0)",
+    barcode_confirmation: "INTEGER NOT NULL DEFAULT 0 CHECK (barcode_confirmation IN (0,1))",
+  },
 } as const;
 
-const bindingBarcodeReviewColumnsSql = Object.entries(BINDING_BARCODE_REVIEW_COLUMNS)
-  .map(([column, definition]) => `${column} ${definition}`).join(",\n  ");
+export type AdditiveTable = keyof typeof ADDITIVE_COLUMNS;
+
+function columnSql<Table extends AdditiveTable>(table: Table, name: keyof (typeof ADDITIVE_COLUMNS)[Table] & string) {
+  return `${name} ${ADDITIVE_COLUMNS[table][name]}`;
+}
+
+function additiveColumnsSql(table: AdditiveTable) {
+  return Object.entries(ADDITIVE_COLUMNS[table])
+    .map(([name, definition]) => `${name} ${definition}`).join(",\n  ");
+}
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -106,9 +150,9 @@ CREATE TABLE IF NOT EXISTS projects (
   code TEXT NOT NULL UNIQUE COLLATE NOCASE,
   description TEXT NOT NULL DEFAULT '',
   pm_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ${columnSql("projects", "software_manager_id")},
   status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN (${sqlValues(PROJECT_STATUSES)})),
-  ${PROJECT_STAGE_COLUMN_SQL},
+  ${columnSql("projects", "stage")},
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
@@ -133,7 +177,7 @@ CREATE TABLE IF NOT EXISTS packages (
   area_id INTEGER REFERENCES areas(id) ON DELETE SET NULL,
   owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
-  trial_overdue_days INTEGER NOT NULL DEFAULT 7,
+  ${columnSql("packages", "trial_overdue_days")},
   created_at TEXT NOT NULL
 );
 
@@ -156,23 +200,23 @@ CREATE TABLE IF NOT EXISTS package_versions (
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   submitted_at TEXT NOT NULL,
   trial_form_no TEXT,
-  trial_review_minutes TEXT,
+  ${columnSql("package_versions", "trial_review_minutes")},
   trial_released_at TEXT,
   formal_released_at TEXT,
   form_flow_no TEXT,
-  formal_review_minutes TEXT,
+  ${columnSql("package_versions", "formal_review_minutes")},
   release_mode TEXT NOT NULL DEFAULT 'INTEGRATION',
   risk_conclusion TEXT,
-  binding_mode TEXT NOT NULL DEFAULT 'PENDING',
-  binding_reason TEXT,
-  binding_decided_at TEXT,
-  binding_decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  void_kind TEXT,
-  voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ${columnSql("package_versions", "binding_mode")},
+  ${columnSql("package_versions", "binding_reason")},
+  ${columnSql("package_versions", "binding_decided_at")},
+  ${columnSql("package_versions", "binding_decided_by")},
+  ${columnSql("package_versions", "void_kind")},
+  ${columnSql("package_versions", "voided_by")},
   void_reason TEXT,
   voided_at TEXT,
   updated_at TEXT NOT NULL,
-  ${PACKAGE_VERSION_BUILD_URL_COLUMN_SQL},
+  ${columnSql("package_versions", "build_url")},
   UNIQUE(package_id, version)
 );
 
@@ -182,7 +226,7 @@ CREATE TABLE IF NOT EXISTS version_transfer_requests (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'PENDING'
     CHECK (status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED','TRIAL','PENDING_FORMAL','FORMAL','VOID','CANCELLED')),
-  integration_status TEXT CHECK (integration_status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')),
+  ${columnSql("version_transfer_requests", "integration_status")},
   trial_form_no TEXT,
   trial_released_at TEXT,
   trial_released_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -193,8 +237,8 @@ CREATE TABLE IF NOT EXISTS version_transfer_requests (
   voided_at TEXT,
   submitted_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  ${TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL},
-  ${TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL},
+  ${columnSql("version_transfer_requests", "release_mode")},
+  ${columnSql("version_transfer_requests", "risk_conclusion")},
   UNIQUE(package_version_id, project_id)
 );
 
@@ -269,7 +313,7 @@ CREATE TABLE IF NOT EXISTS batch_items (
   trial_versions TEXT,
   previous_test_version TEXT,
   changed_vs_previous INTEGER NOT NULL DEFAULT 0,
-  issue_affected INTEGER NOT NULL DEFAULT 0 CHECK (issue_affected IN (0,1)),
+  ${columnSql("batch_items", "issue_affected")},
   UNIQUE(batch_id, package_id)
 );
 
@@ -314,7 +358,7 @@ CREATE TABLE IF NOT EXISTS binding_flow_barcodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   flow_id INTEGER NOT NULL REFERENCES binding_flows(id) ON DELETE CASCADE,
   barcode TEXT NOT NULL,
-  ${bindingBarcodeReviewColumnsSql},
+  ${additiveColumnsSql("binding_flow_barcodes")},
   created_at TEXT NOT NULL
 );
 
@@ -328,15 +372,7 @@ CREATE TABLE IF NOT EXISTS binding_requirements (
   binding_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','PASSED','CANCELLED')),
-  pushed_at TEXT,
-  pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  decision_reason TEXT,
-  waived_at TEXT,
-  waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  confirmed_at TEXT,
-  confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  barcode_revision INTEGER NOT NULL DEFAULT 0 CHECK (barcode_revision >= 0),
-  barcode_confirmation INTEGER NOT NULL DEFAULT 0 CHECK (barcode_confirmation IN (0,1)),
+  ${additiveColumnsSql("binding_requirements")},
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(package_version_id, project_id, node_id)
@@ -358,10 +394,10 @@ CREATE TABLE IF NOT EXISTS binding_flows (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
   node_id INTEGER NOT NULL REFERENCES project_nodes(id) ON DELETE RESTRICT,
   device_barcode TEXT NOT NULL,
-  web_url TEXT,
+  ${columnSql("binding_flows", "web_url")},
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ${columnSql("binding_flows", "reviewed_by")},
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN (${sqlValues(BINDING_FLOW_STATUSES)})),
   submitted_at TEXT NOT NULL,
   reviewed_at TEXT,

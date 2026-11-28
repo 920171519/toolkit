@@ -3,14 +3,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parseBindingBarcodeText } from "./binding-barcode-results";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
-import {
-  BINDING_BARCODE_REVIEW_COLUMNS,
-  PACKAGE_VERSION_BUILD_URL_COLUMN_SQL,
-  PROJECT_STAGE_COLUMN_SQL,
-  SCHEMA_SQL,
-  TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL,
-  TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL,
-} from "./schema";
+import { ADDITIVE_COLUMNS, SCHEMA_SQL, type AdditiveTable } from "./schema";
 import { seedDatabase } from "./seed";
 import { closeDatabaseAfterError, withImmediateTransaction, type SynchronousTransactionCallback } from "./sqlite-lifecycle";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
@@ -40,18 +33,30 @@ function createDatabase(): DatabaseSync {
   return database;
 }
 
+function getColumnNames(database: DatabaseSync, table: AdditiveTable) {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return new Set(columns.map(({ name }) => name));
+}
+
+// The caller can use the original column names to gate data backfills.
+function addMissingColumns(database: DatabaseSync, table: AdditiveTable) {
+  const originalColumns = getColumnNames(database, table);
+  for (const [column, definition] of Object.entries(ADDITIVE_COLUMNS[table])) {
+    if (!originalColumns.has(column)) {
+      database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
+  return originalColumns;
+}
+
 function migrateSchema(database: DatabaseSync) {
-  const projectColumns = database
-    .prepare("PRAGMA table_info(projects)")
-    .all() as Array<{ name: string }>;
-  if (!projectColumns.some((column) => column.name === "software_manager_id")) {
-    database.exec(
-      "ALTER TABLE projects ADD COLUMN software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
-    );
+  const projectColumns = getColumnNames(database, "projects");
+  if (!projectColumns.has("software_manager_id")) {
+    database.exec(`ALTER TABLE projects ADD COLUMN software_manager_id ${ADDITIVE_COLUMNS.projects.software_manager_id}`);
   }
   database.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(software_manager_id);");
-  if (!projectColumns.some((column) => column.name === "stage")) {
-    database.exec(`ALTER TABLE projects ADD COLUMN ${PROJECT_STAGE_COLUMN_SQL}`);
+  if (!projectColumns.has("stage")) {
+    database.exec(`ALTER TABLE projects ADD COLUMN stage ${ADDITIVE_COLUMNS.projects.stage}`);
   }
   // Backfill the current node pool from the primary approver in older databases.
   database.exec(
@@ -64,23 +69,8 @@ function migrateSchema(database: DatabaseSync) {
          WHERE a.node_id = n.id AND a.user_id = n.binding_approver_id
        )`,
   );
-  const flowColumns = database
-    .prepare("PRAGMA table_info(binding_flows)")
-    .all() as Array<{ name: string }>;
-  if (!flowColumns.some((column) => column.name === "web_url")) {
-    database.exec("ALTER TABLE binding_flows ADD COLUMN web_url TEXT");
-  }
-  if (!flowColumns.some((column) => column.name === "reviewed_by")) {
-    database.exec("ALTER TABLE binding_flows ADD COLUMN reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL");
-  }
-  const barcodeColumns = database
-    .prepare("PRAGMA table_info(binding_flow_barcodes)")
-    .all() as Array<{ name: string }>;
-  for (const [column, definition] of Object.entries(BINDING_BARCODE_REVIEW_COLUMNS)) {
-    if (!barcodeColumns.some(({ name }) => name === column)) {
-      database.exec(`ALTER TABLE binding_flow_barcodes ADD COLUMN ${column} ${definition}`);
-    }
-  }
+  addMissingColumns(database, "binding_flows");
+  addMissingColumns(database, "binding_flow_barcodes");
   const legacyBarcodeFlows = database.prepare(
     `SELECT f.id, f.device_barcode AS barcodes, f.submitted_at AS submittedAt
      FROM binding_flows f
@@ -92,66 +82,13 @@ function migrateSchema(database: DatabaseSync) {
     const barcodes = new Set(parseBindingBarcodeText(flow.barcodes));
     for (const barcode of barcodes) insertBarcode.run(flow.id, barcode, flow.submittedAt);
   }
-  const requestColumns = database
-    .prepare("PRAGMA table_info(version_transfer_requests)")
-    .all() as Array<{ name: string }>;
-  if (!requestColumns.some((column) => column.name === "release_mode")) {
-    database.exec(`ALTER TABLE version_transfer_requests ADD COLUMN ${TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL}`);
-  }
-  if (!requestColumns.some((column) => column.name === "risk_conclusion")) {
-    database.exec(`ALTER TABLE version_transfer_requests ADD COLUMN ${TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL}`);
-  }
-  if (!requestColumns.some((column) => column.name === "integration_status")) {
-    database.exec(
-      "ALTER TABLE version_transfer_requests ADD COLUMN integration_status TEXT CHECK (integration_status IN ('PENDING','IN_TEST','PASSED','FAILED','BLOCKED'))",
-    );
-  }
-  const batchItemColumns = database
-    .prepare("PRAGMA table_info(batch_items)")
-    .all() as Array<{ name: string }>;
-  if (!batchItemColumns.some((column) => column.name === "issue_affected")) {
-    database.exec("ALTER TABLE batch_items ADD COLUMN issue_affected INTEGER NOT NULL DEFAULT 0 CHECK (issue_affected IN (0,1))");
-  }
-  const packageColumns = database
-    .prepare("PRAGMA table_info(packages)")
-    .all() as Array<{ name: string }>;
-  if (!packageColumns.some((column) => column.name === "trial_overdue_days")) {
-    database.exec("ALTER TABLE packages ADD COLUMN trial_overdue_days INTEGER NOT NULL DEFAULT 7");
-  }
-  const versionColumns = database
-    .prepare("PRAGMA table_info(package_versions)")
-    .all() as Array<{ name: string }>;
-  for (const [name, sql] of [
-    ["build_url", `ALTER TABLE package_versions ADD COLUMN ${PACKAGE_VERSION_BUILD_URL_COLUMN_SQL}`],
-    ["binding_mode", "ALTER TABLE package_versions ADD COLUMN binding_mode TEXT NOT NULL DEFAULT 'PENDING'"],
-    ["binding_reason", "ALTER TABLE package_versions ADD COLUMN binding_reason TEXT"],
-    ["binding_decided_at", "ALTER TABLE package_versions ADD COLUMN binding_decided_at TEXT"],
-    ["binding_decided_by", "ALTER TABLE package_versions ADD COLUMN binding_decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["void_kind", "ALTER TABLE package_versions ADD COLUMN void_kind TEXT"],
-    ["voided_by", "ALTER TABLE package_versions ADD COLUMN voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["trial_review_minutes", "ALTER TABLE package_versions ADD COLUMN trial_review_minutes TEXT"],
-    ["formal_review_minutes", "ALTER TABLE package_versions ADD COLUMN formal_review_minutes TEXT"],
-  ]) {
-    if (!versionColumns.some((column) => column.name === name)) database.exec(sql);
-  }
-  const requirementColumns = database
-    .prepare("PRAGMA table_info(binding_requirements)")
-    .all() as Array<{ name: string }>;
-  for (const [name, sql] of [
-    ["pushed_at", "ALTER TABLE binding_requirements ADD COLUMN pushed_at TEXT"],
-    ["pushed_by", "ALTER TABLE binding_requirements ADD COLUMN pushed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["decision_reason", "ALTER TABLE binding_requirements ADD COLUMN decision_reason TEXT"],
-    ["waived_at", "ALTER TABLE binding_requirements ADD COLUMN waived_at TEXT"],
-    ["waived_by", "ALTER TABLE binding_requirements ADD COLUMN waived_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["confirmed_at", "ALTER TABLE binding_requirements ADD COLUMN confirmed_at TEXT"],
-    ["confirmed_by", "ALTER TABLE binding_requirements ADD COLUMN confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["barcode_revision", "ALTER TABLE binding_requirements ADD COLUMN barcode_revision INTEGER NOT NULL DEFAULT 0 CHECK (barcode_revision >= 0)"],
-    ["barcode_confirmation", "ALTER TABLE binding_requirements ADD COLUMN barcode_confirmation INTEGER NOT NULL DEFAULT 0 CHECK (barcode_confirmation IN (0,1))"],
-  ]) {
-    if (!requirementColumns.some((column) => column.name === name)) database.exec(sql);
-  }
+  addMissingColumns(database, "version_transfer_requests");
+  addMissingColumns(database, "batch_items");
+  addMissingColumns(database, "packages");
+  const versionColumns = addMissingColumns(database, "package_versions");
+  const requirementColumns = addMissingColumns(database, "binding_requirements");
   database.exec("UPDATE package_versions SET build_url = archive_url WHERE build_url IS NULL");
-  if (!requirementColumns.some((column) => column.name === "pushed_at")) {
+  if (!requirementColumns.has("pushed_at")) {
     database.exec(
       `UPDATE binding_requirements SET pushed_at = created_at
        WHERE request_id IN (
@@ -159,7 +96,7 @@ function migrateSchema(database: DatabaseSync) {
        )`,
     );
   }
-  if (!versionColumns.some((column) => column.name === "binding_mode")) {
+  if (!versionColumns.has("binding_mode")) {
     database.exec(
       `UPDATE package_versions SET binding_mode = 'PUSHED'
        WHERE status IN ('TRIAL','PENDING_FORMAL','FORMAL')
