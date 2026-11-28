@@ -140,6 +140,9 @@
 | 浏览器用例固定关闭会话 Cookie 的 Secure 属性 | [Playwright 环境](../../playwright.config.ts)、[Cookie 回归](../../tests/e2e/session-cookie.spec.ts) | 运行实际协议识别并检查 Cookie 属性，本地环境文件继续隔离。 |
 | 十处分工写入各自读取启用账号 | [启用账号读取](../../lib/assignment-accounts.ts)、[项目写入](../../lib/project-settings.ts)、[绑定写入](../../lib/binding-workflow.ts) | 共享持久化条件，保留实际取字段、既有事务位置及错误顺序。 |
 | 演示数据用写锁取得前的空库读取决定是否写入 | [演示数据入口](../../lib/seed.ts)、[生命周期工具](../../lib/sqlite-lifecycle.ts)、[并发回归](../../tests/e2e/seed-transaction.spec.ts) | 写锁内复核。前置读取保留常规启动路径，错误回滚沿用统一规则。 |
+| WAL 初始化在旧库写锁竞争时立即退出 | [连接配置](../../lib/sqlite-lifecycle.ts)、[数据库打开](../../lib/db.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 只重试该连接的 WAL 设置，继续使用原来 5 秒窗口。已有数据、回退日志模式和其他错误沿用原契约。 |
+| 筛选表头重复向弹窗传输派生参数 | [筛选表头](../../components/column-filter-header.tsx)、[筛选弹窗](../../components/column-filter-popover.tsx) | 弹窗从输入推导自身字段及需保留的值。排序、项目、命名空间分页、清空和无脚本表单保持一致。 |
+| 转测和组织目录分别维护三类责任田分工来源 | [责任田分工读取](../../lib/area-memberships.ts)、[授权](../../lib/access.ts)、[组织目录](../../lib/organization-queries.ts) | 同一成员事实供查询和权限使用，各自保留历史记录与数据展示范围。 |
 
 ## 待核对的规范偏离
 
