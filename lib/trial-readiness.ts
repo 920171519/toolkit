@@ -105,7 +105,7 @@ export function getFormalReleaseCheck(
   };
 }
 
-function createTrialReadinessRefresher(database: DatabaseSync, timestamp: string) {
+export function createTrialReadinessRefresher(database: DatabaseSync, timestamp: string) {
   // Reuse statements for this refresh. Each version still reads the current state in order.
   let findVersion: StatementSync | undefined;
   let readBindings: StatementSync | undefined;

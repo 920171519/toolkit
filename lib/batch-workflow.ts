@@ -17,7 +17,7 @@ import {
   OTHER_OPEN_BATCH_RESERVATION_SQL,
   PENDING_BATCH_REQUEST_SQL,
 } from "./transfer-requests";
-import { refreshTrialReadiness } from "./trial-readiness";
+import { createTrialReadinessRefresher } from "./trial-readiness";
 import { invalidateInTestRiskAdmissionsForBatch, invalidateUnreleasedRiskTrialAdmission } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import { voidVersionRecords } from "./version-void-workflow";
@@ -190,7 +190,8 @@ export function createBatchDraft(actor: SessionUser, input: CreateBatchInput) {
       );
       if (item.requestId) refreshVersions.add(item.versionId);
     }
-    for (const versionId of refreshVersions) refreshTrialReadiness(db, versionId, timestamp);
+    const refreshReadiness = createTrialReadinessRefresher(db, timestamp);
+    for (const versionId of refreshVersions) refreshReadiness(versionId);
     audit(actor.id, draftId ? "UPDATE_BATCH_DRAFT" : "CREATE_BATCH", "BATCH", batchId, `${draftId ? "调整" : "创建"} ${code}（${project.name}）转测草稿，${items.length} 个包，${changedCount} 个变更包`);
     return batchId;
   });
@@ -211,7 +212,8 @@ export function deleteDraftBatch(actor: SessionUser, batchId: number) {
     );
     run("DELETE FROM integration_batches WHERE id = ?", batchId);
     const timestamp = now();
-    for (const version of versionIds) refreshTrialReadiness(db, version.id, timestamp);
+    const refreshReadiness = createTrialReadinessRefresher(db, timestamp);
+    for (const version of versionIds) refreshReadiness(version.id);
     audit(actor.id, "DELETE_BATCH_DRAFT", "BATCH", batchId, `删除 ${batch.code} 转测草稿`);
   });
 }
@@ -235,9 +237,10 @@ export function sendBatch(actor: SessionUser, batchId: number) {
       recordBatchRequestIntegration(db, item.transferRequestId, "IN_TEST", timestamp);
       versionIds.add(item.versionId);
     }
+    const refreshReadiness = createTrialReadinessRefresher(db, timestamp);
     for (const versionId of versionIds) {
       refreshVersionAggregate(db, versionId, timestamp);
-      refreshTrialReadiness(db, versionId, timestamp);
+      refreshReadiness(versionId);
     }
     audit(actor.id, "SEND_BATCH", "BATCH", batchId, `发起 ${batch.code}（${batch.project_name}）整套配套转测，${changes.length} 个变更包`);
     return batch.code;
@@ -262,10 +265,11 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
     );
     const timestamp = now();
     run("UPDATE integration_batches SET status = 'TERMINATED', terminated_at = ?, terminate_reason = ? WHERE id = ?", timestamp, reason.trim(), batchId);
+    const refreshReadiness = createTrialReadinessRefresher(db, timestamp);
     for (const request of requests) {
       recordBatchRequestIntegration(db, request.id, "PENDING", timestamp);
       refreshVersionAggregate(db, request.package_version_id, timestamp);
-      refreshTrialReadiness(db, request.package_version_id, timestamp);
+      refreshReadiness(request.package_version_id);
     }
     invalidateInTestRiskAdmissionsForBatch(db, batchId, timestamp);
     audit(actor.id, "TERMINATE_BATCH", "BATCH", batchId, `终止 ${batch.code} 集成测试：${reason.trim()}`);
@@ -384,6 +388,7 @@ export async function completeBatchTest(
       );
       const requestStatus = input.conclusion === "PASS" ? "PASSED" : input.conclusion === "FAIL" ? "FAILED" : "BLOCKED";
       let voidedCount = 0;
+      const refreshReadiness = createTrialReadinessRefresher(db, timestamp);
       for (const item of items) {
         if (affected.has(item.version_id)) {
           run("UPDATE batch_items SET issue_affected = 1 WHERE batch_id = ? AND package_version_id = ?", batchId, item.version_id);
@@ -399,7 +404,7 @@ export async function completeBatchTest(
           invalidateUnreleasedRiskTrialAdmission(db, item.version_id, timestamp);
         }
         refreshVersionAggregate(db, item.version_id, timestamp);
-        refreshTrialReadiness(db, item.version_id, timestamp);
+        refreshReadiness(item.version_id);
       }
       audit(actor.id, "COMPLETE_BATCH", "BATCH", batchId, `提交 ${batch.code} 测试结论：${input.conclusion}，上传报告 ${file.name}`);
       return { voidedCount };
