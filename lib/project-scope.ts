@@ -1,8 +1,7 @@
 import "server-only";
 
 import { notFound } from "next/navigation";
-import { canAccessProjectPage, getProjectWorkflowProjectIds, getReadablePackageIds } from "./access";
-import { one } from "./db";
+import { canAccessProjectPage, getProjectWorkflowProjectIds, hasReadablePackageInProject } from "./access";
 import { getProjectOption, getProjectOptions } from "./project-queries";
 import type { SessionUser } from "./types";
 
@@ -20,9 +19,7 @@ export function getReadablePackageProject(user: SessionUser, projectId: number) 
   if (!Number.isSafeInteger(projectId) || projectId < 1) return undefined;
   const project = getProjectOption(projectId);
   if (!project || canAccessProjectPage(user, projectId)) return project;
-  const packageIds = getReadablePackageIds(user);
-  return one(`SELECT 1 FROM package_usages WHERE project_id = ? AND package_id IN (SELECT value FROM json_each(?)) LIMIT 1`,
-    projectId, JSON.stringify(packageIds)) ? project : undefined;
+  return hasReadablePackageInProject(user, projectId) ? project : undefined;
 }
 
 export function requireReadablePackageProject(user: SessionUser, value: string | string[] | undefined) {

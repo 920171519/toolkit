@@ -292,7 +292,8 @@ export function getReadableLinkedBatchEvidence(
   return { batchId, batchProjectId, batchStatus, batchCode, batchConclusion };
 }
 
-const batchEvidenceScopeCtes = `readable_projects AS (SELECT value AS id FROM json_each(?)),
+const readableProjectsCte = "readable_projects AS (SELECT value AS id FROM json_each(?))";
+const batchEvidenceScopeCtes = `${readableProjectsCte},
   managed_projects AS (SELECT value AS id FROM json_each(?))`;
 
 // Restrict stored batch rows to real workflow projects, including when testing draft evidence.
@@ -328,6 +329,47 @@ export function getAssignedTrialRequestIds(user: SessionUser): number[] {
   ).map(({ id }) => id);
 }
 
+const versionReadCtes = `${batchEvidenceScopeCtes},
+  package_assignments AS (
+    SELECT area_id, project_id FROM area_project_leads WHERE user_id = ?
+    UNION SELECT area_id, project_id FROM area_project_members WHERE user_id = ?
+  )`;
+
+const versionReadPredicate = `
+  p.owner_id = ? OR pv.submitted_by = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
+  OR EXISTS (
+    SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id
+      AND (r.project_id IN (SELECT id FROM readable_projects)
+        OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id AND duty.project_id = r.project_id))
+  ) OR EXISTS (
+    SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
+    WHERE bi.package_version_id = pv.id AND ${batchEvidenceInScopeSql}
+  ) OR EXISTS (SELECT 1 FROM readable_projects visible WHERE ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "visible.id")})
+  OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id
+    AND ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "duty.project_id")})
+  OR EXISTS (
+    SELECT 1 FROM binding_requirements br WHERE br.package_version_id = pv.id
+      AND (${bindingReadAssignment})
+  )
+`;
+
+function versionReadBindings(userId: number) {
+  return [userId, userId, userId, userId, userId, userId];
+}
+
+const packageReadPredicate = `
+  p.owner_id = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
+  OR EXISTS (SELECT 1 FROM package_usages pu WHERE pu.package_id = p.id AND (
+    pu.project_id IN (SELECT id FROM readable_projects)
+    OR EXISTS (SELECT 1 FROM area_project_leads duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
+    OR EXISTS (SELECT 1 FROM area_project_members duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
+  ))
+`;
+
+function packageReadBindings(userId: number) {
+  return [userId, userId, userId, userId];
+}
+
 type ReadableVersionSelection = { packageId: number } | { versionIds: readonly number[] };
 
 export function getReadableVersionIds(user: SessionUser, selection?: ReadableVersionSelection): number[] | null {
@@ -336,30 +378,11 @@ export function getReadableVersionIds(user: SessionUser, selection?: ReadableVer
     ? { predicate: "pv.package_id = ?", value: selection.packageId }
     : { predicate: "pv.id IN (SELECT value FROM json_each(?))", value: JSON.stringify(selection.versionIds) });
   return all<{ id: number }>(
-    `WITH ${batchEvidenceScopeCtes},
-          package_assignments AS (
-            SELECT area_id, project_id FROM area_project_leads WHERE user_id = ?
-            UNION SELECT area_id, project_id FROM area_project_members WHERE user_id = ?
-          )
+    `WITH ${versionReadCtes}
      SELECT pv.id FROM package_versions pv JOIN packages p ON p.id = pv.package_id
-     WHERE ${filter ? `${filter.predicate} AND ` : ""}(
-       p.owner_id = ? OR pv.submitted_by = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
-       OR EXISTS (
-         SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id
-           AND (r.project_id IN (SELECT id FROM readable_projects)
-             OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id AND duty.project_id = r.project_id))
-       ) OR EXISTS (
-         SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
-         WHERE bi.package_version_id = pv.id AND ${batchEvidenceInScopeSql}
-       ) OR EXISTS (SELECT 1 FROM readable_projects visible WHERE ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "visible.id")})
-       OR EXISTS (SELECT 1 FROM package_assignments duty WHERE duty.area_id = p.area_id
-         AND ${STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL.replace("?", "duty.project_id")})
-       OR EXISTS (
-         SELECT 1 FROM binding_requirements br WHERE br.package_version_id = pv.id
-           AND (${bindingReadAssignment})
-       ))`,
+     WHERE ${filter ? `${filter.predicate} AND ` : ""}(${versionReadPredicate})`,
     ...batchEvidenceScopeSqlParams(user), user.id, user.id,
-    ...(filter ? [filter.value] : []), user.id, user.id, user.id, user.id, user.id, user.id,
+    ...(filter ? [filter.value] : []), ...versionReadBindings(user.id),
   ).map(({ id }) => id);
 }
 
@@ -371,17 +394,31 @@ export function getReadablePackageIds(
   const readableVersionIds = versionIds === undefined ? getReadableVersionIds(user, packageId === undefined ? undefined : { packageId }) : versionIds;
   if (readableVersionIds === null) return null;
   return all<{ id: number }>(
-    `SELECT p.id FROM packages p
-     WHERE ${packageId === undefined ? "" : "p.id = ? AND "}(
-       p.owner_id = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
-       OR EXISTS (SELECT 1 FROM package_usages pu WHERE pu.package_id = p.id AND (
-         pu.project_id IN (SELECT value FROM json_each(?))
-         OR EXISTS (SELECT 1 FROM area_project_leads duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
-         OR EXISTS (SELECT 1 FROM area_project_members duty WHERE duty.user_id = ? AND duty.area_id = p.area_id AND duty.project_id = pu.project_id)
-       ))
+    `WITH ${readableProjectsCte}
+     SELECT p.id FROM packages p
+     WHERE ${packageId === undefined ? "" : "p.id = ? AND "}(${packageReadPredicate}
        OR EXISTS (SELECT 1 FROM package_versions v WHERE v.package_id = p.id AND v.id IN (SELECT value FROM json_each(?))))`,
-    ...(packageId === undefined ? [] : [packageId]), user.id, user.id, JSON.stringify(getProjectWorkflowProjectIds(user, true)), user.id, user.id, JSON.stringify(readableVersionIds),
+    JSON.stringify(getProjectWorkflowProjectIds(user, true)),
+    ...(packageId === undefined ? [] : [packageId]), ...packageReadBindings(user.id), JSON.stringify(readableVersionIds),
   ).map(({ id }) => id);
+}
+
+export function hasReadablePackageInProject(user: SessionUser, projectId: number): boolean {
+  // Limit the packages to this project while preserving grants from other projects.
+  const projectPackages = `FROM packages p
+    WHERE p.id IN (SELECT package_id FROM package_usages WHERE project_id = ?)`;
+  if (user.role === "ADMIN") return Boolean(one(`SELECT 1 ${projectPackages} LIMIT 1`, projectId));
+  return Boolean(one(
+    `WITH ${versionReadCtes}
+     SELECT 1 ${projectPackages}
+       AND ((${packageReadPredicate}) OR EXISTS (
+         SELECT 1 FROM package_versions pv
+         WHERE pv.package_id = p.id AND (${versionReadPredicate})
+       ))
+     LIMIT 1`,
+    ...batchEvidenceScopeSqlParams(user), user.id, user.id,
+    projectId, ...packageReadBindings(user.id), ...versionReadBindings(user.id),
+  ));
 }
 
 export function getReadablePackageVersionScope(user: SessionUser, packageId: number): { versionIds: number[] | null } | null {
