@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui";
+import { BINDING_BARCODE_RESULTS, type BindingBarcodeResult } from "@/lib/binding-barcode-results";
 import { formatDateTime } from "@/lib/format";
 import type { BindingBarcodeRow } from "@/lib/binding-queries";
 import styles from "./binding-barcode-list.module.css";
@@ -7,7 +8,7 @@ const outcomes = {
   UNREVIEWED: { label: "未判定", tone: "slate" },
   PASS: { label: "PASS", tone: "emerald" },
   FAIL: { label: "FAIL", tone: "rose" },
-} as const;
+} as const satisfies Record<BindingBarcodeResult, { label: string; tone: string }>;
 
 export function BindingBarcodeList({ barcodes, editable = false }: {
   barcodes: readonly BindingBarcodeRow[];
@@ -25,7 +26,7 @@ export function BindingBarcodeList({ barcodes, editable = false }: {
           </div>
           {editable ? (
             <select className={`select select-sm ${styles.resultSelect}`} name={`result_${id}`} aria-label={`条码 ${barcode} 验证结果`} defaultValue={result}>
-              {Object.entries(outcomes).map(([value, { label }]) => <option key={value} value={value}>{label}</option>)}
+              {BINDING_BARCODE_RESULTS.map((value) => <option key={value} value={value}>{outcomes[value].label}</option>)}
             </select>
           ) : <Badge tone={outcomes[result].tone}>{outcomes[result].label}</Badge>}
         </li>

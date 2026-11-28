@@ -1,8 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { parseBindingBarcodeText } from "./binding-barcode-results";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
 import {
+  BINDING_BARCODE_REVIEW_COLUMNS,
   PACKAGE_VERSION_BUILD_URL_COLUMN_SQL,
   PROJECT_STAGE_COLUMN_SQL,
   SCHEMA_SQL,
@@ -74,15 +76,10 @@ function migrateSchema(database: DatabaseSync) {
   const barcodeColumns = database
     .prepare("PRAGMA table_info(binding_flow_barcodes)")
     .all() as Array<{ name: string }>;
-  for (const [name, sql] of [
-    ["validation_result", "ALTER TABLE binding_flow_barcodes ADD COLUMN validation_result TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN ('UNREVIEWED','PASS','FAIL'))"],
-    ["validated_at", "ALTER TABLE binding_flow_barcodes ADD COLUMN validated_at TEXT"],
-    ["validated_by", "ALTER TABLE binding_flow_barcodes ADD COLUMN validated_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-    ["failure_reason", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason TEXT"],
-    ["failure_reason_at", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason_at TEXT"],
-    ["failure_reason_by", "ALTER TABLE binding_flow_barcodes ADD COLUMN failure_reason_by INTEGER REFERENCES users(id) ON DELETE SET NULL"],
-  ]) {
-    if (!barcodeColumns.some((column) => column.name === name)) database.exec(sql);
+  for (const [column, definition] of Object.entries(BINDING_BARCODE_REVIEW_COLUMNS)) {
+    if (!barcodeColumns.some(({ name }) => name === column)) {
+      database.exec(`ALTER TABLE binding_flow_barcodes ADD COLUMN ${column} ${definition}`);
+    }
   }
   const legacyBarcodeFlows = database.prepare(
     `SELECT f.id, f.device_barcode AS barcodes, f.submitted_at AS submittedAt
@@ -92,7 +89,7 @@ function migrateSchema(database: DatabaseSync) {
   ).all() as Array<{ id: number; barcodes: string; submittedAt: string }>;
   const insertBarcode = database.prepare("INSERT INTO binding_flow_barcodes (flow_id, barcode, created_at) VALUES (?, ?, ?)");
   for (const flow of legacyBarcodeFlows) {
-    const barcodes = new Set(flow.barcodes.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean));
+    const barcodes = new Set(parseBindingBarcodeText(flow.barcodes));
     for (const barcode of barcodes) insertBarcode.run(flow.id, barcode, flow.submittedAt);
   }
   const requestColumns = database

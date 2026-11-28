@@ -167,3 +167,64 @@ test("旧库启动补齐批次版本索引并保留配套快照", ({}, testInfo)
     }
   }
 });
+
+test("旧电子流条码按原有分隔符补录并使用同一判定约束", ({}, testInfo) => {
+  const target = testInfo.outputPath("legacy-barcode-review.db");
+  function start(seed: boolean) {
+    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
+      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: seed ? "0" : "1" },
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+    expect(startup.error).toBeUndefined();
+    expect(startup.status, startup.stderr).toBe(0);
+  }
+
+  start(true);
+  const legacy = new DatabaseSync(target);
+  let flow: { id: number; submittedAt: string };
+  try {
+    const first = legacy.prepare("SELECT id, submitted_at AS submittedAt FROM binding_flows ORDER BY id LIMIT 1").get() as typeof flow | undefined;
+    assert.ok(first);
+    flow = first;
+    legacy.exec(`
+      ALTER TABLE binding_flow_barcodes DROP COLUMN validation_result;
+      ALTER TABLE binding_flow_barcodes DROP COLUMN validated_at;
+      ALTER TABLE binding_flow_barcodes DROP COLUMN validated_by;
+      ALTER TABLE binding_flow_barcodes DROP COLUMN failure_reason;
+      ALTER TABLE binding_flow_barcodes DROP COLUMN failure_reason_at;
+      ALTER TABLE binding_flow_barcodes DROP COLUMN failure_reason_by;
+    `);
+    legacy.prepare("DELETE FROM binding_flow_barcodes WHERE flow_id = ?").run(flow.id);
+    legacy.prepare("UPDATE binding_flows SET device_barcode = ? WHERE id = ?")
+      .run(" LEGACY-A,\r\n LEGACY-B；LEGACY-A;legacy-a ， ", flow.id);
+  } finally {
+    legacy.close();
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    start(false);
+    const migrated = new DatabaseSync(target);
+    try {
+      expect(migrated.prepare(`
+        SELECT barcode, validation_result, validated_at, validated_by,
+               failure_reason, failure_reason_at, failure_reason_by, created_at
+        FROM binding_flow_barcodes WHERE flow_id = ? ORDER BY id
+      `).all(flow.id)).toEqual(["LEGACY-A", "LEGACY-B", "legacy-a"].map((barcode) => ({
+        barcode,
+        validation_result: "UNREVIEWED",
+        validated_at: null,
+        validated_by: null,
+        failure_reason: null,
+        failure_reason_at: null,
+        failure_reason_by: null,
+        created_at: flow.submittedAt,
+      })));
+      expect(() => migrated.prepare("UPDATE binding_flow_barcodes SET validation_result = 'OTHER' WHERE flow_id = ?")
+        .run(flow.id)).toThrow(/CHECK constraint failed/);
+      expect(migrated.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      migrated.close();
+    }
+  }
+});

@@ -12,6 +12,7 @@ import {
   submitBindingFlow,
   waiveBindingRequirement,
 } from "@/lib/binding-workflow";
+import { parseBindingBarcodeText } from "@/lib/binding-barcode-results";
 import { DomainError } from "@/lib/domain-error";
 import { actionListState, workflowSuccessRedirect } from "./workflow-navigation";
 
@@ -132,7 +133,7 @@ export async function submitBindingFlowAction(_prev: ActionState, formData: Form
   if (!requirementId) return { error: "绑定任务参数无效。" };
   if (!approverId) return { error: "请选择绑定电子流审批人。" };
   const rawBarcodes = formData.getAll("barcodes").filter((item): item is string => typeof item === "string").join("\n");
-  const barcodes = rawBarcodes.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean);
+  const barcodes = parseBindingBarcodeText(rawBarcodes);
   if (barcodes.length === 0) {
     return { error: "请至少添加一个有效设备条码。" };
   }

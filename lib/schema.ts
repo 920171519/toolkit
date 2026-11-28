@@ -1,3 +1,4 @@
+import { BINDING_BARCODE_RESULTS } from "./binding-barcode-results";
 import {
   BATCH_CONCLUSIONS,
   BATCH_STATUSES,
@@ -21,6 +22,18 @@ export const PROJECT_STAGE_COLUMN_SQL =
 export const PACKAGE_VERSION_BUILD_URL_COLUMN_SQL = "build_url TEXT";
 export const TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL = "release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'";
 export const TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL = "risk_conclusion TEXT";
+
+export const BINDING_BARCODE_REVIEW_COLUMNS = {
+  validation_result: `TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN (${sqlValues(BINDING_BARCODE_RESULTS)}))`,
+  validated_at: "TEXT",
+  validated_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+  failure_reason: "TEXT",
+  failure_reason_at: "TEXT",
+  failure_reason_by: "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+} as const;
+
+const bindingBarcodeReviewColumnsSql = Object.entries(BINDING_BARCODE_REVIEW_COLUMNS)
+  .map(([column, definition]) => `${column} ${definition}`).join(",\n  ");
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -301,12 +314,7 @@ CREATE TABLE IF NOT EXISTS binding_flow_barcodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   flow_id INTEGER NOT NULL REFERENCES binding_flows(id) ON DELETE CASCADE,
   barcode TEXT NOT NULL,
-  validation_result TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK (validation_result IN ('UNREVIEWED','PASS','FAIL')),
-  validated_at TEXT,
-  validated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  failure_reason TEXT,
-  failure_reason_at TEXT,
-  failure_reason_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ${bindingBarcodeReviewColumnsSql},
   created_at TEXT NOT NULL
 );
 

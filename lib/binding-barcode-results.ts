@@ -1,4 +1,5 @@
-export type BindingBarcodeResult = "UNREVIEWED" | "PASS" | "FAIL";
+export const BINDING_BARCODE_RESULTS = ["UNREVIEWED", "PASS", "FAIL"] as const;
+export type BindingBarcodeResult = (typeof BINDING_BARCODE_RESULTS)[number];
 export type BindingBarcodeFact = { barcode: string; result: BindingBarcodeResult; flowStatus: string };
 
 export const BINDING_BARCODE_FAILURE_REASON_LIMIT = 2000;
@@ -12,7 +13,11 @@ export function isActiveBindingFlow(status: string): boolean {
 }
 
 export function isBindingBarcodeResult(value: string): value is BindingBarcodeResult {
-  return value === "UNREVIEWED" || value === "PASS" || value === "FAIL";
+  return BINDING_BARCODE_RESULTS.some((result) => result === value);
+}
+
+export function parseBindingBarcodeText(value: string): string[] {
+  return value.split(/[\n,，;；]+/).map((barcode) => barcode.trim()).filter(Boolean);
 }
 
 export function bindingBarcodeEvidenceKey(revision: number, flows: readonly { id: number; status: string }[]): string {
