@@ -226,6 +226,15 @@ const trialReadyProjectVersionScope = `AND package_id IN (
 )`;
 const trialReadyOrder = "ORDER BY pr.sort_order, pv.submitted_at DESC, r.id DESC";
 
+function trialReadyProjectSelection(projectIds: number[] | null) {
+  if (projectIds === null) return { versionScope: "", projectScope: "", params: [] };
+  return {
+    versionScope: trialReadyProjectVersionScope,
+    projectScope: trialReadyProjectScope,
+    params: [JSON.stringify(projectIds)],
+  };
+}
+
 export function getProjectTrialReadyCount(projectId: number): number {
   // Limit candidate versions while keeping every active use in the eligibility check.
   const versionScope = "AND package_id IN (SELECT package_id FROM package_usages WHERE project_id = ?)";
@@ -237,6 +246,17 @@ export function getProjectTrialReadyCount(projectId: number): number {
   )?.total ?? 0;
 }
 
+export function getTrialReadyVersionCount(projectIds: number[] | null): number {
+  if (projectIds?.length === 0) return 0;
+  const { versionScope, projectScope, params } = trialReadyProjectSelection(projectIds);
+  return one<{ total: number }>(
+    `WITH ${trialEligibilityCtes(versionScope)}
+     SELECT COUNT(DISTINCT q.versionId) AS total ${trialReadyFrom}
+     WHERE ${trialReadyCondition} ${projectScope}`,
+    ...params, ...params,
+  )?.total ?? 0;
+}
+
 export function getTrialReadyVersions(
   projectIds: number[] | null = null,
   options: TrialReadyScope = {},
@@ -244,9 +264,9 @@ export function getTrialReadyVersions(
   if (projectIds?.length === 0) return [];
   const requestScope = options.requestId === undefined ? "" : "AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)";
   const versionScope = options.versionId === undefined ? "" : "AND id = ?";
-  const projectParams = projectIds === null ? [] : [JSON.stringify(projectIds)];
-  const prefilterVersions = projectIds !== null && options.requestId === undefined && options.versionId === undefined;
-  const projectVersionScope = prefilterVersions ? trialReadyProjectVersionScope : "";
+  const project = trialReadyProjectSelection(projectIds);
+  const prefilterVersions = options.requestId === undefined && options.versionId === undefined;
+  const projectVersionScope = prefilterVersions ? project.versionScope : "";
   return all<TrialReadyVersion>(
     `WITH ${trialEligibilityCtes(`${requestScope} ${versionScope} ${projectVersionScope}`)}
      SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
@@ -265,13 +285,13 @@ export function getTrialReadyVersions(
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
      LEFT JOIN integration_batches b ON b.id = e.batchId
      WHERE ${trialReadyCondition}
-       ${options.requestId === undefined ? "" : "AND r.id = ?"} ${projectIds === null ? "" : trialReadyProjectScope}
+       ${options.requestId === undefined ? "" : "AND r.id = ?"} ${project.projectScope}
      ${trialReadyOrder}`,
     ...(options.requestId === undefined ? [] : [options.requestId]),
     ...(options.versionId === undefined ? [] : [options.versionId]),
-    ...(prefilterVersions ? projectParams : []),
+    ...(prefilterVersions ? project.params : []),
     ...(options.requestId === undefined ? [] : [options.requestId]),
-    ...projectParams,
+    ...project.params,
   );
 }
 

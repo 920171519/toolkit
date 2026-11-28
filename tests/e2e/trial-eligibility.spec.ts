@@ -208,6 +208,11 @@ test("工作台合并共享待发试制版本，按管理范围保留项目名�
     await page.reload();
     await expectReadyTask("磐石 T3");
     await expect(task).toHaveAttribute("href", "/trial");
+
+    await page.goto(`/trial?view=binding&release_q=${risk.version}`);
+    const readyTab = page.getByRole("navigation", { name: "试制与绑定队列" }).getByRole("link", { name: /^待发布试制/ });
+    await expect(readyTab).toHaveAccessibleName("待发布试制 4");
+    await expect(readyTab).toHaveAttribute("href", `/trial?release_q=${risk.version}`);
   } finally {
     db.prepare("DELETE FROM project_software_managers WHERE project_id = 3 AND user_id = ?").run(manager.id);
   }

@@ -19,7 +19,7 @@ import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { readFlash } from "@/lib/flash";
 import { trialBindingStatuses, trialQueueKey, trialQueueParams, trialReleaseStatuses, type TrialSearchParams } from "@/lib/trial-queue";
-import { getTrialReadyDisplayVersions, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
+import { getTrialReadyDisplayVersions, getTrialReadyVersionCount, trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
 import { workflowHref } from "@/lib/workflow-links";
 import { getReadableTrialQueueCounts } from "@/lib/binding-queries";
 import { getTrialVersionCount, getTrialVersions, type TrialVersionRow } from "@/lib/release-queue-queries";
@@ -82,9 +82,10 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
   const { returnTo } = getWorkflowListState(params);
   const query = { ...queueParams, ...(returnTo ? { returnTo } : {}), ...(showBindings ? { view: "binding" } : {}) };
   const queueHref = (binding: boolean) => workflowHref("/trial", projectId, { ...query, view: binding ? "binding" : undefined }) + (binding ? "#binding-queue" : "");
+  const releaseScope = projectId === undefined ? managerScope : [projectId];
   const byVersion = new Map<number, TrialReadyDisplayVersion[]>();
-  if (canViewReleaseQueue) {
-    for (const request of getTrialReadyDisplayVersions(user, project ? [project.id] : managerScope)) {
+  if (!showBindings) {
+    for (const request of getTrialReadyDisplayVersions(user, releaseScope)) {
       const records = byVersion.get(request.versionId);
       if (records) records.push(request);
       else byVersion.set(request.versionId, [request]);
@@ -94,6 +95,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
     ...(records.find((row) => managesActiveProject(row.projectId)) ?? records[0]),
     records,
   })).sort((first, second) => Number(riskRelease(first)) - Number(riskRelease(second)));
+  const releaseCount = showBindings && canViewReleaseQueue ? getTrialReadyVersionCount(releaseScope) : ready.length;
   const canReadProject = (id: number) => scope === null || scope.includes(id);
   const assignedRequestIds = !project && scope !== null ? getAssignedTrialRequestIds(user) : [];
   const batchScope = showBindings ? getBatchEvidenceReadScope(user) : undefined;
@@ -216,7 +218,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
       <FlashMessage notice={notice} />
 
       {canViewReleaseQueue && <WorkflowQueueNav label="试制与绑定队列" views={[
-        { label: "待发布试制", href: queueHref(false), count: ready.length, current: !showBindings },
+        { label: "待发布试制", href: queueHref(false), count: releaseCount, current: !showBindings },
         { label: "节点绑定", href: queueHref(true), count: bindingCount, current: showBindings, nativeNavigation: !showBindings },
       ]} />}
 
