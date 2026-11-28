@@ -9,7 +9,7 @@ import { assert, DomainError } from "./domain-error";
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import {
   findReadyTrialProject,
-  getRiskTrialEntries,
+  getRiskTrialAdmissionEvidence,
   getTrialNodeUsages,
   getTrialReleaseEligibility,
   missingTrialNodeAssignments,
@@ -41,14 +41,12 @@ export function admitRiskTrial(
     );
     assert(request, "项目版本记录不存在。", "NOT_FOUND");
     const project = assertProjectManager(actor, request.projectId);
-    const entry = getRiskTrialEntries([input.requestId])[input.requestId];
-    assert(entry && entry.stage === input.stage && entry.batchId === (input.batchId ?? null),
+    const entry = getRiskTrialAdmissionEvidence(input.requestId);
+    assert(entry?.stage && entry.stage === input.stage && entry.batchId === (input.batchId ?? null),
       "转测状态已变化，请刷新页面并按当前阶段登记风险原因。");
     assert(!entry.registered, "该版本已经登记风险试制原因，请查看待发布试制队列。");
-    const candidate = getTrialReleaseEligibility(request.versionId);
-    assert(candidate && candidate.riskProjectCount > 0 && candidate.projects.every((row) => row.usable)
-      && candidate.projects.some((row) => row.requestId === input.requestId && row.projectId === project.id),
-    "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
+    assert(entry.riskProjectCount > 0 && entry.unavailableRequestCount === 0,
+      "该版本已满足普通试制条件，或仍缺少共享试制所需的项目转测申请。");
     insertTrialRiskAdmission(db, {
       versionId: request.versionId, requestId: input.requestId, projectId: project.id, projectName: project.name,
       batchId: entry.batchId, stage: entry.stage, reason, actorId: actor.id, createdAt: now(),

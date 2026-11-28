@@ -112,20 +112,21 @@ export type RiskTrialEntry = {
   registered: boolean;
 };
 
+const riskTrialEntryStageSql = `CASE
+  WHEN e.requestStatus = 'PENDING' THEN 'PENDING'
+  WHEN e.requestStatus = 'IN_TEST' AND e.batchStatus = 'IN_TEST' THEN 'IN_TEST'
+  WHEN e.requestStatus = 'FAILED' AND e.batchStatus = 'COMPLETED' AND e.batchConclusion = 'FAIL' THEN 'FAILED'
+  WHEN e.requestStatus = 'BLOCKED' AND e.batchStatus = 'COMPLETED' AND e.batchConclusion = 'BLOCKED' THEN 'BLOCKED'
+  WHEN e.requestStatus = 'PASSED' AND e.passed = 0 THEN 'PASSED_NO_EVIDENCE'
+END`;
+
 export function getRiskTrialEntries(requestIds: number[]): Record<number, RiskTrialEntry | undefined> {
   if (requestIds.length === 0) return {};
 
   const rows = all<Omit<RiskTrialEntry, "stage" | "registered"> & { stage: RiskTrialEntryStage | null; registered: number }>(
     `WITH selected_requests AS (SELECT value AS id FROM json_each(?)),
           ${trialEligibilityCtes("AND id IN (SELECT package_version_id FROM version_transfer_requests WHERE id IN (SELECT id FROM selected_requests))")}
-     SELECT e.requestId, e.batchId,
-            CASE
-              WHEN e.requestStatus = 'PENDING' THEN 'PENDING'
-              WHEN e.requestStatus = 'IN_TEST' AND e.batchStatus = 'IN_TEST' THEN 'IN_TEST'
-              WHEN e.requestStatus = 'FAILED' AND e.batchStatus = 'COMPLETED' AND e.batchConclusion = 'FAIL' THEN 'FAILED'
-              WHEN e.requestStatus = 'BLOCKED' AND e.batchStatus = 'COMPLETED' AND e.batchConclusion = 'BLOCKED' THEN 'BLOCKED'
-              WHEN e.requestStatus = 'PASSED' AND e.passed = 0 THEN 'PASSED_NO_EVIDENCE'
-            END AS stage,
+     SELECT e.requestId, e.batchId, ${riskTrialEntryStageSql} AS stage,
             a.id IS NOT NULL AS registered
      FROM trial_project_evidence e
      LEFT JOIN trial_risk_admissions a ON a.package_version_id = e.versionId AND a.invalidated_at IS NULL
@@ -135,6 +136,24 @@ export function getRiskTrialEntries(requestIds: number[]): Record<number, RiskTr
   return Object.fromEntries(rows.flatMap(({ stage, registered, ...row }) =>
     stage ? [[row.requestId, { ...row, stage, registered: Boolean(registered) }]] : [],
   ));
+}
+
+export function getRiskTrialAdmissionEvidence(requestId: number) {
+  return one<{
+    stage: RiskTrialEntryStage | null;
+    batchId: number | null;
+    registered: number;
+    riskProjectCount: number;
+    unavailableRequestCount: number;
+  }>(
+    `WITH ${trialEligibilityCtes("AND id = (SELECT package_version_id FROM version_transfer_requests WHERE id = ?)")}
+     SELECT e.batchId, ${riskTrialEntryStageSql} AS stage, q.riskAdmissionId IS NOT NULL AS registered,
+            q.riskProjectCount, q.unavailableRequestCount
+     FROM trial_project_evidence e
+     JOIN trial_eligibility q ON q.versionId = e.versionId
+     WHERE e.requestId = ?`,
+    requestId, requestId,
+  );
 }
 
 type TrialProgress = {
