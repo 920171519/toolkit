@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { OPEN_BINDING_RELEASE_STATUSES_SQL } from "./binding-availability";
 
 type ActiveBindingSummary = {
@@ -33,7 +33,7 @@ export function getActiveReleaseRequests(database: DatabaseSync, versionId: numb
   ).all(versionId) as ActiveReleaseRequest[];
 }
 
-function getActiveBindingSummary(database: DatabaseSync, versionId: number): ActiveBindingSummary {
+function prepareActiveBindingSummary(database: DatabaseSync) {
   return database.prepare(
     `SELECT COUNT(*) AS total,
             COUNT(CASE WHEN (br.status = 'PASSED' AND br.confirmed_at IS NOT NULL)
@@ -43,11 +43,7 @@ function getActiveBindingSummary(database: DatabaseSync, versionId: number): Act
      JOIN projects pr ON pr.id = r.project_id
      JOIN binding_requirements br ON br.request_id = r.id
      WHERE r.package_version_id = ? AND ${activeReleaseRequest}`,
-  ).get(versionId) as ActiveBindingSummary;
-}
-
-function hasActiveIntegrationBatch(database: DatabaseSync, versionId: number) {
-  return Boolean(database.prepare(`SELECT b.id ${activeIntegrationBatch} AND bi.package_version_id = ? LIMIT 1`).get(versionId));
+  );
 }
 
 function getActiveIntegrationBatches(database: DatabaseSync, versionId: number) {
@@ -99,7 +95,7 @@ export function getFormalReleaseCheck(
   version: { id: number; status: string; bindingMode: string },
   requests: ActiveReleaseRequest[],
 ) {
-  const binding = getActiveBindingSummary(database, version.id);
+  const binding = prepareActiveBindingSummary(database).get(version.id) as ActiveBindingSummary;
   const batches = getActiveIntegrationBatches(database, version.id);
   const pendingFlowCount = getPendingBindingFlowCounts(database, [version.id]).get(version.id) ?? 0;
   const bindingsReady = areFormalBindingsReady(binding, version.bindingMode);
@@ -109,32 +105,48 @@ export function getFormalReleaseCheck(
   };
 }
 
-export function refreshTrialReadiness(database: DatabaseSync, versionId: number, timestamp: string) {
-  const version = database.prepare(
-    `SELECT pv.status, pv.binding_mode FROM package_versions pv
+function createTrialReadinessRefresher(database: DatabaseSync, timestamp: string) {
+  // Reuse statements for this refresh. Each version still reads the current state in order.
+  let findVersion: StatementSync | undefined;
+  let readBindings: StatementSync | undefined;
+  let findActiveBatch: StatementSync | undefined;
+  let updateVersion: StatementSync | undefined;
+  let updateRequests: StatementSync | undefined;
+
+  return (versionId: number) => {
+    const version = (findVersion ??= database.prepare(
+      `SELECT pv.status, pv.binding_mode FROM package_versions pv
      WHERE pv.id = ? AND pv.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL}
        AND EXISTS (
          SELECT 1 FROM version_transfer_requests r JOIN projects pr ON pr.id = r.project_id
          WHERE r.package_version_id = pv.id AND ${activeReleaseRequest}
        )`,
-  ).get(versionId) as { status: string; binding_mode: string } | undefined;
-  if (!version) return false;
+    )).get(versionId) as { status: string; binding_mode: string } | undefined;
+    if (!version) return false;
 
-  const binding = getActiveBindingSummary(database, versionId);
-  const ready = (version.binding_mode === "PUSHED" || version.binding_mode === "SKIPPED")
-    && areFormalBindingsReady(binding, version.binding_mode);
-  const nextStatus = ready && !hasActiveIntegrationBatch(database, versionId) ? "PENDING_FORMAL" : "TRIAL";
-  if (version.status !== nextStatus) {
-    database.prepare("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?")
-      .run(nextStatus, timestamp, versionId);
-  }
-  database.prepare(
-    `UPDATE version_transfer_requests SET status = ?, updated_at = ?
+    const binding = (readBindings ??= prepareActiveBindingSummary(database)).get(versionId) as ActiveBindingSummary;
+    const ready = (version.binding_mode === "PUSHED" || version.binding_mode === "SKIPPED")
+      && areFormalBindingsReady(binding, version.binding_mode);
+    const activeBatch = ready && (findActiveBatch ??= database.prepare(
+      `SELECT b.id ${activeIntegrationBatch} AND bi.package_version_id = ? LIMIT 1`,
+    )).get(versionId);
+    const nextStatus = ready && !activeBatch ? "PENDING_FORMAL" : "TRIAL";
+    if (version.status !== nextStatus) {
+      (updateVersion ??= database.prepare("UPDATE package_versions SET status = ?, updated_at = ? WHERE id = ?"))
+        .run(nextStatus, timestamp, versionId);
+    }
+    (updateRequests ??= database.prepare(
+      `UPDATE version_transfer_requests SET status = ?, updated_at = ?
      WHERE package_version_id = ? AND status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL} AND status != ?
        AND trial_released_at IS NOT NULL
        AND project_id IN (SELECT id FROM projects WHERE status != 'ARCHIVED')`,
-  ).run(nextStatus, timestamp, versionId, nextStatus);
-  return nextStatus === "PENDING_FORMAL" && version.status !== nextStatus;
+    )).run(nextStatus, timestamp, versionId, nextStatus);
+    return nextStatus === "PENDING_FORMAL" && version.status !== nextStatus;
+  };
+}
+
+export function refreshTrialReadiness(database: DatabaseSync, versionId: number, timestamp: string) {
+  return createTrialReadinessRefresher(database, timestamp)(versionId);
 }
 
 // Pass no project to repair older releases left waiting on an archived project.
@@ -147,7 +159,8 @@ export function refreshProjectTrialReadiness(database: DatabaseSync, timestamp: 
      JOIN package_versions pv ON pv.id = r.package_version_id
      WHERE pv.status IN ${OPEN_BINDING_RELEASE_STATUSES_SQL} AND r.trial_released_at IS NOT NULL AND ${scope}`,
   ).all(...(projectId === undefined ? [] : [projectId])) as Array<{ id: number }>;
+  const refresh = createTrialReadinessRefresher(database, timestamp);
   for (const version of versions) {
-    refreshTrialReadiness(database, version.id, timestamp);
+    refresh(version.id);
   }
 }
