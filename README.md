@@ -556,9 +556,28 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 - `pnpm start` 出现 `Ready` 后，打开公开首页验证数据库能正常读取。若首页返回 HTTP 500，请查看服务日志，核对运行环境中 `DATABASE_PATH` 的解析位置和读写权限。
 - 反向代理避免跨构建缓存 HTML 或 RSC 响应。`/_next/static/` 使用内容哈希文件名，可以长缓存。部署新构建后，请刷新已打开的表单页面，再填写并提交。
 - 登录后点击任意页面被踢回登录页，另一个常见原因是 **HTTP 部署却设置了 Secure 会话 Cookie**。当前系统会优先读取 `SESSION_COOKIE_SECURE`，未设置时根据 `X-Forwarded-Proto: https` 自动判断；Nginx 反代 HTTPS 时必须转发该头，直接用 HTTP 验收时不要设置 `SESSION_COOKIE_SECURE=true`。若之前已经用错误配置登录过，请清除该站点 Cookie 或用无痕窗口重新登录。
-- 数据库升级或清空演示数据前先备份实际使用的 SQLite 数据库和报告目录。
+- 数据库升级或清空演示数据前先[备份数据库和报告目录](#备份与恢复校验)。
 - 试制和转正使用用户填写的 HTTP(S) 电子流网址，已有电子流编号仍可查阅。新发布的试制和正式版本需分别填写评审纪要，可从版本全链路查看。绑定电子流在本系统生成编号并完成审批，尚未对接企业 OA/BPM。
 - 个人工作台通知为系统内派生展示，暂未接入邮件、短信或即时通讯推送。
+
+### 备份与恢复校验
+
+1. 从服务配置核对实际的 `DATABASE_PATH`、`TOOLKIT_REPORTS_PATH` 和工作目录。沿用上面的停服流程，确认服务和使用该数据库的维护命令均已退出。
+2. 将实际使用的数据库和完整报告目录保存为同一组备份，保留报告的相对路径。如果数据库旁还有 `-wal` 文件，一并备份，恢复时保留原文件名并放在主库所在目录。WAL 可能仍保存已提交的数据。`-shm` 是 SQLite 可重建的索引。 [SQLite WAL 文件](https://sqlite.org/wal.html#the_wal_file)
+3. 从同一组备份复制数据库、现存 WAL 和报告到新的空目录，避免混入其他数据库遗留的 `-wal` 或 `-shm` 文件。在该数据库副本上执行 `PRAGMA quick_check`，确认返回 `ok`。执行 `PRAGMA foreign_key_check`，将发现的引用问题与备份前的检查结果核对。
+4. 使用要验证的生产构建，指向隔离副本并监听本机的空闲端口。以下路径和端口按实际情况替换。
+
+```bash
+DATABASE_PATH=/path/to/restore-check/toolkit.db \
+TOOLKIT_REPORTS_PATH=/path/to/restore-check/reports \
+TOOLKIT_SKIP_SEED=1 \
+SESSION_COOKIE_SECURE=false \
+pnpm start --hostname 127.0.0.1 --port 3101
+```
+
+打开公开首页，再用备份中有权查看批次的账号登录，核对一个已知批次的测试结论及对应验证报告的文件名和内容。
+
+正式恢复也从新的空目录开始。在停服窗口，将同一组备份恢复到该目录，并把服务的 `DATABASE_PATH` 和 `TOOLKIT_REPORTS_PATH` 指向恢复出的数据库和报告目录。恢复前的数据库、`-wal`、`-shm` 和报告目录保留至验证完成。
 
 ### 补齐在途版本的转测申请
 
