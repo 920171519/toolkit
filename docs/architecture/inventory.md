@@ -162,6 +162,8 @@
 | 管理员维护命令修改账号时缺少审计 | [管理员命令](../../scripts/create-admin.ts)、[审计写入器](../../lib/audit-log.ts)、[命令回归](../../tests/e2e/admin-create.spec.ts) | 在账号写入事务保存创建和更新事件，原账号字段和命令输出沿用既有行为。 |
 | 转正详情对只读账号读取完全不可见的项目证据 | [转正核对页面](../../app/(workspace)/formal/[id]/page.tsx)、[队列查询](../../lib/release-queue-queries.ts)、[证据权限回归](../../tests/e2e/assignment-authorization.spec.ts) | 在加载项目绑定明细前使用现有证据权限，保留全局项目顺序、管理摘要和默认展开规则。 |
 | 授权报告可读时未诊断持久化大小与实际文件的差异 | [授权报告记录](../../lib/batch-queries.ts)、[报告存储](../../lib/report-storage.ts)、[报告回归](../../tests/e2e/report-download.spec.ts) | 只对可确认的正安全整数大小记录差异，历史或异常文件的下载响应沿用原契约。 |
+| 版本追溯重复声明共用转测状态 | [状态展示](../../lib/constants.ts)、[追溯详情](../../app/(workspace)/versions/[id]/page.tsx) | 共用五项标签和色调，保留待转测名称、发布阶段及未知旧状态的原表现。 |
+| 试制发布逐行重复准备三个写入语句 | [发布写入](../../lib/release-workflow.ts)、[试制资格回归](../../tests/e2e/trial-eligibility.spec.ts) | 在同一发布事务按既有顺序写入项目申请、节点任务及审批人快照，保留生成编号及旧审批回退。 |
 
 ## 待核对的规范偏离
 
