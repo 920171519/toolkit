@@ -10,8 +10,6 @@ import {
 } from "./domain-values";
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES } from "./project-stage";
 
-export const SCHEMA_VERSION = 10;
-
 function sqlValues(values: readonly string[]) {
   return values.map((value) => `'${value}'`).join(",");
 }
