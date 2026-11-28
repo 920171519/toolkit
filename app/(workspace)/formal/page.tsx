@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "@/lib/access";
+import { getManagedProjectScope, getProjectWorkflowProjectIds } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { DEFAULT_LIST_PAGE_SIZE, getPageWindow } from "@/lib/list-pagination";
@@ -49,6 +49,8 @@ export default async function FormalPage({ searchParams }: {
     returnTo,
   };
   const versions = matching.slice(page.offset, page.end);
+  const managerScope = versions.length > 0 ? getManagedProjectScope(user, { includeArchived: true }) : [];
+  const managedProjects = managerScope === null ? null : new Set(managerScope);
   const traceHref = workflowHref("/versions", project?.id, { q: query || undefined, returnTo });
   const bindingHref = workflowHref("/trial", project?.id, { view: "binding", returnTo });
 
@@ -87,7 +89,7 @@ export default async function FormalPage({ searchParams }: {
               <tbody>{versions.map((group) => {
                 const version = group[0];
                 const { code } = packageIdentity({ name: version.packageName, code: version.packageCode });
-                const canRelease = group.some((record) => canManageProjectWorkflowForProject(user, record.projectId));
+                const canRelease = managedProjects === null || group.some((record) => managedProjects.has(record.projectId));
                 const skipped = version.bindingMode === "SKIPPED";
                 const kind = version.releaseMode === "RISK";
                 const passed = group.reduce((count, row) => count + row.requirementPassed, 0);
