@@ -362,12 +362,49 @@ export function getReadableTestReport(user: SessionUser, reportId: number) {
   return readable ? file : null;
 }
 
-export function getBatchDetail(user: SessionUser, batchId: number, projectId?: number): BatchDetailRow | null {
+const batchItemsFrom = `FROM batch_items bi
+     JOIN packages p ON p.id = bi.package_id
+     JOIN package_versions pv ON pv.id = bi.package_version_id`;
+const batchItemsOrder = `ORDER BY bi.is_changed DESC, ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`;
+
+function canReadBatchDetails(user: SessionUser, batchId: number): boolean {
   const readableBatchIds = getReadableBatchEvidenceIds(user, [batchId]);
-  if (readableBatchIds !== null && !readableBatchIds.has(batchId)) return null;
+  return readableBatchIds === null || readableBatchIds.has(batchId);
+}
+
+export function getBatchForPreparation(user: SessionUser, batchId: number, projectId: number) {
+  if (!canReadBatchDetails(user, batchId)) return null;
+  const batch = one<Pick<BatchSummaryRow, "id" | "code" | "title" | "status">>(
+    `SELECT b.id, b.code, b.title, b.status ${batchProjectFrom}
+     WHERE b.id = ? AND b.project_id = ?`,
+    batchId, projectId,
+  );
+  if (!batch) return null;
+  const { id, code } = batch;
+  if (batch.status !== "DRAFT") return { id, code, draft: null };
+
+  const items = all<{ id: number; packageId: number; versionId: number; isChanged: number }>(
+    `SELECT bi.id, p.id AS packageId, bi.package_version_id AS versionId, bi.is_changed AS isChanged
+     ${batchItemsFrom} WHERE bi.batch_id = ? ${batchItemsOrder}`,
+    batchId,
+  );
+  return {
+    id,
+    code,
+    draft: {
+      id,
+      title: batch.title,
+      revision: items.reduce((revision, item) => Math.max(revision, item.id), 0),
+      items: items.map(({ packageId, versionId, isChanged }) => ({ packageId, versionId, isChanged: Boolean(isChanged) })),
+    },
+  };
+}
+
+export function getBatchDetail(user: SessionUser, batchId: number): BatchDetailRow | null {
+  if (!canReadBatchDetails(user, batchId)) return null;
   const batch = one<BatchSummaryRow>(
-    `SELECT ${batchSummaryColumns} ${batchSummaryFrom} WHERE b.id = ? AND (? IS NULL OR b.project_id = ?)`,
-    batchId, projectId ?? null, projectId ?? null,
+    `SELECT ${batchSummaryColumns} ${batchSummaryFrom} WHERE b.id = ?`,
+    batchId,
   );
   if (!batch) return null;
   const items = all<Omit<BatchItemRow, "isChanged" | "changedVsPrevious" | "parallelRiskTrial" | "issueAffected"> & {
@@ -391,13 +428,11 @@ export function getBatchDetail(user: SessionUser, batchId: number, projectId?: n
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
             u.name AS ownerName, bi.issue_affected AS issueAffected,
             ${PARALLEL_RISK_TRIAL_ITEM_SQL} AS parallelRiskTrial
-     FROM batch_items bi
-     JOIN packages p ON p.id = bi.package_id
-     JOIN package_versions pv ON pv.id = bi.package_version_id
+     ${batchItemsFrom}
      LEFT JOIN version_transfer_requests r ON r.id = bi.transfer_request_id
      LEFT JOIN users u ON u.id = p.owner_id
      WHERE bi.batch_id = ?
-     ORDER BY bi.is_changed DESC, ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
+     ${batchItemsOrder}`,
     batchId,
   ).map((item) => ({
     ...item,
