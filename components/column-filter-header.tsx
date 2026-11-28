@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowDown, ArrowDownUp, ArrowUp } from "lucide-react";
-import { columnFilterKeys, type ColumnFilterField } from "@/lib/column-filters";
+import type { ColumnFilterField } from "@/lib/column-filters";
 import { directoryHref } from "@/lib/settings-directory";
 import { ColumnFilterPopover } from "./column-filter-popover";
 import styles from "./column-filter-header.module.css";
@@ -24,11 +24,6 @@ export function ColumnFilterHeader({
   const selected = Boolean(sortKey && sortKey === params[sortParam]);
   const ascending = selected && params[orderParam] !== "desc";
   const Arrow = selected ? ascending ? ArrowUp : ArrowDown : ArrowDownUp;
-  const ownKeys = new Set(fields.flatMap(columnFilterKeys));
-  const otherParams = Object.fromEntries(
-    Object.entries(params).filter(([key]) => !ownKeys.has(key) && key !== pageParam),
-  );
-  const active = [...ownKeys].some((key) => params[key]);
 
   return (
     <th scope="col" className={numeric ? styles.numeric : undefined} aria-sort={selected ? ascending ? "ascending" : "descending" : undefined}>
@@ -43,7 +38,8 @@ export function ColumnFilterHeader({
             {label}<Arrow size={12} aria-hidden="true" />
           </Link>
         ) : <span>{label}</span>}
-        <ColumnFilterPopover label={label} path={path} params={params} otherParams={otherParams} fields={fields} active={active} hash={hash} onFilterChange={onFilterChange} />
+        <ColumnFilterPopover label={label} path={path} params={params} fields={fields}
+          pageParam={pageParam} hash={hash} onFilterChange={onFilterChange} />
       </div>
     </th>
   );

@@ -104,13 +104,12 @@ function FilterInputs({ field, params }: { field: ColumnFilterField; params: Par
   );
 }
 
-export function ColumnFilterPopover({ label, path, params, otherParams, fields, active, hash, onFilterChange }: {
+export function ColumnFilterPopover({ label, path, params, fields, pageParam, hash, onFilterChange }: {
   label: string;
   path: string;
   params: Params;
-  otherParams: Params;
   fields: ColumnFilterField[];
-  active: boolean;
+  pageParam: string;
   hash: string;
   onFilterChange?: (filters: Record<string, string>) => void;
 }) {
@@ -121,6 +120,11 @@ export function ColumnFilterPopover({ label, path, params, otherParams, fields, 
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const accessibleName = `筛选${label}`;
+  const ownKeys = new Set(fields.flatMap(columnFilterKeys));
+  const active = [...ownKeys].some((key) => params[key]);
+  const otherParams = Object.fromEntries(
+    Object.entries(params).filter(([key]) => !ownKeys.has(key) && key !== pageParam),
+  );
 
   useEffect(() => {
     const button = trigger.current;
