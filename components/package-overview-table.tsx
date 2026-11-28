@@ -1,5 +1,6 @@
 "use client";
 
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import { type MouseEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -40,8 +41,7 @@ export function PackageOverviewTable({
   const params = useSearchParams();
   const query = params.get("q") ?? "";
   const matchesSearch = wordSearchMatcher(query);
-  const requestedId = Number(params.get("open"));
-  const openId = Number.isSafeInteger(requestedId) && requestedId > 0 ? requestedId : null;
+  const openId = parsePositiveSafeInteger(params.get("open")) ?? null;
   const openPanel = params.get("panel") === "usage" ? "usage" : "overview";
   const usages = packages.flatMap((pkg) => pkg.usages);
   const fields = {

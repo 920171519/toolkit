@@ -1,3 +1,4 @@
+import { parseDecimalId } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -27,9 +28,8 @@ const comparisonLabels = {
 } satisfies Record<BatchComparisonChange, { label: string; tone: string }>;
 
 function parseBatchId(value: unknown) {
-  if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) notFound();
-  const id = Number(value);
-  if (!Number.isSafeInteger(id)) notFound();
+  const id = parseDecimalId(value);
+  if (id === undefined) notFound();
   return id;
 }
 

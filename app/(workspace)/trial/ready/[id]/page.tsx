@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -31,8 +32,8 @@ export default async function TrialReadyDetailPage({
   searchParams: Promise<TrialSearchParams>;
 }) {
   const user = await requireUser();
-  const requestId = Number((await params).id);
-  if (!Number.isSafeInteger(requestId) || requestId < 1) notFound();
+  const requestId = parsePositiveSafeInteger((await params).id);
+  if (requestId === undefined) notFound();
   const search = await searchParams;
   const projectId = requireWorkflowProject(user, search.project)?.id;
   const managerScope = getManagedProjectScope(user);

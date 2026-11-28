@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { login } from "./helpers";
+import { openE2eDatabase } from "./storage";
 
 async function holdNavigationResponse(page: Page, matches: (url: URL) => boolean) {
   const responseGate = Promise.withResolvers<void>();
@@ -335,4 +336,40 @@ test("软件包空结果仍可清除筛选，关闭详情会回到同一列表",
   await expect(search).toHaveValue("1001OTA");
   await expect(details).toBeFocused();
   await expect(page).toHaveURL(/\/packages\?project=1&pageSize=10&q=1001OTA$/);
+});
+
+test("项目详情保留历史数字链接，草稿参数只接受未补零十进制", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const database = openE2eDatabase({ readOnly: true });
+  let projectId: number;
+  let batchId: number;
+  try {
+    const project = database.prepare("SELECT id FROM projects WHERE code = 'N1'").get() as { id: number };
+    projectId = project.id;
+    const batch = database.prepare("SELECT id FROM integration_batches WHERE project_id = ? AND code = 'B119'").get(projectId) as { id: number };
+    batchId = batch.id;
+  } finally {
+    database.close();
+  }
+
+  for (const id of [String(projectId), `0${projectId}`]) {
+    const response = await page.goto(`/projects/${id}`);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "星云 N1", exact: true })).toBeVisible();
+  }
+  for (const id of [`${projectId}e0`, "9007199254740992"]) {
+    const invalid = await page.goto(`/projects/${id}`);
+    expect(invalid?.status()).toBe(404);
+  }
+  const settings = await page.goto(`/settings/projects/${projectId}e0`);
+  expect(settings?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "星云 N1", exact: true })).toBeVisible();
+
+  await page.goto(`/submissions/batch/new?project=${projectId}&draft=${batchId}`);
+  await expect(page).toHaveURL((url) => url.pathname === `/integration/${batchId}`);
+  await expect(page.getByRole("heading", { name: /B119/, level: 1 })).toBeVisible();
+  for (const draft of [`0${batchId}`, `${batchId}e0`]) {
+    await page.goto(`/submissions/batch/new?project=${projectId}&draft=${draft}`);
+    await expect(page.getByRole("heading", { name: "草稿当前不可用", exact: true })).toBeVisible();
+  }
 });

@@ -1,5 +1,6 @@
 "use server";
 
+import { parseDecimalId } from "@/lib/positive-integer";
 import { actionUser, failure, numberValue, refreshAll, text } from "@/lib/action-helpers";
 import type { ActionState } from "@/lib/action-state";
 import {
@@ -75,9 +76,8 @@ function bindingBarcodeFormFields(formData: FormData, prefix: string): Map<numbe
   const fields = new Map<number, string>();
   for (const [name, value] of formData) {
     if (!name.startsWith(prefix)) continue;
-    const suffix = name.slice(prefix.length);
-    const barcodeId = Number(suffix);
-    if (!/^[1-9]\d*$/.test(suffix) || !Number.isSafeInteger(barcodeId) || fields.has(barcodeId) || typeof value !== "string") {
+    const barcodeId = parseDecimalId(name.slice(prefix.length));
+    if (barcodeId === undefined || fields.has(barcodeId) || typeof value !== "string") {
       throw new DomainError("设备条码参数无效。");
     }
     fields.set(barcodeId, value);

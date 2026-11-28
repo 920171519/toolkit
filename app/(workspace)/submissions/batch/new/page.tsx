@@ -1,3 +1,4 @@
+import { parseDecimalId } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -6,7 +7,7 @@ import { BatchBuilder } from "@/components/batch-builder";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
-import { batchSelectionKey, draftRequestListState, readTransferRequestId } from "@/lib/batch-preparation";
+import { batchSelectionKey, draftRequestListState } from "@/lib/batch-preparation";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
@@ -21,8 +22,8 @@ export default async function NewTransferBatchPage({ searchParams }: { searchPar
   const search = await searchParams;
   const project = requireWorkflowProject(user, search.project);
   if (!project || project.status === "ARCHIVED" || !canManageProjectWorkflowForProject(user, project.id)) notFound();
-  const draftId = typeof search.draft === "string" && /^[1-9][0-9]*$/.test(search.draft) ? Number(search.draft) : undefined;
-  const batch = draftId && Number.isSafeInteger(draftId) ? getBatchForPreparation(user, draftId, project.id) : null;
+  const draftId = parseDecimalId(search.draft);
+  const batch = draftId === undefined ? null : getBatchForPreparation(user, draftId, project.id);
   const listState = getWorkflowListState(search);
   const draftListState = { ...listState, ...draftRequestListState(search) };
   const returnScope = search.from === "all" ? undefined : project.id;
@@ -44,7 +45,7 @@ export default async function NewTransferBatchPage({ searchParams }: { searchPar
   const canCreate = candidates.some((candidate) => candidate.versions.some((version) => version.requestStatus === "PENDING" && version.status !== "VOID"));
   const hasDrafts = !canCreate && !draft && getBatchCount([project.id], { statuses: ["DRAFT"], activeProjectsOnly: true }) > 0;
   const transfersHref = workflowHref("/submissions", draft ? project.id : returnScope, draft ? { returnTo: listState.returnTo }
-    : { ...listState, request: readTransferRequestId(search.request) });
+    : { ...listState, request: parseDecimalId(search.request) });
   const returnHref = draft ? workflowHref(`/integration/${draft.id}`, returnScope, draftListState)
     : transfersHref;
   const draftIssues = draft ? getBatchSendCheck(draft.id).blockers : [];

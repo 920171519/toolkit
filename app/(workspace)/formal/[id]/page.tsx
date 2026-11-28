@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -36,8 +37,8 @@ export default async function FormalDetailPage({ params, searchParams }: {
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const versionId = Number(id);
-  if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
+  const versionId = parsePositiveSafeInteger(id);
+  if (versionId === undefined) notFound();
   const search = await searchParams;
   const notice = readFlash(search);
   const project = requireWorkflowProject(user, search.project);

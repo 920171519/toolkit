@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -54,8 +55,8 @@ export default async function VersionTracePage({
   const { id } = await params;
   const search = await searchParams;
   const notice = readFlash(search);
-  const versionId = Number(id);
-  if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
+  const versionId = parsePositiveSafeInteger(id);
+  if (versionId === undefined) notFound();
   const project = requireWorkflowProject(user, search.project);
   const projectId = project?.id;
   const requested = withTraceTab(readTraceListState(search), versionId);

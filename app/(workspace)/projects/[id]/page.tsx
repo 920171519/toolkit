@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -44,8 +45,8 @@ export default async function ProjectOverviewPage({
   const user = await requireUser();
   const { id } = await params;
   if (!/^\d+$/.test(id)) notFound();
-  const projectId = Number(id);
-  if (!Number.isSafeInteger(projectId) || projectId < 1) notFound();
+  const projectId = parsePositiveSafeInteger(id);
+  if (projectId === undefined) notFound();
   const [project] = getProjectCatalogEntries(projectId);
   if (!project) notFound();
   const search = await searchParams;

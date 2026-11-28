@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,9 +23,9 @@ export default async function LegacyVersionCorrectionPage({ params, searchParams
   const user = await requireUser();
   if (user.role !== "ADMIN") notFound();
   const { id, versionId } = await params;
-  const packageId = Number(id);
-  const parsedVersionId = Number(versionId);
-  if (!Number.isSafeInteger(packageId) || packageId < 1 || !Number.isSafeInteger(parsedVersionId) || parsedVersionId < 1) notFound();
+  const packageId = parsePositiveSafeInteger(id);
+  const parsedVersionId = parsePositiveSafeInteger(versionId);
+  if (packageId === undefined || parsedVersionId === undefined) notFound();
   const listParams = directoryFilters("packages", await searchParams);
   const back = `${directoryHref(`/settings/packages/${packageId}`, listParams)}#imported-version-history`;
   const existing = getLegacyVersionForCorrection(packageId, parsedVersionId);

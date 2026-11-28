@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -28,9 +29,9 @@ export default async function ProjectNodeSettingsPage({ params, searchParams }: 
 }) {
   const user = await requireUser();
   const ids = await params;
-  const projectId = Number(ids.id);
-  const nodeId = Number(ids.nodeId);
-  if (!Number.isSafeInteger(projectId) || !Number.isSafeInteger(nodeId) || projectId < 1 || nodeId < 1 || !canManageProjectWorkflowForProject(user, projectId)) notFound();
+  const projectId = parsePositiveSafeInteger(ids.id);
+  const nodeId = parsePositiveSafeInteger(ids.nodeId);
+  if (projectId === undefined || nodeId === undefined || !canManageProjectWorkflowForProject(user, projectId)) notFound();
   const config = getProjectNodeConfig(projectId, nodeId);
   if (!config) notFound();
   const { project, node } = config;

@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageLinks } from "@/components/page-links";
@@ -38,8 +39,8 @@ export default async function PackageSettingsDetailPage({
   const isAdmin = user.role === "ADMIN";
   const ledAreaIds = getLedAreaIds(user.id);
   const { id } = await params;
-  const packageId = Number(id);
-  if (!Number.isSafeInteger(packageId) || packageId < 1) notFound();
+  const packageId = parsePositiveSafeInteger(id);
+  if (packageId === undefined) notFound();
   const data = getPackageConfiguration(packageId);
   if (!data) notFound();
   if (!isAdmin && (data.package.areaId === null || !ledAreaIds.includes(data.package.areaId))) {

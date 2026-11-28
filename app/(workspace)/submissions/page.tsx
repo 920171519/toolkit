@@ -1,3 +1,4 @@
+import { parseDecimalId } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -5,7 +6,7 @@ import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { canReadBatchEvidence, getBatchEvidenceReadScope, getManagedProjectScope, getNarrowVersionRequestIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
-import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
+import { batchSelectionKey } from "@/lib/batch-preparation";
 import { getBatchCount, getBatches } from "@/lib/batch-queries";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
 import { hasTransferPackageOptions } from "@/lib/package-queries";
@@ -56,7 +57,7 @@ export default async function SubmissionsPage({
   const canPrepare = !archived && (project ? managesProject(project.id) : activeManagerScope === null || activeManagerScope.length > 0);
   const showDrafts = canPrepare && params.view === "drafts";
   const query = getWorkflowSearch(params.q);
-  const focusedRequestId = showDrafts ? undefined : readTransferRequestId(params.request);
+  const focusedRequestId = showDrafts ? undefined : parseDecimalId(params.request);
   const pageSize = getListPageSize(params.pageSize);
   const matches = workflowSearchMatcher(query);
   const requestCount = groups.reduce((total, group) => total + group.items.filter((item) => item.draftBatchId === null).length, 0);

@@ -1,3 +1,4 @@
+import { parseDecimalId } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,7 +23,7 @@ export default async function NewTransferRequestPage({ searchParams }: { searchP
   const returnTo = safeOverviewReturnPath(params.returnTo);
   const packages = getTransferPackageOptions(user, project?.id);
   if (project && !canAccessProjectPage(user, project.id) && packages.length === 0) notFound();
-  const requestedId = typeof params.package === "string" && /^[1-9][0-9]*$/.test(params.package) && Number.isSafeInteger(Number(params.package)) ? Number(params.package) : undefined;
+  const requestedId = parseDecimalId(params.package);
   const initialPackageId = packages.find((pkg) => pkg.id === requestedId)?.id;
   const guidance = !packages.length || (requestedId !== undefined && initialPackageId === undefined)
     ? getTransferEntryGuidance(user, project?.id, requestedId) : [];

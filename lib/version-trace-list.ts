@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "./positive-integer";
 import { readColumnFilters, type ColumnFilterField } from "./column-filters";
 import { PACKAGE_STATUS_META } from "./constants";
 import { PACKAGE_STATUSES } from "./domain-values";
@@ -41,8 +42,7 @@ function textValue(value: unknown) {
 
 function positiveInteger(value: unknown) {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return undefined;
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number > 0 ? number : undefined;
+  return parsePositiveSafeInteger(value);
 }
 
 function stringValue(value: unknown) {

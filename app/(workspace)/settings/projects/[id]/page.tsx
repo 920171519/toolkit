@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -29,8 +30,8 @@ export default async function ProjectSettingsDetailPage({ params, searchParams }
 }) {
   const user = await requireUser();
   const canAssignManagers = user.role === "ADMIN";
-  const projectId = Number((await params).id);
-  if (!Number.isSafeInteger(projectId) || projectId < 1 || !canManageProjectWorkflowForProject(user, projectId)) notFound();
+  const projectId = parsePositiveSafeInteger((await params).id);
+  if (projectId === undefined || !canManageProjectWorkflowForProject(user, projectId)) notFound();
   const project = getProjectConfig(projectId);
   if (!project) notFound();
 

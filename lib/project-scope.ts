@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "./positive-integer";
 import "server-only";
 
 import { notFound } from "next/navigation";
@@ -16,9 +17,8 @@ export function getWorkspaceProjectNavigation(user: SessionUser) {
 }
 
 export function getReadablePackageProject(user: SessionUser, value: string | string[] | undefined) {
-  if (typeof value !== "string") return undefined;
-  const projectId = Number(value);
-  if (!Number.isSafeInteger(projectId) || projectId < 1) return undefined;
+  const projectId = parsePositiveSafeInteger(value);
+  if (projectId === undefined) return undefined;
   const project = getProjectOption(projectId);
   if (!project || canAccessProjectPage(user, projectId)) return project;
   return hasReadablePackageInProject(user, projectId) ? project : undefined;
@@ -38,9 +38,8 @@ export function requireWorkflowProject(
   allowObjectScope = false,
 ) {
   if (value === undefined || value === "") return undefined;
-  if (Array.isArray(value)) notFound();
-  const id = Number(value);
-  if (!Number.isSafeInteger(id) || id < 1 || (expectedProjectId !== undefined && id !== expectedProjectId)) notFound();
+  const id = parsePositiveSafeInteger(value);
+  if (id === undefined || (expectedProjectId !== undefined && id !== expectedProjectId)) notFound();
   const project = canAccessProjectPage(user, id) ? getProjectOption(id) : undefined;
   // Some detail pages independently authorize a specific record, without granting project navigation.
   if (!project && allowObjectScope && expectedProjectId === id) return undefined;

@@ -1,3 +1,5 @@
+import { parsePositiveSafeInteger } from "./positive-integer";
+
 export const LIST_PAGE_SIZES = [10, 25, 50] as const;
 export const DEFAULT_LIST_PAGE_SIZE = 25;
 
@@ -10,8 +12,7 @@ export function getListPageSize(
 }
 
 export function readListPage(value: unknown) {
-  const requested = typeof value === "string" ? Number(value) : 1;
-  return Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
+  return parsePositiveSafeInteger(value) ?? 1;
 }
 
 // Callers provide the row count after filtering and a page parsed by their input contract.

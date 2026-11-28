@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -116,8 +117,8 @@ export default async function AreaSettingsDetailPage({ params, searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
-  const id = Number((await params).id);
-  if (!Number.isSafeInteger(id) || id < 1) notFound();
+  const id = parsePositiveSafeInteger((await params).id);
+  if (id === undefined) notFound();
   const area = getAreaConfig(id);
   if (!area) notFound();
 

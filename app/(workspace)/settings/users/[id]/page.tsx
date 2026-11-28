@@ -1,3 +1,4 @@
+import { parsePositiveSafeInteger } from "@/lib/positive-integer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,8 +25,8 @@ export default async function UserSettingsDetailPage({ params, searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireRole(["ADMIN"]);
-  const userId = Number((await params).id);
-  if (!Number.isSafeInteger(userId) || userId < 1) notFound();
+  const userId = parsePositiveSafeInteger((await params).id);
+  if (userId === undefined) notFound();
   const [member] = getAdminUsers(userId);
   if (!member) notFound();
 
