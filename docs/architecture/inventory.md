@@ -132,6 +132,10 @@
 | 待转测、集成测试和转正各自处理列表搜索及页码 | [列表参数](../../lib/workflow-list.ts)、[页码窗口](../../lib/list-pagination.ts)、[集成历史回归](../../tests/e2e/integration-history-filters.spec.ts) | 共用读取和序列化。列表修正超范围页码，详情保留有效请求页码。 |
 | 配置导航读取完整项目及责任田分工来判断入口是否可见 | [授权查询](../../lib/access.ts)、[配置导航](../../lib/settings-navigation.ts) | 单次查询返回两项权限是否存在。归档项目经理和责任田主管仍按原分工判断。 |
 | 默认部门和启动可用性缺少部署阶段说明 | [配置示例](../../.env.example)、[部署与运行配置](../../README.md) | 记录浏览器构建、命令进程及账号持久化的实际行为，启动后通过首页验证数据库可用。 |
+| 通用操作表单声明无调用的原地成功重置 | [动作反馈](../../lib/action-state.ts)、[表单](../../components/action-form.tsx)、[包配置抽屉](../../components/package-drawer.tsx) | 通用操作成功重定向，抽屉继续独立处理行内保存反馈。 |
+| 转正和试制的列表按行重复查经理关系 | [转正列表](../../app/(workspace)/formal/page.tsx)、[试制列表](../../app/(workspace)/trial/page.tsx)、[读权限](../../lib/access.ts) | 每次请求复用现有范围。归档、在行、只读分工及按对象提交的约束继续生效。 |
+| 版本追溯筛选单包时读取全站可读版本 | [版本列表](../../app/(workspace)/versions/page.tsx)、[授权查询](../../lib/access.ts)、[列表回归](../../tests/e2e/version-trace-list.spec.ts) | 列表通过同一授权查询按包限定结果，已打开的跨包标签仍独立校验。 |
+| 旧库绑定模式和推送时间缺少独立回填回归 | [启动迁移](../../lib/db.ts)、[生命周期回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 真实启动验证两个字段分别缺失、同时缺失及均存在时的处理和重启幂等性。 |
 
 ## 待核对的规范偏离
 
