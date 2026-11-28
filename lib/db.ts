@@ -12,7 +12,7 @@ import {
   TRANSFER_REQUEST_RISK_CONCLUSION_COLUMN_SQL,
 } from "./schema";
 import { seedDatabase } from "./seed";
-import { closeDatabaseAfterError, withImmediateTransaction } from "./sqlite-lifecycle";
+import { closeDatabaseAfterError, withImmediateTransaction, type SynchronousTransactionCallback } from "./sqlite-lifecycle";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
@@ -226,6 +226,6 @@ export function run(sql: string, ...params: SqlValue[]) {
   return db.prepare(sql).run(...params);
 }
 
-export function transaction<T>(fn: () => T): T {
+export function transaction<T>(fn: SynchronousTransactionCallback<T>): T {
   return withImmediateTransaction(db, fn);
 }

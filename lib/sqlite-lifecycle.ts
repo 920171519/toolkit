@@ -1,6 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export function withImmediateTransaction<T>(database: DatabaseSync, fn: () => T): T {
+// The callback finishes its work before the synchronous commit.
+export type SynchronousTransactionCallback<T> = () => T & Exclude<T, { then: (...args: never[]) => unknown }>;
+
+export function withImmediateTransaction<T>(database: DatabaseSync, fn: SynchronousTransactionCallback<T>): T {
   database.exec("BEGIN IMMEDIATE");
   try {
     const result = fn();
