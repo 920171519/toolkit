@@ -114,6 +114,7 @@ export function getVersionTrace(
     projectId ?? null,
     projectId ?? null,
   );
+  // Exclude the version index here to preserve the existing join choices for tied batch times.
   const batches = all<VersionTrace["batches"][number]>(
     `SELECT DISTINCT b.id, b.code, pr.id AS projectId, pr.name AS projectName, b.status,
             b.conclusion, b.created_at AS createdAt, b.sent_at AS sentAt, b.completed_at AS completedAt,
@@ -121,7 +122,7 @@ export function getVersionTrace(
      FROM batch_items bi
      JOIN integration_batches b ON b.id = bi.batch_id
      JOIN projects pr ON pr.id = b.project_id
-     WHERE bi.package_version_id = ? AND (? IS NULL OR pr.id = ?)
+     WHERE +bi.package_version_id = ? AND (? IS NULL OR pr.id = ?)
      ORDER BY b.created_at DESC`,
     versionId,
     projectId ?? null,

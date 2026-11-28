@@ -129,3 +129,41 @@ test("补派预览无法确认 SQLite 只读时在打开目标前退出", ({}, t
   expect(preview.stderr).toContain("无法确认 SQLite 只读模式");
   expect(preview.stderr).not.toContain("fixture target opened");
 });
+
+test("旧库启动补齐批次版本索引并保留配套快照", ({}, testInfo) => {
+  const target = testInfo.outputPath("legacy-batch-history.db");
+  function start(seed: boolean) {
+    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
+      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: seed ? "0" : "1" },
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+    expect(startup.error).toBeUndefined();
+    expect(startup.status, startup.stderr).toBe(0);
+  }
+
+  start(true);
+  const legacy = new DatabaseSync(target);
+  let before: unknown[];
+  try {
+    legacy.exec("DROP INDEX IF EXISTS idx_batch_items_version");
+    before = legacy.prepare("SELECT * FROM batch_items ORDER BY id").all();
+    expect(before.length).toBeGreaterThan(0);
+  } finally {
+    legacy.close();
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    start(false);
+    const migrated = new DatabaseSync(target, { readOnly: true });
+    try {
+      expect(migrated.prepare("PRAGMA index_info(idx_batch_items_version)").all()).toEqual([
+        expect.objectContaining({ name: "package_version_id" }),
+      ]);
+      expect(migrated.prepare("SELECT * FROM batch_items ORDER BY id").all()).toEqual(before);
+      expect(migrated.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      migrated.close();
+    }
+  }
+});
