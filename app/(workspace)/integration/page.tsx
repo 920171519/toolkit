@@ -43,14 +43,16 @@ export default async function IntegrationPage({
   const activeStatuses: BatchStatus[] = ["IN_TEST"];
   const historyStatuses: BatchStatus[] = archived ? ["IN_TEST", "COMPLETED", "TERMINATED"] : ["COMPLETED", "TERMINATED"];
   const activeCount = archived ? 0 : getBatchCount(scope, { statuses: activeStatuses, activeProjectsOnly: true });
-  const historyCount = getBatchCount(scope, { statuses: historyStatuses });
   const historyState = readIntegrationHistory(params);
-  const inHistory = archived || params.view === "history" || params.history === "1" || Object.keys(historyState.filters).length > 0;
+  const hasHistoryFilters = Object.keys(historyState.filters).length > 0;
+  const inHistory = archived || params.view === "history" || params.history === "1" || hasHistoryFilters;
   const filters = { statuses: activeStatuses, query, activeProjectsOnly: true };
   const total = inHistory ? 0 : query ? getBatchCount(scope, filters) : activeCount;
   const page = getPageWindow(total, pageSize, requestedPage);
   const visible = inHistory ? [] : getBatches(pageSize, scope, { ...filters, offset: page.offset });
   const history = inHistory ? getIntegrationHistoryPage(historyState, scope, { statuses: historyStatuses, query }) : undefined;
+  const historyCount = archived ? 0 : history && !query && !hasHistoryFilters
+    ? history.total : getBatchCount(scope, { statuses: historyStatuses });
   const historyParams = { ...integrationHistoryParams({ ...historyState, page: history?.page ?? 1 }), view: "history", q: query || undefined, returnTo };
   const filterHeader = { path: "/integration", params: { ...historyParams, project: project ? String(project.id) : undefined } };
   const projectOptions = inHistory ? project ? [project] : getProjectOptions(true).filter(({ id }) => scope === null || scope.includes(id)) : [];
@@ -115,8 +117,8 @@ export default async function IntegrationPage({
               })}</tbody>
             </table>
           </div>
-          {history.rows.length === 0 && <EmptyState title={(query || Object.keys(historyState.filters).length) ? "没有匹配的历史批次" : "暂无历史批次"}
-            action={query || Object.keys(historyState.filters).length
+          {history.rows.length === 0 && <EmptyState title={(query || hasHistoryFilters) ? "没有匹配的历史批次" : "暂无历史批次"}
+            action={query || hasHistoryFilters
               ? <Link href={queueHref(true, "") + "#integration-history"} prefetch={false} className="button button-secondary button-sm">重置搜索与筛选</Link>
               : !archived ? <Link href={queueHref(false, "")} prefetch={false} className="button button-secondary button-sm">查看在测批次</Link> : undefined} />}
           <DirectoryPagination {...filterHeader} page={history.page} pages={history.pages} total={history.total} unit="个批次" pageSize={historyState.pageSize} label="历史批次分页" />

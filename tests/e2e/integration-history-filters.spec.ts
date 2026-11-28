@@ -64,7 +64,11 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       const active = page.getByText("B120", { exact: true });
       await expect(active).toBeVisible();
       const history = page.locator("#integration-history");
-      await page.getByRole("navigation", { name: "集成测试队列" }).getByRole("link", { name: /历史批次/ }).click();
+      const historyTab = page.getByRole("navigation", { name: "集成测试队列" }).getByRole("link", { name: /历史批次/ });
+      await historyTab.click();
+      await expect(historyTab).toHaveAttribute("aria-current", "page");
+      const historyBadge = historyTab.locator("span").last();
+      const historyBadgeCount = await historyBadge.innerText();
       const table = page.getByRole("region", { name: "历史批次表格" });
       const rows = table.locator("tbody tr");
       await expect(rows).toHaveCount(10);
@@ -75,6 +79,7 @@ test("历史批次先按项目和列筛选，再分页，较早的详情返回�
       await batchFilter.getByRole("button", { name: "应用", exact: true }).click();
       await expect(page).toHaveURL((url) => url.searchParams.get("f_batch") === target);
       await expect(history.getByRole("status")).toContainText("共 12 个批次");
+      await expect(historyBadge).toHaveText(historyBadgeCount);
 
       const dateFilter = await openFilter(page, "时间");
       await dateFilter.getByLabel("时间起始日期").fill("2020-01-02");
