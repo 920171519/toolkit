@@ -5,7 +5,6 @@ import {
   getBatchEvidenceReadScope,
   getNarrowVersionRequestIds,
   getReadableLinkedBatchEvidence,
-  getReadableVersionIds,
   type LinkedBatchEvidence,
 } from "./access";
 import type { TrialDetail, TrialDetailReader } from "./binding-queries";
@@ -73,7 +72,12 @@ export type VersionTrace = {
   details: TrialDetail[];
 };
 
-export function getVersionTrace(reader: TrialDetailReader, versionId: number, projectId?: number, readableIds = getReadableVersionIds(reader.user)): VersionTrace | null {
+export function getVersionTrace(
+  reader: TrialDetailReader,
+  versionId: number,
+  projectId: number | undefined,
+  readableIds: readonly number[] | null,
+): VersionTrace | null {
   const { user } = reader;
   if (readableIds !== null && !readableIds.includes(versionId)) return null;
   const version = one<VersionTrace["version"]>(

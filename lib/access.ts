@@ -328,8 +328,13 @@ export function getAssignedTrialRequestIds(user: SessionUser): number[] {
   ).map(({ id }) => id);
 }
 
-export function getReadableVersionIds(user: SessionUser, packageId?: number): number[] | null {
+type ReadableVersionSelection = { packageId: number } | { versionIds: readonly number[] };
+
+export function getReadableVersionIds(user: SessionUser, selection?: ReadableVersionSelection): number[] | null {
   if (user.role === "ADMIN") return null;
+  const filter = selection && ("packageId" in selection
+    ? { predicate: "pv.package_id = ?", value: selection.packageId }
+    : { predicate: "pv.id IN (SELECT value FROM json_each(?))", value: JSON.stringify(selection.versionIds) });
   return all<{ id: number }>(
     `WITH ${batchEvidenceScopeCtes},
           package_assignments AS (
@@ -337,7 +342,7 @@ export function getReadableVersionIds(user: SessionUser, packageId?: number): nu
             UNION SELECT area_id, project_id FROM area_project_members WHERE user_id = ?
           )
      SELECT pv.id FROM package_versions pv JOIN packages p ON p.id = pv.package_id
-     WHERE ${packageId === undefined ? "" : "pv.package_id = ? AND "}(
+     WHERE ${filter ? `${filter.predicate} AND ` : ""}(
        p.owner_id = ? OR pv.submitted_by = ? OR p.area_id IN (SELECT area_id FROM area_leaders WHERE user_id = ?)
        OR EXISTS (
          SELECT 1 FROM version_transfer_requests r WHERE r.package_version_id = pv.id
@@ -354,7 +359,7 @@ export function getReadableVersionIds(user: SessionUser, packageId?: number): nu
            AND (${bindingReadAssignment})
        ))`,
     ...batchEvidenceScopeSqlParams(user), user.id, user.id,
-    ...(packageId === undefined ? [] : [packageId]), user.id, user.id, user.id, user.id, user.id, user.id,
+    ...(filter ? [filter.value] : []), user.id, user.id, user.id, user.id, user.id, user.id,
   ).map(({ id }) => id);
 }
 
@@ -363,7 +368,7 @@ export function getReadablePackageIds(
   versionIds?: readonly number[] | null,
   packageId?: number,
 ): number[] | null {
-  const readableVersionIds = versionIds === undefined ? getReadableVersionIds(user, packageId) : versionIds;
+  const readableVersionIds = versionIds === undefined ? getReadableVersionIds(user, packageId === undefined ? undefined : { packageId }) : versionIds;
   if (readableVersionIds === null) return null;
   return all<{ id: number }>(
     `SELECT p.id FROM packages p
@@ -380,7 +385,7 @@ export function getReadablePackageIds(
 }
 
 export function getReadablePackageVersionScope(user: SessionUser, packageId: number): { versionIds: number[] | null } | null {
-  const versionIds = getReadableVersionIds(user, packageId);
+  const versionIds = getReadableVersionIds(user, { packageId });
   // A readable version also grants access to its package.
   if (versionIds?.length === 0 && !getReadablePackageIds(user, versionIds, packageId)?.length) return null;
   return { versionIds };

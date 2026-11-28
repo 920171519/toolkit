@@ -58,13 +58,13 @@ export default async function VersionTracePage({
   if (!Number.isSafeInteger(versionId) || versionId < 1) notFound();
   const project = requireWorkflowProject(user, search.project);
   const projectId = project?.id;
-  const readableIds = getReadableVersionIds(user);
+  const requested = withTraceTab(readTraceListState(search), versionId);
+  const readableIds = getReadableVersionIds(user, { versionIds: requested.tabs });
   const trialDetails = createTrialDetailReader(user);
   const trace = getVersionTrace(trialDetails, versionId, projectId, readableIds);
   if (!trace) notFound();
   const { version, requests, batches, details } = trace;
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
-  const requested = withTraceTab(readTraceListState(search), versionId);
   const tabs = getTraceVersionTabs(requested.tabs, projectId, readableIds);
   const state = { ...requested, tabs: tabs.map((tab) => tab.id) };
   const detailByRequest = new Map(details.map((detail) => [detail.request.id, detail]));
