@@ -40,6 +40,11 @@ const versionRequestWithPackageFrom = `${versionRequestFrom}
   JOIN packages p ON p.id = pv.package_id`;
 const activeReleaseStage = "pr.status != 'ARCHIVED' AND r.status = pv.status";
 
+const bindingProgressColumns = `(SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
+  (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
+   AND br.confirmed_at IS NOT NULL) AS requirementPassed,
+  (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived`;
+
 function trialQueueScope(projectIds: number[] | null, assignedRequestIds: number[]) {
   const activeTrial = `${activeReleaseStage} AND pv.status = 'TRIAL'`;
   if (projectIds === null) return { where: activeTrial, params: [] };
@@ -80,10 +85,7 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
               p.trial_overdue_days AS trialOverdueDays,
               CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
               b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
-               AND br.confirmed_at IS NOT NULL) AS requirementPassed,
-              (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived,
+              ${bindingProgressColumns},
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
        ${versionRequestWithPackageFrom}
        LEFT JOIN users su ON su.id = pv.submitted_by
@@ -93,13 +95,7 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
        WHERE ${where}
        ORDER BY r.trial_released_at DESC, r.id DESC`,
     ...params,
-  ).map((version) => ({
-    ...version,
-    requirementTotal: Number(version.requirementTotal),
-    requirementPassed: Number(version.requirementPassed),
-    requirementWaived: Number(version.requirementWaived),
-    pendingFlowCount: Number(version.pendingFlowCount),
-  }));
+  );
 }
 
 export function getManagedTrialRequestState(user: SessionUser, requestId: number, projectId?: number) {
@@ -134,31 +130,34 @@ export function hasReadableFormalHistory(user: SessionUser, versionId: number, p
   ));
 }
 
-export type PendingFormalVersion = {
-  requestId: number;
+type PendingFormalIdentity = {
   versionId: number;
   projectId: number;
-  projectName: string;
-  projectCode: string;
-  packageId: number;
   packageName: string;
   packageCode: string;
   version: string;
+};
+
+type PendingFormalVersion = PendingFormalIdentity & Omit<TrialQueueBindingCounts, "pendingFlowCount"> & {
+  projectName: string;
+  projectCode: string;
   changeSummary: string;
-  archiveUrl: string;
   trialFormNo: string | null;
   trialReleasedAt: string | null;
   bindingMode: "PENDING" | "PUSHED" | "SKIPPED";
   releaseMode: "INTEGRATION" | "RISK";
-  ownerName: string | null;
-  softwareManagerName: string | null;
-  softwareManagerId: number | null;
-  requirementTotal: number;
-  requirementPassed: number;
-  requirementWaived: number;
-  trialOverdueDays: number;
   isOverdue: number;
 };
+
+type PendingFormalDetail = PendingFormalIdentity & {
+  requestId: number;
+  changeSummary: string;
+  archiveUrl: string;
+  trialReleasedAt: string | null;
+};
+
+const pendingFormalIdentityColumns = `pv.id AS versionId, pr.id AS projectId,
+  p.name AS packageName, p.code AS packageCode, pv.version`;
 
 const pendingFormalOrder = "ORDER BY r.trial_released_at DESC, r.id DESC";
 
@@ -172,15 +171,11 @@ function pendingFormalScope(projectIds: number[] | null, versionId?: number) {
   };
 }
 
-type WorkbenchPendingFormalVersion = Pick<PendingFormalVersion,
-  "versionId" | "projectId" | "projectName" | "packageName" | "packageCode" | "version">;
-
-export function getWorkbenchPendingFormalRows(projectIds: number[] | null): WorkbenchPendingFormalVersion[] {
+export function getWorkbenchPendingFormalRows(projectIds: number[] | null) {
   const scope = pendingFormalScope(projectIds);
   if (!scope) return [];
-  return all<WorkbenchPendingFormalVersion>(
-    `SELECT pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
-            p.name AS packageName, p.code AS packageCode, pv.version
+  return all<PendingFormalIdentity & { projectName: string }>(
+    `SELECT ${pendingFormalIdentityColumns}, pr.name AS projectName
      ${versionRequestWithPackageFrom}
      WHERE ${scope.where}
      ${pendingFormalOrder}`,
@@ -188,34 +183,33 @@ export function getWorkbenchPendingFormalRows(projectIds: number[] | null): Work
   );
 }
 
-export function getPendingFormalVersions(projectIds: number[] | null = null, versionId?: number): PendingFormalVersion[] {
-  const scope = pendingFormalScope(projectIds, versionId);
+export function getPendingFormalVersions(projectIds: number[] | null = null): PendingFormalVersion[] {
+  const scope = pendingFormalScope(projectIds);
   if (!scope) return [];
   return all<PendingFormalVersion>(
-    `SELECT r.id AS requestId, pv.id AS versionId, pr.id AS projectId, pr.name AS projectName,
-            pr.code AS projectCode, p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-            pv.version, pv.change_summary AS changeSummary, pv.archive_url AS archiveUrl,
-            r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
+    `SELECT ${pendingFormalIdentityColumns}, pr.name AS projectName, pr.code AS projectCode,
+            pv.change_summary AS changeSummary, r.trial_form_no AS trialFormNo, r.trial_released_at AS trialReleasedAt,
             pv.binding_mode AS bindingMode, r.release_mode AS releaseMode,
-            o.name AS ownerName, sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId,
-            p.trial_overdue_days AS trialOverdueDays,
             CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
-            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id) AS requirementTotal,
-            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.status = 'PASSED'
-             AND br.confirmed_at IS NOT NULL) AS requirementPassed,
-            (SELECT COUNT(*) FROM binding_requirements br WHERE br.request_id = r.id AND br.waived_at IS NOT NULL) AS requirementWaived
+            ${bindingProgressColumns}
      ${versionRequestWithPackageFrom}
-     LEFT JOIN users o ON o.id = p.owner_id
-     LEFT JOIN users sm ON sm.id = pr.software_manager_id
      WHERE ${scope.where}
      ${pendingFormalOrder}`,
     ...scope.params,
-  ).map((version) => ({
-    ...version,
-    requirementTotal: Number(version.requirementTotal),
-    requirementPassed: Number(version.requirementPassed),
-    requirementWaived: Number(version.requirementWaived),
-  }));
+  );
+}
+
+export function getPendingFormalDetailRows(projectIds: number[] | null, versionId: number): PendingFormalDetail[] {
+  const scope = pendingFormalScope(projectIds, versionId);
+  if (!scope) return [];
+  return all<PendingFormalDetail>(
+    `SELECT ${pendingFormalIdentityColumns}, r.id AS requestId, pv.change_summary AS changeSummary,
+            pv.archive_url AS archiveUrl, r.trial_released_at AS trialReleasedAt
+     ${versionRequestWithPackageFrom}
+     WHERE ${scope.where}
+     ${pendingFormalOrder}`,
+    ...scope.params,
+  );
 }
 
 export function getVersionRequestIds(versionId: number): number[] {

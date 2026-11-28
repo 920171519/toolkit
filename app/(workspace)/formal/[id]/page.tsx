@@ -23,7 +23,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
-import { getPendingFormalVersions, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/release-queue-queries";
+import { getPendingFormalDetailRows, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/release-queue-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const guidance = getFormalReleaseGuidance(trialDetails, versionId, { projectId: project?.id, returnTo: listState.returnTo });
   const returnHref = workflowHref("/formal", project?.id, listState);
   const traceHref = workflowHref(`/versions/${versionId}`, project?.id, { ...listState, from: "formal" });
-  const records = getPendingFormalVersions(scope, versionId);
+  const records = getPendingFormalDetailRows(scope, versionId);
   if (records.length === 0) {
     if (!guidance && !hasReadableFormalHistory(user, versionId, project?.id)) notFound();
     const title = guidance?.status === "FORMAL" ? "该版本已转正"
