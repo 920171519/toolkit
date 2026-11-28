@@ -368,7 +368,7 @@ export function getReadableTestReport(user: SessionUser, reportId: number) {
   return readable ? file : null;
 }
 
-const batchItemsFrom = `FROM batch_items bi
+const batchItemsJoin = `batch_items bi
      JOIN packages p ON p.id = bi.package_id
      JOIN package_versions pv ON pv.id = bi.package_version_id`;
 const batchItemsOrder = `ORDER BY bi.is_changed DESC, ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`;
@@ -380,19 +380,31 @@ function canReadBatchDetails(user: SessionUser, batchId: number): boolean {
 
 export function getBatchForPreparation(user: SessionUser, batchId: number, projectId: number) {
   if (!canReadBatchDetails(user, batchId)) return null;
-  const batch = one<Pick<BatchSummaryRow, "id" | "code" | "title" | "status">>(
-    `SELECT b.id, b.code, b.title, b.status ${batchProjectFrom}
-     WHERE b.id = ? AND b.project_id = ?`,
+  const rows = all<Pick<BatchSummaryRow, "id" | "code" | "title" | "status"> & {
+    itemId: number | null;
+    packageId: number | null;
+    versionId: number | null;
+    isChanged: unknown;
+  }>(
+    `WITH batch AS MATERIALIZED (
+       SELECT b.id, b.code, b.title, b.status ${batchProjectFrom}
+       WHERE b.id = ? AND b.project_id = ?
+     )
+     SELECT b.id, b.code, b.title, b.status, bi.id AS itemId,
+            p.id AS packageId, bi.package_version_id AS versionId, bi.is_changed AS isChanged
+     FROM batch b
+     LEFT JOIN (${batchItemsJoin})
+       ON bi.batch_id = (SELECT id FROM batch WHERE status = 'DRAFT')
+     ${batchItemsOrder}`,
     batchId, projectId,
   );
+  const [batch] = rows;
   if (!batch) return null;
   const { id, code } = batch;
   if (batch.status !== "DRAFT") return { id, code, draft: null };
 
-  const items = all<{ id: number; packageId: number; versionId: number; isChanged: number }>(
-    `SELECT bi.id, p.id AS packageId, bi.package_version_id AS versionId, bi.is_changed AS isChanged
-     ${batchItemsFrom} WHERE bi.batch_id = ? ${batchItemsOrder}`,
-    batchId,
+  const items = rows.flatMap(({ itemId, packageId, versionId, isChanged }) =>
+    itemId === null || packageId === null || versionId === null ? [] : [{ id: itemId, packageId, versionId, isChanged }],
   );
   return {
     id,
@@ -434,7 +446,7 @@ export function getBatchDetail(user: SessionUser, batchId: number): BatchDetailR
             bi.previous_test_version AS previousTestVersion, bi.changed_vs_previous AS changedVsPrevious,
             u.name AS ownerName, bi.issue_affected AS issueAffected,
             ${PARALLEL_RISK_TRIAL_ITEM_SQL} AS parallelRiskTrial
-     ${batchItemsFrom}
+     FROM ${batchItemsJoin}
      LEFT JOIN version_transfer_requests r ON r.id = bi.transfer_request_id
      LEFT JOIN users u ON u.id = p.owner_id
      WHERE bi.batch_id = ?
