@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageLinks } from "@/components/page-links";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { requireUser } from "@/lib/auth";
@@ -228,8 +229,7 @@ export default async function PackageSettingsDetailPage({
         {history.pages > 1 && <nav className="settings-pagination" aria-label="历史补录版本分页">
           <span className="small muted">第 {history.page} / {history.pages} 页</span>
           <div className={styles.historyActions}>
-            {history.page > 1 && <Link href={historyHref(history.page - 1)} className="button button-secondary button-sm" prefetch={false}>上一页</Link>}
-            {history.page < history.pages && <Link href={historyHref(history.page + 1)} className="button button-secondary button-sm" prefetch={false}>下一页</Link>}
+            <PageLinks page={history.page} pages={history.pages} href={historyHref} />
           </div>
         </nav>}
       </section>}

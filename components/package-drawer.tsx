@@ -9,6 +9,7 @@ import type { PackageDrawerData } from "@/lib/package-queries";
 import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
 import { getPageWindow } from "@/lib/list-pagination";
+import { LocalPagination } from "@/components/local-pagination";
 import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { packageIdentity } from "@/lib/package-identity";
 import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
@@ -71,11 +72,7 @@ function DrawerPagination({ label, count, start, page, pageCount, setPage }: {
   return (
     <div className={styles.pagination}>
       <span className="small muted" role="status">{count > 0 ? `${start + 1}–${Math.min(start + listPageSize, count)} / ${count} 条` : "0 条"}</span>
-      {pageCount > 1 && <nav aria-label={label}>
-        <button type="button" className="button button-secondary button-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>上一页</button>
-        <span>第 {page} / {pageCount} 页</span>
-        <button type="button" className="button button-secondary button-sm" disabled={page === pageCount} onClick={() => setPage(page + 1)}>下一页</button>
-      </nav>}
+      <LocalPagination label={label} page={page} pages={pageCount} onPageChange={setPage} />
     </div>
   );
 }

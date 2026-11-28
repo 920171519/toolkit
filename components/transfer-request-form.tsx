@@ -7,6 +7,7 @@ import { PackageNameToggle } from "@/components/package-name-toggle";
 import { submitTransferAction } from "@/lib/actions/transfer";
 import type { ActionState } from "@/lib/action-state";
 import { getPageWindow } from "@/lib/list-pagination";
+import { LocalPagination } from "@/components/local-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { invalidTransferFields, TRANSFER_CHANGE_SUMMARY_MIN_LENGTH, type TransferFormFields } from "@/lib/transfer-form-validation";
 import nameVisibility from "./package-name-toggle.module.css";
@@ -108,11 +109,7 @@ export function TransferRequestForm({ packages, scopeProjectId, initialPackageId
                   </button>;
                 })}
               </div>
-              {pages > 1 && <nav className={styles.pagination} aria-label="可提交软件包分页">
-                <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-                <span>第 {page} / {pages} 页</span>
-                <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>下一页</button>
-              </nav>}
+              <LocalPagination className={styles.pagination} label="可提交软件包分页" page={page} pages={pages} onPageChange={setPage} />
             </>
           )}
         </div>

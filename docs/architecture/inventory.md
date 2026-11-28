@@ -106,6 +106,7 @@
 | 工作流提交共用一个可导入所有写模块的入口 | [转测](../../lib/actions/transfer.ts)、[批次](../../lib/actions/batch.ts)、[绑定](../../lib/actions/binding.ts)、[发布](../../lib/actions/release.ts)、[架构契约](../../tests/architecture-check.test.mjs) | 各页面调用对应写入口，风险登记保留专用入口，跨流程回跳参数持续共用。检查器拒绝绕过写入所有者。 |
 | 转正核对沿用列表查询及未展示的节点统计 | [发布队列](../../lib/release-queue-queries.ts)、[转正核对](../../app/(workspace)/formal/[id]/page.tsx) | 在同一查询模块复用范围与排序，按页面读取最少字段。完整项目节点统计仍用于相关队列。 |
 | 账号操作与提示重复声明新密码长度 | [密码规则](../../lib/password-policy.ts)、[认证表单动作](../../app/(auth)/actions.ts)、[管理员命令](../../scripts/create-admin.ts) | 网页和维护命令共用最短长度。网页输入及提示使用自己的上限，登录和历史密码沿用已有校验方式。 |
+| 多个客户端列表内重复绘制页码和翻页按钮 | [本地分页](../../components/local-pagination.tsx)、[分页计算](../../lib/list-pagination.ts)、[工作区导航](../../components/workspace-navigation.tsx) | 各页面继续负责筛选、状态和回调。导航按钮、页码和边界禁用共用一个实现。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

@@ -15,6 +15,7 @@ import { Badge, EmptyState, ExternalLink } from "@/components/ui";
 import { cancelTransferAction } from "@/lib/actions/transfer";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesDateFilter, matchesTextFilter, type ColumnFilterField } from "@/lib/column-filters";
 import { getPageWindow } from "@/lib/list-pagination";
+import { LocalPagination } from "@/components/local-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { workflowHref } from "@/lib/workflow-links";
@@ -198,11 +199,7 @@ export function PendingTransferTable({ group, scopeProjectId, hasProjectWorkflow
       {visibleRows.length === 0 && <EmptyState title="没有匹配的待转测申请"
         action={isFiltered && <button className="button button-secondary button-sm" type="button"
           onClick={() => { setFilters({}); setPage(1); }}>清除全部筛选</button>} />}
-      {pages > 1 && <nav className={`toolbar ${styles.rowActions}`} aria-label={`${projectName}申请列表分页`}>
-        <button className="button button-secondary button-sm" type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>上一页</button>
-        <span className="small muted">第 {currentPage} / {pages} 页</span>
-        <button className="button button-secondary button-sm" type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>下一页</button>
-      </nav>}
+      <LocalPagination className={`toolbar ${styles.rowActions}`} label={`${projectName}申请列表分页`} page={currentPage} pages={pages} onPageChange={setPage} countClassName="small muted" />
       {activePackage !== null && <PackageDrawer key={activePackage} packageId={activePackage} projectId={projectId} hasProjectWorkflowScope={hasProjectWorkflowScope}
         people={[]} readOnly returnFocus={detailTrigger} onClose={() => setActivePackage(null)} />}
     </section>

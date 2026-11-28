@@ -8,6 +8,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { NavigationPending } from "@/components/navigation-pending";
 import { SidebarNav, type SidebarGroup, type SidebarItem } from "@/components/sidebar-nav";
 import { getPageWindow } from "@/lib/list-pagination";
+import { LocalPagination } from "@/components/local-pagination";
 import { wordSearchMatcher } from "@/lib/search-text";
 import { workflowHref } from "@/lib/workflow-links";
 import { safeOverviewReturnPath } from "@/lib/return-to";
@@ -99,11 +100,7 @@ function ProjectChoices({ projects, section, filters }: { projects: Project[]; s
         ))}
       </ul>
       {matches.length === 0 && <p className="small muted" role="status">没有匹配的项目</p>}
-      {lastPage > 1 && <nav className="workspace-dialog-pagination" aria-label="项目分页">
-        <button type="button" className="button button-secondary button-sm" disabled={current === 1} onClick={() => setPage(current - 1)}>上一页</button>
-        <span className="small muted" role="status">第 {current} / {lastPage} 页</span>
-        <button type="button" className="button button-secondary button-sm" disabled={current === lastPage} onClick={() => setPage(current + 1)}>下一页</button>
-      </nav>}
+      <LocalPagination className="workspace-dialog-pagination" label="项目分页" page={current} pages={lastPage} onPageChange={setPage} countClassName="small muted" announceCount />
     </>
   );
 }

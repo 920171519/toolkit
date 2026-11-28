@@ -7,6 +7,7 @@ import type { ProjectOption } from "@/lib/project-queries";
 import type { BatchCandidatePackage } from "@/lib/batch-queries";
 import { PACKAGE_STATUS_META } from "@/lib/constants";
 import { getPageWindow } from "@/lib/list-pagination";
+import { LocalPagination } from "@/components/local-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { Badge, EmptyState } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
@@ -222,11 +223,7 @@ export function BatchBuilder({
           </table>
         </div>
       )}
-      {pages > 1 && <nav className={styles.pagination} aria-label="配套软件包分页">
-        <button type="button" className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-        <span>第 {page} / {pages} 页</span>
-        <button type="button" className="button button-secondary button-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>下一页</button>
-      </nav>}
+      <LocalPagination className={styles.pagination} label="配套软件包分页" page={page} pages={pages} onPageChange={setPage} />
     </ActionForm>
     {!canSave && <div className="form-footer">
       <span className="form-note">{items.length} 个软件包 · 0 个待测版本</span>
