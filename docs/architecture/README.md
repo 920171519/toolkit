@@ -10,7 +10,7 @@
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
 | 锚定弹层 | `components/popover-viewport.ts` | 共用视口范围、横向定位和事件清理。帮助提示与表头筛选各自管理打开、关闭和焦点。 |
 | 发布写入 | `lib/actions/release.ts`、`lib/actions/risk-trial.ts` → `lib/release-workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
-| 批次写入 | `lib/actions/batch.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
+| 批次写入 | `lib/actions/batch.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。多版本操作在同一事务复用试制就绪预编译语句。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/transfer.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/binding.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
 | 项目与节点配置写入 | `lib/actions/project-settings.ts` → `lib/project-settings.ts` | 管理项目、经理与节点配置，保留归档恢复及审批人快照。 |

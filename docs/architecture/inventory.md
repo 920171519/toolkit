@@ -98,7 +98,7 @@
 | 项目经理索引在旧库补齐依赖列前创建 | [数据库启动](../../lib/db.ts)、[旧库回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 在补齐列后创建原索引，当前库和新建库沿用相同定义。 |
 | 已结束转正页面加载不会展示的绑定详情 | [转正引导](../../lib/release-guidance.ts)、[绑定范围查询](../../lib/binding-queries.ts)、[历史引导回归](../../tests/e2e/release-guidance.spec.ts) | 已结束入口根据已有可读范围选择追溯链接；仍开放的办理入口继续读取实际绑定证据。 |
 | 风险试制登记重复计算同一版本的资格证据 | [资格查询](../../lib/trial-eligibility.ts)、[登记事务](../../lib/release-workflow.ts)、[浏览器回归](../../tests/e2e/risk-trial-entry.spec.ts) | 同一查询核对指定申请并取得版本统计。列表沿用现有批量读取，阶段判断由同一表达式提供。 |
-| 一次批量就绪刷新反复编译同一批 SQLite 语句 | [就绪刷新](../../lib/trial-readiness.ts)、[绑定回归](../../tests/e2e/binding-controls.spec.ts) | 单次刷新惰性复用语句。各版本持续读取原连接上的当前证据，事务和写入次序保持原样。 |
+| 一次批量就绪刷新反复编译同一批 SQLite 语句 | [就绪刷新](../../lib/trial-readiness.ts)、[绑定回归](../../tests/e2e/binding-controls.spec.ts) | 按项目刷新和批次多版本命令均惰性复用语句。各版本持续读取原连接上的当前证据，事务和写入次序保持原样。 |
 | 按版本查找批次项时多处扫描同一快照表 | [批次版本索引](../../lib/schema.ts)、[版本追溯](../../lib/version-trace-queries.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 通过同一个索引支持按版本的关联。对同一时间的批次顺序敏感的追溯明细保留原有谓词计划。 |
 | 单软件包流程权限曾加载全部可读包与版本 | [包授权](../../lib/access.ts)、[转测引导](../../lib/transfer-guidance.ts)、[发布引导](../../lib/release-guidance.ts) | 单包判断和项目包存在性使用同一授权谓词和查询。抽屉仍读取展示所需的版本范围。 |
 | 代理入口未应用会话存储的调用方约束 | [架构检查](../../scripts/check-architecture.mjs)、[检查器契约](../../tests/architecture-check.test.mjs) | 复用应用模块分类，发现代理入口直接读取会话存储时报告架构违规。合法调用方保持原范围。 |
