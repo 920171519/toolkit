@@ -2,21 +2,24 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 import { openE2eDatabase } from "./storage";
 
-test("软件包详情接口校验登录和项目参数，成功响应禁用缓存", async ({ page }) => {
+test("软件包详情接口校验账号和项目，失败及成功响应均禁用缓存", async ({ page }) => {
   const detailUrl = "/api/packages/7?project=1";
-  const anonymous = await page.request.get(detailUrl);
-  expect(anonymous.status()).toBe(401);
-  expect(await anonymous.json()).toEqual({ error: "请先登录。" });
+  async function expectError(path: string, status: number, error: string) {
+    const response = await page.request.get(path);
+    expect(response.status(), path).toBe(status);
+    expect(response.headers()["cache-control"], path).toBe("no-store");
+    expect(await response.json(), path).toEqual({ error });
+  }
+  await expectError(detailUrl, 401, "请先登录。");
 
+  await login(page, "MEMBER001");
+  await expectError(detailUrl, 404, "项目不存在或不可查看。");
   await login(page, "MGR001");
-  const invalidPackage = await page.request.get("/api/packages/unknown?project=1");
-  expect(invalidPackage.status()).toBe(400);
-  expect(await invalidPackage.json()).toEqual({ error: "软件包参数无效。" });
+  await expectError("/api/packages/unknown?project=1", 400, "软件包参数无效。");
+  await expectError("/api/packages/9876543?project=1", 404, "软件包不存在。");
 
   for (const path of ["/api/packages/7?project=", "/api/packages/7?project=1&project=1"]) {
-    const invalidProject = await page.request.get(path);
-    expect(invalidProject.status()).toBe(404);
-    expect(await invalidProject.json()).toEqual({ error: "项目不存在或不可查看。" });
+    await expectError(path, 404, "项目不存在或不可查看。");
   }
 
   const detail = await page.request.get(detailUrl);
