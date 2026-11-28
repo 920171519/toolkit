@@ -4,7 +4,7 @@ import { useActionState, useId, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { PackageNameToggle } from "@/components/package-name-toggle";
-import { submitTransferAction } from "@/lib/actions/workflow";
+import { submitTransferAction } from "@/lib/actions/transfer";
 import type { ActionState } from "@/lib/action-state";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";

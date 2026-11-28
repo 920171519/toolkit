@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { submitBindingFlowAction } from "@/lib/actions/workflow";
+import { submitBindingFlowAction } from "@/lib/actions/binding";
 import { ActionForm } from "@/components/action-form";
 
 type ApproverOption = { userId: number; userName: string; userEmployeeId: string; isActive: number };

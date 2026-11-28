@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ActionForm } from "@/components/action-form";
-import { saveBindingBarcodeResultsAction } from "@/lib/actions/workflow";
+import { saveBindingBarcodeResultsAction } from "@/lib/actions/binding";
 import type { BindingBarcodeRow } from "@/lib/binding-queries";
 import styles from "./binding-barcode-list.module.css";
 

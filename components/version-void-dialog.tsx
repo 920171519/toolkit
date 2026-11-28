@@ -1,6 +1,6 @@
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
-import { voidPackageVersionAction } from "@/lib/actions/workflow";
+import { voidPackageVersionAction } from "@/lib/actions/release";
 
 export function VersionVoidDialog({
   versionId,

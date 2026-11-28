@@ -18,7 +18,7 @@ import { getTrialReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
-import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/workflow";
+import { addBatchProgressAction, completeBatchAction, deleteDraftBatchAction, sendBatchAction, terminateBatchAction } from "@/lib/actions/batch";
 import { ActionForm } from "@/components/action-form";
 import { BatchConclusionFields, BatchReportField } from "@/components/batch-conclusion-fields";
 import { ClearBatchChoices } from "@/components/pending-batch-choices";

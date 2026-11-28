@@ -10,7 +10,7 @@
 | --- | --- |
 | 公开首页与登录态 | `app/page.tsx`、`app/(auth)/`、`app/(workspace)/layout.tsx`、`lib/auth.ts` |
 | 页面、表单和接口 | `app/(workspace)/`、`components/`、`lib/actions/`、`app/api/` |
-| 转测、测试、试制、绑定、转正 | 流程操作由 `lib/actions/workflow.ts` 提交，风险登记另由 `lib/actions/risk-trial.ts` 提交。`lib/release-workflow.ts` 负责试制和转正，`lib/batch-workflow.ts` 负责批次和测试，`lib/transfer-workflow.ts` 负责提交与撤回转测，`lib/binding-workflow.ts` 负责绑定写入。流程查询见 `lib/pending-transfer-queries.ts`、`lib/batch-queries.ts`、`lib/binding-queries.ts` 和 `lib/release-queue-queries.ts`。试制资格和转正校验分别由 `lib/trial-eligibility.ts` 和 `lib/trial-readiness.ts` 提供。领域校验错误统一由 `lib/domain-error.ts` 定义。 |
+| 转测、测试、试制、绑定、转正 | 流程表单分别由 `lib/actions/transfer.ts`、`lib/actions/batch.ts`、`lib/actions/binding.ts`、`lib/actions/release.ts` 办理，风险登记由 `lib/actions/risk-trial.ts` 办理。`lib/release-workflow.ts` 负责试制和转正，`lib/batch-workflow.ts` 负责批次和测试，`lib/transfer-workflow.ts` 负责提交与撤回转测，`lib/binding-workflow.ts` 负责绑定写入。流程查询见 `lib/pending-transfer-queries.ts`、`lib/batch-queries.ts`、`lib/binding-queries.ts` 和 `lib/release-queue-queries.ts`。试制资格和转正校验分别由 `lib/trial-eligibility.ts` 和 `lib/trial-readiness.ts` 提供。领域校验错误统一由 `lib/domain-error.ts` 定义。 |
 | 工作台与版本追溯 | `lib/workbench-queries.ts`、`lib/version-trace-queries.ts` |
 | 项目、软件包与组织查询 | `lib/project-queries.ts`、`lib/package-queries.ts`、`lib/organization-queries.ts` |
 | 读取与写入权限 | `lib/access.ts`、`lib/permissions.ts` |

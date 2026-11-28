@@ -30,7 +30,7 @@ import {
   pushBindingTasksAction,
   skipBindingAction,
   waiveBindingRequirementAction,
-} from "@/lib/actions/workflow";
+} from "@/lib/actions/binding";
 import { ActionForm } from "@/components/action-form";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
 import { releaseFlowUrl } from "@/lib/release-flow";

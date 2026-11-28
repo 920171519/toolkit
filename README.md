@@ -551,7 +551,7 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 ```
 
 - 若使用 pm2 等进程管理器，把 `STOP_CMD` / `START_CMD` 传给脚本，确保构建前停止、构建后启动。
-- 反向代理不要跨构建长期缓存 HTML/RSC；`/_next/static/` 是内容哈希文件，可长缓存，但部署后浏览器仍建议强刷一次。
+- 反向代理避免跨构建缓存 HTML 或 RSC 响应。`/_next/static/` 使用内容哈希文件名，可以长缓存。部署新构建后，请刷新已打开的表单页面，再填写并提交。
 - 登录后点击任意页面被踢回登录页，另一个常见原因是 **HTTP 部署却设置了 Secure 会话 Cookie**。当前系统会优先读取 `SESSION_COOKIE_SECURE`，未设置时根据 `X-Forwarded-Proto: https` 自动判断；Nginx 反代 HTTPS 时必须转发该头，直接用 HTTP 验收时不要设置 `SESSION_COOKIE_SECURE=true`。若之前已经用错误配置登录过，请清除该站点 Cookie 或用无痕窗口重新登录。
 - 数据库升级或清空演示数据前先备份实际使用的 SQLite 数据库和报告目录。
 - 试制和转正使用用户填写的 HTTP(S) 电子流网址，已有电子流编号仍可查阅。新发布的试制和正式版本需分别填写评审纪要，可从版本全链路查看。绑定电子流在本系统生成编号并完成审批，尚未对接企业 OA/BPM。

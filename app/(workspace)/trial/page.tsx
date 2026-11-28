@@ -13,7 +13,7 @@ import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { VersionVoidDialog } from "@/components/version-void-dialog";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { canManageProjectWorkflowForProject, getAssignedTrialRequestIds, getBatchEvidenceReadScope, getManagedProjectScope, getProjectWorkflowProjectIds, getReadableLinkedBatchEvidence } from "@/lib/access";
-import { abandonTrialReleaseAction } from "@/lib/actions/workflow";
+import { abandonTrialReleaseAction } from "@/lib/actions/release";
 import { requireUser } from "@/lib/auth";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";

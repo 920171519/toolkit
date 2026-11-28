@@ -12,7 +12,7 @@ import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { Badge, ExternalLink, FlashMessage, PageHeader, ProgressBar } from "@/components/ui";
 import styles from "@/components/workflow-queue.module.css";
 import { canManageProjectWorkflowForProject, getBatchEvidenceReadScope, getReadableLinkedBatchEvidence, getProjectWorkflowProjectIds } from "@/lib/access";
-import { releaseFormalAction } from "@/lib/actions/workflow";
+import { releaseFormalAction } from "@/lib/actions/release";
 import { requireUser } from "@/lib/auth";
 import { CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";

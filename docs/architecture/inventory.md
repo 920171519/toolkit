@@ -51,7 +51,7 @@
 | 待转测清单、计数和预览留在聚合查询中并被转正复用项目范围 | [待转测读模型](../../lib/pending-transfer-queries.ts)、[转测申请规则](../../lib/transfer-requests.ts) | 项目范围归入申请规则，其余投影由待转测模块维护。 |
 | 实例迁移、应用事务和补派各自执行写事务，命令回滚失败会覆盖写入错误 | [即时写事务](../../lib/sqlite-lifecycle.ts)、[补派命令](../../scripts/backfill-trial-transfer-requests.ts)、[生命周期回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 同一实现处理提交和错误传播，调用方拥有连接、事务边界与输出。 |
 | 试制、待转正计数与历史访问留在聚合工作流查询 | [发布队列查询](../../lib/release-queue-queries.ts)、[转正详情](../../app/(workspace)/formal/[id]/page.tsx) | 读取按已有范围投影，队列与历史的不同条件由发布查询模块维护。 |
-| 绑定命令、转测和转正发布共处一个写入模块，推送和跳过重复读取目标 | [绑定写入](../../lib/binding-workflow.ts)、[绑定操作入口](../../lib/actions/workflow.ts)、[授权](../../lib/access.ts) | 命令直接由绑定模块执行，共用记录定位与版本管理规则。 |
+| 绑定命令、转测和转正发布共处一个写入模块，推送和跳过重复读取目标 | [绑定写入](../../lib/binding-workflow.ts)、[绑定操作入口](../../lib/actions/binding.ts)、[授权](../../lib/access.ts) | 命令直接由绑定模块执行，共用记录定位与版本管理规则。 |
 | 版本提交、项目申请分发与撤回留在跨阶段写入 | [转测写入](../../lib/transfer-workflow.ts)、[转测申请规则](../../lib/transfer-requests.ts) | 提交与撤回由转测写入模块负责，使用范围、授权以及历史引用检查沿用原有规则。 |
 | 批次办理与发布作废在跨阶段写入模块中共享私有事务逻辑 | [批次写入](../../lib/batch-workflow.ts)、[版本作废记录](../../lib/version-void-workflow.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) | 批次命令拥有报告及事务，作废记录由实际命令在既有事务内写入。 |
 | 三个视图各自计算试制释放时间与超期天数 | [截止时间定义](../../lib/trial-readiness.ts)、[归档回归](../../tests/e2e/trial-queue.spec.ts) | 共用 SQLite 时间条件，保留每处使用结果的业务范围。 |
@@ -103,6 +103,7 @@
 | 单软件包流程权限曾加载全部可读包与版本 | [包授权](../../lib/access.ts)、[转测引导](../../lib/transfer-guidance.ts)、[发布引导](../../lib/release-guidance.ts) | 单包判断和项目包存在性使用同一授权谓词和查询。抽屉仍读取展示所需的版本范围。 |
 | 代理入口未应用会话存储的调用方约束 | [架构检查](../../scripts/check-architecture.mjs)、[检查器契约](../../tests/architecture-check.test.mjs) | 复用应用模块分类，发现代理入口直接读取会话存储时报告架构违规。合法调用方保持原范围。 |
 | 历史版本导入和更正各自读取并声明相同元数据 | [写入口](../../lib/actions/settings.ts)、[包设置](../../lib/package-settings.ts)、[历史发布字段](../../components/legacy-release-fields.tsx) | 两个操作共用私有元数据解码器。记录标识、状态和更正理由仍由对应的操作处理。 |
+| 工作流提交共用一个可导入所有写模块的入口 | [转测](../../lib/actions/transfer.ts)、[批次](../../lib/actions/batch.ts)、[绑定](../../lib/actions/binding.ts)、[发布](../../lib/actions/release.ts)、[架构契约](../../tests/architecture-check.test.mjs) | 各页面调用对应写入口，风险登记保留专用入口，跨流程回跳参数持续共用。检查器拒绝绕过写入所有者。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

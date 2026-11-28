@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { releaseTrialAction } from "@/lib/actions/workflow";
+import { releaseTrialAction } from "@/lib/actions/release";
 import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
 import { packageIdentity } from "@/lib/package-identity";
 import { getTrialNodeGuidance } from "@/lib/release-guidance";

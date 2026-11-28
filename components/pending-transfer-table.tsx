@@ -12,7 +12,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { WorkflowPackageName } from "@/components/workflow-package-name";
 import { rememberPendingReview, usePendingBatchChoices } from "@/components/pending-batch-choices";
 import { Badge, EmptyState, ExternalLink } from "@/components/ui";
-import { cancelTransferAction } from "@/lib/actions/workflow";
+import { cancelTransferAction } from "@/lib/actions/transfer";
 import { columnFilterKeys, filterOptions, matchesChoiceFilter, matchesDateFilter, matchesTextFilter, type ColumnFilterField } from "@/lib/column-filters";
 import { getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
