@@ -3,17 +3,17 @@ import "server-only";
 
 import { notFound } from "next/navigation";
 import { canAccessProjectPage, getProjectWorkflowProjectIds, hasReadablePackageInProject } from "./access";
-import { getProjectOption, getProjectOptions } from "./project-queries";
+import { getProjectOption, getProjectOptions, type ProjectOption } from "./project-queries";
 import type { SessionUser } from "./types";
 
-export function getWorkspaceProjectNavigation(user: SessionUser) {
+export type WorkspaceProjectEntry = ProjectOption | Pick<ProjectOption, "id" | "name">;
+
+export function getWorkspaceProjectNavigation(user: SessionUser): WorkspaceProjectEntry[] {
   const ids = getProjectWorkflowProjectIds(user, true);
   const projects = getProjectOptions(true);
-  const allowed = ids === null ? null : new Set(ids);
-  return {
-    projects: allowed === null ? projects : projects.filter((project) => allowed.has(project.id)),
-    catalogProjects: projects.map(({ id, name }) => ({ id, name })),
-  };
+  if (ids === null) return projects;
+  const allowed = new Set(ids);
+  return projects.map((project) => allowed.has(project.id) ? project : { id: project.id, name: project.name });
 }
 
 export function getReadablePackageProject(user: SessionUser, value: string | string[] | undefined) {

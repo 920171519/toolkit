@@ -8,12 +8,13 @@ import { FormDialog } from "@/components/form-dialog";
 import { NavigationPending } from "@/components/navigation-pending";
 import { SidebarNav, type SidebarGroup, type SidebarItem } from "@/components/sidebar-nav";
 import { getPageWindow } from "@/lib/list-pagination";
+import type { ProjectOption } from "@/lib/project-queries";
+import type { WorkspaceProjectEntry } from "@/lib/project-scope";
 import { LocalPagination } from "@/components/local-pagination";
 import { wordSearchMatcher } from "@/lib/search-text";
 import { workflowHref } from "@/lib/workflow-links";
 import { safeOverviewReturnPath } from "@/lib/return-to";
 
-type Project = { id: number; name: string; code: string; status: string };
 type Crumb = { label: string; href?: string };
 const projectListPageSize = 12;
 const catalogViewKey = "toolkit.lastProjectCatalogView";
@@ -78,7 +79,11 @@ function MobileWorkspaceMenu({ groups, areaLabel }: { groups: SidebarGroup[]; ar
   </>;
 }
 
-function ProjectChoices({ projects, section, filters }: { projects: Project[]; section: SidebarItem; filters?: Record<string, string | undefined> }) {
+function isWorkflowProject(project: WorkspaceProjectEntry): project is ProjectOption {
+  return "code" in project;
+}
+
+function ProjectChoices({ projects, section, filters }: { projects: ProjectOption[]; section: SidebarItem; filters?: Record<string, string | undefined> }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const matchesSearch = wordSearchMatcher(query);
@@ -105,11 +110,10 @@ function ProjectChoices({ projects, section, filters }: { projects: Project[]; s
   );
 }
 
-export function WorkspaceNavigation({ groups, workflow, projects, catalogProjects, brand, areaLabel, sidebarFooter, actions, children }: {
+export function WorkspaceNavigation({ groups, workflow, projects, brand, areaLabel, sidebarFooter, actions, children }: {
   groups: SidebarGroup[];
   workflow: SidebarItem[];
-  projects: Project[];
-  catalogProjects: Array<Pick<Project, "id" | "name">>;
+  projects: WorkspaceProjectEntry[];
   brand: ReactNode;
   areaLabel: string;
   sidebarFooter: ReactNode;
@@ -125,8 +129,10 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
   const detailId = /^\/projects\/(\d+)$/.exec(pathname)?.[1];
   const projectParams = params.getAll("project");
   const selectedId = detailId ?? (section && projectParams.length === 1 ? projectParams[0] : undefined);
-  const project = projects.find((item) => item.id === Number(selectedId));
-  const catalogProject = detailId ? catalogProjects.find((item) => item.id === Number(detailId)) : undefined;
+  const selectedProject = selectedId === undefined ? undefined : projects.find((item) => item.id === Number(selectedId));
+  const project = selectedProject && isWorkflowProject(selectedProject) ? selectedProject : undefined;
+  const catalogProject = detailId ? selectedProject : undefined;
+  const projectChoices = section && !project ? projects.filter(isWorkflowProject) : [];
   const returnPath = safeOverviewReturnPath(params.get("returnTo"));
   const catalogView = pathname === "/overview" ? safeOverviewReturnPath(`/overview?${params}`) : undefined;
   useEffect(() => {
@@ -191,9 +197,9 @@ export function WorkspaceNavigation({ groups, workflow, projects, catalogProject
               {crumbs.length > 0 && <Breadcrumb items={crumbs} />}
             </div>
             <div className="topbar-right">
-              {section && !project && projects.length > 0 && (
+              {section && projectChoices.length > 0 && (
                 <FormDialog label={<><ChevronsUpDown size={15} aria-hidden="true" /> 按项目查看</>} title="按项目查看" triggerClassName="button button-secondary button-sm" cancelLabel="取消">
-                  <ProjectChoices projects={projects} section={section} filters={filters} />
+                  <ProjectChoices projects={projectChoices} section={section} filters={filters} />
                 </FormDialog>
               )}
               {actions}

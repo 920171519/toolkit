@@ -54,14 +54,13 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
     { label: "基础配置", items: configItems },
   ];
 
-  const { projects, catalogProjects } = getWorkspaceProjectNavigation(user);
+  const projects = getWorkspaceProjectNavigation(user);
 
   return (
     <WorkspaceNavigation
       groups={groups}
       workflow={workflowItems}
       projects={projects}
-      catalogProjects={catalogProjects}
       brand={<Brand href="/dashboard" subtitle={areaLabel} />}
       areaLabel={areaLabel}
       sidebarFooter={
