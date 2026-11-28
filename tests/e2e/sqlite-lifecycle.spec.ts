@@ -43,6 +43,65 @@ test("SQLite 自动回滚或关闭连接失败后保留原始错误", () => {
   assert.throws(() => closeDatabaseAfterError(database, original), (error) => error === original);
 });
 
+test("旧库缺少软件经理列时首次启动补齐索引并保留项目", ({}, testInfo) => {
+  const target = testInfo.outputPath("legacy-project.db");
+  const legacy = new DatabaseSync(target);
+  try {
+    legacy.exec(`
+      PRAGMA foreign_keys = OFF;
+      CREATE TABLE projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        pm_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','PAUSED','ARCHIVED')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO projects (id, name, code, description, status, sort_order, created_at)
+      VALUES (7, '旧版项目', 'LEGACY-P', '原始项目说明', 'ARCHIVED', 4, '2024-01-01');
+    `);
+  } finally {
+    legacy.close();
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
+      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: "1" },
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+    expect(startup.error).toBeUndefined();
+    expect(startup.status, startup.stderr).toBe(0);
+
+    const migrated = new DatabaseSync(target, { readOnly: true });
+    try {
+      expect(migrated.prepare("SELECT * FROM projects").all()).toEqual([{
+        id: 7,
+        name: "旧版项目",
+        code: "LEGACY-P",
+        description: "原始项目说明",
+        pm_user_id: null,
+        software_manager_id: null,
+        status: "ARCHIVED",
+        stage: "TR1",
+        sort_order: 4,
+        created_at: "2024-01-01",
+      }]);
+      expect(migrated.prepare("PRAGMA index_list(projects)").all()).toContainEqual(
+        expect.objectContaining({ name: "idx_projects_manager", unique: 0, origin: "c", partial: 0 }),
+      );
+      expect(migrated.prepare("PRAGMA index_info(idx_projects_manager)").all()).toEqual([
+        expect.objectContaining({ name: "software_manager_id" }),
+      ]);
+      expect(migrated.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      migrated.close();
+    }
+  }
+});
+
 test("补派预览无法确认 SQLite 只读时在打开目标前退出", ({}, testInfo) => {
   const target = testInfo.outputPath("toolkit.db");
   const preloader = testInfo.outputPath("sqlite-ignores-read-only.cjs");

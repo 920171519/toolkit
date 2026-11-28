@@ -47,6 +47,7 @@ function migrateSchema(database: DatabaseSync) {
       "ALTER TABLE projects ADD COLUMN software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
     );
   }
+  database.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(software_manager_id);");
   if (!projectColumns.some((column) => column.name === "stage")) {
     database.exec(`ALTER TABLE projects ADD COLUMN ${PROJECT_STAGE_COLUMN_SQL}`);
   }

@@ -392,7 +392,6 @@ CREATE INDEX IF NOT EXISTS idx_binding_flows_approver ON binding_flows(approver_
 CREATE INDEX IF NOT EXISTS idx_binding_flows_submitter ON binding_flows(submitted_by, status);
 CREATE INDEX IF NOT EXISTS idx_usages_package ON package_usages(package_id);
 CREATE INDEX IF NOT EXISTS idx_usages_project ON package_usages(project_id, node_id);
-CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(software_manager_id);
 
 CREATE TABLE IF NOT EXISTS project_pms (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
