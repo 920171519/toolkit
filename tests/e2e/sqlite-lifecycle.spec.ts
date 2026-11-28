@@ -306,7 +306,8 @@ test("旧日志模式的写锁释放后，启动继续切换 WAL 并保留数据
         if (output.includes("WAL configuration started")) {
           releaseTimer = setTimeout(() => {
             try {
-              writer.exec("COMMIT;");
+              // Release the temporary write reservation while the startup connection is reading.
+              writer.exec("ROLLBACK;");
             } catch (error) {
               startup.kill();
               reject(error);
