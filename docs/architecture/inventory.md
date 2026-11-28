@@ -153,6 +153,9 @@
 | 批次列表读取完整详情和报告字段 | [批次读取](../../lib/batch-queries.ts)、[工作流验证](../../tests/e2e/workflow.spec.ts) | 列表读取 13 个字段，详情继续提供完整证据。范围、顺序和分页相同。 |
 | 三条电子流写入各自维护条码插入 SQL | [条码写入](../../lib/binding-barcode-writer.ts)、[旧库补列](../../lib/db.ts)、[流程验证](../../tests/e2e/binding-controls.spec.ts) | 共用预编译写入，调用方保留连接、事务、顺序和审计。 |
 | 批次的三个集成动作分别写入转测申请双状态 | [转测申请](../../lib/transfer-requests.ts)、[批次流程](../../lib/batch-workflow.ts)、[试制资格回归](../../tests/e2e/trial-eligibility.spec.ts) | 共用有类型约束的集成状态写入，原状态和阶段资格各按原命令检查。 |
+| 草稿标题和保存修订号由两次读取拼接 | [批次读取](../../lib/batch-queries.ts)、[并发回归](../../tests/e2e/batch-draft-snapshot.spec.ts) | 单条快照查询，现有保存事务拒绝过期表单。 |
+| 工作区重复序列化授权项目的名称和编号 | [项目范围](../../lib/project-scope.ts)、[项目导航](../../components/workspace-navigation.tsx) | 同一有序投影按账号附上工作区字段，目录只需编号和名称。 |
+| 部署说明仅要求拷贝数据库和报告目录 | [备份与恢复校验](../../README.md#备份与恢复校验) | 保留同组 WAL 和报告，在空目录验证真实服务及报告后再切换路径。 |
 
 ## 待核对的规范偏离
 

@@ -6,7 +6,7 @@
 
 | 区域 | 主要模块 | 职责和依赖方向 |
 | --- | --- | --- |
-| 公开目录、登录和项目导航 | `app/page.tsx`、`app/(auth)`、`app/(workspace)/layout.tsx`、`components/workspace-navigation.tsx` | App Router 组合页面。公开目录读取在行项目联系人。工作区渲染登录状态和已授权的项目入口。 |
+| 公开目录、登录和项目导航 | `app/page.tsx`、`app/(auth)`、`app/(workspace)/layout.tsx`、`components/workspace-navigation.tsx` | App Router 组合页面。公开目录读取在行项目联系人。工作区通过项目范围模块提供目录名称和已授权项目入口，页面与 API 继续独立校验读取范围。 |
 | 页面和交互 | `app/(workspace)`、`components`、`app/globals.css`、`app/site.css`、局部 CSS Modules | Server Component 负责查询和首屏。客户端控件拥有表单、焦点、选中及展开状态。原生模态和焦点恢复由 `components/use-modal-dialog.ts` 管理。页面间筛选和返回条件通过 URL 传递。 |
 | 锚定弹层 | `components/popover-viewport.ts` | 共用视口范围、横向定位和事件清理。帮助提示与表头筛选各自管理打开、关闭和焦点。 |
 | 发布写入 | `lib/actions/release.ts`、`lib/actions/risk-trial.ts` → `lib/release-workflow.ts` | Server Action 解析表单并返回反馈。风险登记的三处入口共用服务端表单投影和办理适配。工作流模块校验权限和业务条件，通过 SQLite 事务更新状态、证据和审计。 |
@@ -29,7 +29,7 @@
 | 身份和授权 | `lib/auth.ts`、`lib/session-store.ts`、`lib/access.ts`、`lib/area-memberships.ts`、`lib/assignment-accounts.ts` | 认证服务控制注册、登录及 Cookie。会话持久化、责任田分工读取、启用账号查询各有固定入口。`access` 解释项目、版本、节点和批次证据的权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
 | 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/sqlite-lifecycle.ts`、`lib/seed.ts`、`lib/report-storage.ts` | 数据库按实际表结构启动补列。生命周期模块负责锁等待及即时事务，迁移和演示初始化在各自事务执行。报告存储负责文件读写和失败清理，元数据存入 SQLite。 |
-| 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境和工作目录。部署脚本接入现有进程管理器。 |
+| 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境、工作目录及[同组备份与恢复校验](../../README.md#备份与恢复校验)。部署脚本接入现有进程管理器。 |
 | 错误、日志与测试 | `lib/domain-error.ts`、`lib/action-helpers.ts`、`lib/audit-log.ts`、`tests/e2e` | 业务校验使用同一错误类型。`audit-log` 在调用方现有事务和连接上写入操作历史。Playwright 从真实页面、权限及数据库状态验证契约。测试服务与夹具共享同一运行目录中的数据库和报告。 |
 
 ## 状态所有权
@@ -40,7 +40,7 @@
 | 软件包身份和使用范围 | `packages`、`package_usages` | `package-settings` 写入。`package-identity` 投影旧资料中的编码与名称，流程关联继续按 ID。 |
 | 共享版本状态 | `package_versions` | `release-workflow` 办理共享试制及转正，`version-void-workflow` 负责写入作废记录。 |
 | 项目办理状态与验收事实 | `version_transfer_requests.status`、`integration_status` | `transfer-workflow` 创建申请，`batch-workflow` 写入验收，`release-workflow` 更新发布状态。两种状态描述各自的事实，试制与转正资格使用项目验收和版本证据。 |
-| 批次与完整配套 | `integration_batches`、`batch_items` | `batch-workflow` 保存状态和版本快照。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
+| 批次与完整配套 | `integration_batches`、`batch_items` | `batch-workflow` 保存状态和版本快照。转测准备通过批次查询在单条 SQLite 语句中读取草稿标题、配套和修订依据，保存时由批次写入模块复核修订号。批次对比读取两份快照。`integration-conclusion` 定义受影响版本的选择规则。 |
 | 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `release-workflow` 保存试制配置快照，`binding-workflow` 记录后续办理，`binding-barcode-writer` 统一条码插入。`binding-availability` 定义办理状态，`binding-barcode-results` 定义判定和门槛，`trial-readiness` 根据节点确认、免绑及证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |
@@ -72,4 +72,5 @@ GitHub Actions 在 Ubuntu 24.04 上先用 `bash tests/deploy-ubuntu.sh` 验证�
 | 软件包及验证报告的 HTTP 入口 | [软件包体验](../../tests/e2e/package-experience.spec.ts)、[报告下载](../../tests/e2e/report-download.spec.ts) | 同地址按账号显示、历史文件关联、失败状态及缓存策略。 |
 | 试制、绑定、转正 | [试制资格](../../tests/e2e/trial-eligibility.spec.ts)、[节点操作](../../tests/e2e/binding-controls.spec.ts)、[转正引导](../../tests/e2e/release-guidance.spec.ts) | 共享版本就绪、旧页面并发修改、条码证据和可办理角色。 |
 | 历史查询及页面返回 | [集成历史](../../tests/e2e/integration-history-filters.spec.ts)、[版本追溯列表](../../tests/e2e/version-trace-list.spec.ts)、[项目范围](../../tests/e2e/project-scope.spec.ts) | 授权范围、筛选后分页、直接链接及返回条件。 |
+| 转测草稿和项目导航 | [并发保存](../../tests/e2e/batch-draft-snapshot.spec.ts)、[项目目录](../../tests/e2e/project-discovery.spec.ts)、[工作区范围](../../tests/e2e/project-scope.spec.ts) | 草稿标题和修订号一致，项目入口、历史项目和导航返回继续按原范围。 |
 | SQLite 生命周期 | [启动与迁移](../../tests/e2e/sqlite-lifecycle.spec.ts)、[演示数据事务](../../tests/e2e/seed-transaction.spec.ts)、[事务类型](../../tests/typechecks/sqlite-lifecycle.ts) | 旧库补列、竞争及回滚、同步事务回调。 |
