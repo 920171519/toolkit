@@ -143,6 +143,8 @@
 | WAL 初始化在旧库写锁竞争时立即退出 | [连接配置](../../lib/sqlite-lifecycle.ts)、[数据库打开](../../lib/db.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 只重试该连接的 WAL 设置，继续使用原来 5 秒窗口。已有数据、回退日志模式和其他错误沿用原契约。 |
 | 筛选表头重复向弹窗传输派生参数 | [筛选表头](../../components/column-filter-header.tsx)、[筛选弹窗](../../components/column-filter-popover.tsx) | 弹窗从输入推导自身字段及需保留的值。排序、项目、命名空间分页、清空和无脚本表单保持一致。 |
 | 转测和组织目录分别维护三类责任田分工来源 | [责任田分工读取](../../lib/area-memberships.ts)、[授权](../../lib/access.ts)、[组织目录](../../lib/organization-queries.ts) | 同一成员事实供查询和权限使用，各自保留历史记录与数据展示范围。 |
+| 四个列表各自截取普通搜索，表单另设长度 | [搜索参数](../../lib/search-text.ts)、[通用工作流搜索](../../components/workflow-list.tsx)、[版本列表](../../lib/version-trace-list.ts) | 共用搜索输入读取及上限，返回地址与其他搜索命名空间继续保持其契约。 |
+| 绑定页面为待发布试制标签读取完整版本和报告证据 | [试制资格](../../lib/trial-eligibility.ts)、[试制列表](../../app/(workspace)/trial/page.tsx)、[共享版本回归](../../tests/e2e/trial-eligibility.spec.ts) | 按授权范围和相同资格按版本去重计数。激活列表仍读取完整字段。 |
 
 ## 待核对的规范偏离
 
