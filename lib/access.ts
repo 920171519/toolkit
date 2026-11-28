@@ -403,22 +403,33 @@ export function getReadablePackageIds(
   ).map(({ id }) => id);
 }
 
-export function hasReadablePackageInProject(user: SessionUser, projectId: number): boolean {
-  // Limit the packages to this project while preserving grants from other projects.
-  const projectPackages = `FROM packages p
-    WHERE p.id IN (SELECT package_id FROM package_usages WHERE project_id = ?)`;
-  if (user.role === "ADMIN") return Boolean(one(`SELECT 1 ${projectPackages} LIMIT 1`, projectId));
+function hasReadablePackage(user: SessionUser, scope: { projectId: number } | { packageId: number }): boolean {
+  const byProject = "projectId" in scope;
+  const selection = byProject
+    ? "p.id IN (SELECT package_id FROM package_usages WHERE project_id = ?)"
+    : "p.id = ?";
+  const id = byProject ? scope.projectId : scope.packageId;
+  if (user.role === "ADMIN") {
+    return !byProject || Boolean(one(`SELECT 1 FROM packages p WHERE ${selection} LIMIT 1`, id));
+  }
+  if (!byProject && !Number.isInteger(id)) return false;
+
   return Boolean(one(
     `WITH ${versionReadCtes}
-     SELECT 1 ${projectPackages}
+     SELECT 1 FROM packages p WHERE ${selection}
        AND ((${packageReadPredicate}) OR EXISTS (
          SELECT 1 FROM package_versions pv
          WHERE pv.package_id = p.id AND (${versionReadPredicate})
        ))
      LIMIT 1`,
     ...batchEvidenceScopeSqlParams(user), user.id, user.id,
-    projectId, ...packageReadBindings(user.id), ...versionReadBindings(user.id),
+    id, ...packageReadBindings(user.id), ...versionReadBindings(user.id),
   ));
+}
+
+export function hasReadablePackageInProject(user: SessionUser, projectId: number): boolean {
+  // Select packages used by the project while preserving grants from other projects.
+  return hasReadablePackage(user, { projectId });
 }
 
 export function getReadablePackageVersionScope(user: SessionUser, packageId: number): { versionIds: number[] | null } | null {
@@ -430,8 +441,7 @@ export function getReadablePackageVersionScope(user: SessionUser, packageId: num
 
 export function canReadPackageWorkflow(user: SessionUser, packageId: number, projectId?: number): boolean {
   if (projectId !== undefined && !canAccessProjectPage(user, projectId)) return false;
-  const packageIds = getReadablePackageIds(user);
-  return packageIds === null || packageIds.includes(packageId);
+  return hasReadablePackage(user, { packageId });
 }
 
 export function getNarrowVersionRequestIds(user: SessionUser, versionId?: number): number[] {
