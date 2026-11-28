@@ -115,6 +115,7 @@
 | 条码判定的 UI 枚举、旧库补列与提交分隔符重复 | [条码规则](../../lib/binding-barcode-results.ts)、[SQLite 结构](../../lib/schema.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 判定可选值与文本解析沿用领域规则。启动迁移复用新库列定义，保留历史条码顺序与去重。 |
 | 同步事务允许传入返回可等待对象的回调 | [SQLite 事务](../../lib/sqlite-lifecycle.ts)、[编译契约](../../tests/typechecks/sqlite-lifecycle.ts) | 用同一类型约束真实调用签名。保留正常同步返回值以及原有失败和回滚行为。 |
 | 多个读取模块重复声明最近批次关联和五个证据字段 | [转测申请读取](../../lib/transfer-requests.ts)、[绑定查询](../../lib/binding-queries.ts)、[版本追溯](../../lib/version-trace-queries.ts) | 转测申请模块提供共用证据投影。各页面按自己的授权范围展示批次和报告。 |
+| 待转测页按每个项目反复查询已加载的经理权限 | [待转测页](../../app/(workspace)/submissions/page.tsx)、[授权](../../lib/access.ts) | 复用批次证据读取获得的经理范围。提交草稿和发起转测在各自事务中仍用当前分工校验。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

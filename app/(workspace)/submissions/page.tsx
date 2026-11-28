@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardList } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { canManageProjectWorkflowForProject, canReadBatchEvidence, getBatchEvidenceReadScope, getManagedProjectScope, getNarrowVersionRequestIds } from "@/lib/access";
+import { canReadBatchEvidence, getBatchEvidenceReadScope, getManagedProjectScope, getNarrowVersionRequestIds } from "@/lib/access";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { batchSelectionKey, readTransferRequestId } from "@/lib/batch-preparation";
 import { getBatchCount, getBatches } from "@/lib/batch-queries";
@@ -38,20 +38,22 @@ export default async function SubmissionsPage({
   const notice = readFlash(params);
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
-  const managerScope = getManagedProjectScope(user);
+  const activeManagerScope = getManagedProjectScope(user);
   const batchEvidenceScope = getBatchEvidenceReadScope(user);
-  const projectScope = batchEvidenceScope.projectIds;
+  const { managedProjectIds, projectIds: projectScope } = batchEvidenceScope;
+  const managedProjects = managedProjectIds === null ? null : new Set(managedProjectIds);
+  const managesProject = (id: number) => managedProjects === null || managedProjects.has(id);
   const hasProjectAccess = Boolean(project && (projectScope === null || projectScope.includes(project.id)));
   const readableRequests = projectScope === null || hasProjectAccess
     ? null : new Set(getNarrowVersionRequestIds(user));
-  const groups = getPendingTransferGroups(project ? [project.id] : null, managerScope)
+  const groups = getPendingTransferGroups(project ? [project.id] : null, activeManagerScope)
     .map((group) => !readableRequests || projectScope?.includes(group.projectId) ? group
       : { ...group, items: group.items.filter(({ requestId }) => readableRequests.has(requestId)) })
     .filter((group) => group.items.length > 0);
   const canRequest = hasTransferPackageOptions(user, project?.id);
   if (project && !hasProjectAccess && !canRequest && groups.length === 0) notFound();
   const transferHref = workflowHref("/submissions/transfer", project?.id, { returnTo });
-  const canPrepare = !archived && (project ? canManageProjectWorkflowForProject(user, project.id) : managerScope === null || managerScope.length > 0);
+  const canPrepare = !archived && (project ? managesProject(project.id) : activeManagerScope === null || activeManagerScope.length > 0);
   const showDrafts = canPrepare && params.view === "drafts";
   const query = getWorkflowSearch(params.q);
   const focusedRequestId = showDrafts ? undefined : readTransferRequestId(params.request);
@@ -66,10 +68,10 @@ export default async function SubmissionsPage({
     ),
   })).filter((group) => group.items.length > 0);
   const riskEntries = getRiskTrialEntries(visibleGroups.flatMap((group) =>
-    !archived && canManageProjectWorkflowForProject(user, group.projectId) ? group.items.filter((item) => item.draftBatchId === null).map((item) => item.requestId) : [],
+    !archived && managesProject(group.projectId) ? group.items.filter((item) => item.draftBatchId === null).map((item) => item.requestId) : [],
   ));
   const draftFilters = { statuses: ["DRAFT"] as ["DRAFT"], activeProjectsOnly: true };
-  const draftScope = project ? [project.id] : managerScope;
+  const draftScope = project ? [project.id] : activeManagerScope;
   const draftsCount = canPrepare ? getBatchCount(draftScope, draftFilters) : 0;
   const matchingDrafts = showDrafts && query ? getBatchCount(draftScope, { ...draftFilters, query }) : draftsCount;
   const page = getPageWindow(matchingDrafts, pageSize, readListPage(params.page));
@@ -158,7 +160,7 @@ export default async function SubmissionsPage({
           ) : (
             <div className={styles.stack}>
               {visibleGroups.map((group) => {
-                const managesGroup = canManageProjectWorkflowForProject(user, group.projectId);
+                const managesGroup = managesProject(group.projectId);
                 const defaults: Record<number, number> = {};
                 const versionPackages: Record<number, number> = {};
                 if (managesGroup) {
