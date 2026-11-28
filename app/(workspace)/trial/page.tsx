@@ -234,7 +234,7 @@ export default async function TrialPage({ searchParams }: { searchParams: Promis
           return (
             <div className={styles.actions}>
               {managesActiveProject(row.projectId) && <>
-                <TrialReleaseAction actor={user} row={row} records={row.records} projectId={projectId} query={query} />
+                <TrialReleaseAction managerIds={managerScope} row={row} records={row.records} projectId={projectId} query={query} />
                 <FormDialog label={risk ? "撤回风险试制" : "放弃"} title={risk ? `撤回 ${title} 风险试制` : `放弃发布 ${title} 试制`}
                   description={risk ? "该版本将退出风险发布队列，待转测申请和集成测试继续进行。" : "该版本将作废，所有使用项目均停止发布该版本。"}
                   triggerClassName="button button-ghost button-sm" cancelLabel="取消">

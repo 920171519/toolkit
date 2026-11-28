@@ -5,7 +5,6 @@ import type { BatchConclusion } from "@/lib/domain-values";
 import { packageIdentity } from "@/lib/package-identity";
 import { getTrialNodeGuidance } from "@/lib/release-guidance";
 import { trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";
-import type { SessionUser } from "@/lib/types";
 import { workflowHref } from "@/lib/workflow-links";
 import { ActionForm } from "./action-form";
 import { FormDialog } from "./form-dialog";
@@ -14,8 +13,8 @@ import { Badge, ExternalLink } from "./ui";
 import { WorkflowPackageName } from "./workflow-package-name";
 import styles from "./trial-queue-table.module.css";
 
-export function TrialReleaseAction({ actor, row, records, projectId, query = {}, label = "发布", triggerClassName = "button button-secondary button-sm" }: {
-  actor: SessionUser;
+export function TrialReleaseAction({ managerIds, row, records, projectId, query = {}, label = "发布", triggerClassName = "button button-secondary button-sm" }: {
+  managerIds: readonly number[] | null;
   row: TrialReadyDisplayVersion;
   records: readonly TrialReadyDisplayVersion[];
   projectId?: number;
@@ -25,7 +24,7 @@ export function TrialReleaseAction({ actor, row, records, projectId, query = {},
 }) {
   const identity = packageIdentity({ name: row.packageName, code: row.packageCode });
   const title = `${identity.code} ${row.version}`;
-  const nodeGuidance = getTrialNodeGuidance(actor, row.packageId);
+  const nodeGuidance = getTrialNodeGuidance(row.packageId, managerIds);
   const risk = row.riskProjectCount > 0;
   if (nodeGuidance.length > 0) return <GuidanceDialog label={label} title="试制发布条件"
     description={title} items={nodeGuidance} triggerClassName={triggerClassName} />;

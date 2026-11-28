@@ -14,7 +14,7 @@ import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getBatchDetail, getIntegrationConclusionContactNames, type BatchItemRow } from "@/lib/batch-queries";
 import { getBatchSendCheck } from "@/lib/batch-send-check";
-import { getTrialReleaseGuidance } from "@/lib/release-guidance";
+import { createTrialReleaseGuidanceReader } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
 import { packageIdentity } from "@/lib/package-identity";
 import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
@@ -79,9 +79,10 @@ export default async function BatchDetailPage({
   ) : []);
   const showRisk = Object.keys(riskEntries).length > 0;
   const showContinuation = !archived && (batch.status === "COMPLETED" || batch.status === "TERMINATED");
-  const trialGuidance = new Map(showContinuation
-    ? changedItems.filter(({ requestStatus }) => requestStatus === "PASSED")
-      .map(({ versionId }) => [versionId, getTrialReleaseGuidance(user, versionId, { projectId: batch.projectId, returnTo: listState.returnTo })])
+  const readTrialReleaseGuidance = createTrialReleaseGuidanceReader(user);
+  // Legacy snapshots can associate the same version with multiple package rows.
+  const passedVersionIds = new Set(showContinuation
+    ? changedItems.filter(({ requestStatus }) => requestStatus === "PASSED").map(({ versionId }) => versionId)
     : []);
   const reportContacts = isActive && !archived && !canTest ? getIntegrationConclusionContactNames(batch.projectId) : [];
   const draftBlockers = isDraft && canManage ? getBatchSendCheck(batch.id).blockers : [];
@@ -118,7 +119,9 @@ export default async function BatchDetailPage({
     if (item.versionStatus === "TRIAL" || item.versionStatus === "PENDING_FORMAL") {
       return <Link href={traceHref} prefetch={false} className="archive-link">{item.versionStatus === "TRIAL" ? "查看试制与绑定进度" : "核对转正进度"}</Link>;
     }
-    const trial = trialGuidance.get(item.versionId);
+    const trial = passedVersionIds.has(item.versionId)
+      ? readTrialReleaseGuidance(item.versionId, { projectId: batch.projectId, ...context })
+      : null;
     if (trial?.href && !trial.items.length) return <Link href={trial.href} prefetch={false} className="archive-link">
       {trial.canManage ? "查看发布试制" : "查看试制进度"}</Link>;
     if (trial?.items.length) return <GuidanceDialog label="检查试制条件" title={`${code} ${item.version} · 试制条件`} description={trial.description}

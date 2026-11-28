@@ -46,13 +46,13 @@ function versionRecord(versionId: number) {
      FROM package_versions pv JOIN packages p ON p.id = pv.package_id WHERE pv.id = ?`, versionId);
 }
 
-export function getTrialNodeGuidance(user: SessionUser, packageId: number): ReleaseGuidanceItem[] {
+export function getTrialNodeGuidance(packageId: number, managerIds: readonly number[] | null): ReleaseGuidanceItem[] {
   const items: ReleaseGuidanceItem[] = [];
   const nodes = getTrialNodeUsages(packageId);
   for (const node of nodes) {
     const missing = missingTrialNodeAssignments(node);
     if (missing.length === 0) continue;
-    const canConfigure = canManageProjectWorkflowForProject(user, node.projectId);
+    const canConfigure = managerIds === null || managerIds.includes(node.projectId);
     items.push(canConfigure
       ? {
         title: `${node.projectName} · ${node.nodeName} 缺少节点配置`,
@@ -68,80 +68,84 @@ export function getTrialNodeGuidance(user: SessionUser, packageId: number): Rele
     : items;
 }
 
-export function getTrialReleaseGuidance(user: SessionUser, versionId: number, context: GuidanceContext = {}): ReleaseGuidance | null {
-  const version = versionRecord(versionId);
-  if (!version) return null;
-  const eligibility = getTrialReleaseEligibility(versionId);
-  if (!eligibility) return null;
-  const { projects: evidence, releaseMode } = eligibility;
-  if (context.projectId && !evidence.some((row) => row.projectId === context.projectId)) return null;
-  const batchScope = getBatchEvidenceReadScope(user);
-  const readableProjectIds = batchScope.projectIds;
-  const canRead = (projectId: number) => readableProjectIds === null || readableProjectIds.includes(projectId);
-  const readable = evidence.filter((row) => canRead(row.projectId));
-  if (readable.length === 0 && user.role !== "ADMIN" && !canReadPackageWorkflow(user, version.packageId, context.projectId)) return null;
-  const manageable = readable.filter((row) => canManageProjectWorkflowForProject(user, row.projectId));
-  const preferred = manageable.find((row) => row.projectId === context.projectId) ?? manageable[0];
-  const items: ReleaseGuidanceItem[] = [];
-  let restricted = 0;
-  const args = { returnTo: context.returnTo };
-  const canConfigurePackage = canManagePackageArea(user, version.areaId);
-  const identity = packageIdentity(version);
-  for (const row of evidence) {
-    if (row.passed || (releaseMode && row.usable)) continue;
-    if (!canRead(row.projectId)) {
-      restricted += 1;
-      continue;
-    }
-    const mayArrange = canManageProjectWorkflowForProject(user, row.projectId);
-    if (!row.requestId || !row.usable) {
-      items.push({
-        title: `${row.projectName} · ${!row.requestId ? "缺少本版本的转测申请" : "当前转测申请不能发布试制"}`,
-        detail: "请核对软件包在该项目的使用范围和本版本的转测记录。",
-        href: canConfigurePackage
-          ? `/settings/packages/${version.packageId}#package-usage`
-          : workflowHref(`/versions/${versionId}`, row.projectId, args),
-        actionLabel: canConfigurePackage ? "核对使用范围" : "查看项目记录",
+export function createTrialReleaseGuidanceReader(user: SessionUser) {
+  let scope: ReturnType<typeof getBatchEvidenceReadScope> | undefined;
+  return function readTrialReleaseGuidance(versionId: number, context: GuidanceContext = {}): ReleaseGuidance | null {
+    const version = versionRecord(versionId);
+    if (!version) return null;
+    const eligibility = getTrialReleaseEligibility(versionId);
+    if (!eligibility) return null;
+    const { projects: evidence, releaseMode } = eligibility;
+    if (context.projectId && !evidence.some((row) => row.projectId === context.projectId)) return null;
+    const batchScope = (scope ??= getBatchEvidenceReadScope(user));
+    const readableProjectIds = batchScope.projectIds;
+    const canRead = (projectId: number) => readableProjectIds === null || readableProjectIds.includes(projectId);
+    const readable = evidence.filter((row) => canRead(row.projectId));
+    if (readable.length === 0 && user.role !== "ADMIN" && !canReadPackageWorkflow(user, version.packageId, context.projectId)) return null;
+    const canManageProject = (projectId: number) => batchScope.managedProjectIds === null || batchScope.managedProjectIds.includes(projectId);
+    const manageable = readable.filter((row) => canManageProject(row.projectId));
+    const preferred = manageable.find((row) => row.projectId === context.projectId) ?? manageable[0];
+    const items: ReleaseGuidanceItem[] = [];
+    let restricted = 0;
+    const args = { returnTo: context.returnTo };
+    const canConfigurePackage = canManagePackageArea(user, version.areaId);
+    const identity = packageIdentity(version);
+    for (const row of evidence) {
+      if (row.passed || (releaseMode && row.usable)) continue;
+      if (!canRead(row.projectId)) {
+        restricted += 1;
+        continue;
+      }
+      const mayArrange = canManageProject(row.projectId);
+      if (!row.requestId || !row.usable) {
+        items.push({
+          title: `${row.projectName} · ${!row.requestId ? "缺少本版本的转测申请" : "当前转测申请不能发布试制"}`,
+          detail: "请核对软件包在该项目的使用范围和本版本的转测记录。",
+          href: canConfigurePackage
+            ? `/settings/packages/${version.packageId}#package-usage`
+            : workflowHref(`/versions/${versionId}`, row.projectId, args),
+          actionLabel: canConfigurePackage ? "核对使用范围" : "查看项目记录",
+        });
+        continue;
+      }
+      const requestsHref = workflowHref("/submissions", row.projectId, {
+        ...args,
+        q: identity.code,
+        request: row.requestStatus === "PENDING" ? row.requestId : undefined,
       });
-      continue;
+      const batch = getReadableLinkedBatchEvidence(user, row, batchScope);
+      const batchHref = batch ? workflowHref(`/integration/${batch.batchId}`, batch.batchProjectId, args) : undefined;
+      const stage = batch?.batchStatus === "DRAFT" ? "批次待发起"
+        : row.requestStatus === "IN_TEST" ? "等待集成测试结论"
+          : row.requestStatus === "FAILED" ? "集成测试未通过"
+            : row.requestStatus === "BLOCKED" ? "集成测试受阻"
+              : row.requestStatus === "PASSED" ? "缺少有效的测试通过结论" : "待安排转测";
+      items.push({
+        title: `${row.projectName} · ${stage}`,
+        detail: `${batch?.batchCode ? `批次 ${batch.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
+        href: batchHref ?? requestsHref,
+        actionLabel: batchHref ? "查看转测批次" : "查看转测申请",
+      });
     }
-    const requestsHref = workflowHref("/submissions", row.projectId, {
-      ...args,
-      q: identity.code,
-      request: row.requestStatus === "PENDING" ? row.requestId : undefined,
-    });
-    const batch = getReadableLinkedBatchEvidence(user, row, batchScope);
-    const batchHref = batch ? workflowHref(`/integration/${batch.batchId}`, batch.batchProjectId, args) : undefined;
-    const stage = batch?.batchStatus === "DRAFT" ? "批次待发起"
-      : row.requestStatus === "IN_TEST" ? "等待集成测试结论"
-        : row.requestStatus === "FAILED" ? "集成测试未通过"
-          : row.requestStatus === "BLOCKED" ? "集成测试受阻"
-            : row.requestStatus === "PASSED" ? "缺少有效的测试通过结论" : "待安排转测";
-    items.push({
-      title: `${row.projectName} · ${stage}`,
-      detail: `${batch?.batchCode ? `批次 ${batch.batchCode}。` : ""}${mayArrange ? "确认本项目的转测或测试结果。" : "请联系该项目的软件经理。"}`,
-      href: batchHref ?? requestsHref,
-      actionLabel: batchHref ? "查看转测批次" : "查看转测申请",
-    });
-  }
-  if (!evidence.length) {
-    items.push({
-      title: "软件包没有在行使用项目",
-      detail: "先为软件包配置在行项目和测试节点。",
-      href: canConfigurePackage ? `/settings/packages/${version.packageId}#package-usage` : undefined,
-      actionLabel: "配置使用范围",
-    });
-  }
-  if (restricted > 0) items.push({ title: `还有 ${restricted} 个使用项目未完成验收`, detail: "请联系相应项目的软件经理核对转测或测试结论。" });
-  if (items.length === 0) items.push(...getTrialNodeGuidance(user, version.packageId));
-  if (!preferred && items.length === 0) items.push({ title: "等待负责项目的软件经理发布", detail: "软件经理或管理员可以发布共享试制。" });
-  return {
-    status: version.status,
-    canManage: Boolean(preferred) || user.role === "ADMIN",
-    description: `${identity.code} ${version.version} · ${evidence.filter((row) => row.passed).length}/${evidence.length} 个在行使用项目验收通过`,
-    href: preferred?.requestId && items.length === 0
-      ? workflowHref(`/trial/ready/${preferred.requestId}`, preferred.projectId, args) : undefined,
-    items,
+    if (!evidence.length) {
+      items.push({
+        title: "软件包没有在行使用项目",
+        detail: "先为软件包配置在行项目和测试节点。",
+        href: canConfigurePackage ? `/settings/packages/${version.packageId}#package-usage` : undefined,
+        actionLabel: "配置使用范围",
+      });
+    }
+    if (restricted > 0) items.push({ title: `还有 ${restricted} 个使用项目未完成验收`, detail: "请联系相应项目的软件经理核对转测或测试结论。" });
+    if (items.length === 0) items.push(...getTrialNodeGuidance(version.packageId, batchScope.managedProjectIds));
+    if (!preferred && items.length === 0) items.push({ title: "等待负责项目的软件经理发布", detail: "软件经理或管理员可以发布共享试制。" });
+    return {
+      status: version.status,
+      canManage: Boolean(preferred) || user.role === "ADMIN",
+      description: `${identity.code} ${version.version} · ${evidence.filter((row) => row.passed).length}/${evidence.length} 个在行使用项目验收通过`,
+      href: preferred?.requestId && items.length === 0
+        ? workflowHref(`/trial/ready/${preferred.requestId}`, preferred.projectId, args) : undefined,
+      items,
+    };
   };
 }
 

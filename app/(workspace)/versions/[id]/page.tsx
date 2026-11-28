@@ -11,7 +11,7 @@ import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { renderRiskTrialEntryAction } from "@/components/risk-trial-entry-action";
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
-import { getFormalReleaseGuidance, getTrialReleaseGuidance } from "@/lib/release-guidance";
+import { createTrialReleaseGuidanceReader, getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { readTraceListState, traceListParams, withTraceTab } from "@/lib/version-trace-list";
 import { VersionTraceTabs } from "../trace-tabs";
 import { ReleaseFlowEvidence } from "@/components/release-flow-evidence";
@@ -78,11 +78,12 @@ export default async function VersionTracePage({
   const formalState = getWorkflowListState(search);
   const releaseContext = { projectId, returnTo: state.returnTo };
   const isFormalStep = version.status === "TRIAL" || version.status === "PENDING_FORMAL";
+  const readTrialReleaseGuidance = createTrialReleaseGuidanceReader(user);
   const releaseGuidance = project?.status === "ARCHIVED" || version.status === "FORMAL" || version.status === "VOID"
     ? null
     : isFormalStep
       ? getFormalReleaseGuidance(trialDetails, versionId, releaseContext)
-      : getTrialReleaseGuidance(user, versionId, releaseContext);
+      : readTrialReleaseGuidance(versionId, releaseContext);
   const actionLabel = releaseGuidance?.canManage
     ? isFormalStep ? "前往转正发布" : "发布试制"
     : isFormalStep ? "查看转正条件" : "检查试制条件";

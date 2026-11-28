@@ -13,7 +13,7 @@ import { CONCLUSION_META } from "@/lib/constants";
 import { type BatchConclusion } from "@/lib/domain-values";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
-import { getTrialReleaseGuidance } from "@/lib/release-guidance";
+import { createTrialReleaseGuidanceReader } from "@/lib/release-guidance";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { trialQueueParams, type TrialSearchParams } from "@/lib/trial-queue";
 import { getTrialReadyDisplayVersions, trialReleaseStateKey } from "@/lib/trial-eligibility";
@@ -47,7 +47,8 @@ export default async function TrialReadyDetailPage({
   if (!row) {
     const request = getManagedTrialRequestState(user, requestId, projectId);
     if (!request) notFound();
-    const guidance = getTrialReleaseGuidance(user, request.versionId, { projectId: request.projectId, returnTo });
+    const readTrialReleaseGuidance = createTrialReleaseGuidanceReader(user);
+    const guidance = readTrialReleaseGuidance(request.versionId, { projectId: request.projectId, returnTo });
     const ongoingTrial = request.trialReleasedAt && request.projectStatus !== "ARCHIVED";
     const nextHref = ongoingTrial && request.versionStatus === "PENDING_FORMAL"
       ? workflowHref(`/formal/${request.versionId}`, request.projectId, { returnTo })
@@ -81,7 +82,7 @@ export default async function TrialReadyDetailPage({
         description={identity.name !== identity.code ? `${identity.name} · ${row.projectName}` : row.projectName}
         actions={<>
           {back}
-          <TrialReleaseAction actor={user} row={row} records={records} projectId={projectId} query={queue}
+          <TrialReleaseAction managerIds={managerScope} row={row} records={records} projectId={projectId} query={queue}
             triggerClassName="button button-primary" />
           <VersionVoidDialog versionId={row.versionId} code={identity.code} version={row.version}
             returnFields={{ ...queue, requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row), voidFrom: "trial-queue" }} />
