@@ -1,9 +1,9 @@
 import "server-only";
 
-import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds, type LinkedBatchEvidence } from "./access";
+import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "./access";
 import type { TrialQueueBindingCounts } from "./binding-queries";
 import { all, one } from "./db";
-import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL, transferRequestProjectScope } from "./transfer-requests";
+import { LATEST_TRANSFER_BATCH_JOIN_SQL, LINKED_TRANSFER_BATCH_COLUMNS_SQL, transferRequestProjectScope, type LinkedBatchEvidence } from "./transfer-requests";
 import { TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
 
@@ -84,14 +84,14 @@ export function getTrialVersions(projectIds: number[] | null = null, assignedReq
               pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
               p.trial_overdue_days AS trialOverdueDays,
               CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
-              b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
+              ${LINKED_TRANSFER_BATCH_COLUMNS_SQL},
               ${bindingProgressColumns},
               (SELECT COUNT(*) FROM binding_flows f WHERE f.requirement_id IN (SELECT id FROM binding_requirements WHERE request_id = r.id) AND f.status = 'PENDING') AS pendingFlowCount
        ${versionRequestWithPackageFrom}
        LEFT JOIN users su ON su.id = pv.submitted_by
        LEFT JOIN users o ON o.id = p.owner_id
        LEFT JOIN users sm ON sm.id = pr.software_manager_id
-       LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
+       ${LATEST_TRANSFER_BATCH_JOIN_SQL}
        WHERE ${where}
        ORDER BY r.trial_released_at DESC, r.id DESC`,
     ...params,

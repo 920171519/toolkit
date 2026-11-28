@@ -5,13 +5,12 @@ import {
   getBatchEvidenceReadScope,
   getNarrowVersionRequestIds,
   getReadableLinkedBatchEvidence,
-  type LinkedBatchEvidence,
 } from "./access";
 import type { TrialDetail, TrialDetailReader } from "./binding-queries";
 import { all, one } from "./db";
 import { getPageWindow } from "./list-pagination";
 import { packageCodeSql } from "./package-identity";
-import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
+import { LATEST_TRANSFER_BATCH_JOIN_SQL, LINKED_TRANSFER_BATCH_COLUMNS_SQL, type LinkedBatchEvidence } from "./transfer-requests";
 import { TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 import type { TraceListState } from "./version-trace-list";
@@ -102,12 +101,11 @@ export function getVersionTrace(
             r.trial_released_at AS trialReleasedAt,
             r.formal_released_at AS formalReleasedAt, r.form_flow_no AS formFlowNo,
             r.release_mode AS releaseMode, r.risk_conclusion AS riskConclusion,
-            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus,
-            b.conclusion AS batchConclusion, b.test_summary AS batchTestSummary,
+            ${LINKED_TRANSFER_BATCH_COLUMNS_SQL}, b.test_summary AS batchTestSummary,
             b.test_report_url AS batchReportUrl
      FROM version_transfer_requests r
      JOIN projects pr ON pr.id = r.project_id
-     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
+     ${LATEST_TRANSFER_BATCH_JOIN_SQL}
      WHERE r.package_version_id = ? AND (? IS NULL OR pr.id = ?)
      ORDER BY pr.sort_order`,
     versionId,
@@ -191,12 +189,11 @@ export function getProjectVersionRows(projectId: number, limit = -1): ProjectVer
             r.risk_conclusion AS riskConclusion, pv.binding_mode AS bindingMode,
             CASE WHEN pv.status NOT IN ('FORMAL','VOID') AND ${TRIAL_RELEASE_OVERDUE_SQL}
                  THEN 1 ELSE 0 END AS isOverdue,
-            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus,
-            b.conclusion AS batchConclusion
+            ${LINKED_TRANSFER_BATCH_COLUMNS_SQL}
      FROM version_transfer_requests r
      JOIN package_versions pv ON pv.id = r.package_version_id
      JOIN packages p ON p.id = pv.package_id
-     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
+     ${LATEST_TRANSFER_BATCH_JOIN_SQL}
      WHERE r.project_id = ?
      ORDER BY pv.submitted_at DESC, pv.id DESC LIMIT ?`,
     projectId,

@@ -1,9 +1,9 @@
 import "server-only";
 
-import { getProjectWorkflowProjectIds, type LinkedBatchEvidence } from "./access";
+import { getProjectWorkflowProjectIds } from "./access";
 import { bindingBarcodeEvidenceKey, summarizeBindingBarcodes, type BindingBarcodeResult } from "./binding-barcode-results";
 import { all, db, one } from "./db";
-import { LATEST_TRANSFER_REQUEST_BATCH_ID_SQL } from "./transfer-requests";
+import { LATEST_TRANSFER_BATCH_JOIN_SQL, LINKED_TRANSFER_BATCH_COLUMNS_SQL, type LinkedBatchEvidence } from "./transfer-requests";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL, getPendingBindingFlowCounts, TRIAL_RELEASE_OVERDUE_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
 
@@ -210,7 +210,7 @@ function readTrialDetail(requestId: number): TrialDetail | null {
             pv.binding_mode AS bindingMode, pv.binding_reason AS bindingReason,
             p.trial_overdue_days AS trialOverdueDays,
             CASE WHEN ${TRIAL_RELEASE_OVERDUE_SQL} THEN 1 ELSE 0 END AS isOverdue,
-            b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
+            ${LINKED_TRANSFER_BATCH_COLUMNS_SQL},
             r.void_reason AS voidReason, pv.void_kind AS voidKind, r.voided_at AS voidedAt, o.name AS ownerName,
             sm.name AS softwareManagerName, pr.software_manager_id AS softwareManagerId
      FROM version_transfer_requests r
@@ -219,7 +219,7 @@ function readTrialDetail(requestId: number): TrialDetail | null {
      JOIN projects pr ON pr.id = r.project_id
      LEFT JOIN users o ON o.id = p.owner_id
      LEFT JOIN users sm ON sm.id = pr.software_manager_id
-     LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
+     ${LATEST_TRANSFER_BATCH_JOIN_SQL}
      WHERE r.id = ?`,
     requestId,
   );

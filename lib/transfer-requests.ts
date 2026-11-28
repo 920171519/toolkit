@@ -5,8 +5,27 @@ import { packageIdentity } from "./package-identity";
 export const TRIAL_PENDING_VERSION_STATUSES_SQL = "('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL')";
 export const TRIAL_USABLE_REQUEST_STATUSES_SQL = "('PENDING','IN_TEST','PASSED','FAILED','BLOCKED')";
 
-// These SQL fragments read the current transfer request under alias r.
-export const LATEST_TRANSFER_REQUEST_BATCH_ID_SQL = `(
+export type LinkedBatchEvidence = {
+  batchId: number | null;
+  batchCode: string | null;
+  batchProjectId: number | null;
+  batchStatus: string | null;
+  batchConclusion: string | null;
+};
+
+const linkedTransferBatchColumns = {
+  batchId: "b.id",
+  batchCode: "b.code",
+  batchProjectId: "b.project_id",
+  batchStatus: "b.status",
+  batchConclusion: "b.conclusion",
+} satisfies Record<keyof LinkedBatchEvidence, string>;
+
+export const LINKED_TRANSFER_BATCH_COLUMNS_SQL = Object.entries(linkedTransferBatchColumns)
+  .map(([key, column]) => `${column} AS ${key}`).join(", ");
+
+// The latest batch item is selected for transfer request r. Its batch uses alias b.
+export const LATEST_TRANSFER_BATCH_JOIN_SQL = `LEFT JOIN integration_batches b ON b.id = (
   SELECT bi.batch_id FROM batch_items bi WHERE bi.transfer_request_id = r.id ORDER BY bi.id DESC LIMIT 1
 )`;
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { all, one } from "./db";
 import { assert } from "./domain-error";
+import type { LinkedBatchEvidence } from "./transfer-requests";
 import type { SessionUser } from "./types";
 import { STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL } from "./version-scope";
 
@@ -273,14 +274,6 @@ export function canReadBatchEvidence(
   const ids = draft ? scope.managedProjectIds : scope.projectIds;
   return ids === null || ids.includes(projectId);
 }
-
-export type LinkedBatchEvidence = {
-  batchId: number | null;
-  batchProjectId: number | null;
-  batchStatus: string | null;
-  batchCode: string | null;
-  batchConclusion: string | null;
-};
 
 export function getReadableLinkedBatchEvidence(
   user: SessionUser,

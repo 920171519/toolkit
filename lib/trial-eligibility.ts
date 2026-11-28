@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
-import { getBatchEvidenceReadScope, getReadableLinkedBatchEvidence, type LinkedBatchEvidence } from "./access";
+import { getBatchEvidenceReadScope, getReadableLinkedBatchEvidence } from "./access";
 import { all, one } from "./db";
 import {
-  LATEST_TRANSFER_REQUEST_BATCH_ID_SQL,
+  LATEST_TRANSFER_BATCH_JOIN_SQL,
+  LINKED_TRANSFER_BATCH_COLUMNS_SQL,
   TRIAL_PENDING_VERSION_STATUSES_SQL,
   TRIAL_USABLE_REQUEST_STATUSES_SQL,
+  type LinkedBatchEvidence,
 } from "./transfer-requests";
 import { ACTIVE_INTEGRATION_BATCH_COUNT_SQL } from "./trial-readiness";
 import type { SessionUser } from "./types";
@@ -23,12 +25,12 @@ function trialEligibilityCtes(versionScope = "") {
     ),
     trial_project_evidence AS (
       SELECT s.versionId, s.projectId, r.id AS requestId, r.status AS requestStatus,
-             b.id AS batchId, b.code AS batchCode, b.project_id AS batchProjectId, b.status AS batchStatus, b.conclusion AS batchConclusion,
+             ${LINKED_TRANSFER_BATCH_COLUMNS_SQL},
              r.status IN ${TRIAL_USABLE_REQUEST_STATUSES_SQL} AS usable,
              CASE WHEN r.status = 'PASSED' AND b.status = 'COMPLETED' AND b.conclusion = 'PASS' THEN 1 ELSE 0 END AS passed
       FROM trial_scope s
       LEFT JOIN version_transfer_requests r ON r.package_version_id = s.versionId AND r.project_id = s.projectId
-      LEFT JOIN integration_batches b ON b.id = ${LATEST_TRANSFER_REQUEST_BATCH_ID_SQL}
+      ${LATEST_TRANSFER_BATCH_JOIN_SQL}
     ),
     trial_totals AS (
       SELECT v.id AS versionId, COUNT(e.projectId) AS versionProjectCount,
