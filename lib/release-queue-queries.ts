@@ -154,6 +154,7 @@ type PendingFormalDetail = PendingFormalIdentity & {
   changeSummary: string;
   archiveUrl: string;
   trialReleasedAt: string | null;
+  trialReviewMinutes: string | null;
 };
 
 const pendingFormalIdentityColumns = `pv.id AS versionId, pr.id AS projectId,
@@ -204,7 +205,8 @@ export function getPendingFormalDetailRows(projectIds: number[] | null, versionI
   if (!scope) return [];
   return all<PendingFormalDetail>(
     `SELECT ${pendingFormalIdentityColumns}, r.id AS requestId, pv.change_summary AS changeSummary,
-            pv.archive_url AS archiveUrl, r.trial_released_at AS trialReleasedAt
+            pv.archive_url AS archiveUrl, r.trial_released_at AS trialReleasedAt,
+            pv.trial_review_minutes AS trialReviewMinutes
      ${versionRequestWithPackageFrom}
      WHERE ${scope.where}
      ${pendingFormalOrder}`,
@@ -212,12 +214,12 @@ export function getPendingFormalDetailRows(projectIds: number[] | null, versionI
   );
 }
 
-export function getVersionRequestIds(versionId: number): number[] {
-  return all<{ id: number }>(
-    `SELECT r.id FROM version_transfer_requests r
+export function getFormalEvidenceRequests(versionId: number) {
+  return all<{ id: number; projectId: number }>(
+    `SELECT r.id, r.project_id AS projectId FROM version_transfer_requests r
      JOIN projects pr ON pr.id = r.project_id
      WHERE r.package_version_id = ? AND pr.status != 'ARCHIVED'
      ORDER BY pr.sort_order`,
     versionId,
-  ).map((row) => row.id);
+  );
 }

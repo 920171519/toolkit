@@ -25,7 +25,7 @@ import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getWorkflowListState } from "@/lib/workflow-list";
 import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
-import { getPendingFormalDetailRows, getVersionRequestIds, hasReadableFormalHistory } from "@/lib/release-queue-queries";
+import { getFormalEvidenceRequests, getPendingFormalDetailRows, hasReadableFormalHistory } from "@/lib/release-queue-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 
 export const dynamic = "force-dynamic";
@@ -71,12 +71,16 @@ export default async function FormalDetailPage({ params, searchParams }: {
   const version = manageable ?? records[0];
   const pendingBindingFlows = guidance?.pendingFlowCount ?? getPendingBindingFlowCount(versionId);
   const identity = packageIdentity({ name: version.packageName, code: version.packageCode });
-  const evidence = getVersionRequestIds(version.versionId)
-    .map(trialDetails.getTrialDetail)
+  const batchScope = getBatchEvidenceReadScope(user);
+  const canReadEvidenceProject = (projectId: number) => batchScope.projectIds === null || batchScope.projectIds.includes(projectId);
+  const requests = getFormalEvidenceRequests(version.versionId);
+  // The first request controls the default disclosure even when that project is hidden.
+  const firstRequestId = requests[0]?.id;
+  const evidence = requests
+    .filter(({ projectId }) => manageable || canReadEvidenceProject(projectId))
+    .map(({ id }) => trialDetails.getTrialDetail(id))
     .filter((detail) => detail !== null);
   const projects = evidence.map(({ request }) => request.projectName);
-  const batchScope = getBatchEvidenceReadScope(user);
-  const trialReviewMinutes = evidence[0]?.request.trialReviewMinutes;
   const canPublish = Boolean(manageable && guidance?.href);
   const publishGuidance = guidance?.items.length ? guidance.items : [{
     title: "请从具有管理权限的项目核对发布",
@@ -117,8 +121,8 @@ export default async function FormalDetailPage({ params, searchParams }: {
           <div className="card-header"><h2 className={styles.tableHeading}>验收与绑定证据</h2><Badge tone="emerald" dot>{manageable ? "待转正" : "待软件经理发布"}</Badge></div>
           <div className="card-body">
             <div className={styles.nodeList}>
-              {evidence.map(({ request, requirements }, index) => {
-                const canReadProject = batchScope.projectIds === null || batchScope.projectIds.includes(request.projectId);
+              {evidence.map(({ request, requirements }) => {
+                const canReadProject = canReadEvidenceProject(request.projectId);
                 const passed = requirements.filter((requirement) => requirement.confirmedAt !== null).length;
                 const waived = requirements.filter((requirement) => requirement.waivedAt).length;
                 const progress = request.bindingMode === "SKIPPED" ? <Badge tone="slate">无需绑定</Badge>
@@ -131,7 +135,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
                 const batch = getReadableLinkedBatchEvidence(user, request, batchScope);
                 const conclusion = batch?.batchConclusion ? CONCLUSION_META[batch.batchConclusion as BatchConclusion] : null;
                 const trialUrl = releaseFlowUrl(request.trialFormNo);
-                return <details className="binding-table-item" key={request.id} open={project ? request.projectId === project.id : index === 0}>
+                return <details className="binding-table-item" key={request.id} open={project ? request.projectId === project.id : request.id === firstRequestId}>
                   <summary className={styles.nodeHeading}>
                     <span><strong>{request.projectName}</strong><span className="small muted">{trialUrl ? "已登记试制电子流" : request.trialFormNo ?? "无试制电子流"}</span></span>
                     {progress}
@@ -191,10 +195,10 @@ export default async function FormalDetailPage({ params, searchParams }: {
               <div className={styles.rowActions}><ExternalLink href={version.archiveUrl}>归档包</ExternalLink><Link href={traceHref} prefetch={false} className="archive-link">版本全链路</Link></div>
             </div>
           </section>
-          {trialReviewMinutes && (
+          {version.trialReviewMinutes && (
             <section className="card" aria-labelledby="formal-trial-review-minutes-heading">
               <div className="card-header"><h2 className={styles.tableHeading} id="formal-trial-review-minutes-heading">试制评审纪要</h2></div>
-              <div className="card-body"><p className={styles.reviewMinutesText}>{trialReviewMinutes}</p></div>
+              <div className="card-body"><p className={styles.reviewMinutesText}>{version.trialReviewMinutes}</p></div>
             </section>
           )}
         </aside>

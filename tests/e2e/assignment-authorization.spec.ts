@@ -92,6 +92,23 @@ test("共享转正确认同步范围，同时只展开有权项目的原始证�
   await expect(page.getByRole("dialog", { name: /转正 1004NET/ })).toContainText("星云 N1、极光 M2、磐石 T3 将同步使用该正式版本");
 });
 
+test("只读转正核对按原项目顺序决定默认展开，指定项目时直接展开", async ({ page }) => {
+  await login(page, "TEST002");
+  await page.goto("/formal?q=1004NET");
+  await page.getByRole("link", { name: "查看验收记录", exact: true }).click();
+  const evidence = page.getByRole("region", { name: "项目验收与绑定证据" });
+  const project = evidence.locator("details.binding-table-item");
+  await expect(project).toHaveCount(1);
+  await expect(project.locator(":scope > summary")).toContainText("极光 M2");
+  await expect(project).not.toHaveAttribute("open", "");
+  await expect(evidence.getByText("星云 N1", { exact: true })).toHaveCount(0);
+
+  const scoped = new URL(page.url());
+  scoped.searchParams.set("project", "2");
+  await page.goto(scoped.toString());
+  await expect(project).toHaveAttribute("open", "");
+});
+
 test("版本追溯隐藏最新草稿的批次字段，仍保留项目申请和可读历史", async ({ page }) => {
   await login(page, "MGR001");
   const db = openE2eDatabase();
