@@ -160,6 +160,8 @@
 | 转测申请的写入和查询走同一模块边界 | [转测申请读取](../../lib/transfer-requests.ts)、[转测申请写入](../../lib/transfer-request-writes.ts)、[补派命令](../../scripts/backfill-trial-transfer-requests.ts) | 调用方改到专用写入入口，移除原实现。架构检查保留命令的直接调用，拒绝查询和兼容转发。 |
 | 数据库入口守卫遗漏根代理 | [依赖检查](../../scripts/check-architecture.mjs)、[架构测试](../../tests/architecture-check.test.mjs) | 校验代理的解析后数据库模块与 SQLite 内置模块依赖。 |
 | 管理员维护命令修改账号时缺少审计 | [管理员命令](../../scripts/create-admin.ts)、[审计写入器](../../lib/audit-log.ts)、[命令回归](../../tests/e2e/admin-create.spec.ts) | 在账号写入事务保存创建和更新事件，原账号字段和命令输出沿用既有行为。 |
+| 转正详情对只读账号读取完全不可见的项目证据 | [转正核对页面](../../app/(workspace)/formal/[id]/page.tsx)、[队列查询](../../lib/release-queue-queries.ts)、[证据权限回归](../../tests/e2e/assignment-authorization.spec.ts) | 在加载项目绑定明细前使用现有证据权限，保留全局项目顺序、管理摘要和默认展开规则。 |
+| 授权报告可读时未诊断持久化大小与实际文件的差异 | [授权报告记录](../../lib/batch-queries.ts)、[报告存储](../../lib/report-storage.ts)、[报告回归](../../tests/e2e/report-download.spec.ts) | 只对可确认的正安全整数大小记录差异，历史或异常文件的下载响应沿用原契约。 |
 
 ## 待核对的规范偏离
 

@@ -23,12 +23,12 @@
 | 工作流规则和引导 | `lib/batch-comparison.ts`、`lib/release-guidance.ts` | 准备转测与草稿事务在 `lib/transfer-requests.ts` 共用上次转测版本读取。`lib/trial-eligibility.ts` 为队列、引导和事务提供共享试制资格。转正引导与发布事务共用 `lib/trial-readiness.ts` 的转正检查。 |
 | 批次读取 | `lib/batch-queries.ts` | 为转测准备、集成测试、项目最近批次和报告接口生成带读取权限的视图。 |
 | 待转测读取 | `lib/pending-transfer-queries.ts`、`lib/transfer-requests.ts` | 管理申请清单、项目计数和工作台预览，复用现有申请范围及草稿占用规则。`lib/transfer-request-writes.ts` 负责创建、补派、集成状态和版本汇总更新。 |
-| 发布队列读取 | `lib/release-queue-queries.ts` | 为已发试制、待转正、项目计数和可读历史提供查询。 |
+| 发布队列读取 | `lib/release-queue-queries.ts` | 为已发试制、待转正、项目计数和可读历史提供查询。转正核对先按原顺序和权限选取需展开的项目，发布管理和摘要仍使用原项目范围。 |
 | 绑定读取 | `lib/binding-queries.ts` | 为试制、转正和版本追溯提供授权后的节点、条码与电子流证据，缓存同一页面读取期间的详情。绑定办理页在授权后的节点内按需读取审批人名单。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/organization-queries.ts`、`lib/package-queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目查询提供目录和联系人，组织查询提供人员与责任田，软件包查询提供授权详情。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
 | 身份和授权 | `lib/auth.ts`、`lib/session-store.ts`、`lib/access.ts`、`lib/area-memberships.ts`、`lib/assignment-accounts.ts` | 认证服务控制注册、登录及 Cookie。会话持久化、责任田分工读取、启用账号查询各有固定入口。`access` 解释项目、版本、节点和批次证据的权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
-| 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/sqlite-lifecycle.ts`、`lib/seed.ts`、`lib/report-storage.ts` | 数据库按实际表结构启动补列。生命周期模块负责锁等待及即时事务，迁移和演示初始化在各自事务执行。报告存储负责文件读写和失败清理，元数据存入 SQLite。 |
+| 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/sqlite-lifecycle.ts`、`lib/seed.ts`、`lib/report-storage.ts` | 数据库按实际表结构启动补列。生命周期模块负责锁等待及即时事务，迁移和演示初始化在各自事务执行。报告存储负责文件读写和失败清理，元数据存入 SQLite。授权下载对可信大小与实际字节数的差异记录诊断。 |
 | 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境、工作目录及[同组备份与恢复校验](../../README.md#备份与恢复校验)。部署脚本接入现有进程管理器。 |
 | 错误、日志与测试 | `lib/domain-error.ts`、`lib/action-helpers.ts`、`lib/audit-log.ts`、`tests/e2e` | 业务校验使用同一错误类型。`audit-log` 在调用方现有事务和连接上写入操作历史。Playwright 从真实页面、权限及数据库状态验证契约。测试服务与夹具共享同一运行目录中的数据库和报告。 |
 
@@ -69,7 +69,7 @@ GitHub Actions 在 Ubuntu 24.04 上先用 `bash tests/deploy-ubuntu.sh` 验证�
 | 变更范围 | 契约回归 | 核对内容 |
 | --- | --- | --- |
 | 会话、分工和跨项目证据 | [Cookie](../../tests/e2e/session-cookie.spec.ts)、[密码](../../tests/e2e/account-password.spec.ts)、[分工授权](../../tests/e2e/assignment-authorization.spec.ts) | 反代协议、会话撤销、即时收回分工、历史关联的批次授权。 |
-| 软件包及验证报告的 HTTP 入口 | [软件包体验](../../tests/e2e/package-experience.spec.ts)、[报告下载](../../tests/e2e/report-download.spec.ts) | 同地址按账号显示、历史文件关联、失败状态及缓存策略。 |
+| 软件包及验证报告的 HTTP 入口 | [软件包体验](../../tests/e2e/package-experience.spec.ts)、[报告下载](../../tests/e2e/report-download.spec.ts) | 同地址按账号显示、历史文件关联、大小诊断、失败状态及缓存策略。 |
 | 试制、绑定、转正 | [试制资格](../../tests/e2e/trial-eligibility.spec.ts)、[节点操作](../../tests/e2e/binding-controls.spec.ts)、[转正引导](../../tests/e2e/release-guidance.spec.ts) | 共享版本就绪、旧页面并发修改、条码证据和可办理角色。 |
 | 历史查询及页面返回 | [集成历史](../../tests/e2e/integration-history-filters.spec.ts)、[版本追溯列表](../../tests/e2e/version-trace-list.spec.ts)、[项目范围](../../tests/e2e/project-scope.spec.ts) | 授权范围、筛选后分页、直接链接及返回条件。 |
 | 转测草稿和项目导航 | [并发保存](../../tests/e2e/batch-draft-snapshot.spec.ts)、[项目目录](../../tests/e2e/project-discovery.spec.ts)、[工作区范围](../../tests/e2e/project-scope.spec.ts) | 草稿标题和修订号一致，项目入口、历史项目和导航返回继续按原范围。 |
