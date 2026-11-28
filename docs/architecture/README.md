@@ -26,9 +26,9 @@
 | 发布队列读取 | `lib/release-queue-queries.ts` | 为已发试制、待转正、项目计数和可读历史提供查询。 |
 | 绑定读取 | `lib/binding-queries.ts` | 为试制、转正和版本追溯提供授权后的节点、条码与电子流证据，缓存同一页面读取期间的详情。 |
 | 目录、详情与接口 | `lib/project-queries.ts`、`lib/organization-queries.ts`、`lib/package-queries.ts`、`app/api/packages/[id]`、`app/api/reports/[id]` | 项目查询提供目录和联系人，组织查询提供人员与责任田，软件包查询提供授权详情。路由处理认证、参数、状态码、下载及缓存控制。软件包抽屉的页面预加载和 HTTP 入口共用已授权的详情投影。 |
-| 身份和授权 | `lib/auth.ts`、`lib/access.ts`、`lib/permissions.ts`、`lib/project-scope.ts` | 认证服务控制注册、登录及 Cookie，`session-store` 负责会话存储和校验。`access` 管理项目、责任田、软件包、节点和单据的读写范围及批次证据权限。版本对象读取、项目工作区和写入办理各有权限。 |
+| 身份和授权 | `lib/auth.ts`、`lib/session-store.ts`、`lib/access.ts`、`lib/area-memberships.ts`、`lib/assignment-accounts.ts` | 认证服务控制注册、登录及 Cookie。会话持久化、责任田分工读取、启用账号查询各有固定入口。`access` 解释项目、版本、节点和批次证据的权限。 |
 | 通知已读 | `lib/notification-reads.ts` | 通知链接记录当前账号的首次打开时间，工作台按同一模块查询已读键。 |
-| 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/seed.ts`、`lib/report-storage.ts` | `db` 负责连接和启动迁移。`sqlite-lifecycle` 为迁移、应用和补派命令提供即时写事务及失败清理。演示数据经显式环境变量关闭。报告存储统一路径、文件读写和失败清理，报告元数据存入 SQLite。 |
+| 存储、兼容和报告 | `lib/db.ts`、`lib/schema.ts`、`lib/sqlite-lifecycle.ts`、`lib/seed.ts`、`lib/report-storage.ts` | 数据库按实际表结构启动补列。生命周期模块负责锁等待及即时事务，迁移和演示初始化在各自事务执行。报告存储负责文件读写和失败清理，元数据存入 SQLite。 |
 | 配置与部署 | `lib/runtime-config.ts`、`package.json`、`next.config.ts`、`scripts/deploy-ubuntu.sh` | 应用和维护命令共用数据库路径、报告目录和演示数据开关的解析规则。README 记录进程环境和工作目录。部署脚本接入现有进程管理器。 |
 | 错误、日志与测试 | `lib/domain-error.ts`、`lib/action-helpers.ts`、`lib/audit-log.ts`、`tests/e2e` | 业务校验使用同一错误类型。`audit-log` 在调用方现有事务和连接上写入操作历史。Playwright 从真实页面、权限及数据库状态验证契约。测试服务与夹具共享同一运行目录中的数据库和报告。 |
 
@@ -44,7 +44,7 @@
 | 节点、审批和逐条判定 | `binding_requirements`、`binding_flows`、`binding_flow_barcodes` | `release-workflow` 保存试制时的配置快照，`binding-workflow` 写入后续绑定和节点结果。`binding-availability` 定义绑定办理所需的发布阶段和节点状态，`binding-barcode-results` 定义条码统计和确认门槛，`trial-readiness` 根据已保存的节点确认、免绑及流程证据计算转正条件。 |
 | 审计和报告 | `audit_logs`、`report_files`、上传文件 | 写入模块记录操作。`report-storage` 与报告路由共同负责文件读写路径和读取权限。 |
 | 通知已读 | `notification_reads` | `notification-reads` 按账号和通知键保存首次已读时间。 |
-| 目录和流程筛选 | URL 参数、浏览器当前页面状态 | 各列表保留既有 URL 参数。`lib/list-pagination.ts` 统一计算筛选后分页范围，数组和 SQLite 分页都使用该结果。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
+| 目录和流程筛选 | URL 参数、浏览器当前页面状态 | `lib/search-text.ts` 提供普通搜索输入规则，专用队列保留各自参数。`lib/list-pagination.ts` 计算筛选后范围。筛选弹窗根据字段推导提交和清除参数。准备批次的跨页勾选由 `components/pending-batch-choices.tsx` 管理，保存草稿后以服务端快照为准。 |
 
 ## 依赖约束
 
@@ -65,3 +65,11 @@
 `pnpm lint` 同时运行[架构检查的契约测试](../../tests/architecture-check.test.mjs)。测试在临时项目中调用真实检查器，验证合法依赖、违规导入、类型循环和路由规则偏移。
 
 GitHub Actions 在 Ubuntu 24.04 上先用 `bash tests/deploy-ubuntu.sh` 验证部署顺序，再用 Node.js 24.19.0 和 pnpm 11.19.0 冻结安装，执行 `pnpm lint`、`pnpm test:e2e:full` 和 `pnpm typecheck`。部署测试使用模拟命令，浏览器回归使用隔离的演示数据库和报告目录。本机可用相同命令复验。 [工作流配置](../../.github/workflows/verify.yml)
+
+| 变更范围 | 契约回归 | 核对内容 |
+| --- | --- | --- |
+| 会话、分工和跨项目证据 | [Cookie](../../tests/e2e/session-cookie.spec.ts)、[密码](../../tests/e2e/account-password.spec.ts)、[分工授权](../../tests/e2e/assignment-authorization.spec.ts) | 反代协议、会话撤销、即时收回分工、历史关联的批次授权。 |
+| 软件包及验证报告的 HTTP 入口 | [软件包体验](../../tests/e2e/package-experience.spec.ts)、[报告下载](../../tests/e2e/report-download.spec.ts) | 同地址按账号显示、历史文件关联、失败状态及缓存策略。 |
+| 试制、绑定、转正 | [试制资格](../../tests/e2e/trial-eligibility.spec.ts)、[节点操作](../../tests/e2e/binding-controls.spec.ts)、[转正引导](../../tests/e2e/release-guidance.spec.ts) | 共享版本就绪、旧页面并发修改、条码证据和可办理角色。 |
+| 历史查询及页面返回 | [集成历史](../../tests/e2e/integration-history-filters.spec.ts)、[版本追溯列表](../../tests/e2e/version-trace-list.spec.ts)、[项目范围](../../tests/e2e/project-scope.spec.ts) | 授权范围、筛选后分页、直接链接及返回条件。 |
+| SQLite 生命周期 | [启动与迁移](../../tests/e2e/sqlite-lifecycle.spec.ts)、[演示数据事务](../../tests/e2e/seed-transaction.spec.ts)、[事务类型](../../tests/typechecks/sqlite-lifecycle.ts) | 旧库补列、竞争及回滚、同步事务回调。 |

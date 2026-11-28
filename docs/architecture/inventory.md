@@ -145,6 +145,10 @@
 | 转测和组织目录分别维护三类责任田分工来源 | [责任田分工读取](../../lib/area-memberships.ts)、[授权](../../lib/access.ts)、[组织目录](../../lib/organization-queries.ts) | 同一成员事实供查询和权限使用，各自保留历史记录与数据展示范围。 |
 | 四个列表各自截取普通搜索，表单另设长度 | [搜索参数](../../lib/search-text.ts)、[通用工作流搜索](../../components/workflow-list.tsx)、[版本列表](../../lib/version-trace-list.ts) | 共用搜索输入读取及上限，返回地址与其他搜索命名空间继续保持其契约。 |
 | 绑定页面为待发布试制标签读取完整版本和报告证据 | [试制资格](../../lib/trial-eligibility.ts)、[试制列表](../../app/(workspace)/trial/page.tsx)、[共享版本回归](../../tests/e2e/trial-eligibility.spec.ts) | 按授权范围和相同资格按版本去重计数。激活列表仍读取完整字段。 |
+| 页面标题、品牌与可访问名称分别写入产品名称 | [名称常量](../../lib/constants.ts)、[品牌](../../components/brand.tsx)、[页面布局](../../app/layout.tsx) | 同一名称同时驱动展示与标题，部门和责任田副标题维持现有职责。 |
+| 数据库结构包含空闲版本常量 | [启动迁移](../../lib/db.ts)、[建表和补列](../../lib/schema.ts)、[冷启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 以实际数据库结构及共用列定义执行迁移，保留已有库的持久值。 |
+| 集成历史为直接跳转的版本读取试制引导，并逐行加载账号范围 | [集成详情](../../app/(workspace)/integration/[id]/page.tsx)、[发布引导](../../lib/release-guidance.ts)、[试制回归](../../tests/e2e/trial-eligibility.spec.ts) | 先走原有跳转分支，试制引导使用同次渲染的授权范围。旧配套仍按通过项的版本编号关联。 |
+| 按项目查看软件包时在全量摘要读取后过滤使用范围 | [软件包查询](../../lib/package-queries.ts)、[包工作区](../../app/(workspace)/packages/page.tsx)、[浏览器回归](../../tests/e2e/package-experience.spec.ts) | SQL 在读取摘要前取交集。其余在行项目、历史权限和详情接口沿用原业务定义。 |
 
 ## 待核对的规范偏离
 
