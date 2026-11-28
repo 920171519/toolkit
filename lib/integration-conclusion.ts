@@ -1,4 +1,5 @@
-import { ATTRIBUTION_META, CONCLUSION_META, type BatchConclusion, type IssueAttribution } from "./constants";
+import { ATTRIBUTION_META } from "./constants";
+import { BATCH_CONCLUSIONS, type BatchConclusion, type IssueAttribution } from "./domain-values";
 
 type AttributionRule = {
   choices: readonly [IssueAttribution, ...IssueAttribution[]];
@@ -21,7 +22,7 @@ export const integrationAttributionRules: Readonly<Record<BatchConclusion, Attri
 };
 
 export function isBatchConclusion(value: string): value is BatchConclusion {
-  return Object.hasOwn(CONCLUSION_META, value);
+  return BATCH_CONCLUSIONS.some((conclusion) => conclusion === value);
 }
 
 // Both batch queries use bi for the batch item and pv for its current version.

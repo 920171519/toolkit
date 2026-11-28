@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowUpRight, Inbox } from "lucide-react";
-import {
-  BATCH_STATUS_META,
-  BATCH_STATUSES,
-  PACKAGE_PROGRESS_META,
-  type BatchStatus,
-  type PackageProgressStatus,
-} from "@/lib/constants";
+import { BATCH_STATUS_META, PACKAGE_PROGRESS_META, type PackageProgressStatus } from "@/lib/constants";
+import { BATCH_STATUSES, type BatchStatus } from "@/lib/domain-values";
 import { initials } from "@/lib/format";
 import type { Notice } from "@/lib/flash";
 

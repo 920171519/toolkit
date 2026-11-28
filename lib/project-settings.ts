@@ -4,6 +4,7 @@ import { canManageProjectWorkflowForProject, getProjectSoftwareManagerIds } from
 import { createAuditLogWriter } from "./audit-log";
 import { db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
+import { isProjectStatus, type ProjectStatus } from "./domain-values";
 import { isAdmin } from "./permissions";
 import { DEFAULT_PROJECT_STAGE, isProjectStage, PROJECT_STAGE_META, type ProjectStage } from "./project-stage";
 import { getNodeApproverRemovalBlocker, getNodeDeletionBlockers, getProjectDeletionBlockers } from "./settings-queries";
@@ -20,7 +21,7 @@ export type SaveProjectInput = {
   description: string;
   pmUserIds: number[];
   softwareManagerIds?: number[];
-  status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  status: ProjectStatus;
   stage?: string;
   sortOrder?: number | null;
 };
@@ -54,7 +55,7 @@ export function saveProject(actor: SessionUser, input: SaveProjectInput): number
     const pm = one<{ id: number }>("SELECT id FROM users WHERE id = ? AND is_active = 1", pmUserId);
     assert(pm, "选择的 PM 不存在或已停用。");
   }
-  assert(["ACTIVE", "PAUSED", "ARCHIVED"].includes(input.status), "项目状态无效。");
+  assert(isProjectStatus(input.status), "项目状态无效。");
   const requestedStage = input.stage;
   assert(requestedStage === undefined || isProjectStage(requestedStage), "项目阶段无效。");
   return transaction(() => {

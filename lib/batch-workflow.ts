@@ -3,7 +3,7 @@ import "server-only";
 import { assertProjectManager, canSubmitIntegrationConclusionForProject } from "./access";
 import { createAuditLogWriter } from "./audit-log";
 import { getBatchSendCheck } from "./batch-send-check";
-import type { BatchConclusion } from "./constants";
+import type { BatchConclusion } from "./domain-values";
 import { all, db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
 import { integrationAttributionRules, integrationConclusionImpact, PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";

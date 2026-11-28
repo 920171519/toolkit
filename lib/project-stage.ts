@@ -1,3 +1,5 @@
+import type { ProjectStatus } from "./domain-values";
+
 export const PROJECT_STAGES = ["TR1", "TR2", "TR3", "TR4", "TR5", "TR6", "ENDED"] as const;
 
 export type ProjectStage = (typeof PROJECT_STAGES)[number];
@@ -18,6 +20,6 @@ export function isProjectStage(value: string): value is ProjectStage {
   return PROJECT_STAGES.some((stage) => stage === value);
 }
 
-export function getProjectStage(status: "ACTIVE" | "PAUSED" | "ARCHIVED", stage: ProjectStage): ProjectStage {
+export function getProjectStage(status: ProjectStatus, stage: ProjectStage): ProjectStage {
   return status === "ARCHIVED" ? "ENDED" : stage;
 }

@@ -1,5 +1,6 @@
 import { readColumnFilters, type ColumnFilterField } from "./column-filters";
-import { PACKAGE_STATUSES, PACKAGE_STATUS_META } from "./constants";
+import { PACKAGE_STATUS_META } from "./constants";
+import { PACKAGE_STATUSES } from "./domain-values";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "./list-pagination";
 import { safeOverviewReturnPath } from "./return-to";
 import { workflowHref } from "./workflow-links";

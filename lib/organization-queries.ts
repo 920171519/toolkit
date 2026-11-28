@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Role } from "./constants";
+import type { ProjectStatus, Role } from "./domain-values";
 import { all, one } from "./db";
 
 export type AdminUser = {
@@ -56,7 +56,7 @@ export type AreaProjectLead = {
   projectId: number;
   projectName: string;
   projectCode: string;
-  projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  projectStatus: ProjectStatus;
   userId: number;
   userName: string;
   userEmployeeId: string;

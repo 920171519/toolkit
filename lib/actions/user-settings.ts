@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { actionUser, failure, numberValue, refreshAll, successRedirect, text } from "@/lib/action-helpers";
-import { ROLES, type Role } from "@/lib/constants";
+import { ROLES, type Role } from "@/lib/domain-values";
 import { directoryActionHref } from "@/lib/settings-directory";
 import { saveUserProfile, setUserActive, updateUserRole } from "@/lib/user-settings";
 

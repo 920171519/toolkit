@@ -1,7 +1,7 @@
 import "server-only";
 
 import { canReadBatchEvidence, getReadableBatchEvidenceIds } from "./access";
-import type { BatchConclusion, BatchStatus } from "./constants";
+import type { BatchConclusion, BatchStatus } from "./domain-values";
 import { all, db, one } from "./db";
 import { PARALLEL_RISK_TRIAL_ITEM_SQL } from "./integration-conclusion";
 import type { readIntegrationHistory } from "./integration-history";

@@ -1,9 +1,22 @@
+import {
+  BATCH_CONCLUSIONS,
+  BATCH_STATUSES,
+  BINDING_FLOW_STATUSES,
+  ISSUE_ATTRIBUTIONS,
+  PACKAGE_STATUSES,
+  PROJECT_STATUSES,
+  ROLES,
+} from "./domain-values";
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES } from "./project-stage";
 
 export const SCHEMA_VERSION = 10;
 
+function sqlValues(values: readonly string[]) {
+  return values.map((value) => `'${value}'`).join(",");
+}
+
 export const PROJECT_STAGE_COLUMN_SQL =
-  `stage TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${PROJECT_STAGES.map((stage) => `'${stage}'`).join(",")}))`;
+  `stage TEXT NOT NULL DEFAULT '${DEFAULT_PROJECT_STAGE}' CHECK (stage IN (${sqlValues(PROJECT_STAGES)}))`;
 
 export const PACKAGE_VERSION_BUILD_URL_COLUMN_SQL = "build_url TEXT";
 export const TRANSFER_REQUEST_RELEASE_MODE_COLUMN_SQL = "release_mode TEXT NOT NULL DEFAULT 'INTEGRATION'";
@@ -16,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
   employee_id TEXT NOT NULL COLLATE NOCASE UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'MEMBER'
-    CHECK (role IN ('ADMIN','MEMBER')),
+    CHECK (role IN (${sqlValues(ROLES)})),
   department TEXT NOT NULL DEFAULT '软件工程部',
   title TEXT NOT NULL DEFAULT '',
   is_active INTEGER NOT NULL DEFAULT 1,
@@ -81,7 +94,7 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT NOT NULL DEFAULT '',
   pm_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   software_manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','PAUSED','ARCHIVED')),
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN (${sqlValues(PROJECT_STATUSES)})),
   ${PROJECT_STAGE_COLUMN_SQL},
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
@@ -126,7 +139,7 @@ CREATE TABLE IF NOT EXISTS package_versions (
   change_summary TEXT NOT NULL,
   archive_url TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'PENDING_TRANSFER'
-    CHECK (status IN ('PENDING_TRANSFER','IN_TEST','PENDING_TRIAL','TRIAL','PENDING_FORMAL','FORMAL','VOID')),
+    CHECK (status IN (${sqlValues(PACKAGE_STATUSES)})),
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   submitted_at TEXT NOT NULL,
   trial_form_no TEXT,
@@ -196,13 +209,13 @@ CREATE TABLE IF NOT EXISTS integration_batches (
   project_id INTEGER REFERENCES projects(id) ON DELETE RESTRICT,
   title TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'DRAFT'
-    CHECK (status IN ('DRAFT','IN_TEST','COMPLETED','TERMINATED')),
+    CHECK (status IN (${sqlValues(BATCH_STATUSES)})),
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   sent_at TEXT,
   completed_at TEXT,
-  conclusion TEXT CHECK (conclusion IN ('PASS','FAIL','BLOCKED')),
-  issue_attribution TEXT CHECK (issue_attribution IN ('NONE','PACKAGE_RELATED','NOT_PACKAGE_RELATED','UNKNOWN')),
+  conclusion TEXT CHECK (conclusion IN (${sqlValues(BATCH_CONCLUSIONS)})),
+  issue_attribution TEXT CHECK (issue_attribution IN (${sqlValues(ISSUE_ATTRIBUTIONS)})),
   test_summary TEXT,
   test_report_url TEXT,
   test_report_file_id INTEGER REFERENCES report_files(id) ON DELETE SET NULL,
@@ -341,7 +354,7 @@ CREATE TABLE IF NOT EXISTS binding_flows (
   submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN (${sqlValues(BINDING_FLOW_STATUSES)})),
   submitted_at TEXT NOT NULL,
   reviewed_at TEXT,
   review_comment TEXT,

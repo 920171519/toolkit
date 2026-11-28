@@ -4,6 +4,7 @@ import { all, one } from "./db";
 import { canEditPackageResponsibility, getReadableBatchEvidenceIds, getReadablePackageIds, getReadablePackageVersionScope, getReadableVersionIds, getTransferAreaIds } from "./access";
 import { STANDALONE_IMPORTED_VERSION_SQL, STANDALONE_VERSION_HISTORY_IN_PROJECT_SQL, STANDALONE_VERSION_IN_PROJECT_SQL } from "./version-scope";
 import type { PackageProgressStatus } from "./constants";
+import type { ProjectStatus } from "./domain-values";
 import { getTrialProgress } from "./trial-eligibility";
 import { packageCodeSql } from "./package-identity";
 import { getPackageDeactivationBlockingVersions } from "./settings-queries";
@@ -137,7 +138,7 @@ type PackageUsageScope = {
   projectId: number;
   projectName: string;
   projectCode: string;
-  projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  projectStatus: ProjectStatus;
   nodeNames: string[];
 };
 
@@ -362,7 +363,7 @@ type PackageDetailData = {
     projectId: number;
     projectName: string;
     projectCode: string;
-    projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
+    projectStatus: ProjectStatus;
     nodes: Array<{ nodeId: number; nodeName: string }>;
   }>;
   versions: Array<
@@ -461,7 +462,7 @@ function readPackageDetailUsages(packageId: number): PackageDetailData["usages"]
     projectId: number;
     projectName: string;
     projectCode: string;
-    projectStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
+    projectStatus: ProjectStatus;
     nodeId: number;
     nodeName: string;
   }>(

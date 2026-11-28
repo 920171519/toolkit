@@ -1,7 +1,7 @@
 import "server-only";
 
 import { canReadBatchEvidence } from "./access";
-import type { BatchStatus } from "./constants";
+import type { BatchStatus } from "./domain-values";
 import { all, one } from "./db";
 import { packageIdentity } from "./package-identity";
 import type { SessionUser } from "./types";

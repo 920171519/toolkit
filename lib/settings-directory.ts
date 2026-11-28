@@ -1,3 +1,4 @@
+import { isProjectStatus } from "./domain-values";
 import { columnFilterKeys, type ColumnFilterField } from "./column-filters";
 import { getPageWindow, readListPage } from "./list-pagination";
 
@@ -94,7 +95,7 @@ export function projectDirectoryListParams(params: DirectoryParams, fromDetail =
   const page = readListPage(directoryValue(fromDetail ? params.listPage : params.page));
   return {
     q: q || undefined,
-    status: status === "ACTIVE" || status === "PAUSED" || status === "ARCHIVED" ? status : undefined,
+    status: isProjectStatus(status) ? status : undefined,
     page: page > 1 ? String(page) : undefined,
   };
 }

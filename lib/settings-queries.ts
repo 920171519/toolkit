@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PackageStatus } from "./constants";
+import type { PackageStatus } from "./domain-values";
 import { all, one } from "./db";
 import { LEGACY_VERSION_IMPORT_SQL, STANDALONE_IMPORTED_VERSION_SQL } from "./version-scope";
 

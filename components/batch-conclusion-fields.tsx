@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ATTRIBUTION_META, CONCLUSION_META, type BatchConclusion } from "@/lib/constants";
+import { ATTRIBUTION_META, CONCLUSION_META } from "@/lib/constants";
+import { type BatchConclusion } from "@/lib/domain-values";
 import { integrationAttributionRules, integrationConclusionImpact, isBatchConclusion } from "@/lib/integration-conclusion";
 import { packageIdentity } from "@/lib/package-identity";
 import { readTestReport, testReportAccept, testReportHint } from "@/lib/test-report-validation";

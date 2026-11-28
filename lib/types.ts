@@ -1,10 +1,5 @@
-import type {
-  BatchConclusion,
-  BatchStatus,
-  Role,
-  PackageStatus,
-  PackageProgressStatus,
-} from "./constants";
+import type { PackageProgressStatus } from "./constants";
+import type { BatchConclusion, BatchStatus, Role, PackageStatus } from "./domain-values";
 
 export type SessionUser = {
   id: number;

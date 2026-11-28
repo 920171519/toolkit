@@ -1,13 +1,14 @@
 import "server-only";
 
 import { all, one } from "./db";
+import type { ProjectStatus } from "./domain-values";
 import { getProjectStage, type ProjectStage } from "./project-stage";
 
 export type ProjectOption = {
   id: number;
   name: string;
   code: string;
-  status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  status: ProjectStatus;
 };
 
 export type ProjectContact = {

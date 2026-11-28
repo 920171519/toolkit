@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { releaseTrialAction } from "@/lib/actions/release";
-import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type BatchConclusion, type TransferRequestStatus } from "@/lib/constants";
+import { CONCLUSION_META, TRANSFER_REQUEST_STATUS_META, type TransferRequestStatus } from "@/lib/constants";
+import type { BatchConclusion } from "@/lib/domain-values";
 import { packageIdentity } from "@/lib/package-identity";
 import { getTrialNodeGuidance } from "@/lib/release-guidance";
 import { trialReleaseStateKey, type TrialReadyDisplayVersion } from "@/lib/trial-eligibility";

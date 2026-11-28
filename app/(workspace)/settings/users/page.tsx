@@ -13,7 +13,8 @@ import {
   matchesTextFilter,
   readColumnFilters,
 } from "@/lib/column-filters";
-import { ROLE_META, ROLES } from "@/lib/constants";
+import { ROLE_META } from "@/lib/constants";
+import { ROLES } from "@/lib/domain-values";
 import { getListPageSize } from "@/lib/list-pagination";
 import { getAdminUsers, getResponsibilityAreaOptions, type AdminUser } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";

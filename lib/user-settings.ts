@@ -2,7 +2,7 @@ import "server-only";
 
 import { isValidAccountDisplayName } from "./account-identity";
 import { createAuditLogWriter } from "./audit-log";
-import { ROLES, type Role } from "./constants";
+import { ROLES, type Role } from "./domain-values";
 import { db, one, run, transaction } from "./db";
 import { assert } from "./domain-error";
 import { isAdmin } from "./permissions";

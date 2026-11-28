@@ -1,6 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
+import type { ProjectStatus } from "@/lib/domain-values";
 import { actionUser, failure, idList, numberValue, refreshAll, successRedirect, text } from "@/lib/action-helpers";
 import {
   addProjectNode,
@@ -30,7 +31,7 @@ export async function saveProjectAction(
 ): Promise<ActionState> {
   const user = await actionUser();
   const id = numberValue(formData, "id");
-  const status = text(formData, "status") as "ACTIVE" | "PAUSED" | "ARCHIVED";
+  const status = text(formData, "status") as ProjectStatus;
   let projectId: number;
   try {
     projectId = saveProject(user, {

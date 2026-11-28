@@ -16,13 +16,8 @@ import { readFlash } from "@/lib/flash";
 import { createTrialDetailReader, getPendingBindingFlowCount } from "@/lib/binding-queries";
 import { getFormalReleaseGuidance } from "@/lib/release-guidance";
 import { formatDateTime } from "@/lib/format";
-import {
-  BINDING_FLOW_STATUS_META,
-  CONCLUSION_META,
-  TRANSFER_REQUEST_STATUS_META,
-  type BatchConclusion,
-  type BindingFlowStatus,
-} from "@/lib/constants";
+import { BINDING_FLOW_STATUS_META, CONCLUSION_META, TRANSFER_REQUEST_STATUS_META } from "@/lib/constants";
+import { type BatchConclusion, type BindingFlowStatus } from "@/lib/domain-values";
 import {
   cancelBindingFlowAction,
   confirmBindingRequirementAction,

@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { ProjectContactPicker } from "@/components/project-contact-picker";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { PROJECT_STATUS_META } from "@/lib/constants";
+import { PROJECT_STATUSES } from "@/lib/domain-values";
 import { DEFAULT_PROJECT_STAGE, PROJECT_STAGES, PROJECT_STAGE_META } from "@/lib/project-stage";
 import type { ProjectConfig } from "@/lib/project-queries";
 import type { PersonOption } from "@/lib/organization-queries";
 
-export const PROJECT_STATUS_OPTIONS = [
-  { value: "ACTIVE", label: "进行中" },
-  { value: "PAUSED", label: "已暂停" },
-  { value: "ARCHIVED", label: "已归档" },
-] as const;
+export const PROJECT_STATUS_OPTIONS = PROJECT_STATUSES.map((value) => ({ value, label: PROJECT_STATUS_META[value].label }));
 
 export function ProjectSettingsFields({ people, project, canAssignManagers }: { people: PersonOption[]; project?: ProjectConfig; canAssignManagers: boolean }) {
   return (
