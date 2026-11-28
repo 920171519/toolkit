@@ -143,3 +143,14 @@ test("旧链接恢复列筛选，空结果仍可清除单列并保留项目和�
   await page.getByRole("link", { name: "全部软件包", exact: true }).click();
   await expect(page).toHaveURL((url) => url.searchParams.get("project") === "1" && !url.searchParams.has("package"));
 });
+
+test("按软件包查看版本仍保留普通账号有权读取的其他软件包标签", async ({ page }) => {
+  await login(page, "MGR001");
+  await page.goto("/versions?project=1&package=1&tabs=2,1");
+  const rows = page.getByRole("region", { name: "版本记录表格" }).locator("tbody");
+  await expect(rows.getByText("1001OTA", { exact: true }).first()).toBeVisible();
+  await expect(rows.getByText("1002CFG", { exact: true })).toHaveCount(0);
+  const tabs = page.getByRole("navigation", { name: "版本全链路标签页" });
+  await expect(tabs.getByRole("link", { name: "1002CFG 2.2.0", exact: true })).toBeVisible();
+  await expect(tabs.getByRole("link", { name: "1001OTA 1.5.2", exact: true })).toBeVisible();
+});

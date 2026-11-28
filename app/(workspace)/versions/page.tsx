@@ -33,8 +33,12 @@ export default async function VersionsPage({ searchParams }: {
   const params = await searchParams;
   const project = requireWorkflowProject(user, params.project);
   const requested = readTraceListState(params);
-  const readableIds = getReadableVersionIds(user);
-  const tabs = getTraceVersionTabs(requested.tabs, project?.id, readableIds);
+  const packageScope = requested.packageId === undefined ? undefined : { packageId: requested.packageId };
+  const readableIds = getReadableVersionIds(user, packageScope);
+  const readableTabIds = packageScope && requested.tabs.length > 0 && readableIds !== null
+    ? getReadableVersionIds(user, { versionIds: requested.tabs })
+    : readableIds;
+  const tabs = getTraceVersionTabs(requested.tabs, project?.id, readableTabIds);
   const { rows, total, page, pageCount } = getTraceVersionPage(requested, project?.id, readableIds);
   const state = { ...requested, page, tabs: tabs.map((tab) => tab.id) };
   const filtered = Boolean(state.query || Object.keys(state.filters).length);
