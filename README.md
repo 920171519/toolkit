@@ -442,6 +442,8 @@ pnpm admin:create -- <姓名> <工号> <密码>  # 创建或提升一个管理�
 
 生产网页的构建会固定构建时设置的 `NEXT_PUBLIC_DEPARTMENT_NAME`。更新网页注册的默认部门时请重新构建。使用 `admin:create` 新建账号时，在命令执行环境中设置该变量。人员目录展示已保存的部门资料。
 
+`admin:create` 在账号写入的同一事务记录创建或更新事件。审计记录包含目标账号 ID，操作人字段为空，表示事件来自本地维护命令。
+
 ## 测试与验证
 
 E2E 在 Windows 和 Linux 上使用同一组 pnpm 命令。每次启动测试服务时，使用系统临时目录中独立的 `toolkit-e2e-*` 目录保存 SQLite 数据库和上传报告，默认监听 `127.0.0.1:3100`。测试结束后保留该目录用于排查，确认测试服务退出后可按需清理。Playwright UI 重跑用例会沿用当前测试服务的数据，需要恢复演示数据时请退出并重新启动 UI。并行验证时请使用独立检出并设置不同的 `TOOLKIT_QA_PORT`，各检出分别保存 `test-results/` 与 `playwright-report/`。自定义 Playwright 配置沿用项目的全局设置时，在 `webServer.env` 中配置测试服务的 `DATABASE_PATH` 和 `TOOLKIT_REPORTS_PATH`。独立配置可为测试进程显式设置 `TOOLKIT_QA_DB` 和 `TOOLKIT_REPORTS_PATH`，指向测试服务使用的同一组路径。用例覆盖以下场景：

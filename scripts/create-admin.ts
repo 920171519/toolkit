@@ -1,8 +1,9 @@
 import { isValidEmployeeId, normalizeEmployeeId } from "../lib/account-identity";
+import { createAuditLogWriter } from "../lib/audit-log";
 import { DEPARTMENT_NAME } from "../lib/constants";
 import { hashPassword } from "../lib/password";
 import { minimumNewPasswordLengthError } from "../lib/password-policy";
-import { one, run, transaction } from "../lib/db";
+import { db, one, run, transaction } from "../lib/db";
 
 const args = process.argv.slice(2);
 if (args[0] === "--") args.shift();
@@ -27,6 +28,7 @@ if (passwordError) {
 }
 
 const displayName = name.trim();
+const audit = createAuditLogWriter(db);
 const message = transaction(() => {
   const existing = one<{ id: number; name: string }>(
     "SELECT id, name FROM users WHERE employee_id = ? COLLATE NOCASE",
@@ -39,6 +41,7 @@ const message = transaction(() => {
       displayName,
       existing.id,
     );
+    audit(null, "CLI_UPDATE_ADMIN", "USER", existing.id, `维护命令更新系统管理员账号：${displayName}`);
     return `已将现有账号 ${employeeId}（${existing.name}）提升为系统管理员，密码保持不变。`;
   }
 
@@ -51,6 +54,7 @@ const message = transaction(() => {
     DEPARTMENT_NAME,
     new Date().toISOString(),
   );
+  audit(null, "CLI_CREATE_ADMIN", "USER", Number(result.lastInsertRowid), `维护命令创建系统管理员账号：${displayName}`);
   return `已创建系统管理员 ${displayName}（${employeeId}），用户 ID：${result.lastInsertRowid}。`;
 });
 console.log(message);
