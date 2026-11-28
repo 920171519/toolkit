@@ -39,7 +39,8 @@ export default defineConfig({
     env: {
       DATABASE_PATH: join(runDirectory, "toolkit.db"),
       TOOLKIT_REPORTS_PATH: join(runDirectory, "reports"),
-      SESSION_COOKIE_SECURE: "false",
+      // Ignore local overrides while exercising protocol detection.
+      SESSION_COOKIE_SECURE: "",
       TOOLKIT_SKIP_SEED: "0",
     },
     url: baseURL,
