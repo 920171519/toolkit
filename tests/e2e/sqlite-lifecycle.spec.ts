@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
@@ -267,5 +267,66 @@ test("旧库只在补齐试制绑定字段时回填，重启保留已存在的�
         migrated.close();
       }
     }
+  }
+});
+
+test("旧日志模式的写锁释放后，启动继续切换 WAL 并保留数据", async ({}, testInfo) => {
+  const target = testInfo.outputPath("existing-rollback-journal.db");
+  const preloader = testInfo.outputPath("observe-wal-start.cjs");
+  writeFileSync(preloader, String.raw`
+    const { DatabaseSync } = require("node:sqlite");
+    const exec = DatabaseSync.prototype.exec;
+    DatabaseSync.prototype.exec = function (sql) {
+      if (/^PRAGMA\s+journal_mode\s*=\s*WAL\b/i.test(sql)) {
+        process.stdout.write("WAL configuration started\n");
+      }
+      return exec.call(this, sql);
+    };
+  `);
+
+  const writer = new DatabaseSync(target);
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    writer.exec("CREATE TABLE existing (value TEXT); INSERT INTO existing VALUES ('keep');");
+    writer.exec("BEGIN IMMEDIATE;");
+    await new Promise<void>((resolve, reject) => {
+      const startup = execFile(process.execPath, ["--require", preloader, "--import", "tsx", "scripts/seed-db.ts"], {
+        env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: "1" },
+        encoding: "utf8",
+        timeout: 15_000,
+      }, (error, stdout, stderr) => {
+        if (error) reject(new Error(stderr.trim(), { cause: error }));
+        else if (!stdout.includes("WAL configuration started")) reject(new Error("Startup did not attempt WAL configuration."));
+        else resolve();
+      });
+      let output = "";
+      startup.stdout?.setEncoding("utf8").on("data", (chunk: string) => {
+        if (releaseTimer !== undefined) return;
+        output += chunk;
+        if (output.includes("WAL configuration started")) {
+          releaseTimer = setTimeout(() => {
+            try {
+              writer.exec("COMMIT;");
+            } catch (error) {
+              startup.kill();
+              reject(error);
+            }
+          }, 300);
+        }
+      });
+    });
+  } finally {
+    clearTimeout(releaseTimer);
+    writer.close();
+  }
+
+  const initialized = new DatabaseSync(target, { readOnly: true });
+  try {
+    expect(initialized.prepare("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" });
+    expect(initialized.prepare("SELECT value FROM existing").get()).toEqual({ value: "keep" });
+    expect(initialized.prepare("SELECT COUNT(*) AS count FROM users").get()).toEqual({ count: 0 });
+    expect(initialized.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    initialized.close();
   }
 });

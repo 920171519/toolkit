@@ -5,7 +5,7 @@ import { parseBindingBarcodeText } from "./binding-barcode-results";
 import { getDatabasePath, shouldSeedDemoData } from "./runtime-config";
 import { ADDITIVE_COLUMNS, SCHEMA_SQL, type AdditiveTable } from "./schema";
 import { seedDatabase } from "./seed";
-import { closeDatabaseAfterError, withImmediateTransaction, type SynchronousTransactionCallback } from "./sqlite-lifecycle";
+import { closeDatabaseAfterError, configureDatabaseConnection, withImmediateTransaction, type SynchronousTransactionCallback } from "./sqlite-lifecycle";
 import { refreshProjectTrialReadiness, refreshTrialReadiness } from "./trial-readiness";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
@@ -18,9 +18,7 @@ function createDatabase(): DatabaseSync {
   mkdirSync(dirname(databasePath), { recursive: true });
   const database = new DatabaseSync(databasePath);
   try {
-    database.exec("PRAGMA busy_timeout = 5000;");
-    database.exec("PRAGMA foreign_keys = ON;");
-    database.exec("PRAGMA journal_mode = WAL;");
+    configureDatabaseConnection(database);
     withImmediateTransaction(database, () => {
       database.exec(SCHEMA_SQL);
       migrateSchema(database);
