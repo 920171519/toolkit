@@ -7,7 +7,7 @@
 | 范围 | 当前方案与契约 | 验证入口 |
 | --- | --- | --- |
 | 界面与状态 | Next.js App Router 负责路由和首屏。React 客户端组件持有表单、筛选控件和选中状态。列表条件用 URL 恢复。Tailwind 与全局样式提供设计规范，原生 `dialog` 管理焦点。 | [界面规范](../../AGENTS.md#界面层级与文案)、[弹窗钩子](../../components/use-modal-dialog.ts)、[窄屏回归](../../tests/e2e/workspace-width.spec.ts) |
-| 业务办理 | Server Action 处理会话、表单反馈和跳转。工作流服务负责权限、阶段、并行变更和事务写入。配置修改引起的范围联动复用转测申请服务。 | [发布写入](../../lib/release-workflow.ts)、[批次写入](../../lib/batch-workflow.ts)、[转测申请](../../lib/transfer-requests.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) |
+| 业务办理 | Server Action 处理会话、表单反馈和跳转。工作流服务负责权限、阶段、并行变更和事务写入。配置修改引起的范围联动复用转测申请服务。 | [发布写入](../../lib/release-workflow.ts)、[批次写入](../../lib/batch-workflow.ts)、[转测申请写入](../../lib/transfer-request-writes.ts)、[流程回归](../../tests/e2e/workflow.spec.ts) |
 | 软件包详情接口 | `GET /api/packages/[id]` 对未登录请求返回 401，包编号无法解析为整数时返回 400。包或项目不可读、项目参数重复或记录缺失时返回 404。成功 JSON 使用 `no-store`，和页面预加载共享授权投影。 | [接口](../../app/api/packages/[id]/route.ts)、[接口与抽屉回归](../../tests/e2e/package-experience.spec.ts) |
 | 验证报告接口 | `GET /api/reports/[id]` 对未登录请求返回 401。报告权限沿用对应证据读取规则。无效编号、缺失、不可读或无法下载返回 404。成功响应按受支持的原文件名后缀确定媒体类型，保留历史纯文本的标准字符集写法、原文件名、原文件内容及 `private, no-store`。未知历史后缀以附件下载。 | [接口](../../app/api/reports/[id]/route.ts)、[报告回归](../../tests/e2e/workflow.spec.ts) |
 | 通知入口 | `GET /api/notifications/read` 使用 303 导航。未登录跳到登录。登录后按当前账号记录已读，再跳到校验后的站内路径，默认回工作台。 | [接口](../../app/api/notifications/read/route.ts)、[工作台回归](../../tests/e2e/dashboard.spec.ts) |
@@ -152,10 +152,14 @@
 | 未筛选的历史页同范围计数发生两次 | [集成列表](../../app/(workspace)/integration/page.tsx)、[历史筛选回归](../../tests/e2e/integration-history-filters.spec.ts) | 共用分页总数。筛选时保留全范围标签数字，归档使用列表分页数量。 |
 | 批次列表读取完整详情和报告字段 | [批次读取](../../lib/batch-queries.ts)、[工作流验证](../../tests/e2e/workflow.spec.ts) | 列表读取 13 个字段，详情继续提供完整证据。范围、顺序和分页相同。 |
 | 三条电子流写入各自维护条码插入 SQL | [条码写入](../../lib/binding-barcode-writer.ts)、[旧库补列](../../lib/db.ts)、[流程验证](../../tests/e2e/binding-controls.spec.ts) | 共用预编译写入，调用方保留连接、事务、顺序和审计。 |
-| 批次的三个集成动作分别写入转测申请双状态 | [转测申请](../../lib/transfer-requests.ts)、[批次流程](../../lib/batch-workflow.ts)、[试制资格回归](../../tests/e2e/trial-eligibility.spec.ts) | 共用有类型约束的集成状态写入，原状态和阶段资格各按原命令检查。 |
+| 批次的三个集成动作分别写入转测申请双状态 | [转测申请写入](../../lib/transfer-request-writes.ts)、[批次流程](../../lib/batch-workflow.ts)、[试制资格回归](../../tests/e2e/trial-eligibility.spec.ts) | 共用有类型约束的集成状态写入，原状态和阶段资格各按原命令检查。 |
 | 草稿标题和保存修订号由两次读取拼接 | [批次读取](../../lib/batch-queries.ts)、[并发回归](../../tests/e2e/batch-draft-snapshot.spec.ts) | 单条快照查询，现有保存事务拒绝过期表单。 |
 | 工作区重复序列化授权项目的名称和编号 | [项目范围](../../lib/project-scope.ts)、[项目导航](../../components/workspace-navigation.tsx) | 同一有序投影按账号附上工作区字段，目录只需编号和名称。 |
 | 部署说明仅要求拷贝数据库和报告目录 | [备份与恢复校验](../../README.md#备份与恢复校验) | 保留同组 WAL 和报告，在空目录验证真实服务及报告后再切换路径。 |
+| 绑定证据读取总是展开电子流选人范围 | [绑定详情](../../lib/binding-queries.ts)、[办理页面](../../app/(workspace)/trial/[id]/page.tsx) | 只有绑定办理页为可见节点按授权装载审批人选项。证据读取继续共用节点和电子流事实。 |
+| 转测申请的写入和查询走同一模块边界 | [转测申请读取](../../lib/transfer-requests.ts)、[转测申请写入](../../lib/transfer-request-writes.ts)、[补派命令](../../scripts/backfill-trial-transfer-requests.ts) | 调用方改到专用写入入口，移除原实现。架构检查保留命令的直接调用，拒绝查询和兼容转发。 |
+| 数据库入口守卫遗漏根代理 | [依赖检查](../../scripts/check-architecture.mjs)、[架构测试](../../tests/architecture-check.test.mjs) | 校验代理的解析后数据库模块与 SQLite 内置模块依赖。 |
+| 管理员维护命令修改账号时缺少审计 | [管理员命令](../../scripts/create-admin.ts)、[审计写入器](../../lib/audit-log.ts)、[命令回归](../../tests/e2e/admin-create.spec.ts) | 在账号写入事务保存创建和更新事件，原账号字段和命令输出沿用既有行为。 |
 
 ## 待核对的规范偏离
 
