@@ -21,6 +21,7 @@ import { refreshTrialReadiness } from "./trial-readiness";
 import { invalidateInTestRiskAdmissionsForBatch, invalidateUnreleasedRiskTrialAdmission } from "./trial-risk-admissions";
 import type { SessionUser } from "./types";
 import { voidVersionRecords } from "./version-void-workflow";
+import { storedTestReportHref } from "./workflow-links";
 
 const audit = createAuditLogWriter(db);
 const now = () => new Date().toISOString();
@@ -393,7 +394,7 @@ export async function completeBatchTest(
                 issue_attribution = ?, test_summary = ?, test_report_url = ?,
                 test_report_file_id = ?, test_report_name = ? WHERE id = ?`,
         timestamp, input.conclusion, input.issueAttribution, input.testSummary.trim(),
-        `/api/reports/${report.lastInsertRowid}`, report.lastInsertRowid, file.name, batchId,
+        storedTestReportHref(report.lastInsertRowid), report.lastInsertRowid, file.name, batchId,
       );
       const requestStatus = input.conclusion === "PASS" ? "PASSED" : input.conclusion === "FAIL" ? "FAILED" : "BLOCKED";
       let voidedCount = 0;

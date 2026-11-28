@@ -12,3 +12,8 @@ export function workflowHref(
   }
   return query.size ? `${path}?${query}` : path;
 }
+
+// Historical batches may identify an uploaded report by this stored URL alone.
+export function storedTestReportHref(reportId: number | bigint): string {
+  return `/api/reports/${reportId}`;
+}

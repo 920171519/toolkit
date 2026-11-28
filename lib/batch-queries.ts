@@ -9,6 +9,7 @@ import { getPageWindow } from "./list-pagination";
 import { packageCodeSql } from "./package-identity";
 import { EFFECTIVE_INTEGRATION_STATUS_SQL, getPreviousBatchVersions } from "./transfer-requests";
 import type { SessionUser } from "./types";
+import { storedTestReportHref } from "./workflow-links";
 
 export function getNextBatchCode(): string {
   const batch = one<{ highest: number | null }>(
@@ -376,7 +377,7 @@ export function getReadableTestReport(user: SessionUser, reportId: number) {
     `SELECT project_id AS projectId, status FROM integration_batches
      WHERE test_report_file_id = ? OR test_report_url = ?`,
     reportId,
-    `/api/reports/${reportId}`,
+    storedTestReportHref(reportId),
   );
   const readable = batches.length === 0 ? uploadedBy === user.id
     : batches.some(({ projectId, status }) => projectId !== null && canReadBatchEvidence(user, projectId, status));

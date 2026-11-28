@@ -59,3 +59,52 @@ test("验证报告按原文件名返回类型并保留历史文本及下载内�
     }
   }
 });
+
+test("历史批次仅保存报告链接时沿用批次授权，未关联时允许上传人读取", async ({ page }) => {
+  const reportsDirectory = getE2eReportsDirectory();
+  const storedName = `legacy-url-${randomUUID()}.txt`;
+  const reportPath = join(reportsDirectory, storedName);
+  const content = Buffer.from("历史批次验收报告：验证通过。");
+  const timestamp = "2026-11-07T01:00:00.000Z";
+  const database = openE2eDatabase();
+  let reportId: number | bigint | undefined;
+  let batchId: number | bigint | undefined;
+
+  try {
+    await mkdir(reportsDirectory, { recursive: true });
+    await writeFile(reportPath, content, { flag: "wx" });
+    reportId = database.prepare(
+      `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at, uploaded_by)
+       VALUES (?, ?, 'text/plain; charset=utf-8', ?, ?, (SELECT id FROM users WHERE employee_id = 'MEMBER001'))`,
+    ).run("历史验证报告.txt", `data/uploads/reports/${storedName}`, content.length, timestamp).lastInsertRowid;
+    // Use the existing stored URL format independently of the production formatter.
+    const reportHref = `/api/reports/${reportId}`;
+    batchId = database.prepare(
+      `INSERT INTO integration_batches (code, project_id, title, status, created_at, completed_at, conclusion, test_report_url)
+       VALUES ('B99042', (SELECT id FROM projects WHERE code = 'N1'), '历史批次验收', 'COMPLETED', ?, ?, 'PASS', ?)`,
+    ).run(timestamp, timestamp, reportHref).lastInsertRowid;
+
+    await login(page, "TEST001");
+    await page.goto(`/integration/${batchId}`);
+    await expect(page.getByRole("link", { name: "测试验证报告" })).toHaveAttribute("href", reportHref);
+    const sharedReport = await page.request.get(reportHref);
+    expect(sharedReport.status()).toBe(200);
+    expect(sharedReport.headers()["cache-control"]).toBe("private, no-store");
+    expect(await sharedReport.body()).toEqual(content);
+
+    await login(page, "MEMBER001");
+    expect((await page.request.get(reportHref)).status()).toBe(404);
+    database.prepare("UPDATE integration_batches SET test_report_url = NULL WHERE id = ?").run(batchId);
+    const ownReport = await page.request.get(reportHref);
+    expect(ownReport.status()).toBe(200);
+    expect(await ownReport.body()).toEqual(content);
+  } finally {
+    try {
+      if (batchId !== undefined) database.prepare("DELETE FROM integration_batches WHERE id = ?").run(batchId);
+      if (reportId !== undefined) database.prepare("DELETE FROM report_files WHERE id = ?").run(reportId);
+    } finally {
+      database.close();
+      await rm(reportPath, { force: true });
+    }
+  }
+});
