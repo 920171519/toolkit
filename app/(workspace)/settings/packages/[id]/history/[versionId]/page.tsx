@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { correctLegacyVersionAction } from "@/lib/actions/settings";
+import { correctLegacyVersionAction } from "@/lib/actions/package-settings";
 import { packageIdentity } from "@/lib/package-identity";
 import { getImportedPackageVersions, getLegacyVersionForCorrection } from "@/lib/settings-queries";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";

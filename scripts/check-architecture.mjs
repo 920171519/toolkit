@@ -78,7 +78,12 @@ const workflowPageQueries = new Set([
   "lib/package-queries.ts",
   "lib/organization-queries.ts",
 ]);
-const settingsMutationModules = new Set(["lib/area-settings.ts", "lib/package-settings.ts", "lib/project-settings.ts", "lib/user-settings.ts"]);
+const settingsMutationCallers = new Map([
+  ["lib/area-settings.ts", "lib/actions/area-settings.ts"],
+  ["lib/package-settings.ts", "lib/actions/package-settings.ts"],
+  ["lib/project-settings.ts", "lib/actions/project-settings.ts"],
+  ["lib/user-settings.ts", "lib/actions/user-settings.ts"],
+]);
 const sessionStoreCallers = new Set(["lib/auth.ts", "lib/user-settings.ts"]);
 const workspacePagePattern = /^app\/\(workspace\)\/(.+\/)?page\.[jt]sx?$/;
 const graph = new Map();
@@ -107,7 +112,8 @@ for (const file of files.sort()) {
           `${name} imports the workflow mutation module directly (${dependency}). Use its owning Action or domain command.`,
         );
       }
-      if (settingsMutationModules.has(dependency) && name !== "lib/actions/settings.ts") {
+      const settingsCaller = settingsMutationCallers.get(dependency);
+      if (settingsCaller && name !== settingsCaller) {
         dependencyBoundaryErrors.push(
           `${name} imports the settings mutation module directly (${dependency}). Use settings actions for writes and settings queries for reads.`,
         );

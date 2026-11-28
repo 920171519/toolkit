@@ -12,7 +12,7 @@ import { getProjectOptionsWithNodes } from "@/lib/project-queries";
 import { getPackageConfiguration } from "@/lib/package-queries";
 import { getActivePersonOptions, getResponsibilityAreaOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
-import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/settings";
+import { savePackageAction, savePackageUsagesAction } from "@/lib/actions/package-settings";
 import { getImportedPackageVersions, getPackageDeactivationBlockingVersions, getPackageUsageBlockingVersions } from "@/lib/settings-queries";
 import { ActionForm } from "@/components/action-form";
 import { GuidanceDialog } from "@/components/guidance-dialog";

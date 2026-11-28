@@ -11,7 +11,7 @@ import { getActivePersonOptions, getResponsibilityAreaOptions } from "@/lib/orga
 import { readFlash } from "@/lib/flash";
 import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
-import { savePackageAction } from "@/lib/actions/settings";
+import { savePackageAction } from "@/lib/actions/package-settings";
 import { directoryColumnFields, directoryHref, directoryPage } from "@/lib/settings-directory";
 import { wordSearchMatcher } from "@/lib/search-text";
 import { ActionForm } from "@/components/action-form";

@@ -58,7 +58,7 @@
 | 转测表单将可提交条件与服务端四项字段校验分别实现 | [字段校验](../../lib/transfer-form-validation.ts)、[转测表单](../../components/transfer-request-form.tsx) | 共用字段条件及顺序，界面提示与服务端业务错误分别由调用方呈现。 |
 | 帮助提示与表头筛选重复读取视口、约束横向位置和订阅事件 | [弹层视口](../../components/popover-viewport.ts)、[提示](../../components/info-tooltip.tsx)、[表头筛选](../../components/column-filter-popover.tsx) | 通用定位与事件订阅集中，弹层交互由各组件负责。 |
 | 原跨阶段工作流写入文件只剩发布命令 | [发布写入](../../lib/release-workflow.ts)、[风险登记入口](../../lib/actions/risk-trial.ts) | 现行 Action 直接调用发布模块，写入依赖约束同步迁移。 |
-| 软件包配置与历史补录写入和组织账号配置共处一处 | [软件包配置写入](../../lib/package-settings.ts)、[设置操作入口](../../lib/actions/settings.ts) | 软件包使用范围和补录事务由同一写入模块负责，配置及抽屉查询沿用既有读取入口。 |
+| 软件包配置与历史补录写入和组织账号配置共处一处 | [软件包配置写入](../../lib/package-settings.ts)、[软件包设置操作入口](../../lib/actions/package-settings.ts) | 软件包使用范围和补录事务由同一写入模块负责，配置及抽屉查询沿用既有读取入口。 |
 | 项目节点配置与组织及账号命令共用写入文件 | [项目和节点写入](../../lib/project-settings.ts)、[配置证据读取](../../lib/settings-queries.ts) | 项目恢复、节点池和审批人保护由明确的配置写入入口负责。 |
 | 通用设置写入只剩责任田分工和账号状态 | [责任田分工写入](../../lib/area-settings.ts)、[账号写入](../../lib/user-settings.ts) | 真实调用迁移到各写入模块，继续使用现有查询、审计和会话边界。 |
 | 同一查询文件管理软件包详情、组织分工和反馈参数 | [软件包查询](../../lib/package-queries.ts)、[组织查询](../../lib/organization-queries.ts)、[反馈参数](../../lib/flash.ts) | 页面和组件直接使用各自入口，受保护的抽屉投影仍由统一适配模块提供。 |
@@ -102,12 +102,13 @@
 | 按版本查找批次项时多处扫描同一快照表 | [批次版本索引](../../lib/schema.ts)、[版本追溯](../../lib/version-trace-queries.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 通过同一个索引支持按版本的关联。对同一时间的批次顺序敏感的追溯明细保留原有谓词计划。 |
 | 单软件包流程权限曾加载全部可读包与版本 | [包授权](../../lib/access.ts)、[转测引导](../../lib/transfer-guidance.ts)、[发布引导](../../lib/release-guidance.ts) | 单包判断和项目包存在性使用同一授权谓词和查询。抽屉仍读取展示所需的版本范围。 |
 | 代理入口未应用会话存储的调用方约束 | [架构检查](../../scripts/check-architecture.mjs)、[检查器契约](../../tests/architecture-check.test.mjs) | 复用应用模块分类，发现代理入口直接读取会话存储时报告架构违规。合法调用方保持原范围。 |
-| 历史版本导入和更正各自读取并声明相同元数据 | [写入口](../../lib/actions/settings.ts)、[包设置](../../lib/package-settings.ts)、[历史发布字段](../../components/legacy-release-fields.tsx) | 两个操作共用私有元数据解码器。记录标识、状态和更正理由仍由对应的操作处理。 |
+| 历史版本导入和更正各自读取并声明相同元数据 | [写入口](../../lib/actions/package-settings.ts)、[包设置](../../lib/package-settings.ts)、[历史发布字段](../../components/legacy-release-fields.tsx) | 两个操作共用私有元数据解码器。记录标识、状态和更正理由仍由对应的操作处理。 |
 | 工作流提交共用一个可导入所有写模块的入口 | [转测](../../lib/actions/transfer.ts)、[批次](../../lib/actions/batch.ts)、[绑定](../../lib/actions/binding.ts)、[发布](../../lib/actions/release.ts)、[架构契约](../../tests/architecture-check.test.mjs) | 各页面调用对应写入口，风险登记保留专用入口，跨流程回跳参数持续共用。检查器拒绝绕过写入所有者。 |
 | 转正核对沿用列表查询及未展示的节点统计 | [发布队列](../../lib/release-queue-queries.ts)、[转正核对](../../app/(workspace)/formal/[id]/page.tsx) | 在同一查询模块复用范围与排序，按页面读取最少字段。完整项目节点统计仍用于相关队列。 |
 | 账号操作与提示重复声明新密码长度 | [密码规则](../../lib/password-policy.ts)、[认证表单动作](../../app/(auth)/actions.ts)、[管理员命令](../../scripts/create-admin.ts) | 网页和维护命令共用最短长度。网页输入及提示使用自己的上限，登录和历史密码沿用已有校验方式。 |
 | 多个客户端列表内重复绘制页码和翻页按钮 | [本地分页](../../components/local-pagination.tsx)、[分页计算](../../lib/list-pagination.ts)、[工作区导航](../../components/workspace-navigation.tsx) | 各页面继续负责筛选、状态和回调。导航按钮、页码和边界禁用共用一个实现。 |
 | 批次准备向页面发送未使用的归档地址与版本说明 | [批次读取](../../lib/batch-queries.ts)、[配套页面](../../components/batch-builder.tsx)、[批次写入](../../lib/batch-workflow.ts) | 准备查询保留版本选项、待转测关联和历史配套。写事务继续从当前版本记录获取落库快照。 |
+| 设置表单共用一个可导入所有设置写模块的入口 | [责任田](../../lib/actions/area-settings.ts)、[项目](../../lib/actions/project-settings.ts)、[软件包](../../lib/actions/package-settings.ts)、[账号](../../lib/actions/user-settings.ts)、[架构契约](../../tests/architecture-check.test.mjs) | 表单直接使用对应 Action。守卫验证合法导入并拒绝四类跨职责写入。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

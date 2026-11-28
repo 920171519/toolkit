@@ -7,7 +7,7 @@ import { getManagedProjectScope } from "@/lib/access";
 import { getProjectSettingsDirectory } from "@/lib/project-queries";
 import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
-import { saveProjectAction } from "@/lib/actions/settings";
+import { saveProjectAction } from "@/lib/actions/project-settings";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
 import { directoryHref, directoryValue, projectDirectoryDetailParams } from "@/lib/settings-directory";

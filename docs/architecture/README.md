@@ -13,10 +13,10 @@
 | 批次写入 | `lib/actions/batch.ts` → `lib/batch-workflow.ts` | 处理转测批次、测试进展、结论与报告。版本作废记录从 `lib/version-void-workflow.ts` 共用。 |
 | 转测写入 | `lib/actions/transfer.ts` → `lib/transfer-workflow.ts` | 处理提交软件包版本、为在行使用项目生成申请和撤回，沿用责任范围及历史引用保护。 |
 | 绑定写入 | `lib/actions/binding.ts` → `lib/binding-workflow.ts` | 维护绑定决策、节点与电子流写入，沿用事务和各操作的业务校验。 |
-| 项目与节点配置写入 | `lib/actions/settings.ts` → `lib/project-settings.ts` | 管理项目、经理与节点配置，保留归档恢复及审批人快照。 |
-| 责任田写入 | `lib/actions/settings.ts` → `lib/area-settings.ts` | 管理责任田层级与人员分工。 |
-| 账号写入 | `lib/actions/settings.ts` → `lib/user-settings.ts` | 管理账号身份、角色和启停，停用时撤销目标账号的会话。 |
-| 软件包配置写入 | `lib/actions/settings.ts` → `lib/package-settings.ts` | 管理软件包资料、使用范围和历史补录，配置联动复用 `lib/transfer-requests.ts`。 |
+| 项目与节点配置写入 | `lib/actions/project-settings.ts` → `lib/project-settings.ts` | 管理项目、经理与节点配置，保留归档恢复及审批人快照。 |
+| 责任田写入 | `lib/actions/area-settings.ts` → `lib/area-settings.ts` | 管理责任田层级与人员分工。 |
+| 账号写入 | `lib/actions/user-settings.ts` → `lib/user-settings.ts` | 管理账号身份、角色和启停，停用时撤销目标账号的会话。 |
+| 软件包配置写入 | `lib/actions/package-settings.ts` → `lib/package-settings.ts` | 管理软件包资料、使用范围和历史补录，配置联动复用 `lib/transfer-requests.ts`。 |
 | 配置读取 | `lib/settings-queries.ts`、`lib/project-queries.ts`、`lib/package-queries.ts`、`lib/organization-queries.ts` | 界面和设置写入事务共用配置引用、阻塞与补录查询。表单入口选择相应资料投影。 |
 | 工作台读取 | `lib/workbench-queries.ts` | 按角色和项目组合待办、提醒、个人版本和电子流，复用各队列及通知模块。 |
 | 版本追溯读取 | `lib/version-trace-queries.ts` | 负责版本列表、追溯标签和项目版本活动，按原权限投影批次、报告及绑定证据。 |

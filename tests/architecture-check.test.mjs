@@ -16,7 +16,13 @@ const sources = {
   "lib/session-store.ts": "export const session = null;",
   "lib/auth.ts": 'export { session } from "./session-store";',
   "lib/area-settings.ts": "export function deleteArea() {}",
-  "lib/actions/settings.ts": 'export { deleteArea } from "../area-settings";',
+  "lib/actions/area-settings.ts": 'export { deleteArea } from "../area-settings";',
+  "lib/project-settings.ts": "export function saveProject() {} export type ProjectInput = string;",
+  "lib/actions/project-settings.ts": 'export { saveProject } from "../project-settings";',
+  "lib/package-settings.ts": "export function savePackage() {}",
+  "lib/actions/package-settings.ts": 'export { savePackage } from "../package-settings";',
+  "lib/user-settings.ts": "export function saveUserProfile() {}",
+  "lib/actions/user-settings.ts": 'export { saveUserProfile } from "../user-settings";',
   "lib/batch-workflow.ts": 'export { voidVersionRecords } from "./version-void-workflow"; export type BatchInput = string;',
   "lib/actions/batch.ts": 'export { voidVersionRecords } from "../batch-workflow";',
   "lib/binding-workflow.ts": "export function submitBindingFlow() {}",
@@ -59,14 +65,15 @@ function checkFixture(t, overrides = {}, compilerOptions = {}) {
 
 test("allows registered runtime owners and explicit type-only dependencies", (t) => {
   const result = checkFixture(t, {
-    "lib/user-settings.ts": 'export { session } from "./session-store";',
+    "lib/user-settings.ts": sources["lib/user-settings.ts"] + ' export { session } from "./session-store";',
     "scripts/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "tests/session-fixture.ts": 'export { session } from "../lib/session-store";',
     "components/example.ts": [
       'import type { BatchInput } from "@/lib/batch-workflow";',
       'import { type BatchInput as NamedBatchInput } from "@/lib/batch-workflow";',
-      'export type Input = BatchInput | NamedBatchInput | import("@/lib/batch-workflow").BatchInput;',
-      'export { deleteArea } from "@/lib/actions/settings";',
+      'import type { ProjectInput } from "@/lib/project-settings";',
+      'export type Input = BatchInput | NamedBatchInput | import("@/lib/batch-workflow").BatchInput | ProjectInput;',
+      'export { deleteArea } from "@/lib/actions/area-settings";',
     ].join("\n"),
   });
 
@@ -105,6 +112,23 @@ test("rejects invalid workflow, settings, SQLite and session-store dependencies"
   ]) {
     assert.ok(result.stderr.includes(diagnostic), result.stderr);
   }
+});
+
+test("only the corresponding settings Action can import a settings command at runtime", (t) => {
+  const wrongOwners = [
+    ["lib/actions/area-settings.ts", "project-settings", "saveProject"],
+    ["lib/actions/project-settings.ts", "package-settings", "savePackage"],
+    ["lib/actions/package-settings.ts", "user-settings", "saveUserProfile"],
+    ["lib/actions/user-settings.ts", "area-settings", "deleteArea"],
+  ];
+  const result = checkFixture(t, Object.fromEntries(wrongOwners.map(([caller, owner, command]) =>
+    [caller, sources[caller] + ` export { ${command} } from "../${owner}";`],
+  )));
+
+  assert.equal(result.status, 1, result.stdout);
+  assert.deepEqual(result.stderr.trim().split(/\r?\n/).sort(), wrongOwners.map(([caller, owner]) =>
+    `${caller} imports the settings mutation module directly (lib/${owner}.ts). Use settings actions for writes and settings queries for reads.`,
+  ).sort());
 });
 
 test("rejects emitted runtime imports under verbatim module syntax", (t) => {

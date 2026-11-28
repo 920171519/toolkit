@@ -12,7 +12,7 @@ import { getPageWindow } from "@/lib/list-pagination";
 import { LocalPagination } from "@/components/local-pagination";
 import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { packageIdentity } from "@/lib/package-identity";
-import { updatePackageResponsibilityAction } from "@/lib/actions/settings";
+import { updatePackageResponsibilityAction } from "@/lib/actions/package-settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";

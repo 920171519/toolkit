@@ -18,7 +18,7 @@ import {
   removeAreaProjectLeadAction,
   removeAreaProjectMemberAction,
   saveAreaAction,
-} from "@/lib/actions/settings";
+} from "@/lib/actions/area-settings";
 import { ActionForm } from "@/components/action-form";
 import { FormDialog } from "@/components/form-dialog";
 import { GuidanceDialog } from "@/components/guidance-dialog";

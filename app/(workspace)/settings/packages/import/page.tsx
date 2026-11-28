@@ -7,7 +7,7 @@ import { getLedAreaIds } from "@/lib/access";
 import { packageIdentity } from "@/lib/package-identity";
 import { directoryFilters, directoryHref } from "@/lib/settings-directory";
 import { getLegacyImportPackageOptions } from "@/lib/package-queries";
-import { importLegacyVersionAction } from "@/lib/actions/settings";
+import { importLegacyVersionAction } from "@/lib/actions/package-settings";
 import { ActionForm } from "@/components/action-form";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { EmptyState, PageHeader } from "@/components/ui";

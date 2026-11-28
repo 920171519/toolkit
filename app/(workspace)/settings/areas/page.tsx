@@ -7,7 +7,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-directory";
 import styles from "@/components/settings-directory.module.css";
 import { EmptyState, FlashMessage, PageHeader } from "@/components/ui";
-import { saveAreaAction } from "@/lib/actions/settings";
+import { saveAreaAction } from "@/lib/actions/area-settings";
 import { requireUser } from "@/lib/auth";
 import {
   filterOptions,

@@ -7,7 +7,7 @@ import { canManageProjectWorkflowForProject } from "@/lib/access";
 import { getProjectNodeConfig } from "@/lib/project-queries";
 import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
-import { addProjectNodeApproverAction, deleteProjectNodeAction, removeProjectNodeApproverAction, updateProjectNodeAction } from "@/lib/actions/settings";
+import { addProjectNodeApproverAction, deleteProjectNodeAction, removeProjectNodeApproverAction, updateProjectNodeAction } from "@/lib/actions/project-settings";
 import { getNodeApproverRemovalBlocker, getNodeDeletionBlockers } from "@/lib/settings-queries";
 import { directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
 import { getNodeCandidateGuidance, packageReferenceGuidance } from "@/lib/settings-guidance";

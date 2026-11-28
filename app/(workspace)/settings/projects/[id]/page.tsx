@@ -9,7 +9,7 @@ import { getActivePersonOptions } from "@/lib/organization-queries";
 import { readFlash } from "@/lib/flash";
 import { PROJECT_STATUS_META } from "@/lib/constants";
 import { getProjectStage, PROJECT_STAGE_META } from "@/lib/project-stage";
-import { addProjectNodeAction, deleteProjectAction, saveProjectAction } from "@/lib/actions/settings";
+import { addProjectNodeAction, deleteProjectAction, saveProjectAction } from "@/lib/actions/project-settings";
 import { directoryHref, projectDirectoryDetailParams, projectDirectoryListParams } from "@/lib/settings-directory";
 import { getProjectDeletionBlockers } from "@/lib/settings-queries";
 import { getNodeCandidateGuidance, packageReferenceGuidance } from "@/lib/settings-guidance";
