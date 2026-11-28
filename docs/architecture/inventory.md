@@ -136,6 +136,10 @@
 | 转正和试制的列表按行重复查经理关系 | [转正列表](../../app/(workspace)/formal/page.tsx)、[试制列表](../../app/(workspace)/trial/page.tsx)、[读权限](../../lib/access.ts) | 每次请求复用现有范围。归档、在行、只读分工及按对象提交的约束继续生效。 |
 | 版本追溯筛选单包时读取全站可读版本 | [版本列表](../../app/(workspace)/versions/page.tsx)、[授权查询](../../lib/access.ts)、[列表回归](../../tests/e2e/version-trace-list.spec.ts) | 列表通过同一授权查询按包限定结果，已打开的跨包标签仍独立校验。 |
 | 旧库绑定模式和推送时间缺少独立回填回归 | [启动迁移](../../lib/db.ts)、[生命周期回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 真实启动验证两个字段分别缺失、同时缺失及均存在时的处理和重启幂等性。 |
+| 软件包与报告的部分失败读取沿用默认缓存策略 | [软件包 HTTP](../../app/api/packages/[id]/route.ts)、[报告 HTTP](../../app/api/reports/[id]/route.ts)、[报告下载回归](../../tests/e2e/report-download.spec.ts) | 每个资源路由统一缓存响应头，原鉴权、类型及正文契约继续生效。 |
+| 浏览器用例固定关闭会话 Cookie 的 Secure 属性 | [Playwright 环境](../../playwright.config.ts)、[Cookie 回归](../../tests/e2e/session-cookie.spec.ts) | 运行实际协议识别并检查 Cookie 属性，本地环境文件继续隔离。 |
+| 十处分工写入各自读取启用账号 | [启用账号读取](../../lib/assignment-accounts.ts)、[项目写入](../../lib/project-settings.ts)、[绑定写入](../../lib/binding-workflow.ts) | 共享持久化条件，保留实际取字段、既有事务位置及错误顺序。 |
+| 演示数据用写锁取得前的空库读取决定是否写入 | [演示数据入口](../../lib/seed.ts)、[生命周期工具](../../lib/sqlite-lifecycle.ts)、[并发回归](../../tests/e2e/seed-transaction.spec.ts) | 写锁内复核。前置读取保留常规启动路径，错误回滚沿用统一规则。 |
 
 ## 待核对的规范偏离
 
