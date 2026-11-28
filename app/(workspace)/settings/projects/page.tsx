@@ -44,7 +44,7 @@ export default async function ProjectsSettingsPage({ searchParams }: {
         title="项目与测试节点"
         actions={isAdmin && (
           <FormDialog label={<><Plus size={16} aria-hidden="true" /> 新建项目</>} title="新建项目" testId="new-project-trigger">
-            <ActionForm action={saveProjectAction} hidden={listContext} submitText="创建项目" testId="new-project-form" preserveValuesOnSubmit>
+            <ActionForm action={saveProjectAction} hidden={listContext} submitText="创建项目" testId="new-project-form">
               <ProjectSettingsFields people={people} canAssignManagers />
             </ActionForm>
           </FormDialog>

@@ -53,7 +53,7 @@ export default async function LegacyVersionCorrectionPage({ params, searchParams
         <div className="card-body">
           <ActionForm action={correctLegacyVersionAction} testId="correct-legacy-version-form"
             hidden={{ ...listParams, packageId, versionId: parsedVersionId, expectedUpdatedAt: existing.updatedAt }}
-            submitText="保存更正" preserveValuesOnSubmit
+            submitText="保存更正"
             confirmMessage={`将更新 ${code} ${existing.version} 的历史资料。更正前后的内容及原因将保留在审计记录中。`}>
             <div className={`form-grid ${styles.formGrid}`}>
               <label className="field span-2"><span className="label">版本说明/修复内容</span><textarea className="textarea" name="changeSummary" defaultValue={existing.changeSummary} required minLength={2} /></label>

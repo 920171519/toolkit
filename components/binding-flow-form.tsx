@@ -40,7 +40,6 @@ export function BindingFlowForm({
       hidden={{ requirementId, requestId, scopeProjectId, ...listState }}
       submitText="提交绑定电子流"
       submitClassName="button-sm"
-      preserveValuesOnSubmit
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label className="field">

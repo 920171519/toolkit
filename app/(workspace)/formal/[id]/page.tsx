@@ -96,7 +96,7 @@ export default async function FormalDetailPage({ params, searchParams }: {
             returnFields={{ ...listState, scopeProjectId: project?.id, from: "formal" }} />}
           {canPublish && manageable ? <FormDialog label="发布正式版本" title={`转正 ${identity.code} ${version.version}`} description={`${projects.join("、")} 将同步使用该正式版本。`} cancelLabel="取消">
             <WorkflowPackageName {...identity} />
-            <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...listState }} submitText="提交转正电子流并发布" preserveValuesOnSubmit>
+            <ActionForm action={releaseFormalAction} hidden={{ requestId: manageable.requestId, scopeProjectId: project?.id, ...listState }} submitText="提交转正电子流并发布">
               <label className="field">
                 <span className="label">转正电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>
                 <input className="input" name="flowNo" type="url" required placeholder="https://eflow.example.com/releases/152" />

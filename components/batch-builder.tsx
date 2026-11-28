@@ -108,7 +108,6 @@ export function BatchBuilder({
       submitVariant="primary"
       hidden={{ projectId: project.id, scopeProjectId, draftBatchId: draft?.id, expectedDraftRevision: draft?.revision, ...listState, items: JSON.stringify(items), returnTo }}
       hideSubmit={!canSave}
-      preserveValuesOnSubmit
       footerNote={<>{items.length} 个软件包 · {changedCount} 个待测版本</>}
     >
       <section className={`${styles.section} workspace-edit-form`} aria-label="批次信息">

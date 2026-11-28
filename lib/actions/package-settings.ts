@@ -92,10 +92,15 @@ export async function correctLegacyVersionAction(_prev: ActionState, formData: F
   successRedirect(directoryActionHref("packages", formData, packageId), "历史版本已更正。");
 }
 
+export type PackageResponsibilityState = {
+  error?: string;
+  success?: string;
+};
+
 export async function updatePackageResponsibilityAction(
-  _prev: ActionState,
+  _prev: PackageResponsibilityState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<PackageResponsibilityState> {
   const user = await actionUser();
   const packageId = numberValue(formData, "packageId");
   if (!packageId) return { error: "软件包参数无效。" };

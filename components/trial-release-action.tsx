@@ -60,7 +60,7 @@ export function TrialReleaseAction({ actor, row, records, projectId, query = {},
       {risk && <p className="risk-callout" style={{ marginBottom: 10 }}>风险发布原因 · {row.riskConclusion}</p>}
       <ActionForm action={releaseTrialAction}
         hidden={{ ...query, requestId: row.requestId, scopeProjectId: projectId, eligibility: trialReleaseStateKey(row) }}
-        submitText="发布全项目共享试制版本" submitClassName="button-sm" preserveValuesOnSubmit
+        submitText="发布全项目共享试制版本" submitClassName="button-sm"
         confirmMessage={`全部 ${row.versionProjectCount} 个使用项目将同步使用 ${title} 试制版本。`}>
         <label className="field">
           <span className="label">试制电子流网址 <span className="required-mark" aria-hidden="true">*</span></span>

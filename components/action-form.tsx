@@ -22,7 +22,6 @@ type Props = {
   hideSubmit?: boolean;
   disabled?: boolean;
   onChange?: FormEventHandler<HTMLFormElement>;
-  preserveValuesOnSubmit?: boolean;
   title?: string;
   submitName?: string;
   submitValue?: string;
@@ -53,7 +52,6 @@ export function ActionForm({
   hideSubmit = false,
   disabled = false,
   onChange,
-  preserveValuesOnSubmit = false,
   title,
   submitName,
   submitValue,
@@ -65,19 +63,11 @@ export function ActionForm({
   const errorSummary = useRef<HTMLDivElement>(null);
   const submitter = useRef<HTMLButtonElement | HTMLInputElement | null>(null);
   const confirmed = useRef(false);
-  const resettingAfterSuccess = useRef(false);
   const fieldErrors = Object.entries(state?.fieldErrors ?? {});
 
   useEffect(() => {
-    if (pending) return;
-    if (state?.error) {
-      errorSummary.current?.focus();
-    } else if (state?.success && !preserveValuesOnSubmit) {
-      resettingAfterSuccess.current = true;
-      form.current?.reset();
-      resettingAfterSuccess.current = false;
-    }
-  }, [pending, preserveValuesOnSubmit, state]);
+    if (!pending && state?.error) errorSummary.current?.focus();
+  }, [pending, state]);
 
   function focusField(name: string) {
     const control = Array.from(form.current?.elements ?? []).find((element) =>
@@ -105,8 +95,8 @@ export function ActionForm({
       data-testid={testId}
       onChange={onChange}
       onReset={(event) => {
-        // React resets uncontrolled inputs when an action returns, including on validation errors.
-        if (!resettingAfterSuccess.current) event.preventDefault();
+        // Keep uncontrolled inputs when React resets the form after an action returns an error.
+        event.preventDefault();
       }}
       onSubmit={(event) => {
         if (!confirmMessage || confirmed.current) return;

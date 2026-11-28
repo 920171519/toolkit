@@ -139,7 +139,7 @@ export default async function BatchDetailPage({
         actions={<>
           <Link href={backToList} prefetch={false} className="button button-secondary"><ArrowLeft size={14} />{returnLabel}</Link>
           {canTest && <FormDialog label={<><ClipboardCheck size={16} aria-hidden="true" />提交测试结论</>} title={`${batch.code} · 提交项目测试结论`} description={batch.projectName ?? undefined} cancelLabel="取消">
-            <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论" preserveValuesOnSubmit>
+            <ActionForm action={completeBatchAction} testId="complete-test-form" hidden={batchFormFields} submitText="提交验证结论">
               <div className={styles.formFields}>
                 <BatchConclusionFields items={items.map(({ versionId, packageName, packageCode, version, parallelRiskTrial }) => ({ versionId, packageName, packageCode, version, parallelRiskTrial }))} />
                 <label className="field"><span className="label">测试总结</span><textarea className="textarea" name="testSummary" required minLength={10} placeholder="验证范围、结果及问题定位" /></label>

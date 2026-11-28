@@ -258,7 +258,7 @@ export default async function TrialDetailPage({
                                 ? `${requirement.passedBarcodeCount}/${requirement.requiredCount} 个条码通过。逐条补齐失败原因后确认。`
                                 : `本次可保存失败原因。${passShortfall > 0 ? `还需 ${passShortfall} 个通过条码。` : ""}${qualificationHint}`}
                               triggerClassName={`button ${canConfirm ? "button-primary" : "button-secondary"} button-sm`} cancelLabel="取消">
-                              <ActionForm action={confirmBindingRequirementAction} preserveValuesOnSubmit
+                              <ActionForm action={confirmBindingRequirementAction}
                                 hidden={{ ...confirmationFields, intent: canConfirm ? undefined : "save-reasons" }}
                                 submitText={canConfirm ? "保存原因并确认通过" : "保存失败原因"}>
                                 {failedFlows.map(({ flow, barcodes }) => (

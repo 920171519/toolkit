@@ -6,13 +6,12 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, LoaderCircle, Pencil, Search, X } from "lucide-react";
 import type { PersonOption } from "@/lib/organization-queries";
 import type { PackageDrawerData } from "@/lib/package-queries";
-import type { ActionState } from "@/lib/action-state";
 import { formatDateTime } from "@/lib/format";
 import { getPageWindow } from "@/lib/list-pagination";
 import { LocalPagination } from "@/components/local-pagination";
 import { includesSearchWords, normalizeSearchText, searchWords } from "@/lib/search-text";
 import { packageIdentity } from "@/lib/package-identity";
-import { updatePackageResponsibilityAction } from "@/lib/actions/package-settings";
+import { updatePackageResponsibilityAction, type PackageResponsibilityState } from "@/lib/actions/package-settings";
 import { workflowHref } from "@/lib/workflow-links";
 import { Avatar, Badge, EmptyState, ExternalLink, StatusPill } from "@/components/ui";
 import { SettingsPersonPicker } from "@/components/settings-person-picker";
@@ -33,7 +32,7 @@ type DrawerPanel = typeof panels[number]["id"];
 type PackageVersion = PackageDrawerData["versions"][number];
 
 const listPageSize = 10;
-const initialActionState: ActionState = {};
+const initialActionState: PackageResponsibilityState = {};
 
 function useDrawerFilter<Row>(rows: Row[], searchable: (row: Row) => string) {
   const [query, setQuery] = useState("");
@@ -162,7 +161,7 @@ export function PackageDrawer({ packageId, projectId, hasProjectWorkflowScope = 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [panel, setPanel] = useState<DrawerPanel>(initialPanel);
   const [editing, setEditing] = useState(false);
-  const [state, setState] = useState<ActionState>(initialActionState);
+  const [state, setState] = useState(initialActionState);
   const [pending, startTransition] = useTransition();
   const dialog = useModalDialog(dismiss, returnFocus);
   const body = useRef<HTMLDivElement>(null);
