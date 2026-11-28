@@ -14,7 +14,7 @@ import { getTrialNodeUsages, getTrialReleaseEligibility, missingTrialNodeAssignm
 import { getActiveReleaseRequests, getFormalReleaseCheck } from "./trial-readiness";
 import type { SessionUser } from "./types";
 import { workflowHref } from "./workflow-links";
-import type { TrialDetailReader } from "./binding-queries";
+import { getReadableTrialQueueCounts, type TrialDetailReader } from "./binding-queries";
 
 type ReleaseGuidanceItem = { title: string; detail?: string; href?: string; actionLabel?: string };
 type GuidanceContext = {
@@ -152,10 +152,13 @@ export function getFormalReleaseGuidance(reader: TrialDetailReader, versionId: n
   if (!version) return null;
   const requests = getActiveReleaseRequests(db, versionId);
   if (!requests.length || (context.projectId && !requests.some((request) => request.projectId === context.projectId))) return null;
-  const readable = requests.flatMap((request) => {
+  const releaseOpen = isBindingReleaseOpen(version.status);
+  const readableDetails = releaseOpen ? requests.flatMap((request) => {
     const detail = reader.getReadableTrialDetail(request.id);
     return detail ? [{ ...request, detail }] : [];
-  });
+  }) : [];
+  const readableCounts = releaseOpen ? null : getReadableTrialQueueCounts(user, requests.map(({ id }) => id));
+  const readable = readableCounts === null ? readableDetails : requests.filter(({ id }) => readableCounts.has(id));
   if (readable.length === 0) return null;
   const manageable = readable.filter((request) => canManageProjectWorkflowForProject(user, request.projectId));
   const preferred = manageable.find((request) => request.projectId === context.projectId) ?? manageable[0];
@@ -165,7 +168,7 @@ export function getFormalReleaseGuidance(reader: TrialDetailReader, versionId: n
   const bindingArgs = { ...context.bindingListState, ...args };
   const projectScope = (projectId: number) => canReadProject(projectId) ? projectId : undefined;
   const traceHref = workflowHref(`/versions/${versionId}`, context.projectId === undefined ? undefined : projectScope(context.projectId), args);
-  if (!isBindingReleaseOpen(version.status)) return {
+  if (!releaseOpen) return {
     status: version.status, canManage, pendingFlowCount: 0,
     description: `${identity.code} ${version.version}`,
     items: [{
@@ -189,7 +192,7 @@ export function getFormalReleaseGuidance(reader: TrialDetailReader, versionId: n
     actionLabel: canManage ? "决定绑定方式" : "查看绑定详情",
   });
 
-  for (const row of readable) {
+  for (const row of readableDetails) {
     const trialHref = workflowHref(`/trial/${row.id}`, projectScope(row.projectId), bindingArgs);
     for (const node of row.detail.requirements) {
       const nodeTitle = `${row.projectName} · ${node.nodeName}`;

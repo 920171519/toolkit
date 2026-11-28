@@ -63,3 +63,55 @@ test("试制版本保留转正入口，按当前权限定位实际的节点与�
   await expect(guidance).not.toContainText("极光 M2 · EVT");
   await expect(guidance.getByRole("link", { name: "查看节点", exact: true })).toHaveCount(0);
 });
+
+test("已转正历史保留绑定电子流参与者的只读入口", async ({ page }) => {
+  await login(page, "VALID001");
+  const database = openE2eDatabase();
+  let versionId: number | bigint | undefined;
+  try {
+    database.exec("PRAGMA foreign_keys = ON");
+    const scope = database.prepare(
+      `SELECT p.id AS packageId, pr.id AS projectId, n.id AS nodeId, u.id AS approverId
+       FROM packages p JOIN projects pr ON pr.code = 'N1'
+       JOIN project_nodes n ON n.project_id = pr.id AND n.name = 'EVT'
+       JOIN users u ON u.employee_id = 'VALID001'
+       WHERE p.name = '1006KEY' OR p.code = '1006KEY'`,
+    ).get() as { packageId: number; projectId: number; nodeId: number; approverId: number };
+    const timestamp = "2026-11-07T01:00:00.000Z";
+    versionId = database.prepare(
+      `INSERT INTO package_versions (package_id, version, status, binding_mode, change_summary, archive_url, submitted_at, updated_at)
+       VALUES (?, '988.1.0', 'FORMAL', 'PUSHED', '历史转正入口验收', 'https://example.test/formal', ?, ?)`,
+    ).run(scope.packageId, timestamp, timestamp).lastInsertRowid;
+    const requestId = database.prepare(
+      `INSERT INTO version_transfer_requests (package_version_id, project_id, status, trial_released_at, submitted_at, updated_at)
+       VALUES (?, ?, 'FORMAL', ?, ?, ?)`,
+    ).run(versionId, scope.projectId, timestamp, timestamp, timestamp).lastInsertRowid;
+    const requirementId = database.prepare(
+      `INSERT INTO binding_requirements (request_id, package_version_id, project_id, node_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(requestId, versionId, scope.projectId, scope.nodeId, timestamp, timestamp).lastInsertRowid;
+    database.prepare(
+      `INSERT INTO binding_flows (flow_no, requirement_id, package_version_id, project_id, node_id, device_barcode, approver_id, status, submitted_at)
+       VALUES ('HISTORICAL-CLOSED-FLOW', ?, ?, ?, ?, 'HISTORICAL-DEVICE', ?, 'REJECTED', ?)`,
+    ).run(requirementId, versionId, scope.projectId, scope.nodeId, scope.approverId, timestamp);
+
+    const href = `/formal/${versionId}`;
+    expect((await page.goto(href))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "该版本已转正" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "查看版本记录" })).toHaveAttribute("href", `/versions/${versionId}?from=formal`);
+    await expect(page.getByText("HISTORICAL-CLOSED-FLOW")).toHaveCount(0);
+    expect((await page.goto(`${href}?project=${scope.projectId}`))?.status()).toBe(404);
+
+    await login(page, "MEMBER001");
+    expect((await page.goto(href))?.status()).toBe(404);
+    await login(page, "MGR001");
+    expect((await page.goto(`${href}?project=${scope.projectId}`))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "该版本已转正" })).toBeVisible();
+  } finally {
+    try {
+      if (versionId !== undefined) database.prepare("DELETE FROM package_versions WHERE id = ?").run(versionId);
+    } finally {
+      database.close();
+    }
+  }
+});
