@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { createAuditLogWriter } from "./audit-log";
 import { hashPassword } from "./password";
+import { withImmediateTransaction } from "./sqlite-lifecycle";
 
 export const DEMO_PASSWORD = "Demo@1234";
 
@@ -27,17 +28,13 @@ type VersionSeed = {
 };
 
 export function seedDatabase(db: DatabaseSync) {
-  const existing = db.prepare("SELECT COUNT(*) AS count FROM users").get() as { count: number };
-  if (Number(existing.count) > 0) return;
+  const hasUsers = db.prepare("SELECT 1 FROM users LIMIT 1");
+  if (hasUsers.get()) return;
 
-  db.exec("BEGIN");
-  try {
-    seedAll(db);
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  withImmediateTransaction(db, () => {
+    // A different connection may initialize demo data before this write lock is acquired.
+    if (!hasUsers.get()) seedAll(db);
+  });
 }
 
 function seedAll(db: DatabaseSync) {
