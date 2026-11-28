@@ -106,6 +106,56 @@ test("验证报告按原文件名返回类型并保留历史文本及下载内�
   }
 });
 
+test("报告字节数不一致或旧库大小不可用时，授权下载仍返回实际文件", async ({ page }) => {
+  await login(page, "ADMIN001");
+  const reportsDirectory = getE2eReportsDirectory();
+  const storedName = `report-size-${randomUUID()}.txt`;
+  const reportPath = join(reportsDirectory, storedName);
+  const original = Buffer.from("验证报告的原始文件。");
+  const truncated = original.subarray(0, 6);
+  const database = openE2eDatabase();
+  let reportId: number | bigint | undefined;
+
+  try {
+    await mkdir(reportsDirectory, { recursive: true });
+    await writeFile(reportPath, original, { flag: "wx" });
+    reportId = database.prepare(
+      `INSERT INTO report_files (original_name, stored_path, mime_type, size_bytes, created_at)
+       VALUES ('验证报告.txt', ?, 'text/plain', ?, datetime('now'))`,
+    ).run(`data/uploads/reports/${storedName}`, original.byteLength).lastInsertRowid;
+
+    const href = `/api/reports/${reportId}`;
+    const expectContent = async (bytes: Buffer) => {
+      const response = await page.request.get(href);
+      expect(response.status()).toBe(200);
+      expect(response.headers()["cache-control"]).toBe("private, no-store");
+      expect(await response.body()).toEqual(bytes);
+    };
+    await expectContent(original);
+    await writeFile(reportPath, truncated);
+    await expectContent(truncated);
+
+    await login(page, "MEMBER001");
+    const denied = await page.request.get(href);
+    expect(denied.status()).toBe(404);
+    expect(await denied.text()).toBe("Not found");
+    await login(page, "ADMIN001");
+
+    const setStoredSize = database.prepare("UPDATE report_files SET size_bytes = ? WHERE id = ?");
+    for (const unknownSize of [0, "旧库占位值", 9007199254740992n]) {
+      setStoredSize.run(unknownSize, reportId);
+      await expectContent(truncated);
+    }
+  } finally {
+    try {
+      if (reportId !== undefined) database.prepare("DELETE FROM report_files WHERE id = ?").run(reportId);
+    } finally {
+      database.close();
+      await rm(reportPath, { force: true });
+    }
+  }
+});
+
 test("历史批次仅保存报告链接时沿用批次授权，未关联时允许上传人读取", async ({ page }) => {
   const reportsDirectory = getE2eReportsDirectory();
   const storedName = `legacy-url-${randomUUID()}.txt`;

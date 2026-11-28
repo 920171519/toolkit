@@ -39,7 +39,11 @@ function fileErrorCode(error: unknown) {
   return typeof code === "string" && /^[A-Z][A-Z0-9_]{1,39}$/.test(code) ? code : "UNKNOWN";
 }
 
-function logReportStorageFailure(operation: "read" | "close" | "discard", target: { reportId: number } | { batchId: number }, code: string) {
+function logReportStorageFailure(
+  operation: "read" | "close" | "discard",
+  target: { reportId: number; expectedBytes?: number; actualBytes?: number } | { batchId: number },
+  code: string,
+) {
   console.error("[report-storage]", { operation, ...target, code });
 }
 
@@ -76,9 +80,13 @@ export function discardReportFile(storagePath: string, batchId: number) {
   }
 }
 
-export async function readReportFile(storagePath: string, reportId: number) {
+export async function readReportFile(storagePath: string, reportId: number, expectedBytes: number | null) {
   try {
-    return await readFile(storagePath);
+    const data = await readFile(storagePath);
+    if (expectedBytes !== null && data.byteLength !== expectedBytes) {
+      logReportStorageFailure("read", { reportId, expectedBytes, actualBytes: data.byteLength }, "SIZE_MISMATCH");
+    }
+    return data;
   } catch (error) {
     const code = fileErrorCode(error);
     if (code !== "ENOENT") logReportStorageFailure("read", { reportId }, code);

@@ -348,8 +348,17 @@ export function getIntegrationConclusionContactNames(projectId: number): string[
 }
 
 export function getReadableTestReport(user: SessionUser, reportId: number) {
-  const report = one<{ originalName: string; storedPath: string; storedMediaType: unknown; uploadedBy: number | null }>(
-    `SELECT original_name AS originalName, stored_path AS storedPath, mime_type AS storedMediaType, uploaded_by AS uploadedBy
+  const report = one<{
+    originalName: string;
+    storedPath: string;
+    storedMediaType: unknown;
+    expectedBytes: number | null;
+    uploadedBy: number | null;
+  }>(
+    `SELECT original_name AS originalName, stored_path AS storedPath, mime_type AS storedMediaType,
+            CASE WHEN typeof(size_bytes) = 'integer' AND size_bytes BETWEEN 1 AND ${Number.MAX_SAFE_INTEGER}
+                 THEN size_bytes END AS expectedBytes,
+            uploaded_by AS uploadedBy
      FROM report_files WHERE id = ?`,
     reportId,
   );

@@ -24,7 +24,7 @@ export async function GET(
   const storagePath = resolveReportPath(report.storedPath);
   if (!storagePath) return reportNotFound();
   try {
-    const data = await readReportFile(storagePath, reportId);
+    const data = await readReportFile(storagePath, reportId, report.expectedBytes);
     if (data === null) return reportNotFound();
     const mediaType = getTestReportMediaType(report.originalName, report.storedMediaType);
     const disposition = mediaType ? "inline" : "attachment";
