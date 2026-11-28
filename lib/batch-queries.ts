@@ -24,20 +24,12 @@ export type BatchCandidatePackage = {
   packageName: string;
   packageCode: string;
   ownerName: string | null;
-  areaName: string | null;
-  versionId: number;
-  version: string;
-  versionStatus: string;
   versions: Array<{ id: number; version: string; status: string; requestStatus: string | null }>;
   defaultVersionId: number;
   carryVersionId: number | null;
-  requestId: number | null;
   formalVersion: string | null;
   currentTrialVersions: string[];
   previousTestVersion: string | null;
-  changedVsPrevious: boolean;
-  changeSummary: string;
-  archiveUrl: string;
 };
 
 export function getBatchCandidatesForProject(projectId: number, editingBatchId = 0): BatchCandidatePackage[] {
@@ -46,14 +38,12 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
     packageName: string;
     packageCode: string;
     ownerName: string | null;
-    areaName: string | null;
   }>(
     `SELECT DISTINCT p.id AS packageId, p.name AS packageName, p.code AS packageCode,
-            u.name AS ownerName, a.name AS areaName
+            u.name AS ownerName
      FROM packages p
      JOIN package_usages usage ON usage.package_id = p.id
      LEFT JOIN users u ON u.id = p.owner_id
-     LEFT JOIN areas a ON a.id = p.area_id
      WHERE usage.project_id = ? AND p.is_active = 1
      ORDER BY ${packageCodeSql("p.name", "p.code")} COLLATE NOCASE, p.id`,
     projectId,
@@ -64,12 +54,9 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
     id: number;
     version: string;
     status: string;
-    archiveUrl: string;
-    changeSummary: string;
   };
   const versionRows = all<CandidateVersion>(
-    `SELECT pv.package_id AS packageId, pv.id, pv.version, pv.status,
-            pv.archive_url AS archiveUrl, pv.change_summary AS changeSummary
+    `SELECT pv.package_id AS packageId, pv.id, pv.version, pv.status
      FROM package_versions pv
      JOIN packages p ON p.id = pv.package_id AND p.is_active = 1
      WHERE EXISTS (
@@ -85,8 +72,8 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
     else versionsByPackage.set(version.packageId, [version]);
   }
   const previousByPackage = getPreviousBatchVersions(db, projectId, packages.map(({ packageId }) => packageId));
-  const projectRequests = all<{ requestId: number; versionId: number; status: string; reserved: number }>(
-    `SELECT r.id AS requestId, r.package_version_id AS versionId,
+  const projectRequests = all<{ versionId: number; status: string; reserved: number }>(
+    `SELECT r.package_version_id AS versionId,
             ${EFFECTIVE_INTEGRATION_STATUS_SQL} AS status,
             EXISTS (
               SELECT 1 FROM batch_items bi JOIN integration_batches b ON b.id = bi.batch_id
@@ -114,23 +101,14 @@ export function getBatchCandidatesForProject(projectId: number, editingBatchId =
     const firstSafe = versions.find((version) => version.status !== "VOID" && version.requestStatus !== "VOID") ?? null;
     const defaultVersion = pending ?? previousSafe ?? formal ?? firstSafe ?? versions[0] ?? null;
     if (!defaultVersion) return null;
-    const selectedRow = versionRows.find((version) => version.id === defaultVersion.id);
-    const selectedRequest = requestByVersion.get(defaultVersion.id);
     return {
       ...pkg,
-      versionId: defaultVersion.id,
-      version: defaultVersion.version,
-      versionStatus: selectedRequest?.status ?? defaultVersion.status,
       versions,
       defaultVersionId: defaultVersion.id,
       carryVersionId: previousSafe?.id ?? null,
-      requestId: selectedRequest?.status === "PENDING" ? selectedRequest.requestId : null,
       formalVersion: formal?.version ?? null,
       currentTrialVersions: trialVersions.map((version) => version.version),
       previousTestVersion: previous?.version ?? null,
-      changedVsPrevious: previous?.version !== defaultVersion.version,
-      changeSummary: selectedRow?.changeSummary ?? "",
-      archiveUrl: selectedRow?.archiveUrl ?? "",
     };
   }).filter((item): item is BatchCandidatePackage => item !== null);
 }
