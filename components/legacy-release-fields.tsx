@@ -2,16 +2,14 @@
 
 import { useState } from "react";
 
-type LegacyReleaseDetails = {
-  status: "FORMAL" | "TRIAL";
-  formFlowNo: string | null;
-  formalReleasedAt: string | null;
-  trialFormNo: string | null;
-  trialReleasedAt: string | null;
-};
+import type { LegacyReleaseStatus, LegacyVersionMetadata } from "@/lib/settings-queries";
+
+type LegacyReleaseDetails = Pick<LegacyVersionMetadata,
+  "formFlowNo" | "formalReleasedAt" | "trialFormNo" | "trialReleasedAt"
+> & { status: LegacyReleaseStatus };
 
 export function LegacyReleaseFields({ existing }: { existing?: LegacyReleaseDetails }) {
-  const [status, setStatus] = useState<"FORMAL" | "TRIAL">(existing?.status ?? "FORMAL");
+  const [status, setStatus] = useState<LegacyReleaseStatus>(existing?.status ?? "FORMAL");
   const [includeTrial, setIncludeTrial] = useState(Boolean(existing?.trialFormNo));
   const isFormal = status === "FORMAL";
   const trialVisible = !isFormal || includeTrial;

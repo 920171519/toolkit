@@ -11,7 +11,7 @@ import {
   text,
   successRedirect,
 } from "@/lib/action-helpers";
-import { correctLegacyVersion, importLegacyVersion, savePackage, savePackageUsages, updatePackageResponsibility } from "@/lib/package-settings";
+import { correctLegacyVersion, importLegacyVersion, savePackage, savePackageUsages, updatePackageResponsibility, type LegacyVersionMetadataInput } from "@/lib/package-settings";
 import {
   addProjectNode,
   addProjectNodeApprover,
@@ -375,6 +375,18 @@ export async function savePackageAction(
 }
 
 
+function readLegacyVersionMetadata(formData: FormData): LegacyVersionMetadataInput {
+  return {
+    changeSummary: text(formData, "changeSummary"),
+    archiveUrl: text(formData, "archiveUrl"),
+    buildUrl: text(formData, "buildUrl"),
+    trialFormNo: text(formData, "trialFormNo"),
+    trialReleasedAt: text(formData, "trialReleasedAt"),
+    formFlowNo: text(formData, "formFlowNo"),
+    formalReleasedAt: text(formData, "formalReleasedAt"),
+  };
+}
+
 export async function importLegacyVersionAction(
   _prev: ActionState,
   formData: FormData,
@@ -387,14 +399,8 @@ export async function importLegacyVersionAction(
     importLegacyVersion(user, {
       packageId,
       version: text(formData, "version"),
-      changeSummary: text(formData, "changeSummary"),
-      archiveUrl: text(formData, "archiveUrl"),
-      buildUrl: text(formData, "buildUrl"),
       status,
-      trialFormNo: text(formData, "trialFormNo"),
-      trialReleasedAt: text(formData, "trialReleasedAt"),
-      formFlowNo: text(formData, "formFlowNo"),
-      formalReleasedAt: text(formData, "formalReleasedAt"),
+      ...readLegacyVersionMetadata(formData),
     });
   } catch (error) {
     return failure(error);
@@ -412,13 +418,7 @@ export async function correctLegacyVersionAction(_prev: ActionState, formData: F
     correctLegacyVersion(user, packageId, versionId, {
       expectedUpdatedAt: text(formData, "expectedUpdatedAt"),
       reason: text(formData, "reason"),
-      changeSummary: text(formData, "changeSummary"),
-      archiveUrl: text(formData, "archiveUrl"),
-      buildUrl: text(formData, "buildUrl"),
-      trialFormNo: text(formData, "trialFormNo"),
-      trialReleasedAt: text(formData, "trialReleasedAt"),
-      formFlowNo: text(formData, "formFlowNo"),
-      formalReleasedAt: text(formData, "formalReleasedAt"),
+      ...readLegacyVersionMetadata(formData),
     });
   } catch (error) {
     return failure(error);

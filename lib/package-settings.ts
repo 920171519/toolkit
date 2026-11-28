@@ -135,15 +135,11 @@ export function savePackage(actor: SessionUser, input: SavePackageInput): number
 }
 
 
-type LegacyVersionMetadataInput = {
-  changeSummary: string;
-  archiveUrl: string;
-  buildUrl: string;
-  trialFormNo: string;
-  trialReleasedAt: string;
-  formFlowNo: string;
-  formalReleasedAt: string;
-};
+export type LegacyVersionMetadataInput = Record<
+  keyof Pick<LegacyVersionMetadata, "changeSummary" | "archiveUrl" | "buildUrl"
+    | "trialFormNo" | "trialReleasedAt" | "formFlowNo" | "formalReleasedAt">,
+  string
+>;
 
 export type ImportLegacyVersionInput = LegacyVersionMetadataInput & {
   packageId: number;

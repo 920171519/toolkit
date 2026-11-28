@@ -102,6 +102,7 @@
 | 按版本查找批次项时多处扫描同一快照表 | [批次版本索引](../../lib/schema.ts)、[版本追溯](../../lib/version-trace-queries.ts)、[启动回归](../../tests/e2e/sqlite-lifecycle.spec.ts) | 通过同一个索引支持按版本的关联。对同一时间的批次顺序敏感的追溯明细保留原有谓词计划。 |
 | 单软件包流程权限曾加载全部可读包与版本 | [包授权](../../lib/access.ts)、[转测引导](../../lib/transfer-guidance.ts)、[发布引导](../../lib/release-guidance.ts) | 单包判断和项目包存在性使用同一授权谓词和查询。抽屉仍读取展示所需的版本范围。 |
 | 代理入口未应用会话存储的调用方约束 | [架构检查](../../scripts/check-architecture.mjs)、[检查器契约](../../tests/architecture-check.test.mjs) | 复用应用模块分类，发现代理入口直接读取会话存储时报告架构违规。合法调用方保持原范围。 |
+| 历史版本导入和更正各自读取并声明相同元数据 | [写入口](../../lib/actions/settings.ts)、[包设置](../../lib/package-settings.ts)、[历史发布字段](../../components/legacy-release-fields.tsx) | 两个操作共用私有元数据解码器。记录标识、状态和更正理由仍由对应的操作处理。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |
