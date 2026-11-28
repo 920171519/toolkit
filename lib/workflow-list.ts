@@ -13,13 +13,21 @@ export function workflowSearchMatcher(query: string) {
   };
 }
 
-export function getWorkflowListState(params: Record<string, string | string[] | undefined>) {
-  const page = readListPage(params.page);
-  const pageSize = getListPageSize(params.pageSize);
+export function workflowListParams({ q, page, pageSize }: { q: string; page: number; pageSize: number }) {
   return {
-    q: getWorkflowSearch(params.q) || undefined,
+    q: q || undefined,
     page: page > 1 ? page : undefined,
     pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+  };
+}
+
+export function getWorkflowListState(params: Record<string, string | string[] | undefined>) {
+  return {
+    ...workflowListParams({
+      q: getWorkflowSearch(params.q),
+      page: readListPage(params.page),
+      pageSize: getListPageSize(params.pageSize),
+    }),
     returnTo: safeOverviewReturnPath(params.returnTo),
   };
 }

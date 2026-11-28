@@ -4,12 +4,12 @@ import { ArrowRight } from "lucide-react";
 import { canManageProjectWorkflowForProject, getProjectWorkflowProjectIds } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getPageWindow } from "@/lib/list-pagination";
 import { packageIdentity } from "@/lib/package-identity";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { readFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import { getWorkflowListState, workflowListParams, workflowSearchMatcher } from "@/lib/workflow-list";
 import { getPendingFormalVersions } from "@/lib/release-queue-queries";
 import { WorkflowListPagination, WorkflowListSearch } from "@/components/workflow-list";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -23,7 +23,7 @@ export default async function FormalPage({ searchParams }: {
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const { returnTo } = getWorkflowListState(params);
+  const { q: query = "", page: requestedPage = 1, pageSize = DEFAULT_LIST_PAGE_SIZE, returnTo } = getWorkflowListState(params);
   const notice = readFlash(params);
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
@@ -35,22 +35,17 @@ export default async function FormalPage({ searchParams }: {
     groups.set(version.versionId, group);
   }
 
-  const query = getWorkflowSearch(params.q);
-  const pageSize = getListPageSize(params.pageSize);
   const matches = workflowSearchMatcher(query);
   const matching = [...groups.values()]
     .filter((group) => group.some((version) => matches(version.packageName, version.packageCode, version.version, version.projectName, version.projectCode, version.trialFormNo)))
     .sort((left, right) => right[0].isOverdue - left[0].isOverdue);
-  const page = getPageWindow(matching.length, pageSize, readListPage(params.page));
+  const page = getPageWindow(matching.length, pageSize, requestedPage);
   const listHref = (searchTerm = query, nextPage = 1) => workflowHref("/formal", project?.id, {
-    q: searchTerm || undefined,
-    page: nextPage > 1 ? nextPage : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: searchTerm, page: nextPage, pageSize }),
     returnTo,
   });
   const listState = {
-    q: query || undefined, page: page.current > 1 ? page.current : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: query, page: page.current, pageSize }),
     returnTo,
   };
   const versions = matching.slice(page.offset, page.end);

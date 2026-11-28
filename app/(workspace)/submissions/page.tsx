@@ -8,12 +8,12 @@ import { canReadBatchEvidence, getBatchEvidenceReadScope, getManagedProjectScope
 import { getRiskTrialEntries } from "@/lib/trial-eligibility";
 import { batchSelectionKey } from "@/lib/batch-preparation";
 import { getBatchCount, getBatches } from "@/lib/batch-queries";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getPageWindow } from "@/lib/list-pagination";
 import { hasTransferPackageOptions } from "@/lib/package-queries";
 import { readFlash } from "@/lib/flash";
 import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import { getWorkflowListState, workflowListParams, workflowSearchMatcher } from "@/lib/workflow-list";
 import { getPendingTransferGroups } from "@/lib/pending-transfer-queries";
 import { formatDateTime } from "@/lib/format";
 import { Badge, EmptyState, FlashMessage, PageHeader } from "@/components/ui";
@@ -35,7 +35,7 @@ export default async function SubmissionsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const { returnTo } = getWorkflowListState(params);
+  const { q: query = "", page: requestedPage = 1, pageSize = DEFAULT_LIST_PAGE_SIZE, returnTo } = getWorkflowListState(params);
   const notice = readFlash(params);
   const project = requireReadablePackageProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
@@ -56,9 +56,7 @@ export default async function SubmissionsPage({
   const transferHref = workflowHref("/submissions/transfer", project?.id, { returnTo });
   const canPrepare = !archived && (project ? managesProject(project.id) : activeManagerScope === null || activeManagerScope.length > 0);
   const showDrafts = canPrepare && params.view === "drafts";
-  const query = getWorkflowSearch(params.q);
   const focusedRequestId = showDrafts ? undefined : parseDecimalId(params.request);
-  const pageSize = getListPageSize(params.pageSize);
   const matches = workflowSearchMatcher(query);
   const requestCount = groups.reduce((total, group) => total + group.items.filter((item) => item.draftBatchId === null).length, 0);
   const visibleGroups = showDrafts ? [] : groups.map((group) => ({
@@ -75,22 +73,18 @@ export default async function SubmissionsPage({
   const draftScope = project ? [project.id] : activeManagerScope;
   const draftsCount = canPrepare ? getBatchCount(draftScope, draftFilters) : 0;
   const matchingDrafts = showDrafts && query ? getBatchCount(draftScope, { ...draftFilters, query }) : draftsCount;
-  const page = getPageWindow(matchingDrafts, pageSize, readListPage(params.page));
+  const page = getPageWindow(matchingDrafts, pageSize, requestedPage);
   const drafts = showDrafts ? getBatches(pageSize, draftScope, { ...draftFilters, query, offset: page.offset }) : [];
   const queueHref = (draft: boolean, searchTerm = query, nextPage = 1) => workflowHref("/submissions", project?.id, {
     view: draft ? "drafts" : undefined,
-    q: searchTerm || undefined,
-    page: nextPage > 1 ? nextPage : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: searchTerm, page: nextPage, pageSize }),
     returnTo,
   });
   const requestsHref = queueHref(false, showDrafts ? "" : query);
   const draftsHref = queueHref(true, showDrafts ? query : "");
   const integrationHref = workflowHref("/integration", project?.id, { view: archived ? "history" : undefined, returnTo });
   const returnState = {
-    q: query || undefined,
-    page: page.current > 1 ? page.current : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: query, page: page.current, pageSize }),
     request: focusedRequestId,
     returnTo,
   };

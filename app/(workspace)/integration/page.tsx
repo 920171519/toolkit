@@ -9,11 +9,11 @@ import { DirectoryFilterBar, DirectoryPagination } from "@/components/settings-d
 import { filterOptions } from "@/lib/column-filters";
 import { historyFields, integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { requireUser } from "@/lib/auth";
-import { DEFAULT_LIST_PAGE_SIZE, getListPageSize, getPageWindow, readListPage } from "@/lib/list-pagination";
+import { DEFAULT_LIST_PAGE_SIZE, getPageWindow } from "@/lib/list-pagination";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { readFlash } from "@/lib/flash";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowSearch } from "@/lib/workflow-list";
+import { getWorkflowListState, workflowListParams } from "@/lib/workflow-list";
 import { getProjectOptions } from "@/lib/project-queries";
 import { getBatchCount, getBatches, getIntegrationHistoryPage } from "@/lib/batch-queries";
 import { formatDateTime } from "@/lib/format";
@@ -34,7 +34,7 @@ export default async function IntegrationPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const { returnTo } = getWorkflowListState(params);
+  const { q: query = "", page: requestedPage = 1, pageSize = DEFAULT_LIST_PAGE_SIZE, returnTo } = getWorkflowListState(params);
   const notice = readFlash(params);
   const project = requireWorkflowProject(user, params.project);
   const archived = project?.status === "ARCHIVED";
@@ -46,11 +46,9 @@ export default async function IntegrationPage({
   const historyCount = getBatchCount(scope, { statuses: historyStatuses });
   const historyState = readIntegrationHistory(params);
   const inHistory = archived || params.view === "history" || params.history === "1" || Object.keys(historyState.filters).length > 0;
-  const query = getWorkflowSearch(params.q);
   const filters = { statuses: activeStatuses, query, activeProjectsOnly: true };
   const total = inHistory ? 0 : query ? getBatchCount(scope, filters) : activeCount;
-  const pageSize = getListPageSize(params.pageSize);
-  const page = getPageWindow(total, pageSize, readListPage(params.page));
+  const page = getPageWindow(total, pageSize, requestedPage);
   const visible = inHistory ? [] : getBatches(pageSize, scope, { ...filters, offset: page.offset });
   const history = inHistory ? getIntegrationHistoryPage(historyState, scope, { statuses: historyStatuses, query }) : undefined;
   const historyParams = { ...integrationHistoryParams({ ...historyState, page: history?.page ?? 1 }), view: "history", q: query || undefined, returnTo };
@@ -62,15 +60,11 @@ export default async function IntegrationPage({
   const testingRights = new Map([...visibleProjectIds].map((id) => [id, canSubmitIntegrationConclusionForProject(user, id)]));
   const queueHref = (showHistory: boolean, searchTerm = query, page = 1) => workflowHref("/integration", project?.id, {
     view: showHistory ? "history" : undefined,
-    q: searchTerm || undefined,
-    page: page > 1 ? page : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: searchTerm, page, pageSize }),
     returnTo,
   });
   const detailHref = (id: number) => workflowHref(`/integration/${id}`, project?.id, {
-    q: query || undefined,
-    page: page.current > 1 ? page.current : undefined,
-    pageSize: pageSize !== DEFAULT_LIST_PAGE_SIZE ? pageSize : undefined,
+    ...workflowListParams({ q: query, page: page.current, pageSize }),
     returnTo,
   });
 
