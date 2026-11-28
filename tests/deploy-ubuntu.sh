@@ -27,6 +27,7 @@ case "$1" in
     ;;
   start)
     printf 'start %s\n' "$2" >> "$DEPLOY_TEST_CALLS"
+    exit "$DEPLOY_TEST_START_CODE"
     ;;
   *) exit 90 ;;
 esac
@@ -47,7 +48,12 @@ MOCK
 cat > "$sandbox/bin/pnpm" <<'MOCK'
 #!/bin/bash
 printf 'pnpm %s\n' "$*" >> "$DEPLOY_TEST_CALLS"
-if [[ "$1" == "--version" ]]; then exit "$DEPLOY_TEST_PNPM_CODE"; fi
+case "$1" in
+  --version) exit "$DEPLOY_TEST_PNPM_CODE" ;;
+  install) exit "$DEPLOY_TEST_INSTALL_CODE" ;;
+  build) exit "$DEPLOY_TEST_BUILD_CODE" ;;
+  *) exit 92 ;;
+esac
 MOCK
 
 chmod +x "$sandbox/bin/systemctl" "$sandbox/bin/sudo" "$sandbox/bin/node" "$sandbox/bin/pnpm"
@@ -58,11 +64,20 @@ run_deploy() {
     STOP_CMD="${DEPLOY_TEST_STOP_CMD:-}" START_CMD="${DEPLOY_TEST_START_CMD:-}" DO_BUILD="${DEPLOY_TEST_DO_BUILD:-1}" \
     DEPLOY_TEST_UNIT="$1" DEPLOY_TEST_STOP_CODE="$2" DEPLOY_TEST_CALLS="$sandbox/calls" \
     DEPLOY_TEST_NODE_CODE="${4:-0}" DEPLOY_TEST_PNPM_CODE="${5:-0}" \
+    DEPLOY_TEST_INSTALL_CODE="${DEPLOY_TEST_INSTALL_CODE:-0}" DEPLOY_TEST_BUILD_CODE="${DEPLOY_TEST_BUILD_CODE:-0}" \
+    DEPLOY_TEST_START_CODE="${DEPLOY_TEST_START_CODE:-0}" \
     "$BASH" "$sandbox/project/scripts/deploy-ubuntu.sh" > "$sandbox/output" 2>&1
 }
 
 assert_calls() {
   diff -u <(printf '%s\n' "$@") "$sandbox/calls"
+}
+
+assert_incomplete() {
+  if grep -Fq '==> 完成。' "$sandbox/output"; then
+    printf 'Deployment reported completion after a failed step.\n' >&2
+    return 1
+  fi
 }
 
 run_deploy 'toolkit.service' 0 toolkit 0 0 '--experimental-sqlite'
@@ -91,10 +106,28 @@ run_deploy 'toolkit.service' 0 toolkit 0 21 || status=$?
 assert_calls 'node:sqlite default' 'pnpm --version'
 grep -Fq '无法运行 pnpm' "$sandbox/output"
 
+status=0
+DEPLOY_TEST_INSTALL_CODE=22 run_deploy 'toolkit.service' 0 || status=$?
+[[ "$status" -eq 22 ]]
+assert_calls 'node:sqlite default' 'pnpm --version' 'stop toolkit.service' 'pnpm install --frozen-lockfile'
+assert_incomplete
+
+status=0
+DEPLOY_TEST_BUILD_CODE=23 run_deploy 'toolkit.service' 0 || status=$?
+[[ "$status" -eq 23 ]]
+assert_calls 'node:sqlite default' 'pnpm --version' 'stop toolkit.service' 'pnpm install --frozen-lockfile' 'pnpm build'
+assert_incomplete
+
+status=0
+DEPLOY_TEST_START_CODE=24 run_deploy 'toolkit.service' 0 || status=$?
+[[ "$status" -eq 24 ]]
+assert_calls 'node:sqlite default' 'pnpm --version' 'stop toolkit.service' 'pnpm install --frozen-lockfile' 'pnpm build' 'start toolkit.service'
+assert_incomplete
+
 DEPLOY_TEST_DO_BUILD=0 \
   DEPLOY_TEST_STOP_CMD='printf "custom stop\n" >> "$DEPLOY_TEST_CALLS"' \
   DEPLOY_TEST_START_CMD='printf "custom start\n" >> "$DEPLOY_TEST_CALLS"' \
   run_deploy 'toolkit.service' 0 toolkit 20
 assert_calls 'pnpm --version' 'custom stop' 'pnpm install --frozen-lockfile' 'custom start'
 
-printf 'Ubuntu deployment mock tests passed (7 scenarios).\n'
+printf 'Ubuntu deployment mock tests passed (10 scenarios).\n'
