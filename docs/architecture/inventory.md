@@ -111,6 +111,7 @@
 | 设置表单共用一个可导入所有设置写模块的入口 | [责任田](../../lib/actions/area-settings.ts)、[项目](../../lib/actions/project-settings.ts)、[软件包](../../lib/actions/package-settings.ts)、[账号](../../lib/actions/user-settings.ts)、[架构契约](../../tests/architecture-check.test.mjs) | 表单直接使用对应 Action。守卫验证合法导入并拒绝四类跨职责写入。 |
 | 多个数据库 CHECK、类型守卫与页面选项重复枚举合法值 | [领域值](../../lib/domain-values.ts)、[SQLite 结构](../../lib/schema.ts)、[展示元数据](../../lib/constants.ts)、[项目设置字段](../../components/project-settings-fields.tsx) | 存储接受值和类型由纯领域模块提供，类型检查保证展示映射覆盖。各流程继续独立维护有不同含义的状态子集和转换条件。 |
 | 批次编辑读取测试进展和完整配套证据 | [批次读取](../../lib/batch-queries.ts)、[草稿编辑](../../app/(workspace)/submissions/batch/new/page.tsx) | 编辑使用专门投影。保持证据权限、配套顺序、旧库修订值与原详情跳转。 |
+| 软件包列表与详情接口重复解析项目范围 | [项目范围](../../lib/project-scope.ts)、[包详情接口](../../app/api/packages/[id]/route.ts)、[浏览器用例](../../tests/e2e/package-experience.spec.ts) | 共用范围解析和授权。路由持有入参基数、状态码和缓存契约，读取受当前用户所选项目约束。 |
 | 为定位单个项目加载完整项目和分工列表 | [项目授权](../../lib/access.ts)、[项目资料](../../lib/project-queries.ts) | 单项目读取定向查询。导航仍读取完整授权范围，单据和软件包访问保留各自的例外。 |
 | 转正核对、绑定详情及追溯同时重复加载对应绑定申请 | [页面绑定详情读取](../../lib/binding-queries.ts) | 同一次渲染按申请复用，授权投影和跨项目证据口径各自执行。 |
 | 版本追溯页面和写入事务分别判断作废权限 | [版本维护授权](../../lib/access.ts)、[作废资格](../../lib/version-void.ts) | 页面和事务共用可办理项目及目标分类。依赖检查拦截工作区页面直接引用写入模块。 |

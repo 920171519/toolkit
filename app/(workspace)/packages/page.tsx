@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ListTree, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getPackageDrawerData, getReadablePackageOverviewRows, hasTransferPackageOptions } from "@/lib/package-queries";
@@ -10,7 +9,7 @@ import { canAccessProjectPage, hasAreaLeadership } from "@/lib/access";
 import { PackageOverviewTable } from "@/components/package-overview-table";
 import { GuidanceDialog } from "@/components/guidance-dialog";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { getReadablePackageProject } from "@/lib/project-scope";
+import { requireReadablePackageProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
 import { getTransferEntryGuidance } from "@/lib/transfer-guidance";
 import { FlashMessage, PageHeader } from "@/components/ui";
@@ -26,8 +25,7 @@ export default async function PackagesPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = readFlash(params);
-  const selectedProject = typeof params.project === "string" ? getReadablePackageProject(user, Number(params.project)) : undefined;
-  if (params.project && !selectedProject) notFound();
+  const selectedProject = requireReadablePackageProject(user, params.project);
   const workflowProjectId = selectedProject && canAccessProjectPage(user, selectedProject.id) ? selectedProject.id : undefined;
   const packages = getReadablePackageOverviewRows(user, selectedProject?.id);
   const people = user.role === "ADMIN" || hasAreaLeadership(user.id) ? getActivePersonOptions() : [];

@@ -20,7 +20,7 @@ export async function GET(
   }
   const scope = new URL(request.url).searchParams.getAll("project");
   const project = scope.length === 1
-    ? getReadablePackageProject(user, Number(scope[0]))
+    ? getReadablePackageProject(user, scope[0])
     : undefined;
   if (scope.length > 0 && !project) {
     return NextResponse.json({ error: "项目不存在或不可查看。" }, { status: 404 });

@@ -15,7 +15,9 @@ export function getWorkspaceProjectNavigation(user: SessionUser) {
   };
 }
 
-export function getReadablePackageProject(user: SessionUser, projectId: number) {
+export function getReadablePackageProject(user: SessionUser, value: string | string[] | undefined) {
+  if (typeof value !== "string") return undefined;
+  const projectId = Number(value);
   if (!Number.isSafeInteger(projectId) || projectId < 1) return undefined;
   const project = getProjectOption(projectId);
   if (!project || canAccessProjectPage(user, projectId)) return project;
@@ -24,7 +26,7 @@ export function getReadablePackageProject(user: SessionUser, projectId: number) 
 
 export function requireReadablePackageProject(user: SessionUser, value: string | string[] | undefined) {
   if (value === undefined || value === "") return undefined;
-  const project = typeof value === "string" ? getReadablePackageProject(user, Number(value)) : undefined;
+  const project = getReadablePackageProject(user, value);
   if (!project) notFound();
   return project;
 }

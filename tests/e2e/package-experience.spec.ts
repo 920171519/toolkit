@@ -13,14 +13,26 @@ test("软件包详情接口校验登录和项目参数，成功响应禁用缓�
   expect(invalidPackage.status()).toBe(400);
   expect(await invalidPackage.json()).toEqual({ error: "软件包参数无效。" });
 
-  const duplicateProject = await page.request.get(`${detailUrl}&project=1`);
-  expect(duplicateProject.status()).toBe(404);
-  expect(await duplicateProject.json()).toEqual({ error: "项目不存在或不可查看。" });
+  for (const path of ["/api/packages/7?project=", "/api/packages/7?project=1&project=1"]) {
+    const invalidProject = await page.request.get(path);
+    expect(invalidProject.status()).toBe(404);
+    expect(await invalidProject.json()).toEqual({ error: "项目不存在或不可查看。" });
+  }
 
   const detail = await page.request.get(detailUrl);
   expect(detail.status()).toBe(200);
   expect(detail.headers()["cache-control"]).toBe("no-store");
-  expect(await detail.json()).toMatchObject({ package: { id: 7 }, canEdit: false });
+  const payload = await detail.json();
+  expect(payload).toMatchObject({ package: { id: 7 }, canEdit: false });
+
+  const alternateProject = await page.request.get("/api/packages/7?project=1e0");
+  expect(alternateProject.status()).toBe(200);
+  expect(await alternateProject.json()).toEqual(payload);
+
+  await page.goto("/packages?project=");
+  await expect(page.getByRole("heading", { name: "软件版本总览", exact: true })).toBeVisible();
+  await page.goto("/packages?project=1&project=1");
+  await expect(page.getByRole("heading", { name: "页面或记录不存在", exact: true })).toBeVisible();
 });
 
 test("只可访问旧版本的账号仍能看到软件包，始终隐藏未授权的最新版本", async ({ page }) => {
