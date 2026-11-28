@@ -100,6 +100,22 @@ export function insertTransferRequest(
   ).run(versionId, projectId, timestamp, timestamp).changes > 0;
 }
 
+export function recordBatchRequestIntegration(
+  database: DatabaseSync,
+  requestId: number,
+  nextStatus: "PENDING" | "IN_TEST" | "PASSED" | "FAILED" | "BLOCKED",
+  timestamp: string,
+) {
+  const previousStatus = nextStatus === "IN_TEST" ? "PENDING" : "IN_TEST";
+  database.prepare(
+    `UPDATE version_transfer_requests
+     SET status = CASE WHEN status = ? THEN ? ELSE status END,
+         integration_status = CASE WHEN integration_status IS NOT NULL THEN ? END,
+         updated_at = ?
+     WHERE id = ? ${nextStatus === "PENDING" ? "AND status != 'VOID'" : ""}`,
+  ).run(previousStatus, nextStatus, nextStatus, timestamp, requestId);
+}
+
 export function refreshVersionAggregate(database: DatabaseSync, versionId: number, timestamp?: string) {
   const version = database.prepare(
     `SELECT status, package_id AS packageId, status IN ${TRIAL_PENDING_VERSION_STATUSES_SQL} AS beforeTrial

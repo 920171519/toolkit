@@ -15,6 +15,7 @@ import {
   OPEN_BATCH_RESERVATION_SQL,
   OTHER_OPEN_BATCH_RESERVATION_SQL,
   PENDING_BATCH_REQUEST_SQL,
+  recordBatchRequestIntegration,
   refreshVersionAggregate,
 } from "./transfer-requests";
 import { refreshTrialReadiness } from "./trial-readiness";
@@ -232,14 +233,7 @@ export function sendBatch(actor: SessionUser, batchId: number) {
     run("UPDATE integration_batches SET status = 'IN_TEST', sent_at = ? WHERE id = ?", timestamp, batchId);
     const versionIds = new Set<number>();
     for (const item of changes) {
-      run(
-        `UPDATE version_transfer_requests
-         SET status = CASE WHEN status = 'PENDING' THEN 'IN_TEST' ELSE status END,
-             integration_status = CASE WHEN integration_status IS NOT NULL THEN 'IN_TEST' END, updated_at = ?
-         WHERE id = ?`,
-        timestamp,
-        item.transferRequestId,
-      );
+      recordBatchRequestIntegration(db, item.transferRequestId, "IN_TEST", timestamp);
       versionIds.add(item.versionId);
     }
     for (const versionId of versionIds) {
@@ -270,14 +264,7 @@ export function terminateBatch(actor: SessionUser, batchId: number, reason: stri
     const timestamp = now();
     run("UPDATE integration_batches SET status = 'TERMINATED', terminated_at = ?, terminate_reason = ? WHERE id = ?", timestamp, reason.trim(), batchId);
     for (const request of requests) {
-      run(
-        `UPDATE version_transfer_requests
-         SET status = CASE WHEN status = 'IN_TEST' THEN 'PENDING' ELSE status END,
-             integration_status = CASE WHEN integration_status IS NOT NULL THEN 'PENDING' END, updated_at = ?
-          WHERE id = ? AND status != 'VOID'`,
-        timestamp,
-        request.id,
-      );
+      recordBatchRequestIntegration(db, request.id, "PENDING", timestamp);
       refreshVersionAggregate(db, request.package_version_id, timestamp);
       refreshTrialReadiness(db, request.package_version_id, timestamp);
     }
@@ -408,13 +395,7 @@ export async function completeBatchTest(
           }
         }
         if (item.request_id === null || item.version_status === "VOID") continue;
-        run(
-          `UPDATE version_transfer_requests
-           SET status = CASE WHEN status = 'IN_TEST' THEN ? ELSE status END,
-               integration_status = CASE WHEN integration_status IS NOT NULL THEN ? END, updated_at = ?
-           WHERE id = ?`,
-          requestStatus, requestStatus, timestamp, item.request_id,
-        );
+        recordBatchRequestIntegration(db, item.request_id, requestStatus, timestamp);
         if (requestStatus !== "PASSED") {
           invalidateUnreleasedRiskTrialAdmission(db, item.version_id, timestamp);
         }

@@ -35,7 +35,9 @@ export function getBatchSendCheck(batchId: number) {
      ORDER BY bi.id`,
     batchId,
   ).map((item) => ({ ...item, packageCode: packageIdentity(item).code }));
-  const changes = items.filter((item) => item.transferRequestId !== null);
+  const changes = items.filter(
+    (item): item is typeof item & { transferRequestId: number } => item.transferRequestId !== null,
+  );
   const blockers: DraftBlocker[] = items.filter((item) => item.versionStatus === "VOID").map((item) => ({
     message: `${item.packageCode} ${item.version} 已作废，请在配套中更换或移除该版本。`,
   }));
