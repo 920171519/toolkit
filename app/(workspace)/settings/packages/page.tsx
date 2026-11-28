@@ -13,7 +13,7 @@ import { getListPageSize } from "@/lib/list-pagination";
 import { packageIdentity, PACKAGE_CODE_EXAMPLE, PACKAGE_CODE_PATTERN } from "@/lib/package-identity";
 import { savePackageAction } from "@/lib/actions/package-settings";
 import { directoryColumnFields, directoryHref, directoryPage } from "@/lib/settings-directory";
-import { wordSearchMatcher } from "@/lib/search-text";
+import { readListSearchQuery, wordSearchMatcher } from "@/lib/search-text";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, FlashMessage, PageHeader, StatusPill } from "@/components/ui";
 import { ColumnFilterHeader } from "@/components/column-filter-header";
@@ -70,7 +70,7 @@ export default async function PackagesSettingsPage({
     progress: { ...progress, options: filterOptions(progressOptions) },
   };
 
-  const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const query = readListSearchQuery(params.q);
   const matchesSearch = wordSearchMatcher(query);
   const oldArea = areas.find((area) => String(area.id) === params.area);
   const legacyState = params.state ?? params.status;

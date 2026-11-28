@@ -4,6 +4,7 @@ import { PACKAGE_STATUS_META } from "./constants";
 import { PACKAGE_STATUSES } from "./domain-values";
 import { DEFAULT_LIST_PAGE_SIZE, getListPageSize } from "./list-pagination";
 import { safeOverviewReturnPath } from "./return-to";
+import { readListSearchQuery } from "./search-text";
 import { workflowHref } from "./workflow-links";
 
 export const TRACE_SORT_FIELDS = ["package", "version", "status", "submitted"] as const;
@@ -36,10 +37,6 @@ export type TraceListState = {
   returnTo?: string;
 };
 
-function textValue(value: unknown) {
-  return typeof value === "string" ? value.trim().slice(0, 100) : "";
-}
-
 function positiveInteger(value: unknown) {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return undefined;
   return parsePositiveSafeInteger(value);
@@ -65,7 +62,7 @@ export function readTraceListState(params: Record<string, unknown>): TraceListSt
     f_submitted_max: stringValue(params.f_submitted_max) ?? stringValue(params.to),
   }, Object.values(traceColumnFields));
   return {
-    query: textValue(params.q),
+    query: readListSearchQuery(params.q),
     packageId: positiveInteger(params.package),
     filters,
     sort,

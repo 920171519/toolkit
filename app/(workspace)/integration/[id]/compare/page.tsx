@@ -12,7 +12,8 @@ import { formatDateTime } from "@/lib/format";
 import { integrationHistoryParams, readIntegrationHistory } from "@/lib/integration-history";
 import { requireWorkflowProject } from "@/lib/project-scope";
 import { workflowHref } from "@/lib/workflow-links";
-import { getWorkflowListState, getWorkflowSearch, workflowSearchMatcher } from "@/lib/workflow-list";
+import { LIST_SEARCH_QUERY_MAX_LENGTH, readListSearchQuery } from "@/lib/search-text";
+import { getWorkflowListState, workflowSearchMatcher } from "@/lib/workflow-list";
 import nameVisibility from "@/components/package-name-toggle.module.css";
 import styles from "./comparison.module.css";
 
@@ -68,7 +69,7 @@ export default async function BatchComparisonPage({ params, searchParams }: {
   const path = `${detailPath}/compare`;
   const backHref = workflowHref(detailPath, project?.id, context);
   const showAll = search.show === "all";
-  const query = getWorkflowSearch(search.baseQuery);
+  const query = readListSearchQuery(search.baseQuery);
   const matches = workflowSearchMatcher(query);
   const filteredCandidates = candidates.filter((candidate) => matches(candidate.code, candidate.title));
   const comparisonHref = (id: number | undefined, all: boolean) => workflowHref(path, project?.id, {
@@ -101,7 +102,7 @@ export default async function BatchComparisonPage({ params, searchParams }: {
             <form role="search" aria-label="搜索基准批次" action={path} method="get" className={styles.search}>
               {Object.entries(pickerFields).map(([name, value]) => value === undefined ? null :
                 <input key={name} type="hidden" name={name} value={value} />)}
-              <input className="input input-sm" type="search" name="baseQuery" aria-label="批次号或标题" placeholder="批次号或标题" defaultValue={query} maxLength={100} />
+              <input className="input input-sm" type="search" name="baseQuery" aria-label="批次号或标题" placeholder="批次号或标题" defaultValue={query} maxLength={LIST_SEARCH_QUERY_MAX_LENGTH} />
               <button className="button button-secondary button-sm" type="submit"><Search size={14} aria-hidden="true" />搜索</button>
             </form>
             {filteredCandidates.length ? <ul className={styles.candidates} aria-label="可对比批次">

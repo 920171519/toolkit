@@ -14,7 +14,7 @@ import { getProjectWorkflowProjectIds } from "@/lib/access";
 import { readFlash } from "@/lib/flash";
 import styles from "../projects/projects.module.css";
 import { directoryHref, directoryPage } from "@/lib/settings-directory";
-import { wordSearchMatcher } from "@/lib/search-text";
+import { readListSearchQuery, wordSearchMatcher } from "@/lib/search-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "项目总览" };
@@ -43,7 +43,7 @@ export default async function OverviewPage({
   const user = await requireUser();
   const params = await searchParams;
   const notice = readFlash(params);
-  const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const query = readListSearchQuery(params.q);
   const matchesSearch = wordSearchMatcher(query);
   const pageSize = getListPageSize(params.pageSize);
   const catalog = getProjectCatalogEntries();
