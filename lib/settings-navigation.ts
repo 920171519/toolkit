@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { getLedAreaIds, getManagedProjectScope } from "./access";
+import { getSettingsNavigationGrants } from "./access";
 import type { SessionUser } from "./types";
 
 const areas = { href: "/settings/areas", label: "责任田", icon: "areas" } as const;
@@ -12,9 +12,10 @@ const users = { href: "/settings/users", label: "人员与角色", icon: "users"
 export const getSettingsNavigation = cache((user: SessionUser) => {
   if (user.role === "ADMIN") return [areas, projects, packages, users];
 
+  const { hasManagedProjects, hasLedAreas } = getSettingsNavigationGrants(user.id);
   return [
     areas,
-    ...(getManagedProjectScope(user, { includeArchived: true })?.length !== 0 ? [projects] : []),
-    ...(getLedAreaIds(user.id).length > 0 ? [packages] : []),
+    ...(hasManagedProjects ? [projects] : []),
+    ...(hasLedAreas ? [packages] : []),
   ];
 });

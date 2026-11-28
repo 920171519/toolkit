@@ -206,6 +206,15 @@ export function getLedAreaIds(userId: number): number[] {
   ).map((row) => row.areaId);
 }
 
+export function getSettingsNavigationGrants(userId: number) {
+  const grants = one<{ hasManagedProjects: number; hasLedAreas: number }>(
+    `SELECT EXISTS (SELECT 1 FROM project_software_managers WHERE user_id = ?) AS hasManagedProjects,
+            EXISTS (SELECT 1 FROM area_leaders WHERE user_id = ?) AS hasLedAreas`,
+    userId, userId,
+  );
+  return { hasManagedProjects: Boolean(grants?.hasManagedProjects), hasLedAreas: Boolean(grants?.hasLedAreas) };
+}
+
 export function getTransferAreaIds(user: SessionUser): number[] | null {
   if (user.role === "ADMIN") return null;
   return all<{ areaId: number }>(
