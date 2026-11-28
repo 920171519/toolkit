@@ -5,6 +5,16 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 import { closeDatabaseAfterError, withImmediateTransaction } from "../../lib/sqlite-lifecycle";
 
+function startTestDatabase(databasePath: string, seed = false) {
+  const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
+    env: { ...process.env, DATABASE_PATH: databasePath, TOOLKIT_SKIP_SEED: seed ? "0" : "1" },
+    encoding: "utf8",
+    timeout: 15_000,
+  });
+  expect(startup.error).toBeUndefined();
+  expect(startup.status, startup.stderr).toBe(0);
+}
+
 test("SQLite 写事务保留返回值，开启失败时保留已有事务", () => {
   const database = new DatabaseSync(":memory:");
   try {
@@ -67,13 +77,7 @@ test("旧库缺少软件经理列时首次启动补齐索引并保留项目", ({
   }
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
-      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: "1" },
-      encoding: "utf8",
-      timeout: 15_000,
-    });
-    expect(startup.error).toBeUndefined();
-    expect(startup.status, startup.stderr).toBe(0);
+    startTestDatabase(target);
 
     const migrated = new DatabaseSync(target, { readOnly: true });
     try {
@@ -132,17 +136,7 @@ test("补派预览无法确认 SQLite 只读时在打开目标前退出", ({}, t
 
 test("旧库启动补齐批次版本索引并保留配套快照", ({}, testInfo) => {
   const target = testInfo.outputPath("legacy-batch-history.db");
-  function start(seed: boolean) {
-    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
-      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: seed ? "0" : "1" },
-      encoding: "utf8",
-      timeout: 15_000,
-    });
-    expect(startup.error).toBeUndefined();
-    expect(startup.status, startup.stderr).toBe(0);
-  }
-
-  start(true);
+  startTestDatabase(target, true);
   const legacy = new DatabaseSync(target);
   let before: unknown[];
   try {
@@ -154,7 +148,7 @@ test("旧库启动补齐批次版本索引并保留配套快照", ({}, testInfo)
   }
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    start(false);
+    startTestDatabase(target);
     const migrated = new DatabaseSync(target, { readOnly: true });
     try {
       expect(migrated.prepare("PRAGMA index_info(idx_batch_items_version)").all()).toEqual([
@@ -170,17 +164,7 @@ test("旧库启动补齐批次版本索引并保留配套快照", ({}, testInfo)
 
 test("旧电子流条码按原有分隔符补录并使用同一判定约束", ({}, testInfo) => {
   const target = testInfo.outputPath("legacy-barcode-review.db");
-  function start(seed: boolean) {
-    const startup = spawnSync(process.execPath, ["--import", "tsx", "scripts/seed-db.ts"], {
-      env: { ...process.env, DATABASE_PATH: target, TOOLKIT_SKIP_SEED: seed ? "0" : "1" },
-      encoding: "utf8",
-      timeout: 15_000,
-    });
-    expect(startup.error).toBeUndefined();
-    expect(startup.status, startup.stderr).toBe(0);
-  }
-
-  start(true);
+  startTestDatabase(target, true);
   const legacy = new DatabaseSync(target);
   let flow: { id: number; submittedAt: string };
   try {
@@ -203,7 +187,7 @@ test("旧电子流条码按原有分隔符补录并使用同一判定约束", ({
   }
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    start(false);
+    startTestDatabase(target);
     const migrated = new DatabaseSync(target);
     try {
       expect(migrated.prepare(`
@@ -225,6 +209,63 @@ test("旧电子流条码按原有分隔符补录并使用同一判定约束", ({
       expect(migrated.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     } finally {
       migrated.close();
+    }
+  }
+});
+
+test("旧库只在补齐试制绑定字段时回填，重启保留已存在的办理状态", ({}, testInfo) => {
+  const seedPath = testInfo.outputPath("binding-seed.db");
+  startTestDatabase(seedPath, true);
+
+  const fixtures = [
+    { name: "current", hasPushedAt: true, hasBindingMode: true },
+    { name: "legacy", hasPushedAt: false, hasBindingMode: false },
+    { name: "missing-pushed-at", hasPushedAt: false, hasBindingMode: true },
+    { name: "missing-binding-mode", hasPushedAt: true, hasBindingMode: false },
+  ].map((fixture) => ({ ...fixture, path: testInfo.outputPath("binding-" + fixture.name + ".db") }));
+
+  const seeded = new DatabaseSync(seedPath);
+  let version: { versionId: number; requirementId: number; createdAt: string };
+  try {
+    const candidate = seeded.prepare(`
+      SELECT pv.id AS versionId, br.id AS requirementId, br.created_at AS createdAt
+      FROM binding_requirements br
+      JOIN version_transfer_requests vtr ON vtr.id = br.request_id
+      JOIN package_versions pv ON pv.id = br.package_version_id
+      WHERE pv.status = 'TRIAL' AND vtr.status = 'TRIAL' AND br.status = 'PENDING'
+      ORDER BY br.id LIMIT 1
+    `).get() as typeof version | undefined;
+    assert.ok(candidate);
+    version = candidate;
+    seeded.prepare("UPDATE binding_requirements SET pushed_at = NULL WHERE id = ?").run(version.requirementId);
+    seeded.prepare("UPDATE package_versions SET binding_mode = 'PENDING' WHERE id = ?").run(version.versionId);
+    const copy = seeded.prepare("VACUUM INTO ?");
+    for (const fixture of fixtures) copy.run(fixture.path);
+  } finally {
+    seeded.close();
+  }
+
+  for (const fixture of fixtures) {
+    const old = new DatabaseSync(fixture.path);
+    try {
+      if (!fixture.hasPushedAt) old.exec("ALTER TABLE binding_requirements DROP COLUMN pushed_at;");
+      if (!fixture.hasBindingMode) old.exec("ALTER TABLE package_versions DROP COLUMN binding_mode;");
+    } finally {
+      old.close();
+    }
+
+    for (let startup = 0; startup < 2; startup += 1) {
+      startTestDatabase(fixture.path);
+      const migrated = new DatabaseSync(fixture.path, { readOnly: true });
+      try {
+        expect(migrated.prepare("SELECT pushed_at FROM binding_requirements WHERE id = ?").get(version.requirementId), fixture.name)
+          .toEqual({ pushed_at: fixture.hasPushedAt ? null : version.createdAt });
+        expect(migrated.prepare("SELECT binding_mode FROM package_versions WHERE id = ?").get(version.versionId), fixture.name)
+          .toEqual({ binding_mode: fixture.hasBindingMode ? "PENDING" : "PUSHED" });
+        expect(migrated.prepare("PRAGMA foreign_key_check").all(), fixture.name).toEqual([]);
+      } finally {
+        migrated.close();
+      }
     }
   }
 });
