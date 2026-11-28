@@ -346,7 +346,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。首次启动会自动创建数据库并写入演示数据（`data/toolkit.db`）。
+打开 [http://localhost:3000](http://localhost:3000)。首次访问公开首页时会打开数据库并按配置初始化，默认在 `data/toolkit.db` 写入演示数据。
 
 Node.js 22.5 至 22.12 需要为 Node 进程启用 `--experimental-sqlite`，并选择兼容该版本的 pnpm。项目完整回归使用 Node.js 24.19.0 和 pnpm 11.19.0。pnpm 11.19.0 本身需要 Node.js 22.13 或更高版本。 [Node.js SQLite 文档](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html) · [22.13.0 发布说明](https://nodejs.org/en/blog/release/v22.13.0)
 
@@ -432,13 +432,15 @@ pnpm admin:create -- <姓名> <工号> <密码>  # 创建或提升一个管理�
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_DEPARTMENT_NAME` | 软件工程部 | 部门名称展示 |
+| `NEXT_PUBLIC_DEPARTMENT_NAME` | 软件工程部 | 网页注册与 `admin:create` 新建账号时保存的默认部门。工作区左上角显示账号所属责任田。 |
 | `DATABASE_PATH` | `./data/toolkit.db` | SQLite 文件路径 |
 | `TOOLKIT_REPORTS_PATH` | `./data/uploads/reports` | 验证报告的实际存放目录。数据库中的报告路径格式保持一致 |
 | `SESSION_COOKIE_SECURE` | 按请求协议自动判断 | HTTPS 反代请转发 `X-Forwarded-Proto: https` 或显式设为 true；HTTP 验收不要设为 true |
 | `TOOLKIT_SKIP_SEED` | `0` | 设为 `1` 时不写入演示数据 |
 
 数据库和报告的相对路径以进程工作目录为准。Next.js 会加载项目的环境文件，独立维护命令读取执行进程的环境变量。对已有部署运行维护命令时，先核对服务的工作目录和存储配置，再通过 `DATABASE_PATH` 传入实际数据库的绝对路径。需要关闭演示数据时，同时传入 `TOOLKIT_SKIP_SEED=1`。
+
+生产网页的构建会固定构建时设置的 `NEXT_PUBLIC_DEPARTMENT_NAME`。更新网页注册的默认部门时请重新构建。使用 `admin:create` 新建账号时，在命令执行环境中设置该变量。人员目录展示已保存的部门资料。
 
 ## 测试与验证
 
@@ -551,6 +553,7 @@ SERVICE_NAME=toolkit bash scripts/deploy-ubuntu.sh
 ```
 
 - 若使用 pm2 等进程管理器，把 `STOP_CMD` / `START_CMD` 传给脚本，确保构建前停止、构建后启动。
+- `pnpm start` 出现 `Ready` 后，打开公开首页验证数据库能正常读取。若首页返回 HTTP 500，请查看服务日志，核对运行环境中 `DATABASE_PATH` 的解析位置和读写权限。
 - 反向代理避免跨构建缓存 HTML 或 RSC 响应。`/_next/static/` 使用内容哈希文件名，可以长缓存。部署新构建后，请刷新已打开的表单页面，再填写并提交。
 - 登录后点击任意页面被踢回登录页，另一个常见原因是 **HTTP 部署却设置了 Secure 会话 Cookie**。当前系统会优先读取 `SESSION_COOKIE_SECURE`，未设置时根据 `X-Forwarded-Proto: https` 自动判断；Nginx 反代 HTTPS 时必须转发该头，直接用 HTTP 验收时不要设置 `SESSION_COOKIE_SECURE=true`。若之前已经用错误配置登录过，请清除该站点 Cookie 或用无痕窗口重新登录。
 - 数据库升级或清空演示数据前先备份实际使用的 SQLite 数据库和报告目录。
