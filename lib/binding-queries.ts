@@ -69,7 +69,6 @@ type BindingRequirementRow = {
   waivedByName: string | null;
   confirmedAt: string | null;
   confirmedByName: string | null;
-  approverOptions: Array<{ userId: number; userName: string; userEmployeeId: string; isActive: number }>;
   flows: BindingFlowRow[];
 };
 
@@ -121,7 +120,7 @@ function bindingFlowCounts(flows: BindingFlowRow[]) {
   };
 }
 
-type BindingApproverOption = BindingRequirementRow["approverOptions"][number];
+type BindingApproverOption = { userId: number; userName: string; userEmployeeId: string; isActive: number };
 
 function getBindingFlowsByRequirement(requirementIdsJson: string) {
   const flowRows = all<Omit<BindingFlowRow, "barcodes" | "barcodeResults">>(
@@ -160,18 +159,17 @@ function getBindingFlowsByRequirement(requirementIdsJson: string) {
   return Map.groupBy(flows, ({ requirementId }) => requirementId);
 }
 
-function getBindingApproversByRequirement(
-  requirementIdsJson: string,
-  requirements: ReadonlyArray<Pick<BindingRequirementRow, "id" | "approverId" | "approverName">>,
-) {
+function getBindingApproversByRequirement(requirements: readonly BindingRequirementRow[]) {
+  const approversByRequirement = new Map<number, BindingApproverOption[]>();
+  if (requirements.length === 0) return approversByRequirement;
+
   const snapshots = all<BindingApproverOption & { requirementId: number }>(
     `SELECT bra.requirement_id AS requirementId, bra.user_id AS userId, u.name AS userName,
             u.employee_id AS userEmployeeId, u.is_active AS isActive
      FROM binding_requirement_approvers bra JOIN users u ON u.id = bra.user_id
      WHERE bra.requirement_id IN (SELECT value FROM json_each(?)) ORDER BY bra.id`,
-    requirementIdsJson,
+    JSON.stringify(requirements.map(({ id }) => id)),
   );
-  const approversByRequirement = new Map<number, BindingApproverOption[]>();
   for (const { requirementId, ...option } of snapshots) {
     const group = approversByRequirement.get(requirementId) ?? [];
     group.push(option);
@@ -224,7 +222,7 @@ function readTrialDetail(requestId: number): TrialDetail | null {
     requestId,
   );
   if (!request) return null;
-  const requirementRows = all<Omit<BindingRequirementRow, "flows" | "approverOptions" | "approvedCount" | "submittedCount" | "pendingCount"
+  const requirementRows = all<Omit<BindingRequirementRow, "flows" | "approvedCount" | "submittedCount" | "pendingCount"
     | "passedBarcodeCount" | "unreviewedApprovedCount" | "failedBarcodeCount" | "barcodeEvidenceKey" | "legacyConfirmation">
     & { barcodeRevision: number; barcodeConfirmation: number }>(
     `SELECT br.id, br.project_id AS projectId, pr.name AS projectName, br.node_id AS nodeId,
@@ -249,16 +247,13 @@ function readTrialDetail(requestId: number): TrialDetail | null {
   if (requirementRows.length === 0) return { request, requirements: [] };
   const requirementIds = JSON.stringify(requirementRows.map(({ id }) => id));
   const flowsByRequirement = getBindingFlowsByRequirement(requirementIds);
-  const approversByRequirement = getBindingApproversByRequirement(requirementIds, requirementRows);
   const requirements = requirementRows.map(({ barcodeRevision, barcodeConfirmation, ...requirement }) => {
     const flows = flowsByRequirement.get(requirement.id) ?? [];
-    const approverOptions = approversByRequirement.get(requirement.id) ?? [];
     return {
       ...requirement,
       ...bindingFlowCounts(flows),
       barcodeEvidenceKey: bindingBarcodeEvidenceKey(barcodeRevision, flows),
       legacyConfirmation: requirement.status === "PASSED" && barcodeConfirmation === 0,
-      approverOptions,
       flows,
     };
   });
@@ -311,12 +306,28 @@ export function createTrialDetailReader(user: SessionUser) {
     const requirements = detail.requirements.flatMap((requirement) => {
       if (isPushedBindingOwner(viewer.id, requirement)) return [requirement];
       const flows = requirement.flows.filter((flow) => isBindingFlowParticipant(viewer.id, flow));
-      return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows, approverOptions: [] }] : [];
+      return flows.length ? [{ ...requirement, ...bindingFlowCounts(flows), barcodeEvidenceKey: "", flows }] : [];
     });
     return requirements.length ? { ...detail, requirements } : null;
   }
 
-  return { user: viewer, canReadProject, getTrialDetail, getReadableTrialDetail };
+  function getReadableTrialEditorDetail(requestId: number) {
+    const detail = getReadableTrialDetail(requestId);
+    if (!detail) return null;
+    const readAll = canReadEntireTrialRequest(viewer.id, detail.request, getReadableProjectIds());
+    const withApproverAccess = readAll ? detail.requirements
+      : detail.requirements.filter((requirement) => isPushedBindingOwner(viewer.id, requirement));
+    const approvers = getBindingApproversByRequirement(withApproverAccess);
+    return {
+      ...detail,
+      requirements: detail.requirements.map((requirement) => ({
+        ...requirement,
+        approverOptions: approvers.get(requirement.id) ?? [],
+      })),
+    };
+  }
+
+  return { user: viewer, canReadProject, getTrialDetail, getReadableTrialDetail, getReadableTrialEditorDetail };
 }
 
 export type TrialDetailReader = ReturnType<typeof createTrialDetailReader>;

@@ -55,7 +55,7 @@ export default async function TrialDetailPage({
   const requestId = Number(id);
   if (!Number.isInteger(requestId)) notFound();
   const trialDetails = createTrialDetailReader(user);
-  const data = trialDetails.getReadableTrialDetail(requestId);
+  const data = trialDetails.getReadableTrialEditorDetail(requestId);
   if (!data) notFound();
   const search = await searchParams;
   const notice = readFlash(search);
